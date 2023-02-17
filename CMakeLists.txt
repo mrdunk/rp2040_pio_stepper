@@ -1,3 +1,4 @@
+# CMake minimum required version
 cmake_minimum_required(VERSION 3.13)
 
 # Pull in SDK (must be before project)
@@ -13,7 +14,7 @@ include(rp2040_hat_c_sdk_version.cmake)
 # Set project name
 set(PROJECT_NAME RP2040-STEPPER-C)
 
-
+# Set project informations
 project(test_project C CXX ASM)
 
 set(CMAKE_C_STANDARD 11)
@@ -53,6 +54,15 @@ if(NOT DEFINED PORT_DIR)
     message(STATUS "PORT_DIR = ${PORT_DIR}")
 endif()
 
+# Turn off mbedtls test mode 
+set(ENABLE_PROGRAMS OFF CACHE BOOL "Build mbedtls programs")
+set(ENABLE_TESTING OFF CACHE BOOL "Build mbedtls testing")
+add_definitions(-DMBEDTLS_CONFIG_FILE="${PORT_DIR}/mbedtls/inc/ssl_config.h")
+add_definitions(-DSET_TRUSTED_CERT_IN_SAMPLES)
+
+# Hardware-specific examples in subdirectories:
+add_subdirectory(pico_stepper)
+
 # Add libraries in subdirectories
 add_subdirectory(${CMAKE_SOURCE_DIR}/libraries)
 add_subdirectory(${MBEDTLS_DIR})
@@ -65,14 +75,3 @@ add_compile_options(
         -Wno-unused-function # we have some for the docs that aren't called
         -Wno-maybe-uninitialized
         )
-
-
-
-      #add_executable(test test.c)
-
-      #pico_enable_stdio_usb(test 1)
-      #pico_enable_stdio_uart(test 0)
-
-      #pico_add_extra_outputs(test)
-
-      #target_link_libraries(test pico_stdlib)
