@@ -1,10 +1,6 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 
-// Basic pin IO.
-//#include "hardware/gpio.h"
-//#include "pico/binary_info.h"
-
 // PIO related.
 #include "hardware/pio.h"
 #include "hardware/clocks.h"
@@ -72,7 +68,10 @@ void blink_pin_forever(PIO pio, uint sm, uint offset, uint pin, uint freq) {
 
     // PIO counter program takes 3 more cycles in total than we pass as
     // input (wait for n + 1; mov; jmp)
-    pio->txf[sm] = (clock_get_hz(clk_sys) / (2 * freq)) - 3;
+    //pio->txf[sm] = (clock_get_hz(clk_sys) / (2 * freq)) - 3;
+    uint32_t level = (clock_get_hz(clk_sys) / (2 * freq)) - 3;
+    pio_sm_put_blocking(pio, sm, level);
+    pio_sm_put_blocking(pio, sm, 3);
 }
 
 int main() {
@@ -99,9 +98,6 @@ int main() {
 
   setup_default_uart();
 
-  //gpio_init(LED_PIN);
-  //gpio_set_dir(LED_PIN, GPIO_OUT);
- 
   // PIO init. 
   PIO pio = pio0;
   uint offset = pio_add_program(pio, &blink_program);
@@ -114,9 +110,6 @@ int main() {
 
 
   while (1) {
-    //gpio_put(LED_PIN, 0);
-    //sleep_ms(250);
-    //gpio_put(LED_PIN, 1);
     puts("Hello World\n");
     sleep_ms(1000);
 
