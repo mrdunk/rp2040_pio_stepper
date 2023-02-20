@@ -3,3 +3,6 @@ $ cd build
 $ export PICO_SDK_PATH=../../pico-sdk
 $ cmake ..
 $ make
+
+$ sudo blkid -o list | grep RPI-RP2
+
