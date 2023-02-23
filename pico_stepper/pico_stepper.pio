@@ -2,13 +2,14 @@
 
 
 .program blink
+.side_set 1 opt
     pull block     ; Direction pin
     out x, 1
     jmp x-- direction_off
-    set pins, 0b11
+    set pins, 1
     jmp direction_done
 direction_off:
-    set pins, 0b01
+    set pins, 0
 direction_done:
 
     pull block
@@ -23,11 +24,13 @@ halt:
 
 continue:
     mov x, isr
-    set pins, 1   ; Turn LED on
+    ;set pins, 1   ; Turn LED on
+    nop  side 1
 lp1:
     jmp x-- lp1   ; Delay for (x + 1) cycles, x is a 32 bit number
     mov x, isr
-    set pins, 0   ; Turn LED off
+    ;set pins, 0   ; Turn LED off
+    nop  side 0
 lp2:
     jmp x-- lp2   ; Delay for the same number of cycles again
 
@@ -38,11 +41,17 @@ lp2:
 % c-sdk {
 // this is a raw helper function for use by the user which sets up the GPIO output, and configures the SM to output on a particular pin
 
-void blink_program_init(PIO pio, uint sm, uint offset, uint pin) {
-   pio_gpio_init(pio, pin);
-   pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
+void blink_program_init(PIO pio, uint sm, uint offset, uint pin_step, uint pin_direction) {
    pio_sm_config c = blink_program_get_default_config(offset);
-   sm_config_set_set_pins(&c, pin, 1);
+
+   pio_gpio_init(pio, pin_direction);
+   pio_sm_set_consecutive_pindirs(pio, sm, pin_direction, 1, true);
+   sm_config_set_set_pins(&c, pin_direction, 1);
+
+   pio_gpio_init(pio, pin_step);
+   pio_sm_set_consecutive_pindirs(pio, sm, pin_step, 1, true);
+   sm_config_set_sideset_pins(&c, pin_step);
+
    pio_sm_init(pio, sm, offset, &c);
 }
 %}
