@@ -1,48 +1,49 @@
 
 
 
-.program blink
+.program step
 .side_set 1 opt
-    pull block     ; Direction pin
-    out x, 1
-    jmp x-- direction_off
+
+.wrap_target
+    //pull block              ; Direction pin
+    out x, 32     side 0
+    jmp !x direction_off
     set pins, 1
     jmp direction_done
 direction_off:
-    set pins, 0
+    set pins, 0  [1]
 direction_done:
 
-    pull block
-    out isr, 32    ; Abuse isr register as a general purpose register.
-    pull block
+    //pull block
+    out isr, 32               ; Abuse isr register as a general purpose register.
+    //pull block
     out y, 32
-.wrap_target
 
-    jmp y-- continue
-halt:
-    jmp halt
+    jmp step_entry
 
-continue:
-    mov x, isr
-    ;set pins, 1   ; Turn LED on
-    nop  side 1
-lp1:
-    jmp x-- lp1   ; Delay for (x + 1) cycles, x is a 32 bit number
-    mov x, isr
-    ;set pins, 0   ; Turn LED off
-    nop  side 0
-lp2:
-    jmp x-- lp2   ; Delay for the same number of cycles again
+step:
+    nop [5]       side 1      ; Pause for the same length of time as fetching data takes.
+    nop [6]       side 0
+step_entry:
+    mov x, isr    side 0
+pause_off:
+    jmp x-- pause_off
 
-.wrap             ; Blink forever!
+    mov x, isr    side 1      ; Turn step LED on
+pause_on:
+    jmp x-- pause_on
+
+    jmp y-- step              ; Do another step
+    nop [5]
+.wrap                         ; Go get more data.
 
 
 
 % c-sdk {
 // this is a raw helper function for use by the user which sets up the GPIO output, and configures the SM to output on a particular pin
 
-void blink_program_init(PIO pio, uint sm, uint offset, uint pin_step, uint pin_direction) {
-   pio_sm_config c = blink_program_get_default_config(offset);
+void step_program_init(PIO pio, uint sm, uint offset, uint pin_step, uint pin_direction) {
+   pio_sm_config c = step_program_get_default_config(offset);
 
    pio_gpio_init(pio, pin_direction);
    pio_sm_set_consecutive_pindirs(pio, sm, pin_direction, 1, true);
@@ -51,6 +52,12 @@ void blink_program_init(PIO pio, uint sm, uint offset, uint pin_step, uint pin_d
    pio_gpio_init(pio, pin_step);
    pio_sm_set_consecutive_pindirs(pio, sm, pin_step, 1, true);
    sm_config_set_sideset_pins(&c, pin_step);
+
+   //  	sm_config_set_in_shift(pio_sm_config*, shift_right, auto_push, push_threshold)
+   sm_config_set_out_shift(&c, 1, 1, 32);
+
+   // Join both FIFO registers.
+   sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
 
    pio_sm_init(pio, sm, offset, &c);
 }

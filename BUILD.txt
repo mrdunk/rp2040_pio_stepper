@@ -1,3 +1,9 @@
+Modify CMakeLists.txt in the root directory and modify the section:
+  # Set ethernet chip
+  set(WIZNET_CHIP W5500)
+to reflect your Ethernet chip version.
+Either W5100S or W5500.
+
 $ mkdir build
 $ cd build
 $ export PICO_SDK_PATH=../../pico-sdk

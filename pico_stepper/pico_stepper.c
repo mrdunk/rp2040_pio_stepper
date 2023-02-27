@@ -65,28 +65,33 @@ static void set_clock_khz(void)
     );
 }
 
-void blink_pin_forever(
+void step_pin_forever(
     PIO pio,
     uint sm,
     uint offset,
     uint pin_step,
     uint pin_direction,
     uint step_count,
-    uint freq
+    uint freq,
+    uint direction
     ) {
-  blink_program_init(pio, sm, offset, pin_step, pin_direction);
+  step_program_init(pio, sm, offset, pin_step, pin_direction);
   pio_sm_set_enabled(pio, sm, true);
 
   printf("Blinking pin %d at %d Hz\n", pin_step, freq);
 
-  uint32_t stepper_num = 0;
-  uint32_t direction = 0;
   uint32_t pulse_len = (clock_get_hz(clk_sys) / (2 * freq)) - 3;
-  uint32_t pulse_count = step_count;
 
-  pio_sm_put_blocking(pio, sm, direction);
-  pio_sm_put_blocking(pio, sm, pulse_len);
-  pio_sm_put_blocking(pio, sm, pulse_count);
+  //pio_sm_put_blocking(pio, sm, direction);
+  //pio_sm_put_blocking(pio, sm, pulse_len);
+  //pio_sm_put_blocking(pio, sm, step_count);
+  pio_sm_put(pio, sm, direction);
+  pio_sm_put(pio, sm, pulse_len);
+  pio_sm_put(pio, sm, step_count);
+
+  pio_sm_put(pio, sm, 0);
+  pio_sm_put(pio, sm, pulse_len);
+  pio_sm_put(pio, sm, step_count);
 }
 
 void send_data(uint32_t *values) {
@@ -243,15 +248,15 @@ int main() {
 
   // PIO init.
   PIO pio = pio0;
-  uint offset = pio_add_program(pio, &blink_program);
+  uint offset = pio_add_program(pio, &step_program);
   printf("Loaded program at %d\n", offset);
 
   uint pin_step = 0;
   uint pin_direction = 1;
-  blink_pin_forever(pio, 0, offset, pin_step, pin_direction, 5, 1);
-  //blink_pin_forever(pio, 1, offset, 1, 2);
-  //blink_pin_forever(pio, 2, offset, 2, 3);
-  //blink_pin_forever(pio, 3, offset, 3, 4);
+  step_pin_forever(pio, 0, offset, pin_step, pin_direction, 5, 1, 1);
+  //step_pin_forever(pio, 1, offset, 1, 2);
+  //step_pin_forever(pio, 2, offset, 2, 3);
+  //step_pin_forever(pio, 3, offset, 3, 4);
 
 
   sleep_ms(1000);
