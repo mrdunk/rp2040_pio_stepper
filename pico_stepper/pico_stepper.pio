@@ -5,7 +5,6 @@
 .side_set 1 opt
 
 .wrap_target
-    //pull block              ; Direction pin
     out x, 32     side 0
     jmp !x direction_off
     set pins, 1
@@ -14,10 +13,10 @@ direction_off:
     set pins, 0  [1]
 direction_done:
 
-    //pull block
     out isr, 32               ; Abuse isr register as a general purpose register.
-    //pull block
-    out y, 32
+                              ; It will store the length of each step.
+
+    out y, 32                 ; y contains number of steps.
 
     jmp step_entry
 
@@ -25,11 +24,11 @@ step:
     nop [5]       side 1      ; Pause for the same length of time as fetching data takes.
     nop [6]       side 0
 step_entry:
-    mov x, isr    side 0
+    mov x, isr    side 0      ; Restore the step length.
 pause_off:
     jmp x-- pause_off
 
-    mov x, isr    side 1      ; Turn step LED on
+    mov x, isr    side 1      ; Restore the step length. Turn step LED on
 pause_on:
     jmp x-- pause_on
 

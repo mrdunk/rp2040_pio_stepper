@@ -65,37 +65,120 @@ static void set_clock_khz(void)
     );
 }
 
-void step_pin_forever(
+void init_pio(
     PIO pio,
     uint sm,
     uint offset,
     uint pin_step,
-    uint pin_direction,
+    uint pin_direction)
+{
+  step_program_init(pio, sm, offset, pin_step, pin_direction);
+  pio_sm_set_enabled(pio, sm, true);
+}
+
+void init_pios(
+    uint stepper,
+    uint pin_step,
+    uint pin_direction
+    )
+{
+  uint offset;
+  switch (stepper) {
+    case 0:
+      offset = pio_add_program(pio0, &step_program);
+      init_pio(pio0, 0, offset, pin_step, pin_direction);
+      break;
+    case 1:
+      offset = pio_add_program(pio0, &step_program);
+      init_pio(pio0, 1, offset, pin_step, pin_direction);
+      break;
+    case 2:
+      offset = pio_add_program(pio0, &step_program);
+      init_pio(pio0, 2, offset, pin_step, pin_direction);
+      break;
+    case 3:
+      offset = pio_add_program(pio0, &step_program);
+      init_pio(pio0, 3, offset, pin_step, pin_direction);
+      break;
+    case 4:
+      offset = pio_add_program(pio1, &step_program);
+      init_pio(pio1, 0, offset, pin_step, pin_direction);
+      break;
+    case 5:
+      offset = pio_add_program(pio1, &step_program);
+      init_pio(pio1, 1, offset, pin_step, pin_direction);
+      break;
+    case 6:
+      offset = pio_add_program(pio1, &step_program);
+      init_pio(pio1, 2, offset, pin_step, pin_direction);
+      break;
+    case 7:
+      offset = pio_add_program(pio1, &step_program);
+      init_pio(pio1, 3, offset, pin_step, pin_direction);
+      break;
+  }
+}
+
+void send_pio_steps(
+    PIO pio,
+    uint sm,
     uint step_count,
     uint freq,
     uint direction
     ) {
-  step_program_init(pio, sm, offset, pin_step, pin_direction);
-  pio_sm_set_enabled(pio, sm, true);
+  if(step_count == 0) {
+    // No steps to add.
+    return;
+  }
 
-  printf("Blinking pin %d at %d Hz\n", pin_step, freq);
+  // PIO program generates 1 more step than it's told to.
+  step_count -= 1;
 
-  uint32_t pulse_len = (clock_get_hz(clk_sys) / (2 * freq)) - 3;
+  // PIO program makes steps 9 instructions longer than it's told to.
+  uint32_t pulse_len = (clock_get_hz(clk_sys) / (2 * freq)) - 9;
 
-  //pio_sm_put_blocking(pio, sm, direction);
-  //pio_sm_put_blocking(pio, sm, pulse_len);
-  //pio_sm_put_blocking(pio, sm, step_count);
   pio_sm_put(pio, sm, direction);
-  pio_sm_put(pio, sm, pulse_len);
-  pio_sm_put(pio, sm, step_count);
-
-  pio_sm_put(pio, sm, 0);
   pio_sm_put(pio, sm, pulse_len);
   pio_sm_put(pio, sm, step_count);
 }
 
+void send_pios_steps(
+    uint stepper,
+    uint step_count,
+    uint freq,
+    uint direction)
+{
+  switch (stepper) {
+    case 0:
+      send_pio_steps(pio0, 0, step_count, freq, direction);
+      break;
+    case 1:
+      send_pio_steps(pio0, 1, step_count, freq, direction);
+      break;
+    case 2:
+      send_pio_steps(pio0, 2, step_count, freq, direction);
+      break;
+    case 3:
+      send_pio_steps(pio0, 3, step_count, freq, direction);
+      break;
+    case 4:
+      send_pio_steps(pio1, 0, step_count, freq, direction);
+      break;
+    case 5:
+      send_pio_steps(pio1, 1, step_count, freq, direction);
+      break;
+    case 6:
+      send_pio_steps(pio1, 2, step_count, freq, direction);
+      break;
+    case 7:
+      send_pio_steps(pio1, 3, step_count, freq, direction);
+      break;
+  }
+}
+
 void send_data(uint32_t *values) {
   printf("%ld:%ld:%ld:%ld\n", values[0], values[1], values[2], values[3]);
+  send_pios_steps(values[0], values[1], values[2], values[3]);
 }
 
 void process_buffer(char* uart_buffer) {
@@ -246,18 +329,18 @@ int main() {
   stdio_usb_init();
   setup_default_uart();
 
-  // PIO init.
-  PIO pio = pio0;
-  uint offset = pio_add_program(pio, &step_program);
-  printf("Loaded program at %d\n", offset);
+  // Initialise PIOs.
+  uint stepper_count = 2;
+  uint pins_step[2] = {0, 2};
+  uint pins_direction[2] = {1, 3};
+  for (uint stepper = 0; stepper < stepper_count; stepper++) {
+    init_pios(stepper, pins_step[stepper], pins_direction[stepper]);
+  }
 
-  uint pin_step = 0;
-  uint pin_direction = 1;
-  step_pin_forever(pio, 0, offset, pin_step, pin_direction, 5, 1, 1);
-  //step_pin_forever(pio, 1, offset, 1, 2);
-  //step_pin_forever(pio, 2, offset, 2, 3);
-  //step_pin_forever(pio, 3, offset, 3, 4);
-
+  send_pios_steps(0, 5, 1, 1);
+  send_pios_steps(0, 10, 2, 0);
+  send_pios_steps(1, 20, 4, 0);
+  send_pios_steps(1, 5, 1, 1);
 
   sleep_ms(1000);
   puts("Hello World");
