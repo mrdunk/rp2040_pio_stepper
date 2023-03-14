@@ -14,7 +14,6 @@
 #include "port_common.h"
 #include "wizchip_conf.h"
 #include "w5x00_spi.h"
-//#include "loopback.h"
 #include "socket.h"
 
 /* Clock */
@@ -29,7 +28,7 @@
 /* Port */
 #define NW_PORT 5000
 
-#define NET_ENABLE 0
+#define NET_ENABLE 1
 #define DATA_BUF_SIZE 255
 
 const uint LED_PIN = 25;
@@ -43,11 +42,6 @@ static wiz_NetInfo g_net_info =
         .gw = {192, 168, 11, 1},                     // Gateway
         .dns = {8, 8, 8, 8},                         // DNS server
         .dhcp = NETINFO_STATIC                       // DHCP enable/disable
-};
-
-/* Loopback */
-static uint8_t g_loopback_buf[ETHERNET_BUF_MAX_SIZE] = {
-    0,
 };
 
 static void set_clock_khz(void)
@@ -122,12 +116,20 @@ void init_pios(
 void send_pio_steps(
     PIO pio,
     uint sm,
-    uint step_count,
+    uint time_slice_us,
     uint freq,
     uint direction
     ) {
+  uint32_t pulse_len = (clock_get_hz(clk_sys) / (2 * freq));
+  uint32_t step_count = time_slice_us * freq / 1000000;
+
+  printf("%ld\t%ld\n", step_count, pulse_len);
   if(step_count == 0) {
     // No steps to add.
+    return;
+  }
+  if(pulse_len <= 9) {
+    // Step too short.
     return;
   }
 
@@ -135,7 +137,7 @@ void send_pio_steps(
   step_count -= 1;
 
   // PIO program makes steps 9 instructions longer than it's told to.
-  uint32_t pulse_len = (clock_get_hz(clk_sys) / (2 * freq)) - 9;
+  pulse_len -= 9;
 
   pio_sm_put(pio, sm, direction);
   pio_sm_put(pio, sm, pulse_len);
@@ -144,48 +146,49 @@ void send_pio_steps(
 
 void send_pios_steps(
     uint stepper,
-    uint step_count,
+    uint time_slice_us,
     uint freq,
     uint direction)
 {
   switch (stepper) {
     case 0:
-      send_pio_steps(pio0, 0, step_count, freq, direction);
+      send_pio_steps(pio0, 0, time_slice_us, freq, direction);
       break;
     case 1:
-      send_pio_steps(pio0, 1, step_count, freq, direction);
+      send_pio_steps(pio0, 1, time_slice_us, freq, direction);
       break;
     case 2:
-      send_pio_steps(pio0, 2, step_count, freq, direction);
+      send_pio_steps(pio0, 2, time_slice_us, freq, direction);
       break;
     case 3:
-      send_pio_steps(pio0, 3, step_count, freq, direction);
+      send_pio_steps(pio0, 3, time_slice_us, freq, direction);
       break;
     case 4:
-      send_pio_steps(pio1, 0, step_count, freq, direction);
+      send_pio_steps(pio1, 0, time_slice_us, freq, direction);
       break;
     case 5:
-      send_pio_steps(pio1, 1, step_count, freq, direction);
+      send_pio_steps(pio1, 1, time_slice_us, freq, direction);
       break;
     case 6:
-      send_pio_steps(pio1, 2, step_count, freq, direction);
+      send_pio_steps(pio1, 2, time_slice_us, freq, direction);
       break;
     case 7:
-      send_pio_steps(pio1, 3, step_count, freq, direction);
+      send_pio_steps(pio1, 3, time_slice_us, freq, direction);
       break;
   }
 }
 
 void send_data(uint32_t *values) {
-  printf("%ld:%ld:%ld:%ld\n", values[0], values[1], values[2], values[3]);
+  // printf("%ld:%ld:%ld:%ld\n", values[0], values[1], values[2], values[3]);
+  printf("Sending data\n");
   send_pios_steps(values[0], values[1], values[2], values[3]);
 }
 
-void process_buffer(char* uart_buffer) {
-  printf("\nReceived: %s\n", uart_buffer);
+void process_buffer(char* tx_buffer, char* rx_buffer) {
+  printf("\nReceived: %s\n", tx_buffer);
   uint32_t values[4] = {0,0,0};
   size_t value_num = 0;
-  char* itterate = uart_buffer;
+  char* itterate = tx_buffer;
   uint32_t val = 0;
   while(*itterate) {
     if (*itterate == ':') {
@@ -212,23 +215,28 @@ void process_buffer(char* uart_buffer) {
   }
 
   if (value_num == 4) {
+    snprintf(
+        rx_buffer,
+        DATA_BUF_SIZE,
+        "Parsed: %ld:%ld:%ld:%ld\r\n",
+        values[0], values[1], values[2], values[3]);
     send_data(values);
   } else {
     printf("Wrong number of values: %i\n", value_num);
   }
 }
 
-uint8_t get_uart(char* uart_buffer, size_t buffer_len) {
-    char* start_update = &uart_buffer[strlen(uart_buffer)];
+uint8_t get_uart(char* uart_tx_buffer, size_t buffer_len) {
+    char* start_update = &uart_tx_buffer[strlen(uart_tx_buffer)];
 
     int ch = getchar_timeout_us(0);
     while (ch > 0) {
-      size_t pos = strlen(uart_buffer);
+      size_t pos = strlen(uart_tx_buffer);
       if (ch == 13) {
         // Return pressed.
         return 1;
-      } else if (pos < buffer_len - 1) {
-        uart_buffer[pos] = ch;
+      } else if (pos < buffer_len - 1 && isprint(ch)) {
+        uart_tx_buffer[pos] = ch;
         printf("%c", ch);
       }
       ch = getchar_timeout_us(0);
@@ -237,15 +245,77 @@ uint8_t get_uart(char* uart_buffer, size_t buffer_len) {
     return 0;
 }
 
-void collect_uart_buffer(char* uart_buffer, size_t buffer_len) {
-    uint8_t buffer_state = get_uart(uart_buffer, DATA_BUF_SIZE);
+void put_uart(char* rx_buffer, size_t buffer_len) {
+  puts_raw(rx_buffer);
+  memset(rx_buffer, '\0', buffer_len);
+}
+
+void comm_uart(char* uart_tx_buffer, char* rx_buffer, size_t buffer_len) {
+    uint8_t buffer_state = get_uart(uart_tx_buffer, buffer_len);
     if (buffer_state > 0) {
-      process_buffer(uart_buffer);
-      memset(uart_buffer, '\0', DATA_BUF_SIZE);
+      process_buffer(uart_tx_buffer, rx_buffer);
+      memset(uart_tx_buffer, '\0', buffer_len);
+    }
+
+    if(rx_buffer[0] != '\0') {
+      put_uart(rx_buffer, buffer_len);
     }
 }
 
-int32_t collect_nw_buffer(uint8_t socket_num, uint8_t* network_buffer, uint16_t port) {
+/*
+ * $ nc -u <host> <port>
+ */
+int32_t comm_UDP(
+    uint8_t socket_num, uint8_t* network_tx_buffer, uint8_t* rx_buffer, uint16_t port) {
+   int32_t  ret;
+   uint16_t size;
+   uint16_t sentsize;
+   uint8_t  destip[4];
+   uint16_t destport;
+
+   switch(getSn_SR(socket_num))
+   {
+      case SOCK_UDP :
+         if((size = getSn_RX_RSR(socket_num)) > 0) {
+            if(size > DATA_BUF_SIZE) {
+              size = DATA_BUF_SIZE;
+            }
+            ret = recvfrom(socket_num, network_tx_buffer, size, destip, (uint16_t*)&destport);
+            if(ret <= 0) {
+               printf("%d: recvfrom error. %ld\r\n",socket_num,ret);
+               return ret;
+            }
+
+            if (strlen(network_tx_buffer) > 0) {
+              process_buffer(network_tx_buffer, rx_buffer);
+            }
+
+            sentsize = 0;
+            size = strlen(rx_buffer);
+            while(sentsize < size) {
+              ret = sendto(socket_num, rx_buffer + sentsize, size - sentsize, destip, destport);
+              if(ret < 0) {
+                printf("%d: sendto error. %ld\r\n", socket_num, ret);
+                return ret;
+              }
+              sentsize += ret; // Don't care SOCKERR_BUSY, because it is zero.
+            }
+
+         }
+         break;
+      case SOCK_CLOSED:
+         if((ret = socket(socket_num, Sn_MR_UDP, port, 0x00)) != socket_num)
+            return ret;
+         printf("%d:Opened, UDP connection, port [%d]\r\n", socket_num, port);
+         break;
+      default :
+         break;
+   }
+   return 1;
+}
+
+int32_t comm_TCP(
+    uint8_t socket_num, uint8_t* network_tx_buffer, uint8_t* rx_buffer, uint16_t port) {
   int32_t ret;
   uint16_t size_received = 0;
 
@@ -267,14 +337,14 @@ int32_t collect_nw_buffer(uint8_t socket_num, uint8_t* network_buffer, uint16_t 
         if(size_received > DATA_BUF_SIZE) {
           size_received = DATA_BUF_SIZE;
         }
-        ret = recv(socket_num, network_buffer, size_received);
+        ret = recv(socket_num, network_tx_buffer, size_received);
 
         if(ret <= 0) {
           return ret;
         }
 
-        if (strlen(network_buffer) > 0) {
-          process_buffer(network_buffer);
+        if (strlen(network_tx_buffer) > 0) {
+          process_buffer(network_tx_buffer, rx_buffer);
         }
       }
       break;
@@ -285,7 +355,7 @@ int32_t collect_nw_buffer(uint8_t socket_num, uint8_t* network_buffer, uint16_t 
       printf("%d:Socket Closed\r\n", socket_num);
       break;
     case SOCK_INIT :
-      printf("%d:Listen, TCP server loopback, port [%d]\r\n", socket_num, port);
+      printf("%d:Listen, TCP server, port [%d]\r\n", socket_num, port);
       if( (ret = listen(socket_num)) != SOCK_OK) {
         return ret;
       }
@@ -305,8 +375,9 @@ int32_t collect_nw_buffer(uint8_t socket_num, uint8_t* network_buffer, uint16_t 
 int main() {
 
   int retval = 0;
-  char uart_buffer[DATA_BUF_SIZE] = "";
-  char network_buffer[DATA_BUF_SIZE] = "";
+  char uart_tx_buffer[DATA_BUF_SIZE] = "";
+  char network_tx_buffer[DATA_BUF_SIZE] = "";
+  char rx_buffer[DATA_BUF_SIZE] = "";
 
   bi_decl(bi_program_description("This is a test binary."));
   bi_decl(bi_1pin_with_name(LED_PIN, "On-board LED"));
@@ -337,23 +408,23 @@ int main() {
     init_pios(stepper, pins_step[stepper], pins_direction[stepper]);
   }
 
-  send_pios_steps(0, 5, 1, 1);
-  send_pios_steps(0, 10, 2, 0);
-  send_pios_steps(1, 20, 4, 0);
-  send_pios_steps(1, 5, 1, 1);
+  //send_pios_steps(0, 5000000, 1, 1);
+  //send_pios_steps(0, 10000000, 2, 0);
+  //send_pios_steps(1, 20000000, 4, 0);
+  //send_pios_steps(1, 5000000, 1, 1);
 
   sleep_ms(1000);
-  puts("Hello World");
 
   while (1) {
 
     if (NET_ENABLE &&
-        (retval = collect_nw_buffer(SOCKET_NUMBER, network_buffer, NW_PORT)) < 0) {
-      printf(" Loopback error : %d\n", retval);
+        // (retval = comm_TCP(SOCKET_NUMBER, network_tx_buffer, rx_buffer, NW_PORT)) < 0) {
+        (retval = comm_UDP(SOCKET_NUMBER, network_tx_buffer, rx_buffer, NW_PORT)) < 0) {
+      printf(" Network error : %d\n", retval);
       while (1);
     }
 
-    collect_uart_buffer(uart_buffer, DATA_BUF_SIZE);
+    comm_uart(uart_tx_buffer, rx_buffer, DATA_BUF_SIZE);
 
   }
 }
