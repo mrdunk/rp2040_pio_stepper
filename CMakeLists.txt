@@ -62,6 +62,7 @@ add_definitions(-DSET_TRUSTED_CERT_IN_SAMPLES)
 
 # Hardware-specific examples in subdirectories:
 add_subdirectory(pico_stepper)
+add_subdirectory(sender)
 
 # Add libraries in subdirectories
 add_subdirectory(${CMAKE_SOURCE_DIR}/libraries)
