@@ -1,8 +1,5 @@
 set(TARGET_NAME pico_stepper)
 
-#add_executable(${TARGET_NAME}
-#        ${TARGET_NAME}.c
-#        )
 add_library(${TARGET_NAME} STATIC)
 
 # Compile .pio file.
@@ -18,8 +15,3 @@ target_link_libraries(${TARGET_NAME} PRIVATE
         pico_stdlib
         hardware_pio
         )
-#
-#pico_enable_stdio_usb(${TARGET_NAME} 1)
-#pico_enable_stdio_uart(${TARGET_NAME} 0)
-#
-#pico_add_extra_outputs(${TARGET_NAME})
