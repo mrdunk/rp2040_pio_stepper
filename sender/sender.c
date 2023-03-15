@@ -39,15 +39,23 @@ static void set_clock_khz(void)
     );
 }
 
-void send_data(uint32_t *values) {
-  // printf("%ld:%ld:%ld:%ld\n", values[0], values[1], values[2], values[3]);
-  // printf("Sending data\n");
-  send_pio_steps(values[0], values[1], values[2], values[3]);
+void help(char* rx_buffer) {
+    snprintf(
+        rx_buffer,
+        DATA_BUF_SIZE,
+        "Usage:\r\n"
+        " > [stepper_id]                                           |"
+        "   Display the target_position of a stepper_id.\r\n"
+        " > [stepper_id]:[new_position]:[time_to_arrive_us]        |"
+        "   Set absolute position of a stepper_id.\r\n"
+        " > [stepper_id]:[step_count]:[step_len_us]:[direction]    |"
+        "   Perform some steps on a stepper_id.\r\n"
+        );
 }
 
 void process_buffer(char* tx_buffer, char* rx_buffer) {
   printf("\nReceived: %s\n", tx_buffer);
-  uint32_t values[4] = {0,0,0};
+  uint32_t values[4] = {0,0,0,0};
   size_t value_num = 0;
   char* itterate = tx_buffer;
   uint32_t val = 0;
@@ -64,25 +72,90 @@ void process_buffer(char* tx_buffer, char* rx_buffer) {
         values[value_num] = val;
       } else {
         printf("Too many values. %ld\n", val);
+        memset(tx_buffer, '\0', DATA_BUF_SIZE);
         return;
       }
       value_num++;
+    } else if (*itterate == '?' && value_num == 0) {
+      help(rx_buffer);
+      memset(tx_buffer, '\0', DATA_BUF_SIZE);
+      return;
     } else {
       printf("Unexpected character: %u : %c\n", *itterate, *itterate);
+      memset(tx_buffer, '\0', DATA_BUF_SIZE);
       return;
     }
   }
 
   if (value_num == 4) {
+    uint position = send_pio_steps(values[0], values[1], values[2], values[3]);
     snprintf(
         rx_buffer,
         DATA_BUF_SIZE,
-        "Parsed: %ld:%ld:%ld:%ld\r\n",
-        values[0], values[1], values[2], values[3]);
-    send_data(values);
+        "Parsed:\r\n"
+        " stepper: %ld\r\n"
+        " step_count: %ld\r\n"
+        " step_len_us: %ld\r\n"
+        " direction: %ld\r\n"
+        "Configured:\r\n"
+        " stepper: %ld\r\n"
+        " target_position: %lu\r\n",
+        values[0], values[1], values[2], values[3], values[0], position);
+  } else if (value_num == 3) {
+    uint position = set_absolute_position(values[0], values[1], values[2]);
+    snprintf(
+        rx_buffer,
+        DATA_BUF_SIZE,
+        "Parsed:\r\n"
+        " stepper: %ld\r\n"
+        " new_position: %ld\r\n"
+        " time_slice_us: %ld\r\n"
+        "Configured:\r\n"
+        " stepper: %ld\r\n"
+        " target_position: %lu\r\n",
+        values[0], values[1], values[2], values[0], position);
+  } else if (value_num == 1) {
+    snprintf(
+        rx_buffer,
+        DATA_BUF_SIZE,
+        "Configured:\r\n"
+        " stepper: %ld\r\n"
+        " target_position: %lu\r\n",
+        values[0], get_absolute_position(values[0]));
+  } else if (value_num > 0) {
+    printf("Wrong number of values: %i\r\n", value_num);
   } else {
-    printf("Wrong number of values: %i\n", value_num);
+    snprintf(
+        rx_buffer,
+        DATA_BUF_SIZE,
+        "Configured:\r\n"
+        " stepper: 0\r\n"
+        " target_position: %lu\r\n"
+        " stepper: 1\r\n"
+        " target_position: %lu\r\n"
+        " stepper: 2\r\n"
+        " target_position: %lu\r\n"
+        " stepper: 3\r\n"
+        " target_position: %lu\r\n"
+        " stepper: 4\r\n"
+        " target_position: %lu\r\n"
+        " stepper: 5\r\n"
+        " target_position: %lu\r\n"
+        " stepper: 6\r\n"
+        " target_position: %lu\r\n"
+        " stepper: 7\r\n"
+        " target_position: %lu\r\n",
+        get_absolute_position(0),
+        get_absolute_position(1),
+        get_absolute_position(2),
+        get_absolute_position(3),
+        get_absolute_position(4),
+        get_absolute_position(5),
+        get_absolute_position(6),
+        get_absolute_position(7)
+          );
   }
+  memset(tx_buffer, '\0', DATA_BUF_SIZE);
 }
 
 uint8_t get_uart(char* uart_tx_buffer, char* rx_buffer, size_t buffer_len) {
@@ -94,7 +167,7 @@ uint8_t get_uart(char* uart_tx_buffer, char* rx_buffer, size_t buffer_len) {
       if (ch == 13) {
         // Return pressed.
         process_buffer(uart_tx_buffer, rx_buffer);
-        memset(uart_tx_buffer, '\0', buffer_len);
+        //memset(uart_tx_buffer, '\0', buffer_len);
       } else if (pos < buffer_len - 1 && isprint(ch)) {
         uart_tx_buffer[pos] = ch;
         printf("%c", ch);
@@ -202,10 +275,10 @@ int main() {
     init_pio(stepper, pins_step[stepper], pins_direction[stepper]);
   }
 
-  //send_pios_steps(0, 5000000, 1, 1);
-  //send_pios_steps(0, 10000000, 2, 0);
-  //send_pios_steps(1, 20000000, 4, 0);
-  //send_pios_steps(1, 5000000, 1, 1);
+  //send_pios_steps(0, 10, 500000, 1);
+  //send_pios_steps(0, 20, 100000, 0);
+  //send_pios_steps(1, 4, 2000000, 0);
+  //send_pios_steps(1, 2, 5000000, 1);
 
   sleep_ms(1000);
 

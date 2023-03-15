@@ -1,4 +1,6 @@
+#include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 // PIO related.
 #include "hardware/pio.h"
@@ -7,6 +9,17 @@
 #include "pico_stepper.pio.h"
 
 #include "pico_stepper.h"
+
+uint position[8] = {
+  UINT_MAX / 2,
+  UINT_MAX / 2,
+  UINT_MAX / 2,
+  UINT_MAX / 2,
+  UINT_MAX / 2,
+  UINT_MAX / 2,
+  UINT_MAX / 2,
+  UINT_MAX / 2,
+};
 
 void init_pio(
     uint stepper,
@@ -39,12 +52,11 @@ void init_pio(
   }
 }
 
-void send_pio_steps(
+uint send_pio_steps(
     uint stepper,
-    uint time_slice_us,
-    uint freq,
-    uint direction
-    ) {
+    uint step_count,
+    uint step_len_us,
+    uint direction) {
   PIO pio;
   uint sm;
 
@@ -67,26 +79,60 @@ void send_pio_steps(
       printf("Invalid stepper index: %ld\n", stepper);
   }
 
-  uint32_t pulse_len = (clock_get_hz(clk_sys) / (2 * freq));
-  uint32_t step_count = time_slice_us * freq / 1000000;
-
   if(step_count == 0) {
     // No steps to add.
-    return;
+    return position[stepper];
   }
-  if(pulse_len <= 9) {
-    // Step too short.
-    return;
+  if(step_len_us <= 9) {
+    printf("Step too short: %ld\n", step_len_us);
+    return position[stepper];
+  }
+
+  // TODO: Implement minimum valid step length.
+
+  // Track absolute position.
+  // TODO: Implement max speed and acceleration values.
+  if (direction > 0) {
+    position[stepper] += step_count;
+  } else {
+    position[stepper] -= step_count;
   }
 
   // PIO program generates 1 more step than it's told to.
   step_count -= 1;
 
   // PIO program makes steps 9 instructions longer than it's told to.
-  pulse_len -= 9;
+  step_len_us -= 9;
 
   pio_sm_put(pio, sm, direction);
-  pio_sm_put(pio, sm, pulse_len);
+  pio_sm_put(pio, sm, step_len_us);
   pio_sm_put(pio, sm, step_count);
+
+  return position[stepper];
 }
 
+uint set_relative_position(
+    uint stepper,
+    int position_diff,
+    uint time_slice) {
+  uint step_len_us = time_slice / abs(position_diff);
+  uint direction = 0;
+  if(position_diff > 0) {
+    direction = 1;
+  }
+
+  return send_pio_steps(stepper, abs(position_diff), step_len_us, direction);
+}
+
+uint set_absolute_position(
+    uint stepper,
+    uint new_position,
+    uint time_slice_us) {
+  int position_diff = new_position - position[stepper];
+  return set_relative_position(stepper, position_diff, time_slice_us);
+}
+
+uint get_absolute_position(uint stepper) {
+  return position[stepper];
+}
+    
