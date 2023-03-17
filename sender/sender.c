@@ -53,7 +53,105 @@ void help(char* rx_buffer) {
         );
 }
 
-void process_buffer(char* tx_buffer, char* rx_buffer) {
+void display_data(const struct Data* received_data) {
+  const struct DataEntry* data_entry;
+  printf("Received binary data. Expecting %u entries.\n", received_data->count);
+  for(uint data_count = 0; data_count < MAX_MACHINE_DATA; data_count++) {
+    data_entry = &(received_data->entry[data_count]);
+    if(data_entry->target >= MAX_TARGETS) {
+      break;
+    }
+    printf("  %u\n", data_count);
+    printf("    target:   %u\n", data_entry->target);
+    printf("    sequence: %u\n", data_entry->sequence);
+    printf("    key:      %u\n", data_entry->key);
+    printf("    value:    %u\n", data_entry->value);
+  }
+}
+
+void delegete_set_absolute_position(
+    char* rx_buffer,
+    const uint stepper,
+    const uint new_position,
+    const uint time_slice_us) {
+  uint position = set_absolute_position(stepper, new_position, time_slice_us);
+  snprintf(
+      rx_buffer,
+      DATA_BUF_SIZE,
+      "Parsed:\r\n"
+      " stepper: %lu\r\n"
+      " new_position: %lu\r\n"
+      " time_slice_us: %lu\r\n"
+      "Set:\r\n"
+      " stepper: %lu\r\n"
+      " target_position: %lu\r\n",
+      stepper, new_position, time_slice_us, stepper, position);
+}
+
+void process_buffer_machine(char* tx_buffer, char* rx_buffer) {
+  struct Data received_data;
+  struct DataEntry* data_entry;
+  memcpy(&received_data, tx_buffer, sizeof(struct Data));
+
+  display_data(&received_data);
+
+  struct CollectedValues collected_values;
+  struct CollectedValues collected_is_set;
+
+  uint last_sequence = 0;
+
+  for(uint data_count = 0; data_count < received_data.count; data_count++) {
+    data_entry = &((received_data.entry)[data_count]);
+
+    if(last_sequence == 0) {
+      // Start of a new sequence.
+      memset(&collected_values, 0, sizeof(struct CollectedValues));
+      memset(&collected_is_set, 0, sizeof(struct CollectedValues));
+    }
+
+    if(collected_is_set.target && collected_values.target != data_entry->target) {
+      printf("WARNING: Data corruption: Different targets for entries in same sequence. "
+          "%lu %lu\r\n",
+          collected_values.target, data_entry->target);
+      return;
+    }
+
+    if(data_entry->target > MAX_TARGETS) {
+      printf("WARNING: Data corruption: Invalid target. %lu\r\n", data_entry->target);
+      return;
+    }
+
+    collected_values.target = data_entry->target;
+    collected_is_set.target = 1;
+
+    switch(data_entry->key) {
+      case(TIME_WINDOW):
+        collected_values.time_window_us = data_entry->value;
+        collected_is_set.time_window_us = 1;
+        break;
+      case(SET_AXIS_ABS_POS):
+        collected_values.set_axis_abs_pos = data_entry->value;
+        collected_is_set.set_axis_abs_pos = 1;
+        break;
+      default:
+        printf("Unexpected key: %lu\r\n", data_entry->key);
+    }
+
+    if(data_entry->sequence == 0) {
+      // Have gathered all associated attributes.
+      if(collected_is_set.time_window_us && collected_is_set.set_axis_abs_pos) {
+        delegete_set_absolute_position(
+            rx_buffer,
+            collected_values.target,
+            collected_values.set_axis_abs_pos,
+            collected_values.time_window_us);
+      }
+    }
+    last_sequence = data_entry->sequence;
+  }
+}
+
+void process_buffer_human(char* tx_buffer, char* rx_buffer) {
   printf("\nReceived: %s\n", tx_buffer);
   uint32_t values[4] = {0,0,0,0};
   size_t value_num = 0;
@@ -93,32 +191,21 @@ void process_buffer(char* tx_buffer, char* rx_buffer) {
         rx_buffer,
         DATA_BUF_SIZE,
         "Parsed:\r\n"
-        " stepper: %ld\r\n"
-        " step_count: %ld\r\n"
-        " step_len_us: %ld\r\n"
-        " direction: %ld\r\n"
-        "Configured:\r\n"
+        " stepper: %lu\r\n"
+        " step_count: %lu\r\n"
+        " step_len_us: %lu\r\n"
+        " direction: %lu\r\n"
+        "Set:\r\n"
         " stepper: %ld\r\n"
         " target_position: %lu\r\n",
         values[0], values[1], values[2], values[3], values[0], position);
   } else if (value_num == 3) {
-    uint position = set_absolute_position(values[0], values[1], values[2]);
-    snprintf(
-        rx_buffer,
-        DATA_BUF_SIZE,
-        "Parsed:\r\n"
-        " stepper: %ld\r\n"
-        " new_position: %ld\r\n"
-        " time_slice_us: %ld\r\n"
-        "Configured:\r\n"
-        " stepper: %ld\r\n"
-        " target_position: %lu\r\n",
-        values[0], values[1], values[2], values[0], position);
+    delegete_set_absolute_position(rx_buffer, values[0], values[1], values[2]);
   } else if (value_num == 1) {
     snprintf(
         rx_buffer,
         DATA_BUF_SIZE,
-        "Configured:\r\n"
+        "Set:\r\n"
         " stepper: %ld\r\n"
         " target_position: %lu\r\n",
         values[0], get_absolute_position(values[0]));
@@ -128,7 +215,7 @@ void process_buffer(char* tx_buffer, char* rx_buffer) {
     snprintf(
         rx_buffer,
         DATA_BUF_SIZE,
-        "Configured:\r\n"
+        "Set:\r\n"
         " stepper: 0\r\n"
         " target_position: %lu\r\n"
         " stepper: 1\r\n"
@@ -166,7 +253,7 @@ uint8_t get_uart(char* uart_tx_buffer, char* rx_buffer, size_t buffer_len) {
       size_t pos = strlen(uart_tx_buffer);
       if (ch == 13) {
         // Return pressed.
-        process_buffer(uart_tx_buffer, rx_buffer);
+        process_buffer_human(uart_tx_buffer, rx_buffer);
         //memset(uart_tx_buffer, '\0', buffer_len);
       } else if (pos < buffer_len - 1 && isprint(ch)) {
         uart_tx_buffer[pos] = ch;
@@ -189,7 +276,12 @@ void put_uart(char* rx_buffer, size_t buffer_len) {
  * $ nc -u <host> <port>
  */
 int32_t comm_UDP(
-    uint8_t socket_num, uint8_t* network_tx_buffer, uint8_t* rx_buffer, uint16_t port) {
+    uint8_t socket_num,
+    uint8_t* network_tx_buffer,
+    uint8_t* rx_buffer,
+    uint16_t port,
+    void (*callback)(char*, char*)
+    ) {
    int32_t  ret;
    uint16_t size;
    uint16_t sentsize;
@@ -199,32 +291,33 @@ int32_t comm_UDP(
    switch(getSn_SR(socket_num)) {
       case SOCK_UDP :
          if((size = getSn_RX_RSR(socket_num)) > 0) {
-            if(size > DATA_BUF_SIZE) {
-              size = DATA_BUF_SIZE;
-            }
-            ret = recvfrom(socket_num, network_tx_buffer, size, destip, (uint16_t*)&destport);
-            if(ret <= 0) {
-               printf("%d: recvfrom error. %ld\r\n",socket_num,ret);
-               return ret;
-            }
+           // Receiving data.
+           if(size > DATA_BUF_SIZE) {
+             size = DATA_BUF_SIZE;
+           }
+           ret = recvfrom(socket_num, network_tx_buffer, size, destip, (uint16_t*)&destport);
+           if(ret <= 0) {
+             printf("%d: recvfrom error. %ld\r\n",socket_num,ret);
+             return ret;
+           }
 
-            if (strlen(network_tx_buffer) > 0) {
-              process_buffer(network_tx_buffer, rx_buffer);
-            }
+           if (strlen(network_tx_buffer) > 0) {
+             callback(network_tx_buffer, rx_buffer);
+           }
          }
 
          size = strlen(rx_buffer);
          if(size > 0) {
-            sentsize = 0;
-            while(sentsize < size) {
-              ret = sendto(socket_num, rx_buffer + sentsize, size - sentsize, destip, destport);
-              if(ret < 0) {
-                printf("%d: sendto error. %ld\r\n", socket_num, ret);
-                return ret;
-              }
-              sentsize += ret; // Don't care SOCKERR_BUSY, because it is zero.
-            }
-
+           // Sending data.
+           sentsize = 0;
+           while(sentsize < size) {
+             ret = sendto(socket_num, rx_buffer + sentsize, size - sentsize, destip, destport);
+             if(ret < 0) {
+               printf("%d: sendto error. %ld\r\n", socket_num, ret);
+               return ret;
+             }
+             sentsize += ret; // Don't care SOCKERR_BUSY, because it is zero.
+           }
          }
          break;
       case SOCK_CLOSED:
@@ -286,11 +379,29 @@ int main() {
 
     get_uart(uart_tx_buffer, rx_buffer, DATA_BUF_SIZE);
 
-    if (NET_ENABLE &&
-        (retval = comm_UDP(SOCKET_NUMBER, network_tx_buffer, rx_buffer, NW_PORT)) < 0) {
-      printf(" Network error : %d\n", retval);
-      while (1);
+    if (NET_ENABLE) {
+        retval = comm_UDP(
+            SOCKET_NUMBER_HUMAN,
+            network_tx_buffer,
+            rx_buffer,
+            NW_PORT_HUMAN,
+            &process_buffer_human);
+        if (retval < 0) {
+          printf(" Network error : %d\n", retval);
+          while (1);
+        }
+        retval = comm_UDP(
+            SOCKET_NUMBER_MACHINE,
+            network_tx_buffer,
+            rx_buffer,
+            NW_PORT_MACHINE,
+            &process_buffer_machine);
+        if (retval < 0) {
+          printf(" Network error : %d\n", retval);
+          while (1);
+        }
     }
+
 
     put_uart(rx_buffer, DATA_BUF_SIZE);
 

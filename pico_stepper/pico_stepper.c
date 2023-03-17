@@ -10,7 +10,9 @@
 
 #include "pico_stepper.h"
 
-uint position[8] = {
+
+/* Default starting positions. */
+static uint position[8] = {
   UINT_MAX / 2,
   UINT_MAX / 2,
   UINT_MAX / 2,
@@ -21,10 +23,33 @@ uint position[8] = {
   UINT_MAX / 2,
 };
 
+/* Minimum step length in us. Inversely proportional to the axis speed. */
+static uint min_step_len_us[8] = {
+  1000,
+  1000,
+  1000,
+  1000,
+  1000,
+  1000,
+  1000,
+  1000
+};
+
+//static uint min_step_len_diff_us
+
+/* Return speed in steps/second for a particular step length. */
+inline static uint step_len_to_speed(const uint step_len_us) {
+  return clock_get_hz(clk_sys) / 2 / step_len_us;
+}
+
+inline static uint speed_to_step_len(const uint speed) {
+  return clock_get_hz(clk_sys) / 2 / speed;
+}
+
 void init_pio(
-    uint stepper,
-    uint pin_step,
-    uint pin_direction
+    const uint stepper,
+    const uint pin_step,
+    const uint pin_direction
     )
 {
   uint offset, sm;
@@ -53,10 +78,10 @@ void init_pio(
 }
 
 uint send_pio_steps(
-    uint stepper,
+    const uint stepper,
     uint step_count,
     uint step_len_us,
-    uint direction) {
+    const uint direction) {
   PIO pio;
   uint sm;
 
@@ -83,15 +108,20 @@ uint send_pio_steps(
     // No steps to add.
     return position[stepper];
   }
-  if(step_len_us <= 9) {
+  if(step_len_us <= 9) {  // TODO: Should this be "=" rather than "<=" ?
+    // The PIO program has a 9 instruction overhead so steps shorter than this are
+    // not possible.
     printf("Step too short: %ld\n", step_len_us);
     return position[stepper];
   }
 
-  // TODO: Implement minimum valid step length.
+  if(step_len_us < min_step_len_us[stepper]) {
+    // Limit maximum speed.
+    step_len_us = min_step_len_us[stepper];
+  }
 
   // Track absolute position.
-  // TODO: Implement max speed and acceleration values.
+  // TODO: Implement acceleration values.
   if (direction > 0) {
     position[stepper] += step_count;
   } else {
@@ -104,6 +134,7 @@ uint send_pio_steps(
   // PIO program makes steps 9 instructions longer than it's told to.
   step_len_us -= 9;
 
+  // TODO: What if the buffer is full?
   pio_sm_put(pio, sm, direction);
   pio_sm_put(pio, sm, step_len_us);
   pio_sm_put(pio, sm, step_count);
@@ -112,9 +143,9 @@ uint send_pio_steps(
 }
 
 uint set_relative_position(
-    uint stepper,
-    int position_diff,
-    uint time_slice) {
+    const uint stepper,
+    const int position_diff,
+    const uint time_slice) {
   uint step_len_us = time_slice / abs(position_diff);
   uint direction = 0;
   if(position_diff > 0) {
@@ -125,9 +156,9 @@ uint set_relative_position(
 }
 
 uint set_absolute_position(
-    uint stepper,
-    uint new_position,
-    uint time_slice_us) {
+    const uint stepper,
+    const uint new_position,
+    const uint time_slice_us) {
   int position_diff = new_position - position[stepper];
   return set_relative_position(stepper, position_diff, time_slice_us);
 }
@@ -135,4 +166,18 @@ uint set_absolute_position(
 uint get_absolute_position(uint stepper) {
   return position[stepper];
 }
-    
+
+void set_max_speed(
+    const uint stepper,
+    const uint max_speed_step_sec
+    ) {
+  min_step_len_us[stepper] = speed_to_step_len(max_speed_step_sec);
+}
+
+uint get_max_speed(
+    const uint stepper,
+    const uint max_speed_step_sec
+    ) {
+  return step_len_to_speed(min_step_len_us[stepper]);
+}
+

@@ -1,6 +1,7 @@
 #ifndef PICO_STEPPER__H
 #define PICO_STEPPER__H
 
+
 /* Initialise an rp2040 PIO to drive stepper motors.
  *
  * Arguments:
@@ -13,7 +14,7 @@ void init_pio(
     uint pin_step,
     uint pin_direction);
 
-/* Get the step count of a stepper motor. */
+/* Get the step count of a stepper motor in steps. */
 uint get_absolute_position(uint stepper);
 
 /* Perform some steps.
@@ -49,7 +50,7 @@ uint set_relative_position(
  *
  * Arguments:
  *  stepper: A stepper motor index in the range 0-7.
- *  position: The target position.
+ *  position: The target position in steps.
  *  time_slice_us: The time in us to perform the steps.
  *
  * Returns:
