@@ -18,7 +18,9 @@
 
 #define BUFSIZE 1024
 #define MAX_DATA 16
-#define MAX_TARGETS 8
+#define MAX_AXIS 8
+#define MAX_TARGETS (MAX_AXIS + 1)
+#define TARGET_GLOBAL = (MAX_TARGETS - 1)
 
 
 struct DataEntry {
@@ -138,8 +140,9 @@ int main(int argc, char **argv) {
 
     /* socket: create the socket */
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sockfd < 0) 
+    if (sockfd < 0) {
         error("ERROR opening socket");
+    }
 
     /* gethostbyname: get the server's DNS entry */
     server = gethostbyname(hostname);
@@ -162,9 +165,16 @@ int main(int argc, char **argv) {
 
     /* send the message to the server */
     serverlen = sizeof(serveraddr);
-    n = sendto(sockfd, (void*)&send_data, sizeof(send_data), 0, (struct sockaddr *)&serveraddr, serverlen);
-    if (n < 0) 
+    n = sendto(
+        sockfd,
+        (void*)&send_data,
+        sizeof(send_data),
+        0,
+        (struct sockaddr *)&serveraddr,
+        serverlen);
+    if (n < 0) {
       error("ERROR in sendto");
+    }
     
     /* print the server's reply */
     int flags = MSG_DONTWAIT;

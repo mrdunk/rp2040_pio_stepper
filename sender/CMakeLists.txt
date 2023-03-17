@@ -4,6 +4,7 @@ add_executable(${TARGET_NAME}
         ${TARGET_NAME}.c
         )
 
+target_include_directories (${TARGET_NAME} PUBLIC ../shared/)
 target_sources(${TARGET_NAME} PRIVATE ${TARGET_NAME}.c)
 
 target_link_libraries(${TARGET_NAME} PRIVATE

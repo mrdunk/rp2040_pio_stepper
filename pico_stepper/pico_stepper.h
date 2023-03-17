@@ -1,6 +1,21 @@
 #ifndef PICO_STEPPER__H
 #define PICO_STEPPER__H
 
+#define MAX_AXIS 8
+#define MAX_TARGETS (MAX_AXIS + 1)
+#define TARGET_GLOBAL = (MAX_TARGETS - 1)
+
+
+struct ConfigAxis {
+  uint abs_pos_current;
+  uint abs_pos_desired;
+  uint min_step_len;
+};
+
+struct ConfigGlobal {
+  struct ConfigAxis axis[MAX_TARGETS];
+  uint update_rate;
+};
 
 /* Initialise an rp2040 PIO to drive stepper motors.
  *
