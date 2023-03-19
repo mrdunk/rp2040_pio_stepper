@@ -5,15 +5,15 @@
 
 
 struct ConfigAxis {
-  uint abs_pos;
-  uint min_step_len_us;
+  uint32_t abs_pos;
+  uint32_t min_step_len_us;
 };
 
 struct ConfigGlobal {
   // Both the following are really the same thing, portrayed different ways.
   // Update using set_global_update_rate(...).
-  uint update_rate;
-  uint update_time_us;  // (1,000,000) / update_rate
+  uint32_t update_rate;
+  uint32_t update_time_us;  // (1,000,000) / update_rate
 
   struct ConfigAxis axis[MAX_AXIS];
 };
@@ -26,12 +26,12 @@ struct ConfigGlobal {
  *  pin_direction: The DIR rp2040 output pin.
  */
 void init_pio(
-    uint stepper,
-    uint pin_step,
-    uint pin_direction);
+    uint32_t stepper,
+    uint32_t pin_step,
+    uint32_t pin_direction);
 
 /* Get the step count of a stepper motor in steps. */
-uint get_absolute_position(uint stepper);
+uint32_t get_absolute_position(uint32_t stepper);
 
 /* Perform a set number of steps of a specified length each.
  *
@@ -41,11 +41,11 @@ uint get_absolute_position(uint stepper);
  *  step_len_us: Step duration in us.
  *  direction: Forwards (>0) or backwards (==0).
  */
-uint send_pio_steps(
-    uint stepper,
-    uint step_count,
-    uint step_len_us,
-    uint direction);
+uint32_t send_pio_steps(
+    uint32_t stepper,
+    uint32_t step_count,
+    uint32_t step_len_us,
+    uint32_t direction);
 
 /* Perform a specified number of steps to be completed in a specified time interval.
  *
@@ -57,10 +57,10 @@ uint send_pio_steps(
  * Returns:
  *  The position of the stepper motor will be in after steps have been performed.
  */
-uint set_relative_position_at_time(
-    uint stepper,
+uint32_t set_relative_position_at_time(
+    uint32_t stepper,
     int position_diff,
-    uint time_slice_us);
+    uint32_t time_slice_us);
 
 /* Perform a specified number of steps within the globally configured update_time_us.
  *
@@ -71,8 +71,8 @@ uint set_relative_position_at_time(
  * Returns:
  *  The position of the stepper motor will be in after steps have been performed.
  */
-uint set_relative_position(
-    uint stepper,
+uint32_t set_relative_position(
+    uint32_t stepper,
     int position_diff);
 
 /* Reach a specified step count in a specified time interval.
@@ -85,10 +85,10 @@ uint set_relative_position(
  * Returns:
  *  The position of the stepper motor will be in after steps have been performed.
  */
-uint set_absolute_position_at_time(
-    uint stepper,
-    uint new_position,
-    uint time_slice_us);
+uint32_t set_absolute_position_at_time(
+    uint32_t stepper,
+    uint32_t new_position,
+    uint32_t time_slice_us);
 
 /* Reach a specified step count in the globally configured update_time_us.
  *
@@ -99,9 +99,9 @@ uint set_absolute_position_at_time(
  * Returns:
  *  The position of the stepper motor will be in after steps have been performed.
  */
-uint set_absolute_position(
-    uint stepper,
-    uint new_position);
+uint32_t set_absolute_position(
+    uint32_t stepper,
+    uint32_t new_position);
 
 /* Set the update rate for position commands that do not include a time window.
  *
@@ -111,7 +111,7 @@ uint set_absolute_position(
  * Returns the stored value. Could theoretically be different to that asked due
  *   to rounding errors when converting to config.update_time_us.
  */
-uint set_global_update_rate(uint update_rate);
+uint32_t set_global_update_rate(uint32_t update_rate);
 
 /* Gets summary of global config. */
 void get_global_config(
@@ -123,7 +123,7 @@ void get_global_config(
 
 /* Gets summary of specified axis config.*/
 void get_axis_config(
-    const uint axis,
+    const uint32_t axis,
     uint8_t* msg_human,
     size_t msg_human_len_max,
     uint8_t* msg_machine,
@@ -132,7 +132,7 @@ void get_axis_config(
 
 /* Gets the abs_pos paramiter for an axis.*/
 void get_axis_pos(
-    const uint axis,
+    const uint32_t axis,
     uint8_t* msg_human,
     size_t msg_human_len_max,
     uint8_t* msg_machine,

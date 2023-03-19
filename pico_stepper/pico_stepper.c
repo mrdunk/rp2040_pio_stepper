@@ -62,21 +62,21 @@ struct ConfigGlobal config = {
 };
 
 /* Return speed in steps/second for a particular step length. */
-inline static uint step_len_to_speed(const uint step_len_us) {
+inline static uint32_t step_len_to_speed(const uint32_t step_len_us) {
   return clock_get_hz(clk_sys) / 2 / step_len_us;
 }
 
-inline static uint speed_to_step_len(const uint speed) {
+inline static uint32_t speed_to_step_len(const uint32_t speed) {
   return clock_get_hz(clk_sys) / 2 / speed;
 }
 
 void init_pio(
-    const uint stepper,
-    const uint pin_step,
-    const uint pin_direction
+    const uint32_t stepper,
+    const uint32_t pin_step,
+    const uint32_t pin_direction
     )
 {
-  uint offset, sm;
+  uint32_t offset, sm;
   switch (stepper) {
     case 0:
     case 1:
@@ -101,11 +101,11 @@ void init_pio(
   }
 }
 
-uint send_pio_steps(
-    const uint stepper,
-    uint step_count,
-    uint step_len_us,
-    const uint direction) {
+uint32_t send_pio_steps(
+    const uint32_t stepper,
+    uint32_t step_count,
+    uint32_t step_len_us,
+    const uint32_t direction) {
   if(step_count == 0) {
     // No steps to add.
     return config.axis[stepper].abs_pos;
@@ -118,7 +118,7 @@ uint send_pio_steps(
   }
 
   PIO pio;
-  uint sm;
+  uint32_t sm;
 
   switch (stepper) {
     case 0:
@@ -170,12 +170,12 @@ uint send_pio_steps(
   return config.axis[stepper].abs_pos;
 }
 
-uint set_relative_position_at_time(
-    const uint stepper,
+uint32_t set_relative_position_at_time(
+    const uint32_t stepper,
     const int position_diff,
-    const uint time_slice) {
-  uint step_len_us = time_slice / abs(position_diff);
-  uint direction = 0;
+    const uint32_t time_slice) {
+  uint32_t step_len_us = time_slice / abs(position_diff);
+  uint32_t direction = 0;
   if(position_diff > 0) {
     direction = 1;
   }
@@ -183,11 +183,11 @@ uint set_relative_position_at_time(
   return send_pio_steps(stepper, abs(position_diff), step_len_us, direction);
 }
 
-uint set_relative_position(
-    const uint stepper,
+uint32_t set_relative_position(
+    const uint32_t stepper,
     const int position_diff) {
-  uint step_len_us = config.update_time_us / abs(position_diff);
-  uint direction = 0;
+  uint32_t step_len_us = config.update_time_us / abs(position_diff);
+  uint32_t direction = 0;
   if(position_diff > 0) {
     direction = 1;
   }
@@ -195,41 +195,41 @@ uint set_relative_position(
   return send_pio_steps(stepper, abs(position_diff), step_len_us, direction);
 }
 
-uint set_absolute_position_at_time(
-    const uint stepper,
-    const uint new_position,
-    const uint time_slice_us) {
+uint32_t set_absolute_position_at_time(
+    const uint32_t stepper,
+    const uint32_t new_position,
+    const uint32_t time_slice_us) {
   int position_diff = new_position - config.axis[stepper].abs_pos;
   return set_relative_position_at_time(stepper, position_diff, time_slice_us);
 }
 
-uint set_absolute_position(
-    const uint stepper,
-    const uint new_position) {
-  const uint time_slice_us = config.update_time_us;
+uint32_t set_absolute_position(
+    const uint32_t stepper,
+    const uint32_t new_position) {
+  const uint32_t time_slice_us = config.update_time_us;
   int position_diff = new_position - config.axis[stepper].abs_pos;
   return set_relative_position_at_time(stepper, position_diff, time_slice_us);
 }
 
-uint get_absolute_position(uint stepper) {
+uint32_t get_absolute_position(uint32_t stepper) {
   return config.axis[stepper].abs_pos;
 }
 
 void set_max_speed(
-    const uint stepper,
-    const uint max_speed_step_sec
+    const uint32_t stepper,
+    const uint32_t max_speed_step_sec
     ) {
   config.axis[stepper].min_step_len_us = speed_to_step_len(max_speed_step_sec);
 }
 
-uint get_max_speed(
-    const uint stepper,
-    const uint max_speed_step_sec
+uint32_t get_max_speed(
+    const uint32_t stepper,
+    const uint32_t max_speed_step_sec
     ) {
   return step_len_to_speed(config.axis[stepper].min_step_len_us);
 }
 
-uint set_global_update_rate(uint update_rate) {
+uint32_t set_global_update_rate(uint32_t update_rate) {
   config.update_rate = update_rate;
   config.update_time_us = 1000000 / update_rate;
   return 1000000 / config.update_time_us;
@@ -261,7 +261,7 @@ void get_global_config(
 }
 
 void get_axis_config(
-    const uint axis,
+    const uint32_t axis,
     uint8_t* msg_human,
     size_t msg_human_len_max,
     uint8_t* msg_machine,
@@ -288,7 +288,7 @@ void get_axis_config(
 }
 
 void get_axis_pos(
-    const uint axis,
+    const uint32_t axis,
     uint8_t* msg_human,
     size_t msg_human_len_max,
     uint8_t* msg_machine,

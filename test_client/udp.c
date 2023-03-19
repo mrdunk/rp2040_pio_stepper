@@ -33,7 +33,7 @@ void error(char *msg) {
     exit(0);
 }
 
-uint all_digits(char* buf, uint sign) {
+uint32_t all_digits(char* buf, uint32_t sign) {
   char* itterator = buf;
   while(*itterator != 0 && *itterator != 10) {
     if(! isdigit(*itterator) && *itterator != '-') {
@@ -45,7 +45,7 @@ uint all_digits(char* buf, uint sign) {
   return 1;
 }
 
-uint get_property_uint(const char* msg) {
+uint32_t get_property_uint(const char* msg) {
     char buf[BUFSIZE] = "";
     bzero(buf, BUFSIZE);
     do {
@@ -56,7 +56,7 @@ uint get_property_uint(const char* msg) {
     return strtol((char*)buf, (char**)(&buf), 10);
 }
 
-uint get_property_int(const char* msg) {
+uint32_t get_property_int(const char* msg) {
     char buf[BUFSIZE] = "";
     bzero(buf, BUFSIZE);
     do {
@@ -67,7 +67,7 @@ uint get_property_int(const char* msg) {
     return strtol((char*)buf, (char**)(&buf), 10);
 }
 
-size_t populate_message(uint type, void** packet, size_t* packet_space) {
+size_t populate_message(uint32_t type, void** packet, size_t* packet_space) {
   struct Message_uint message = { type };
   size_t message_size = sizeof(struct Message);
   if(*packet_space < message_size) {
@@ -81,8 +81,8 @@ size_t populate_message(uint type, void** packet, size_t* packet_space) {
   return message_size;
 }
 
-size_t populate_message_uint(char* text, uint type, void** packet, size_t* packet_space) {
-  uint value0 = get_property_uint(text);
+size_t populate_message_uint(char* text, uint32_t type, void** packet, size_t* packet_space) {
+  uint32_t value0 = get_property_uint(text);
   struct Message_uint message = { type, value0 };
   size_t message_size = sizeof(struct Message_uint);
   if(*packet_space < message_size) {
@@ -97,9 +97,9 @@ size_t populate_message_uint(char* text, uint type, void** packet, size_t* packe
 }
 
 size_t populate_message_uint_uint(
-    char* text0, char* text1, uint type, void** packet, size_t* packet_space) {
-  uint value0 = get_property_uint(text0);
-  uint value1 = get_property_uint(text1);
+    char* text0, char* text1, uint32_t type, void** packet, size_t* packet_space) {
+  uint32_t value0 = get_property_uint(text0);
+  uint32_t value1 = get_property_uint(text1);
   struct Message_uint_uint message = { type, value0, value1 };
   size_t message_size = sizeof(struct Message_uint_uint);
   if(*packet_space < message_size) {
@@ -114,9 +114,9 @@ size_t populate_message_uint_uint(
 }
 
 size_t populate_message_uint_int(
-    char* text0, char* text1, uint type, void** packet, size_t* packet_space) {
-  uint value0 = get_property_uint(text0);
-  uint value1 = get_property_int(text1);
+    char* text0, char* text1, uint32_t type, void** packet, size_t* packet_space) {
+  uint32_t value0 = get_property_uint(text0);
+  uint32_t value1 = get_property_int(text1);
   struct Message_uint_int message = { type, value0, value1 };
   size_t message_size = sizeof(struct Message_uint_int);
   if(*packet_space < message_size) {
@@ -131,7 +131,7 @@ size_t populate_message_uint_int(
 }
 
 size_t populate_data(void* packet, size_t* packet_space) {
-  uint msg_type;
+  uint32_t msg_type;
   size_t message_size = 0;
   size_t packet_size = 0;
 
@@ -192,7 +192,7 @@ void display_data(void* packet, size_t packet_size) {
 
   printf("\nSending messages:\n");
   while(packet_parsed < packet_size) {
-    uint msg_type = *(uint*)packet;
+    uint32_t msg_type = *(uint32_t*)packet;
     switch(msg_type) {
       case MSG_SET_GLOAL_UPDATE_RATE:
         message_size = sizeof(struct Message_uint);
@@ -241,7 +241,7 @@ void display_data(void* packet, size_t packet_size) {
 void display_reply(char* buf) {
   char* itterator = buf;
   size_t size;
-  uint msg_type;
+  uint32_t msg_type;
   while(msg_type = *(uint32_t*)itterator) {
     switch(msg_type) {
       case REPLY_GLOBAL_CONFIG:

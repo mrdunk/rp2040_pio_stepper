@@ -10,6 +10,7 @@ target_sources(${TARGET_NAME} PRIVATE ${TARGET_NAME}.c)
 target_link_libraries(${TARGET_NAME} PRIVATE
         pico_stepper
         pico_stdlib
+        pico_multicore
         hardware_spi
         hardware_dma
         ETHERNET_FILES

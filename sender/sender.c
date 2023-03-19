@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include "pico/stdlib.h"
+#include "pico/multicore.h"
 
 // w5x00 related.
 #include "port_common.h"
@@ -13,6 +14,8 @@
 #include "pico_stepper.h"
 #include "sender.h"
 #include "messages.h"
+
+uint8_t led_flipper = 0;
 
 /* Network */
 static wiz_NetInfo g_net_info =
@@ -100,14 +103,14 @@ struct Message_uint_int* process_msg_uint_int(char** rx_buf) {
 size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* tx_buf_machine) {
   char* rx_itterator = rx_buf;
   size_t tx_buf_machine_len = 0;
-  uint msg_type;
+  uint32_t msg_type;
   size_t tx_buf_mach_len_max = DATA_BUF_SIZE - sizeof(uint32_t);
   struct Message* msg;
   struct Message_uint* msg_uint;
   struct Message_uint_uint* msg_uint_uint;
   struct Message_uint_int* msg_uint_int;
 
-  while(msg_type = *(uint*)(rx_itterator)) {  // msg_type of 0 indicates end of data.
+  while(msg_type = *(uint32_t*)(rx_itterator)) {  // msg_type of 0 indicates end of data.
     switch(msg_type) {
       case MSG_SET_GLOAL_UPDATE_RATE:
         msg_uint = process_msg_uint(&rx_itterator);
@@ -177,7 +180,7 @@ size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* tx_buf_
 
   //printf("tx_buf_machine_len: %lu\n", tx_buf_machine_len);
   //for(size_t i = 0; i < tx_buf_machine_len; i += 4) {
-  //  printf("**  %lu\t%lu\n", i, ((uint*)tx_buf_machine)[i/4]);
+  //  printf("**  %lu\t%lu\n", i, ((uint32_t*)tx_buf_machine)[i/4]);
   //}
 
   return tx_buf_machine_len;
@@ -360,31 +363,39 @@ int32_t get_UDP(
    uint16_t size;
 
    switch(getSn_SR(socket_num)) {
-      case SOCK_UDP :
-         if((size = getSn_RX_RSR(socket_num)) > 0) {
-           // Receiving data.
-           if(size > DATA_BUF_SIZE) {
-             size = DATA_BUF_SIZE;
-           }
-           ret = recvfrom(socket_num, nw_rx_buf, size, destip, destport);
-           // printf("RECEIVED: %u %u.%u.%u.%u : %u\r\n",
-           //    socket_num, destip[0], destip[1], destip[2], destip[3], *destport);
-           if(ret <= 0) {
-             printf("%d: recvfrom error. %ld\r\n", socket_num,ret);
-             return ret;
-           }
+     case SOCK_UDP :
+       if((size = getSn_RX_RSR(socket_num)) > 0) {
+         if (led_flipper > 0) {
+           led_flipper = 0;
+         } else {
+           led_flipper = 1;
+         }
+         printf("led: %u\n", led_flipper);
+         gpio_put(LED_PIN, led_flipper);
 
-           *tx_buf_machine_len = callback(nw_rx_buf, tx_buf_human, tx_buf_machine);
+         // Receiving data.
+         if(size > DATA_BUF_SIZE) {
+           size = DATA_BUF_SIZE;
          }
-         break;
-      case SOCK_CLOSED:
-         if((ret = socket(socket_num, Sn_MR_UDP, port, 0x00)) != socket_num) {
-            return ret;
+         ret = recvfrom(socket_num, nw_rx_buf, size, destip, destport);
+         // printf("RECEIVED: %u %u.%u.%u.%u : %u\r\n",
+         //    socket_num, destip[0], destip[1], destip[2], destip[3], *destport);
+         if(ret <= 0) {
+           printf("%d: recvfrom error. %ld\r\n", socket_num,ret);
+           return ret;
          }
-         printf("%d:Opened, UDP connection, port [%d]\r\n", socket_num, port);
-         break;
-      default :
-         break;
+
+         *tx_buf_machine_len = callback(nw_rx_buf, tx_buf_human, tx_buf_machine);
+       }
+       break;
+     case SOCK_CLOSED:
+       if((ret = socket(socket_num, Sn_MR_UDP, port, 0x00)) != socket_num) {
+         return ret;
+       }
+       printf("%d:Opened, UDP connection, port [%d]\r\n", socket_num, port);
+       break;
+     default :
+       break;
    }
    return 1;
 }
@@ -423,7 +434,6 @@ int32_t put_UDP(
           sentsize += ret; // Don't care SOCKERR_BUSY, because it is zero.
         }
       }
-
       break;
     case SOCK_CLOSED:
       if((ret = socket(socket_num, Sn_MR_UDP, port, 0x00)) != socket_num) {
@@ -437,6 +447,19 @@ int32_t put_UDP(
   return 1;
 }
 
+void core1_entry() {
+  printf("Hello core1\n");
+  while(1) {
+    printf("loop core1\n");
+    gpio_put(LED_PIN, 1);
+    sleep_ms(1000);
+    gpio_put(LED_PIN, 0);
+    sleep_ms(100);
+  }
+}
+
+#define CORE1_STACK_SIZE 4096
+uint32_t core1_stack[CORE1_STACK_SIZE];
 
 int main() {
 
@@ -456,12 +479,15 @@ int main() {
   uint16_t destport_machine = 0;
   memset(nw_rx_buf, '\0', DATA_BUF_SIZE);
 
-  bi_decl(bi_program_description("This is a test binary."));
+  bi_decl(bi_program_description("Ethernet controlled stepper motor controller."));
   bi_decl(bi_1pin_with_name(LED_PIN, "On-board LED"));
 
   set_clock_khz();
 
   stdio_init_all();
+
+  gpio_init(LED_PIN);
+  gpio_set_dir(LED_PIN, GPIO_OUT);
 
   if(NET_ENABLE > 0) {
     wizchip_spi_initialize();
@@ -478,10 +504,10 @@ int main() {
   setup_default_uart();
 
   // Initialise PIOs.
-  uint stepper_count = 2;
-  uint pins_step[2] = {0, 2};
-  uint pins_direction[2] = {1, 3};
-  for (uint stepper = 0; stepper < stepper_count; stepper++) {
+  uint32_t stepper_count = 2;
+  uint32_t pins_step[2] = {0, 2};
+  uint32_t pins_direction[2] = {1, 3};
+  for (uint32_t stepper = 0; stepper < stepper_count; stepper++) {
     init_pio(stepper, pins_step[stepper], pins_direction[stepper]);
   }
 
@@ -492,6 +518,10 @@ int main() {
 
   sleep_ms(1000);
 
+  // Launch core 1
+  //multicore_launch_core1(&core1_entry);
+  multicore_launch_core1_with_stack(&core1_entry, core1_stack, CORE1_STACK_SIZE);
+
   while (1) {
     memset(tx_buf_machine, '\0', DATA_BUF_SIZE);
     memset(tx_buf_human, '\0', DATA_BUF_SIZE);
@@ -499,7 +529,7 @@ int main() {
 
     get_uart(uart_rx_buf, tx_buf_human, tx_buf_machine);
 
-    if (NET_ENABLE) {
+    if (NET_ENABLE > 0) {
         retval = get_UDP(
             SOCKET_NUMBER_HUMAN,
             NW_PORT_HUMAN,
@@ -528,7 +558,6 @@ int main() {
           printf(" Network error : %d\n", retval);
           while (1);
         }
-
         retval = put_UDP(
             SOCKET_NUMBER_HUMAN,
             NW_PORT_HUMAN,
@@ -553,7 +582,7 @@ int main() {
         }
 
         //for(size_t i = 0; i < tx_buf_machine_len; i += 4) {
-        //  printf("*   %lu\t%lu\n", i, ((uint*)tx_buf_machine)[i/4]);
+        //  printf("*   %lu\t%lu\n", i, ((uint32_t*)tx_buf_machine)[i/4]);
         //}
   
     }
