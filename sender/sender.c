@@ -44,33 +44,14 @@ void help(char* tx_buf) {
     snprintf(
         tx_buf,
         DATA_BUF_SIZE,
-        "Usage:\r\n"
-        " > [stepper_id]                                           |"
-        "   Display the target_position of a stepper_id.\r\n"
-        " > [stepper_id]:[new_position]:[time_to_arrive_us]        |"
-        "   Set absolute position of a stepper_id.\r\n"
-        " > [stepper_id]:[step_count]:[step_len_us]:[direction]    |"
-        "   Perform some steps on a stepper_id.\r\n"
+        "\r\nUsage:\r\n"
+        " > COMMAND[:VALUE[:VALUE[:VALUE]]]\r\n"
+        "eg:\r\n"
+        " > 3:0:-15\r\n\r\n"
+        "List of available commands:\r\n"
+        "%s\r\n",
+        human_help
         );
-}
-
-void delegete_set_absolute_position(
-    char* tx_buf,
-    const uint stepper,
-    const uint new_position,
-    const uint time_slice_us) {
-  uint position = set_absolute_position_at_time(stepper, new_position, time_slice_us);
-  snprintf(
-      tx_buf,
-      DATA_BUF_SIZE,
-      "Parsed:\r\n"
-      " stepper: %lu\r\n"
-      " new_position: %lu\r\n"
-      " time_slice_us: %lu\r\n"
-      "Set:\r\n"
-      " stepper: %lu\r\n"
-      " target_position: %lu\r\n",
-      stepper, new_position, time_slice_us, stepper, position);
 }
 
 struct Message* process_msg(char** rx_buf) {
@@ -131,14 +112,30 @@ size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* tx_buf_
       case MSG_SET_GLOAL_UPDATE_RATE:
         msg_uint = process_msg_uint(&rx_itterator);
         set_global_update_rate(msg_uint->value0);
+        get_global_config(
+            tx_buf, DATA_BUF_SIZE, tx_buf_machine, &tx_buf_machine_len, tx_buf_mach_len_max);
         break;
       case MSG_SET_AXIS_ABS_POS:
         msg_uint_uint = process_msg_uint_uint(&rx_itterator);
         set_absolute_position(msg_uint_uint->value0, msg_uint_uint->value1);
+        get_axis_pos(
+            msg_uint_uint->value0,
+            tx_buf,
+            DATA_BUF_SIZE,
+            tx_buf_machine,
+            &tx_buf_machine_len,
+            tx_buf_mach_len_max);
         break;
       case MSG_SET_AXIS_REL_POS:
         msg_uint_int = process_msg_uint_int(&rx_itterator);
         set_relative_position(msg_uint_int->value0, msg_uint_int->value1);
+        get_axis_pos(
+            msg_uint_int->value0,
+            tx_buf,
+            DATA_BUF_SIZE,
+            tx_buf_machine,
+            &tx_buf_machine_len,
+            tx_buf_mach_len_max);
         break;
       case MSG_SET_AXIS_MAX_SPEED:
         // TODO.
@@ -146,6 +143,7 @@ size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* tx_buf_
         // TODO.
       case MSG_SET_AXIS_ABS_POS_AT_TIME:
         // TODO.
+        break;
       case MSG_GET_GLOBAL_CONFIG:
         msg = process_msg(&rx_itterator);
         get_global_config(
@@ -173,7 +171,6 @@ size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* tx_buf_
         break;
       default:
         printf("Invalid message type: %lu\r\n", msg_type);
-        exit(0);
     }
   }
   memset(rx_buf, '\0', DATA_BUF_SIZE);
@@ -188,10 +185,13 @@ size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* tx_buf_
 
 size_t process_buffer_human(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* tx_buf_machine) {
   printf("\nReceived: %s\n", rx_buf);
-  uint32_t values[4] = {0,0,0,0};
+  int64_t values[4] = {0,0,0,0};
   size_t value_num = 0;
   char* itterate = rx_buf;
   uint32_t val = 0;
+  size_t tx_buf_machine_len = 0;
+  size_t tx_buf_mach_len_max = DATA_BUF_SIZE - sizeof(uint32_t);
+
   while(*itterate) {
     if (*itterate == ':') {
       // Separator.
@@ -199,7 +199,7 @@ size_t process_buffer_human(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* tx_buf_ma
     } else if (isspace(*itterate)) {
       // Whitespace. Ignore and continue.
       itterate++;
-    } else if (isdigit(*itterate)) {
+    } else if (isdigit(*itterate) || *itterate == '-') {
       val = strtol(itterate, &itterate, 10);
       if (value_num < 4) {
         values[value_num] = val;
@@ -220,62 +220,96 @@ size_t process_buffer_human(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* tx_buf_ma
     }
   }
 
-  if (value_num == 4) {
-    uint position = send_pio_steps(values[0], values[1], values[2], values[3]);
-    snprintf(
-        tx_buf,
-        DATA_BUF_SIZE,
-        "Parsed:\r\n"
-        " stepper: %lu\r\n"
-        " step_count: %lu\r\n"
-        " step_len_us: %lu\r\n"
-        " direction: %lu\r\n"
-        "Set:\r\n"
-        " stepper: %ld\r\n"
-        " target_position: %lu\r\n",
-        values[0], values[1], values[2], values[3], values[0], position);
-  } else if (value_num == 3) {
-    delegete_set_absolute_position(tx_buf, values[0], values[1], values[2]);
-  } else if (value_num == 1) {
-    snprintf(
-        tx_buf,
-        DATA_BUF_SIZE,
-        "Set:\r\n"
-        " stepper: %ld\r\n"
-        " target_position: %lu\r\n",
-        values[0], get_absolute_position(values[0]));
-  } else if (value_num > 0) {
-    printf("Wrong number of values: %i\r\n", value_num);
-  } else {
-    snprintf(
-        tx_buf,
-        DATA_BUF_SIZE,
-        "Set:\r\n"
-        " stepper: 0\r\n"
-        " target_position: %lu\r\n"
-        " stepper: 1\r\n"
-        " target_position: %lu\r\n"
-        " stepper: 2\r\n"
-        " target_position: %lu\r\n"
-        " stepper: 3\r\n"
-        " target_position: %lu\r\n"
-        " stepper: 4\r\n"
-        " target_position: %lu\r\n"
-        " stepper: 5\r\n"
-        " target_position: %lu\r\n"
-        " stepper: 6\r\n"
-        " target_position: %lu\r\n"
-        " stepper: 7\r\n"
-        " target_position: %lu\r\n",
-        get_absolute_position(0),
-        get_absolute_position(1),
-        get_absolute_position(2),
-        get_absolute_position(3),
-        get_absolute_position(4),
-        get_absolute_position(5),
-        get_absolute_position(6),
-        get_absolute_position(7)
-          );
+  switch(values[0]) {
+    case MSG_SET_GLOAL_UPDATE_RATE:
+      if(value_num != 2) {
+        printf("Wrong number of values for type %lu. Got: %u. Expected: 2\n",
+            (uint32_t)values[0], value_num);
+        break;
+      }
+      set_global_update_rate(values[1]);
+      get_global_config(
+          tx_buf, DATA_BUF_SIZE, tx_buf_machine, &tx_buf_machine_len, tx_buf_mach_len_max);
+      break;
+    case MSG_SET_AXIS_ABS_POS:
+      if(value_num != 3) {
+        printf("Wrong number of values for type %lu. Got: %u. Expected: 3\n",
+            (uint32_t)values[0], value_num);
+        break;
+      }
+      set_absolute_position(values[1], values[2]);
+      get_axis_pos(
+          values[1],
+          tx_buf,
+          DATA_BUF_SIZE,
+          tx_buf_machine,
+          &tx_buf_machine_len,
+          tx_buf_mach_len_max);
+      break;
+    case MSG_SET_AXIS_REL_POS:
+      if(value_num != 3) {
+        printf("Wrong number of values for type %lu. Got: %u. Expected: 3\n",
+            (uint32_t)values[0], value_num);
+        break;
+      }
+      set_relative_position(values[1], values[2]);
+      get_axis_pos(
+          values[1],
+          tx_buf,
+          DATA_BUF_SIZE,
+          tx_buf_machine,
+          &tx_buf_machine_len,
+          tx_buf_mach_len_max);
+      break;
+    case MSG_SET_AXIS_MAX_SPEED:
+      // TODO.
+    case MSG_SET_AXIS_MAX_ACCEL:
+      // TODO.
+    case MSG_SET_AXIS_ABS_POS_AT_TIME:
+      // TODO.
+      break;
+    case MSG_GET_GLOBAL_CONFIG:
+      if(value_num != 1) {
+        printf("Wrong number of values for type %lu. Got: %u. Expected: 1\n",
+            (uint32_t)values[0], value_num);
+        break;
+      }
+      get_global_config(
+          tx_buf, DATA_BUF_SIZE, tx_buf_machine, &tx_buf_machine_len, tx_buf_mach_len_max);
+      break;
+    case MSG_GET_AXIS_CONFIG:
+      if(value_num != 2) {
+        printf("Wrong number of values for type %lu. Got: %u. Expected: 2\n",
+            (uint32_t)values[0], value_num);
+        break;
+      }
+      get_axis_config(
+          values[1],
+          tx_buf,
+          DATA_BUF_SIZE,
+          tx_buf_machine,
+          &tx_buf_machine_len,
+          tx_buf_mach_len_max);
+      break;
+    case MSG_GET_AXIS_POS:
+      if(value_num != 2) {
+        printf("Wrong number of values for type %lu. Got: %u. Expected: 2\n",
+            (uint32_t)values[0], value_num);
+        break;
+      }
+      get_axis_pos(
+          values[1],
+          tx_buf,
+          DATA_BUF_SIZE,
+          tx_buf_machine,
+          &tx_buf_machine_len,
+          tx_buf_mach_len_max);
+      break;
+    default:
+      printf("Invalid message type: %lu\r\n", values[0]);
+      help(tx_buf);
+      memset(rx_buf, '\0', DATA_BUF_SIZE);
+      return 0;
   }
   memset(rx_buf, '\0', DATA_BUF_SIZE);
 
@@ -333,8 +367,8 @@ int32_t get_UDP(
              size = DATA_BUF_SIZE;
            }
            ret = recvfrom(socket_num, nw_rx_buf, size, destip, destport);
-           printf("RECEIVED: %u %u.%u.%u.%u : %u\r\n",
-               socket_num, destip[0], destip[1], destip[2], destip[3], *destport);
+           // printf("RECEIVED: %u %u.%u.%u.%u : %u\r\n",
+           //    socket_num, destip[0], destip[1], destip[2], destip[3], *destport);
            if(ret <= 0) {
              printf("%d: recvfrom error. %ld\r\n", socket_num,ret);
              return ret;
@@ -376,11 +410,10 @@ int32_t put_UDP(
       size = tx_buf_len;
       if(size > 0) {
         // Sending data.
-        printf("SENDING: %u %u.%u.%u.%u : %u\r\n",
-            socket_num, destip[0], destip[1], destip[2], destip[3], *destport);
+        // printf("SENDING: %u %u.%u.%u.%u : %u\r\n",
+        //    socket_num, destip[0], destip[1], destip[2], destip[3], *destport);
         sentsize = 0;
         while(sentsize < size) {
-          printf("%u %u\n", sentsize, size);
           ret = sendto(
               socket_num, tx_buf + sentsize, size - sentsize, destip, *destport);
           if(ret < 0) {
@@ -518,6 +551,11 @@ int main() {
           printf(" Network error : %d\n", retval);
           while (1);
         }
+
+        //for(size_t i = 0; i < tx_buf_machine_len; i += 4) {
+        //  printf("*   %lu\t%lu\n", i, ((uint*)tx_buf_machine)[i/4]);
+        //}
+  
     }
 
     put_uart(tx_buf_human, DATA_BUF_SIZE);

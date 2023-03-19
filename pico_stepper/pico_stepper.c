@@ -136,7 +136,7 @@ uint send_pio_steps(
       sm = stepper - 4;
       break;
     default:
-      printf("Invalid stepper index: %ld\n", stepper);
+      printf("WARN: Invalid stepper index: %ld\n", stepper);
   }
 
   if(!pio_sm_is_tx_fifo_empty(pio, sm)) {
@@ -256,7 +256,6 @@ void get_global_config(
     reply.update_rate = config.update_rate;
     reply.update_time_us = config.update_time_us;
     memcpy(msg_machine + *msg_machine_len, &reply, sizeof(struct Reply_global_config));
-    printf("** %lu %lu %lu\n", ((uint*)msg_machine)[0], ((uint*)msg_machine)[1], ((uint*)msg_machine)[2]);
     *msg_machine_len += sizeof(struct Reply_global_config);
   }
 }

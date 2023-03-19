@@ -265,7 +265,7 @@ void display_reply(char* buf) {
         size = sizeof(struct Reply_axis_pos);
         memcpy(&reply_axis_pos, itterator, size);
         printf("Reply_axis_pos\n  type: %u\n  abs_pos: %u\n",
-            msg_type, reply_axis_config.abs_pos);
+            msg_type, reply_axis_pos.abs_pos);
         itterator += size;
         break;
       default:
@@ -341,7 +341,7 @@ int main(int argc, char **argv) {
       }
       if(n > 0) {
         //printf("Echo from server:\r\n %s\r\n", buf);
-        printf("Reply received.\n");
+        printf("Binary reply received.\n");
         display_reply(buf);
       }
       memset(buf, '\0', BUFSIZE);
