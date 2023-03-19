@@ -2,19 +2,20 @@
 #define PICO_STEPPER__H
 
 #define MAX_AXIS 8
-#define MAX_TARGETS (MAX_AXIS + 1)
-#define TARGET_GLOBAL = (MAX_TARGETS - 1)
 
 
 struct ConfigAxis {
-  uint abs_pos_current;
-  uint abs_pos_desired;
-  uint min_step_len;
+  uint abs_pos;
+  uint min_step_len_us;
 };
 
 struct ConfigGlobal {
-  struct ConfigAxis axis[MAX_TARGETS];
+  // Both the following are really the same thing, portrayed different ways.
+  // Update using set_global_update_rate(...).
   uint update_rate;
+  uint update_time_us;  // (1,000,000) / update_rate
+
+  struct ConfigAxis axis[MAX_AXIS];
 };
 
 /* Initialise an rp2040 PIO to drive stepper motors.
@@ -32,7 +33,7 @@ void init_pio(
 /* Get the step count of a stepper motor in steps. */
 uint get_absolute_position(uint stepper);
 
-/* Perform some steps.
+/* Perform a set number of steps of a specified length each.
  *
  * Arguments:
  *  stepper: A stepper motor index in the range 0-7.
@@ -46,7 +47,7 @@ uint send_pio_steps(
     uint step_len_us,
     uint direction);
 
-/* Perform some steps equal to a specified step count.
+/* Perform a specified number of steps to be completed in a specified time interval.
  *
  * Arguments:
  *  stepper: A stepper motor index in the range 0-7.
@@ -54,14 +55,27 @@ uint send_pio_steps(
  *  time_slice_us: The time in us to perform the steps.
  *
  * Returns:
- *  The position of the stepper motor after steps have been performed.
+ *  The position of the stepper motor will be in after steps have been performed.
  */
-uint set_relative_position(
+uint set_relative_position_at_time(
     uint stepper,
     int position_diff,
     uint time_slice_us);
 
-/* Perform some steps to reach a specified step count.
+/* Perform a specified number of steps within the globally configured update_time_us.
+ *
+ * Arguments:
+ *  stepper: A stepper motor index in the range 0-7.
+ *  position_diff: Number of steps to increase (+ive) or decrease (-ive) the position by.
+ *
+ * Returns:
+ *  The position of the stepper motor will be in after steps have been performed.
+ */
+uint set_relative_position(
+    uint stepper,
+    int position_diff);
+
+/* Reach a specified step count in a specified time interval.
  *
  * Arguments:
  *  stepper: A stepper motor index in the range 0-7.
@@ -69,12 +83,61 @@ uint set_relative_position(
  *  time_slice_us: The time in us to perform the steps.
  *
  * Returns:
- *  The position of the stepper motor after steps have been performed.
+ *  The position of the stepper motor will be in after steps have been performed.
  */
-uint set_absolute_position(
+uint set_absolute_position_at_time(
     uint stepper,
     uint new_position,
     uint time_slice_us);
+
+/* Reach a specified step count in the globally configured update_time_us.
+ *
+ * Arguments:
+ *  stepper: A stepper motor index in the range 0-7.
+ *  position: The target position in steps.
+ *
+ * Returns:
+ *  The position of the stepper motor will be in after steps have been performed.
+ */
+uint set_absolute_position(
+    uint stepper,
+    uint new_position);
+
+/* Set the update rate for position commands that do not include a time window.
+ *
+ * Arguments:
+ *   update_rate: The update rate in Hz.
+ *
+ * Returns the stored value. Could theoretically be different to that asked due
+ *   to rounding errors when converting to config.update_time_us.
+ */
+uint set_global_update_rate(uint update_rate);
+
+/* Gets summary of global config. */
+void get_global_config(
+    uint8_t* msg_human,
+    size_t msg_human_len_max,
+    uint8_t* msg_machine,
+    size_t* msg_machine_len,
+    size_t msg_machine_len_max);
+
+/* Gets summary of specified axis config.*/
+void get_axis_config(
+    const uint axis,
+    uint8_t* msg_human,
+    size_t msg_human_len_max,
+    uint8_t* msg_machine,
+    size_t* msg_machine_len,
+    size_t msg_machine_len_max);
+
+/* Gets the abs_pos paramiter for an axis.*/
+void get_axis_pos(
+    const uint axis,
+    uint8_t* msg_human,
+    size_t msg_human_len_max,
+    uint8_t* msg_machine,
+    size_t* msg_machine_len,
+    size_t msg_machine_len_max);
 
 
 #endif  // PICO_STEPPER__H

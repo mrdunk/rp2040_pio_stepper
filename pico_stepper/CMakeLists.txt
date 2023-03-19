@@ -8,6 +8,7 @@ pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/${TARGET_NAME}
 # however, alternatively you can choose to generate it somewhere else (in this case in the source tree for check in)
 #pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/${TARGET_NAME}.pio OUTPUT_DIR ${CMAKE_CURRENT_LIST_DIR})
 
+target_include_directories (${TARGET_NAME} PUBLIC ../shared/)
 target_sources(${TARGET_NAME} PRIVATE ${TARGET_NAME}.c)
 target_include_directories (${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 

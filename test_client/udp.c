@@ -16,24 +16,14 @@
 #include <netdb.h> 
 #include <limits.h>
 
+#include "../shared/messages.h"
+
 #define BUFSIZE 1024
 #define MAX_DATA 16
 #define MAX_AXIS 8
 #define MAX_TARGETS (MAX_AXIS + 1)
 #define TARGET_GLOBAL = (MAX_TARGETS - 1)
 
-
-struct DataEntry {
-    uint target;               // Identifies target resource. Eg: axis.
-    uint sequence;             // Non zero if following data is related to this one..
-    uint key;                  // Identifies data purpose.
-    uint value;
-};
-
-struct Data {
-  uint count;                  // How many DataEntry items are populated.
-  struct DataEntry entry[MAX_DATA];
-};
 
 /* 
  * error - wrapper for perror
@@ -43,10 +33,10 @@ void error(char *msg) {
     exit(0);
 }
 
-uint all_digits(char* buf) {
+uint all_digits(char* buf, uint sign) {
   char* itterator = buf;
   while(*itterator != 0 && *itterator != 10) {
-    if(! isdigit(*itterator)) {
+    if(! isdigit(*itterator) && *itterator != '-') {
       printf("Invalid number: %s\n", buf);
       return 0;
     }
@@ -55,71 +45,235 @@ uint all_digits(char* buf) {
   return 1;
 }
 
-uint get_property(const char* msg) {
+uint get_property_uint(const char* msg) {
     char buf[BUFSIZE] = "";
     bzero(buf, BUFSIZE);
     do {
-      printf("%s\n", msg);
+      printf("%s\n > ", msg);
       fgets(buf, BUFSIZE, stdin);
-    } while (! all_digits(buf));
+    } while (! all_digits(buf, 0));
 
     return strtol((char*)buf, (char**)(&buf), 10);
 }
 
-void populate_data(struct Data* send_data) {
-  struct DataEntry* data_entry;
-  uint sequence = 0;
-  uint target = UINT_MAX;
+uint get_property_int(const char* msg) {
+    char buf[BUFSIZE] = "";
+    bzero(buf, BUFSIZE);
+    do {
+      printf("%s\n > ", msg);
+      fgets(buf, BUFSIZE, stdin);
+    } while (! all_digits(buf, 1));
 
-  for(uint data_count = 0; data_count < MAX_DATA; data_count++) {
-    data_entry = &(send_data->entry[data_count]);
-    if(sequence == 0) {
-      printf("\n");
-      target = get_property("Packet target: ");
-      data_entry->target = target;
-      if (target >= MAX_TARGETS) {
-        data_entry->target = UINT_MAX;
+    return strtol((char*)buf, (char**)(&buf), 10);
+}
+
+size_t populate_message(uint type, void** packet, size_t* packet_space) {
+  struct Message_uint message = { type };
+  size_t message_size = sizeof(struct Message);
+  if(*packet_space < message_size) {
+    printf("ERROR: No space left in packet\n");
+    exit(0);
+  }
+
+  memcpy(*packet, &message, message_size);
+  *packet_space -= message_size;
+  *packet += message_size;
+  return message_size;
+}
+
+size_t populate_message_uint(char* text, uint type, void** packet, size_t* packet_space) {
+  uint value0 = get_property_uint(text);
+  struct Message_uint message = { type, value0 };
+  size_t message_size = sizeof(struct Message_uint);
+  if(*packet_space < message_size) {
+    printf("ERROR: No space left in packet\n");
+    exit(0);
+  }
+
+  memcpy(*packet, &message, message_size);
+  *packet_space -= message_size;
+  *packet += message_size;
+  return message_size;
+}
+
+size_t populate_message_uint_uint(
+    char* text0, char* text1, uint type, void** packet, size_t* packet_space) {
+  uint value0 = get_property_uint(text0);
+  uint value1 = get_property_uint(text1);
+  struct Message_uint_uint message = { type, value0, value1 };
+  size_t message_size = sizeof(struct Message_uint_uint);
+  if(*packet_space < message_size) {
+    printf("ERROR: No space left in packet\n");
+    exit(0);
+  }
+
+  memcpy(*packet, &message, message_size);
+  *packet_space -= message_size;
+  *packet += message_size;
+  return message_size;
+}
+
+size_t populate_message_uint_int(
+    char* text0, char* text1, uint type, void** packet, size_t* packet_space) {
+  uint value0 = get_property_uint(text0);
+  uint value1 = get_property_int(text1);
+  struct Message_uint_int message = { type, value0, value1 };
+  size_t message_size = sizeof(struct Message_uint_int);
+  if(*packet_space < message_size) {
+    printf("ERROR: No space left in packet\n");
+    exit(0);
+  }
+
+  memcpy(*packet, &message, message_size);
+  *packet_space -= message_size;
+  *packet += message_size;
+  return message_size;
+}
+
+size_t populate_data(void* packet, size_t* packet_space) {
+  uint msg_type;
+  size_t message_size = 0;
+  size_t packet_size = 0;
+
+  memset(packet, 0, *packet_space);
+
+  printf("%s", human_help);
+
+  while(msg_type = get_property_uint("\nPacket message type. (Leave empty to finish.): ")) {
+    switch(msg_type) {
+      case MSG_SET_GLOAL_UPDATE_RATE:
+        message_size = populate_message_uint(
+            "Set global update rate:", msg_type, &packet, packet_space);
         break;
-      }
-      sequence = get_property("Number in sequence: ");
-      if(sequence <= 1) {
-        sequence = 0;
-      }
-    }
+      case MSG_SET_AXIS_ABS_POS:
+        message_size = populate_message_uint_uint(
+            "Axis:", "Set absolute position:", msg_type, &packet, packet_space);
+        break;
+      case MSG_SET_AXIS_REL_POS:
+        message_size = populate_message_uint_int(
+            "Axis:", "Set relative position:", msg_type, &packet, packet_space);
+        break;
+      case MSG_SET_AXIS_MAX_SPEED:
+        // TODO.
+      case MSG_SET_AXIS_MAX_ACCEL:
+        // TODO.
+      case MSG_SET_AXIS_ABS_POS_AT_TIME:
+        // TODO.
+      case MSG_GET_GLOBAL_CONFIG:
+        message_size = populate_message(msg_type, &packet, packet_space);
+        break;
+      case MSG_GET_AXIS_CONFIG:
+        message_size = populate_message_uint(
+            "Get configuration for axis:", msg_type, &packet, packet_space);
+        break;
+      case MSG_GET_AXIS_POS:
+        message_size = populate_message_uint(
+            "Get absolute position of axis:", msg_type, &packet, packet_space);
+        break;
+      default:
+        printf("Invalid message type: %u\n", msg_type);
+        exit(0);
 
-    if(sequence > 0) {
-      printf("sequence %u\n", sequence - 1);
-      data_entry->sequence = sequence - 1;
-      data_entry->target = target;
-      data_entry->key = get_property("\tPacket key: ");
-      data_entry->value = get_property("\tPacket value: ");
-      sequence--;
-    } else {
-      data_entry->sequence = 0;
-      data_entry->key = get_property("Packet key: ");
-      data_entry->value = get_property("Packet value: ");
     }
+    packet_size += message_size;
+    //printf("  %lu\t%lu\t%lu\n", message_size, *packet_space, packet_size);
+  }
 
-    send_data->count = data_count + 1;
+  return packet_size;
+}
+
+void display_data(void* packet, size_t packet_size) {
+  size_t packet_parsed = 0;
+  size_t message_size;
+  struct Message_uint message;
+  struct Message_uint message_uint;
+  struct Message_uint_uint message_uint_uint;
+  struct Message_uint_int message_uint_int;
+
+  printf("\nSending messages:\n");
+  while(packet_parsed < packet_size) {
+    uint msg_type = *(uint*)packet;
+    switch(msg_type) {
+      case MSG_SET_GLOAL_UPDATE_RATE:
+        message_size = sizeof(struct Message_uint);
+        memcpy(&message_uint, packet, message_size);
+        printf("  msg type: %u\tvalue0: %u\n",
+            message_uint.type, message_uint.value0);
+        break;
+      case MSG_SET_AXIS_ABS_POS:
+        message_size = sizeof(struct Message_uint_uint);
+        memcpy(&message_uint_int, packet, message_size);
+        printf("  msg type: %u\tvalue0: %u\tvalue1: %u\n",
+            message_uint_int.type, message_uint_int.value0, message_uint_int.value1);
+        break;
+      case MSG_SET_AXIS_REL_POS:
+        message_size = sizeof(struct Message_uint_uint);
+        memcpy(&message_uint_int, packet, message_size);
+        printf("  msg type: %u\tvalue0: %u\tvalue1: %i\n",
+            message_uint_int.type, message_uint_int.value0, message_uint_int.value1);
+        break;
+      case MSG_SET_AXIS_MAX_SPEED:
+      case MSG_SET_AXIS_MAX_ACCEL:
+      case MSG_SET_AXIS_ABS_POS_AT_TIME:
+        printf("  Invalid message type: %u\n", msg_type);
+        exit(0);
+      case MSG_GET_GLOBAL_CONFIG:
+        message_size = sizeof(struct Message);
+        memcpy(&message, packet, message_size);
+        printf("  msg type: %u\n", message.type);
+        break;
+      case MSG_GET_AXIS_CONFIG:
+      case MSG_GET_AXIS_POS:
+        message_size = sizeof(struct Message_uint);
+        memcpy(&message_uint, packet, message_size);
+        printf("  msg type: %u\tvalue0: %u\n",
+            message_uint.type, message_uint.value0);
+        break;
+      default:
+        printf("  Invalid message type: %u\n", msg_type);
+        exit(0);
+    }
+    packet += message_size;
+    packet_parsed += message_size;
   }
 }
 
-void display_data(const struct Data* send_data) {
-  const struct DataEntry* data_entry;
-  printf("Displaying data. Expecting %u entries.\n", send_data->count);
-  for(uint data_count = 0; data_count < MAX_DATA; data_count++) {
-    data_entry = &(send_data->entry[data_count]);
-    if(data_entry->target >= MAX_TARGETS) {
-      break;
+void display_reply(char* buf) {
+  char* itterator = buf;
+  size_t size;
+  uint msg_type;
+  while(msg_type = *(uint32_t*)itterator) {
+    switch(msg_type) {
+      case REPLY_GLOBAL_CONFIG:
+        struct Reply_global_config reply_global_config;
+        size = sizeof(struct Reply_global_config);
+        memcpy(&reply_global_config, itterator, size);
+        printf("Reply_global_config\n  type: %u\n  update_rate: %u\n  update_time_us: %u\n",
+            msg_type, reply_global_config.update_rate, reply_global_config.update_time_us);
+        itterator += size;
+        break;
+      case REPLY_AXIS_CONFIG:
+        struct Reply_axis_config reply_axis_config;
+        size = sizeof(struct Reply_axis_config);
+        memcpy(&reply_axis_config, itterator, size);
+        printf("Reply_axis_config\n  type: %u\n  abs_pos: %u\n  min_step_len_us: %u\n",
+            msg_type, reply_axis_config.abs_pos, reply_axis_config.min_step_len_us);
+        itterator += size;
+        break;
+      case REPLY_AXIS_POS:
+        struct Reply_axis_pos reply_axis_pos;
+        size = sizeof(struct Reply_axis_pos);
+        memcpy(&reply_axis_pos, itterator, size);
+        printf("Reply_axis_pos\n  type: %u\n  abs_pos: %u\n",
+            msg_type, reply_axis_config.abs_pos);
+        itterator += size;
+        break;
+      default:
+        printf("ERROR: Unexpected reply type: %u\n", msg_type);
+        exit(0);
     }
-    printf("  %u\n", data_count);
-    printf("    target:   %u\n", data_entry->target);
-    printf("    sequence: %u\n", data_entry->sequence);
-    printf("    key:      %u\n", data_entry->key);
-    printf("    value:    %u\n", data_entry->value);
   }
 }
-
 
 int main(int argc, char **argv) {
     int sockfd, portno, n;
@@ -128,7 +282,9 @@ int main(int argc, char **argv) {
     struct hostent *server;
     char *hostname;
     char buf[BUFSIZE];
-    struct Data send_data;
+    char packet[BUFSIZE];
+    // Leave room for an empty terminating record.
+    size_t packet_space = BUFSIZE - sizeof(struct Message);
 
     /* check command line arguments */
     if (argc != 3) {
@@ -159,16 +315,16 @@ int main(int argc, char **argv) {
     serveraddr.sin_port = htons(portno);
 
 
-    populate_data(&send_data);
-    display_data(&send_data);
+    size_t packet_size = populate_data(packet, &packet_space);
+    display_data(packet, packet_size);
 
 
     /* send the message to the server */
     serverlen = sizeof(serveraddr);
     n = sendto(
         sockfd,
-        (void*)&send_data,
-        sizeof(send_data),
+        (void*)packet,
+        packet_size,
         0,
         (struct sockaddr *)&serveraddr,
         serverlen);
@@ -184,7 +340,9 @@ int main(int argc, char **argv) {
         error("ERROR in recvfrom");
       }
       if(n > 0) {
-        printf("Echo from server:\r\n %s\r\n", buf);
+        //printf("Echo from server:\r\n %s\r\n", buf);
+        printf("Reply received.\n");
+        display_reply(buf);
       }
       memset(buf, '\0', BUFSIZE);
     }
