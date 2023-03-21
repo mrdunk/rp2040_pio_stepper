@@ -466,6 +466,15 @@ int main() {
   gpio_init(LED_PIN);
   gpio_set_dir(LED_PIN, GPIO_OUT);
 
+  stdio_usb_init();
+  setup_default_uart();
+  sleep_ms(1000);
+  printf("--------------------------------\n");
+  printf("UART up.\n");
+
+  init_core1();
+  printf("--------------------------------\n");
+
   if(NET_ENABLE > 0) {
     wizchip_spi_initialize();
     wizchip_cris_initialize();
@@ -477,10 +486,6 @@ int main() {
     print_network_information(g_net_info);
   }
 
-  stdio_usb_init();
-  setup_default_uart();
-
-  sleep_ms(1000);
 
   // Initialise PIOs.
   // TODO: Set up all pins.

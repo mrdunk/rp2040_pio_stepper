@@ -376,16 +376,20 @@ void display_reply(char* buf) {
         struct Reply_global_config reply_global_config;
         size = sizeof(struct Reply_global_config);
         memcpy(&reply_global_config, itterator, size);
-        printf("Reply_global_config\n  type: %u\n  update_rate: %u\n  update_time_us: %u\n",
-            msg_type, reply_global_config.update_rate, reply_global_config.update_time_us);
+        printf("Reply_global_config\n  "
+            "type: %u\n  update_rate: %u\n  update_time_us: %u  update_time_ticks: %u\n",
+            msg_type,
+            reply_global_config.update_rate,
+            reply_global_config.update_time_us,
+            reply_global_config.update_rate);
         itterator += size;
         break;
       case REPLY_AXIS_CONFIG:
         struct Reply_axis_config reply_axis_config;
         size = sizeof(struct Reply_axis_config);
         memcpy(&reply_axis_config, itterator, size);
-        printf("Reply_axis_config\n  type: %u\n  abs_pos: %u\n  min_step_len_us: %u\n",
-            msg_type, reply_axis_config.abs_pos, reply_axis_config.min_step_len_us);
+        printf("Reply_axis_config\n  type: %u\n  abs_pos: %u\n  min_step_len_ticks: %u\n",
+            msg_type, reply_axis_config.abs_pos, reply_axis_config.min_step_len_ticks);
         itterator += size;
         break;
       case REPLY_AXIS_POS:

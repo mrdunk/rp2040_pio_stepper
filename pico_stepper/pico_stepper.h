@@ -3,20 +3,29 @@
 
 #define MAX_AXIS 8
 
+#define MESSAGE_SECTIONS 10
+
 #define LED_PIN 25
-#define CORE1_STACK_SIZE 4096  // TODO: I have no idea how big this needs to be.
+//#define CORE1_STACK_SIZE 4096  // TODO: I have no idea how big this needs to be.
+#define CORE1_STACK_SIZE 0x4000  // TODO: I have no idea how big this needs to be.
 
 
-struct StepperMovement {
-  uint16_t padding;
+#define CMND_SET_POS           1
+#define CMND_SET_MIN_STEP_LEN  2
+#define CMND_SET_DESIRED_POS   3
+
+struct AxisUpdate {
+  uint8_t padding;
+  uint8_t command;
   uint8_t updated;
-  uint8_t count;
-  int32_t step_change;
+  uint8_t axis;
+  int32_t value;
 };
 
 struct ConfigAxis {
-  uint32_t abs_pos;
-  uint32_t min_step_len_us;
+  uint32_t abs_pos;             // In steps. Default value is UINT_MAX / 2.
+  uint32_t min_step_len_ticks;
+  int32_t velocity;             // Steps per update_time_us.
 };
 
 struct ConfigGlobal {
@@ -24,11 +33,12 @@ struct ConfigGlobal {
   // Update using set_global_update_rate(...).
   uint32_t update_rate;
   uint32_t update_time_us;  // (1,000,000) / update_rate
+  uint32_t update_time_ticks;  // clock_speed / update_rate
 
   struct ConfigAxis axis[MAX_AXIS];
 };
 
-// void init_updates();
+void init_core1();
 
 /* Initialise an rp2040 PIO to drive stepper motors.
  *
@@ -117,5 +127,7 @@ void get_axis_pos(
     size_t* msg_machine_len,
     size_t msg_machine_len_max);
 
+/* Convert a time in us to PIO ticks. */
+inline static uint32_t time_to_ticks(const uint32_t time_us);
 
 #endif  // PICO_STEPPER__H

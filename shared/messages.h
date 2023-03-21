@@ -58,12 +58,13 @@ struct Reply_global_config {
   uint32_t type;
   uint32_t update_rate;
   uint32_t update_time_us;  // (1,000,000) / update_rate
+  uint32_t update_time_ticks;
 } static Reply_global_conf_default = { REPLY_GLOBAL_CONFIG };
 
 struct Reply_axis_config {
   uint32_t type;
   uint32_t abs_pos;
-  uint32_t min_step_len_us;
+  uint32_t min_step_len_ticks;
 } static Reply_axis_config_default = { REPLY_AXIS_CONFIG };
 
 struct Reply_axis_pos {
