@@ -3,6 +3,16 @@
 
 #define MAX_AXIS 8
 
+#define LED_PIN 25
+#define CORE1_STACK_SIZE 4096  // TODO: I have no idea how big this needs to be.
+
+
+struct StepperMovement {
+  uint16_t padding;
+  uint8_t updated;
+  uint8_t count;
+  int32_t step_change;
+};
 
 struct ConfigAxis {
   uint32_t abs_pos;
@@ -17,6 +27,8 @@ struct ConfigGlobal {
 
   struct ConfigAxis axis[MAX_AXIS];
 };
+
+// void init_updates();
 
 /* Initialise an rp2040 PIO to drive stepper motors.
  *
@@ -33,34 +45,15 @@ void init_pio(
 /* Get the step count of a stepper motor in steps. */
 uint32_t get_absolute_position(uint32_t stepper);
 
-/* Perform a set number of steps of a specified length each.
+/* Perform a set number of steps.
  *
  * Arguments:
  *  stepper: A stepper motor index in the range 0-7.
- *  step_count: How many steps.
- *  step_len_us: Step duration in us.
- *  direction: Forwards (>0) or backwards (==0).
+ *  position_diff: The number of steps to be applied in the next config.update_time_us.
  */
 uint32_t send_pio_steps(
     uint32_t stepper,
-    uint32_t step_count,
-    uint32_t step_len_us,
-    uint32_t direction);
-
-/* Perform a specified number of steps to be completed in a specified time interval.
- *
- * Arguments:
- *  stepper: A stepper motor index in the range 0-7.
- *  position_diff: Number of steps to increase (+ive) or decrease (-ive) the position by.
- *  time_slice_us: The time in us to perform the steps.
- *
- * Returns:
- *  The position of the stepper motor will be in after steps have been performed.
- */
-uint32_t set_relative_position_at_time(
-    uint32_t stepper,
-    int position_diff,
-    uint32_t time_slice_us);
+    int32_t position_diff);
 
 /* Perform a specified number of steps within the globally configured update_time_us.
  *
@@ -74,21 +67,6 @@ uint32_t set_relative_position_at_time(
 uint32_t set_relative_position(
     uint32_t stepper,
     int position_diff);
-
-/* Reach a specified step count in a specified time interval.
- *
- * Arguments:
- *  stepper: A stepper motor index in the range 0-7.
- *  position: The target position in steps.
- *  time_slice_us: The time in us to perform the steps.
- *
- * Returns:
- *  The position of the stepper motor will be in after steps have been performed.
- */
-uint32_t set_absolute_position_at_time(
-    uint32_t stepper,
-    uint32_t new_position,
-    uint32_t time_slice_us);
 
 /* Reach a specified step count in the globally configured update_time_us.
  *

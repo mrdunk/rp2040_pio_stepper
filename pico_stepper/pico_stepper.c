@@ -8,10 +8,16 @@
 #include "hardware/clocks.h"
 // The compiled .pio.
 #include "pico_stepper.pio.h"
+// Core1
+#include "pico/multicore.h"
 
 #include "pico_stepper.h"
 #include "messages.h"
 
+uint32_t core1_stack[CORE1_STACK_SIZE];
+repeating_timer_t hw_update_timer;
+volatile struct StepperMovement stepper_mvmnt_c0[MAX_AXIS] = {0};
+volatile struct StepperMovement stepper_mvmnt_c1[MAX_AXIS] = {0};
 
 
 struct ConfigGlobal config = {
@@ -21,45 +27,81 @@ struct ConfigGlobal config = {
     {
       // Azis 0.
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_us = 500
+      .min_step_len_us = 50
     },
     {
       // Azis 1.
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_us = 500
+      .min_step_len_us = 50
     },
     {
       // Azis 2.
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_us = 500
+      .min_step_len_us = 50
     },
     {
       // Azis 3.
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_us = 500
+      .min_step_len_us = 50
     },
     {
       // Azis 4.
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_us = 500
+      .min_step_len_us = 50
     },
     {
       // Azis 5.
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_us = 500
+      .min_step_len_us = 50
     },
     {
       // Azis 6.
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_us = 500
+      .min_step_len_us = 50
     },
     {
       // Azis 7.
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_us = 500
+      .min_step_len_us = 50
     }
   }
 };
+
+void core1_entry() {
+  printf("Hello core1\n");
+
+  size_t i;
+  uint32_t byte;
+  while(1) {
+    //printf("loop core1\n");
+    if(multicore_fifo_rvalid() == true) {
+      //printf("core1: pop\n");
+      for(i = 0; i < MAX_AXIS * sizeof(struct StepperMovement) / sizeof(uint32_t); i++) {
+        if(multicore_fifo_pop_timeout_us(1, &byte) == true) {
+          ((uint32_t*)stepper_mvmnt_c1)[i] = byte;
+        } else {
+          printf("FAIL: core1 pop on the %lu byte.\n", i);
+          break;
+        }
+      }
+    }
+
+    for(i = 0; i < MAX_AXIS; i++) {
+      if(stepper_mvmnt_c1[i].updated > 0) {
+        printf("core1: "
+            "Stepper updated: %lu,  step_change: %li\n",
+            i,
+            stepper_mvmnt_c1[i].step_change);
+        stepper_mvmnt_c1[i].updated = 0;
+      }
+    }
+
+  }
+
+  //pio_sm_put(pio, sm, direction);
+  //pio_sm_put(pio, sm, step_len_us);
+  //pio_sm_put(pio, sm, step_count);
+}
 
 /* Return speed in steps/second for a particular step length. */
 inline static uint32_t step_len_to_speed(const uint32_t step_len_us) {
@@ -70,12 +112,56 @@ inline static uint32_t speed_to_step_len(const uint32_t speed) {
   return clock_get_hz(clk_sys) / 2 / speed;
 }
 
+/* Send data to core1 via FIFO. */
+static bool timer_callback(repeating_timer_t *rt) {
+  static int32_t jitter = 0;
+  //printf("timer_callback. %i\n", get_core_num());
+  for(size_t stepper = 0; stepper < MAX_AXIS; stepper++) {
+    volatile struct StepperMovement* to_serialise = &(stepper_mvmnt_c0[stepper]);
+    //if(to_serialise->updated) {
+    //  printf("core0: updating %lu.  step_change: %li\n",
+    //      to_serialise->count, to_serialise->step_change);
+    //}
+    for (size_t i = 0; i < sizeof(struct StepperMovement) / sizeof(uint32_t); i++) {
+      uint32_t byte = ((uint32_t*)to_serialise)[i];
+      if(multicore_fifo_push_timeout_us(byte, 100) == false) {
+        printf("FAIL: core0 push fail for axis %u\n", stepper);
+      }
+    }
+    to_serialise->updated = 0;
+  }
+
+  return true; // keep repeating
+}
+
+
+void init_updates() {
+  static uint8_t done = 0;
+  if(done > 0) {
+    return;
+  }
+  printf("Initializing PIO handlers.\n");
+
+  // Launch core 1
+  multicore_launch_core1_with_stack(&core1_entry, core1_stack, CORE1_STACK_SIZE);
+
+  // negative timeout means exact delay (rather than delay between callbacks)
+  // TODO: Make the period match config.update_time_us.
+  if (!add_repeating_timer_us(-1000, timer_callback, NULL, &hw_update_timer)) {
+    printf("ERROR: Failed to add timer\n");
+  }
+
+  done = 1;
+}
+
 void init_pio(
     const uint32_t stepper,
     const uint32_t pin_step,
     const uint32_t pin_direction
     )
 {
+  init_updates();
+
   uint32_t offset, sm;
   switch (stepper) {
     case 0:
@@ -103,13 +189,51 @@ void init_pio(
 
 uint32_t send_pio_steps(
     const uint32_t stepper,
-    uint32_t step_count,
-    uint32_t step_len_us,
-    const uint32_t direction) {
-  if(step_count == 0) {
+    int32_t position_diff) {
+  if(position_diff == 0) {
     // No steps to add.
     return config.axis[stepper].abs_pos;
   }
+
+  uint32_t step_len_us = config.update_time_us / abs(position_diff);
+  if(step_len_us < config.axis[stepper].min_step_len_us) {
+    // Limit maximum speed.
+    step_len_us = config.axis[stepper].min_step_len_us;
+
+    if(position_diff > 0) {
+      position_diff = config.update_time_us / step_len_us;
+    } else {
+      position_diff = -config.update_time_us / step_len_us;
+    }
+  }
+
+  // TODO: This probably wants to be replaced with code that updates config
+  // with the steps performed as reported by core0.
+  config.axis[stepper].abs_pos += position_diff;
+
+  // Queue stepper movement data;
+  // Disable timer interrupt to make sure the ISR doesn't read partial data.
+  // TODO: Could the timer number change with library updates?
+  // TODO: can we disable only this alarm rather than the whole interrupt?
+  irq_set_enabled(TIMER_IRQ_3, 0);
+  if(stepper_mvmnt_c0[stepper].updated > 0) {
+    // Data hasn't been pulled in time.
+    printf("WARN: Data not transferred to core1 in time.");
+    gpio_put(LED_PIN, 1);
+  }
+  stepper_mvmnt_c0[stepper] = (struct StepperMovement){
+    .padding = 0,
+    .updated = 1,
+    .count = stepper,
+    .step_change = position_diff
+  };
+  irq_set_enabled(TIMER_IRQ_3, 1);
+
+  return config.axis[stepper].abs_pos;
+}
+
+/*
+uint32_t todo(){
   if(step_len_us <= 9) {  // TODO: Should this be "=" rather than "<=" ?
     // The PIO program has a 9 instruction overhead so steps shorter than this are
     // not possible.
@@ -144,18 +268,6 @@ uint32_t send_pio_steps(
     return config.axis[stepper].abs_pos;
   }
 
-  if(step_len_us < config.axis[stepper].min_step_len_us) {
-    // Limit maximum speed.
-    step_len_us = config.axis[stepper].min_step_len_us;
-  }
-
-  // Track absolute position.
-  // TODO: Implement acceleration values.
-  if (direction > 0) {
-    config.axis[stepper].abs_pos += step_count;
-  } else {
-    config.axis[stepper].abs_pos -= step_count;
-  }
 
   // PIO program generates 1 more step than it's told to.
   step_count -= 1;
@@ -163,52 +275,23 @@ uint32_t send_pio_steps(
   // PIO program makes steps 9 instructions longer than it's told to.
   step_len_us -= 9;
 
-  pio_sm_put(pio, sm, direction);
-  pio_sm_put(pio, sm, step_len_us);
-  pio_sm_put(pio, sm, step_count);
 
   return config.axis[stepper].abs_pos;
 }
-
-uint32_t set_relative_position_at_time(
-    const uint32_t stepper,
-    const int position_diff,
-    const uint32_t time_slice) {
-  uint32_t step_len_us = time_slice / abs(position_diff);
-  uint32_t direction = 0;
-  if(position_diff > 0) {
-    direction = 1;
-  }
-
-  return send_pio_steps(stepper, abs(position_diff), step_len_us, direction);
-}
+*/
 
 uint32_t set_relative_position(
     const uint32_t stepper,
     const int position_diff) {
-  uint32_t step_len_us = config.update_time_us / abs(position_diff);
-  uint32_t direction = 0;
-  if(position_diff > 0) {
-    direction = 1;
-  }
 
-  return send_pio_steps(stepper, abs(position_diff), step_len_us, direction);
-}
-
-uint32_t set_absolute_position_at_time(
-    const uint32_t stepper,
-    const uint32_t new_position,
-    const uint32_t time_slice_us) {
-  int position_diff = new_position - config.axis[stepper].abs_pos;
-  return set_relative_position_at_time(stepper, position_diff, time_slice_us);
+  return send_pio_steps(stepper, position_diff);
 }
 
 uint32_t set_absolute_position(
     const uint32_t stepper,
     const uint32_t new_position) {
-  const uint32_t time_slice_us = config.update_time_us;
   int position_diff = new_position - config.axis[stepper].abs_pos;
-  return set_relative_position_at_time(stepper, position_diff, time_slice_us);
+  return send_pio_steps(stepper, position_diff);
 }
 
 uint32_t get_absolute_position(uint32_t stepper) {
@@ -309,4 +392,3 @@ void get_axis_pos(
     *msg_machine_len += sizeof(struct Reply_axis_pos);
   }
 }
-

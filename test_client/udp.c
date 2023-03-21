@@ -182,6 +182,125 @@ size_t populate_data(void* packet, size_t* packet_space) {
   return packet_size;
 }
 
+size_t store_message(int64_t* values, void** packet, size_t* packet_space) {
+  printf("store_message [%li, %li, %li, %li]\n", values[0], values[1], values[2], values[3]);
+  struct Message message;
+  struct Message_uint message_uint;
+  struct Message_uint_uint message_uint_uint;
+  struct Message_uint_int message_uint_int;
+  size_t message_size = 0;
+
+  switch(values[0]) {
+    case MSG_SET_GLOAL_UPDATE_RATE:
+      message_uint = (struct Message_uint){.type=values[0], .value0=values[1]};
+      message_size = sizeof(struct Message_uint);
+      memcpy(*packet, &message_uint, message_size);
+      break;
+    case MSG_SET_AXIS_ABS_POS:
+      message_uint_uint = 
+        (struct Message_uint_uint){.type=values[0], .value0=values[1], .value1=values[2]};
+      message_size = sizeof(struct Message_uint_uint);
+      memcpy(*packet, &message_uint_uint, message_size);
+      break;
+    case MSG_SET_AXIS_REL_POS:
+      message_uint_int = 
+        (struct Message_uint_int){.type=values[0], .value0=values[1], .value1=values[2]};
+      message_size = sizeof(struct Message_uint_int);
+      memcpy(*packet, &message_uint_int, message_size);
+      break;
+    case MSG_SET_AXIS_MAX_SPEED:
+      // TODO.
+    case MSG_SET_AXIS_MAX_ACCEL:
+      // TODO.
+    case MSG_SET_AXIS_ABS_POS_AT_TIME:
+      // TODO.
+    case MSG_GET_GLOBAL_CONFIG:
+      message = (struct Message){.type=values[0]};
+      message_size = sizeof(struct Message);
+      memcpy(*packet, &message, message_size);
+      break;
+    case MSG_GET_AXIS_CONFIG:
+      message_uint = (struct Message_uint){.type=values[0], .value0=values[1]};
+      message_size = sizeof(struct Message_uint);
+      memcpy(*packet, &message_uint, message_size);
+      break;
+    case MSG_GET_AXIS_POS:
+      message_uint = (struct Message_uint){.type=values[0], .value0=values[1]};
+      message_size = sizeof(struct Message_uint);
+      memcpy(*packet, &message_uint, message_size);
+      break;
+    default:
+      printf("Invalid message type: %lu\n", values[0]);
+      exit(0);
+  }
+
+  packet_space -= message_size;
+  *packet += message_size;
+
+  return message_size;
+}
+
+size_t populate_data_oneshot(void* packet, size_t* packet_space) {
+  size_t message_size = 0;
+  size_t packet_size = 0;
+  int64_t values[4] = {0,0,0,0};
+  size_t value_num = 0;
+  uint32_t val = 0;
+
+  memset(packet, 0, *packet_space);
+
+  char buf[BUFSIZE] = "";
+  bzero(buf, BUFSIZE);
+  printf("%s", human_help);
+  printf("Use \":\" to separate values.\n"
+      "Use \",\" to seperate messages\n"
+      "eg: > 3:0:10, 3:1:-10, 8:0, 8:1\n");
+  printf(" > ");
+  fgets(buf, BUFSIZE, stdin);
+  printf("%s\n", buf);
+
+  char* itterate = buf;
+
+  while(*itterate) {
+    if (*itterate == ',') {
+      // New message.
+      packet_size += store_message(values, &packet, packet_space);
+      values[0] = 0;
+      values[1] = 0;
+      values[2] = 0;
+      values[3] = 0;
+      value_num = 0;
+      itterate++;
+    } else if (*itterate == ':') {
+      // Separator.
+      itterate++;
+    } else if (*itterate == 10) {
+      // Enter
+      packet_size += store_message(values, &packet, packet_space);
+      break;
+    } else if (isspace(*itterate)) {
+      // Whitespace. Ignore and continue.
+      itterate++;
+    } else if (isdigit(*itterate) || *itterate == '-') {
+      val = strtol(itterate, &itterate, 10);
+      if (value_num < 4) {
+        values[value_num] = val;
+      } else {
+        printf("Too many values. %u\n", val);
+        memset(packet, '\0', BUFSIZE);
+        return 0;
+      }
+      value_num++;
+    } else {
+      printf("Unexpected character: %u : %c\n", *itterate, *itterate);
+      memset(packet, '\0', BUFSIZE);
+      return 0;
+    }
+  }
+
+  return packet_size;
+}
+
 void display_data(void* packet, size_t packet_size) {
   size_t packet_parsed = 0;
   size_t message_size;
@@ -191,6 +310,14 @@ void display_data(void* packet, size_t packet_size) {
   struct Message_uint_int message_uint_int;
 
   printf("\nSending messages:\n");
+  printf("Raw:\n");
+  printf("  addr\t| val\n");
+  printf("  --------+-------\n");
+  for(size_t i = 0; i < packet_size / sizeof(uint32_t); i++) {
+    printf("    %lu\t| %u\n", i, ((uint32_t*)packet)[i]);
+  }
+
+  printf("Parsed:\n");
   while(packet_parsed < packet_size) {
     uint32_t msg_type = *(uint32_t*)packet;
     switch(msg_type) {
@@ -236,6 +363,7 @@ void display_data(void* packet, size_t packet_size) {
     packet += message_size;
     packet_parsed += message_size;
   }
+  printf("\n");
 }
 
 void display_reply(char* buf) {
@@ -283,16 +411,26 @@ int main(int argc, char **argv) {
     char *hostname;
     char buf[BUFSIZE];
     char packet[BUFSIZE];
+    uint8_t oneshot = 0;
     // Leave room for an empty terminating record.
     size_t packet_space = BUFSIZE - sizeof(struct Message);
 
     /* check command line arguments */
-    if (argc != 3) {
-       fprintf(stderr,"usage: %s <hostname> <port>\n", argv[0]);
+    if (argc < 3 || argc > 4) {
+       fprintf(stderr,"usage: %s <hostname> <port> [-oneshot]\n", argv[0]);
        exit(0);
     }
     hostname = argv[1];
     portno = atoi(argv[2]);
+
+    if(argc == 4) {
+      if(strcmp(argv[3], "-oneshot") == 0) {
+        oneshot = 1;
+      } else {
+        fprintf(stderr,"usage: %s <hostname> <port> [-oneshot]\n", argv[0]);
+        exit(0);
+      }
+    }
 
     /* socket: create the socket */
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -315,7 +453,13 @@ int main(int argc, char **argv) {
     serveraddr.sin_port = htons(portno);
 
 
-    size_t packet_size = populate_data(packet, &packet_space);
+    size_t packet_size;
+    if(oneshot) {
+      packet_size = populate_data_oneshot(packet, &packet_space);
+    } else {
+      packet_size = populate_data(packet, &packet_space);
+    }
+
     display_data(packet, packet_size);
 
 

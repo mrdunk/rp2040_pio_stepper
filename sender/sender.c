@@ -15,7 +15,6 @@
 #include "sender.h"
 #include "messages.h"
 
-uint8_t led_flipper = 0;
 
 /* Network */
 static wiz_NetInfo g_net_info =
@@ -365,14 +364,6 @@ int32_t get_UDP(
    switch(getSn_SR(socket_num)) {
      case SOCK_UDP :
        if((size = getSn_RX_RSR(socket_num)) > 0) {
-         if (led_flipper > 0) {
-           led_flipper = 0;
-         } else {
-           led_flipper = 1;
-         }
-         printf("led: %u\n", led_flipper);
-         gpio_put(LED_PIN, led_flipper);
-
          // Receiving data.
          if(size > DATA_BUF_SIZE) {
            size = DATA_BUF_SIZE;
@@ -447,20 +438,6 @@ int32_t put_UDP(
   return 1;
 }
 
-void core1_entry() {
-  printf("Hello core1\n");
-  while(1) {
-    printf("loop core1\n");
-    gpio_put(LED_PIN, 1);
-    sleep_ms(1000);
-    gpio_put(LED_PIN, 0);
-    sleep_ms(100);
-  }
-}
-
-#define CORE1_STACK_SIZE 4096
-uint32_t core1_stack[CORE1_STACK_SIZE];
-
 int main() {
 
   int retval = 0;
@@ -503,24 +480,24 @@ int main() {
   stdio_usb_init();
   setup_default_uart();
 
+  sleep_ms(1000);
+
   // Initialise PIOs.
-  uint32_t stepper_count = 2;
+  // TODO: Set up all pins.
+  uint32_t stepper_count = 2; // MAX_AXIS;  // TODO: populate other pins.
   uint32_t pins_step[2] = {0, 2};
   uint32_t pins_direction[2] = {1, 3};
   for (uint32_t stepper = 0; stepper < stepper_count; stepper++) {
     init_pio(stepper, pins_step[stepper], pins_direction[stepper]);
+    //while(1);
   }
+
 
   //send_pios_steps(0, 10, 500000, 1);
   //send_pios_steps(0, 20, 100000, 0);
   //send_pios_steps(1, 4, 2000000, 0);
   //send_pios_steps(1, 2, 5000000, 1);
 
-  sleep_ms(1000);
-
-  // Launch core 1
-  //multicore_launch_core1(&core1_entry);
-  multicore_launch_core1_with_stack(&core1_entry, core1_stack, CORE1_STACK_SIZE);
 
   while (1) {
     memset(tx_buf_machine, '\0', DATA_BUF_SIZE);
@@ -584,7 +561,6 @@ int main() {
         //for(size_t i = 0; i < tx_buf_machine_len; i += 4) {
         //  printf("*   %lu\t%lu\n", i, ((uint32_t*)tx_buf_machine)[i/4]);
         //}
-  
     }
 
     put_uart(tx_buf_human, DATA_BUF_SIZE);

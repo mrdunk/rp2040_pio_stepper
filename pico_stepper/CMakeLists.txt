@@ -14,5 +14,6 @@ target_include_directories (${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(${TARGET_NAME} PRIVATE
         pico_stdlib
+        pico_multicore
         hardware_pio
         )

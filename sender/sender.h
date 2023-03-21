@@ -22,5 +22,4 @@
 
 #define LED_PIN 25
 
-
 #endif  // SENDER__H
