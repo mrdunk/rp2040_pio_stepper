@@ -7,13 +7,15 @@
 
 #define LED_PIN 25
 //#define CORE1_STACK_SIZE 4096  // TODO: I have no idea how big this needs to be.
-#define CORE1_STACK_SIZE 0x4000  // TODO: I have no idea how big this needs to be.
+#define CORE1_STACK_SIZE 0xA000  // TODO: I have no idea how big this needs to be.
 
 
 #define CMND_SET_POS           1
 #define CMND_SET_MIN_STEP_LEN  2
 #define CMND_SET_DESIRED_POS   3
 
+/* Objects passed between core0 and core1 over the FIFO.
+ * Used to synchronise the config on either core and request axis moves. */
 struct AxisUpdate {
   uint8_t padding;
   uint8_t command;
@@ -22,12 +24,14 @@ struct AxisUpdate {
   int32_t value;
 };
 
+/* Configuration object for an axis. */
 struct ConfigAxis {
   uint32_t abs_pos;             // In steps. Default value is UINT_MAX / 2.
   uint32_t min_step_len_ticks;
   int32_t velocity;             // Steps per update_time_us.
 };
 
+/* Configuration object for global settings. */
 struct ConfigGlobal {
   // Both the following are really the same thing, portrayed different ways.
   // Update using set_global_update_rate(...).
@@ -38,7 +42,9 @@ struct ConfigGlobal {
   struct ConfigAxis axis[MAX_AXIS];
 };
 
+/* Initialise core1. Done soon after startup. Should only need called the once. */
 void init_core1();
+void core1_entry();
 
 /* Initialise an rp2040 PIO to drive stepper motors.
  *

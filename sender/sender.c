@@ -483,18 +483,7 @@ int main() {
     wizchip_check();
     network_initialize(g_net_info);
     /* Get network information */
-    print_network_information(g_net_info);
-  }
-
-
-  // Initialise PIOs.
-  // TODO: Set up all pins.
-  uint32_t stepper_count = 2; // MAX_AXIS;  // TODO: populate other pins.
-  uint32_t pins_step[2] = {0, 2};
-  uint32_t pins_direction[2] = {1, 3};
-  for (uint32_t stepper = 0; stepper < stepper_count; stepper++) {
-    init_pio(stepper, pins_step[stepper], pins_direction[stepper]);
-    //while(1);
+    //print_network_information(g_net_info);
   }
 
 
@@ -512,7 +501,7 @@ int main() {
     get_uart(uart_rx_buf, tx_buf_human, tx_buf_machine);
 
     if (NET_ENABLE > 0) {
-        retval = get_UDP(
+        /*retval = get_UDP(
             SOCKET_NUMBER_HUMAN,
             NW_PORT_HUMAN,
             nw_rx_buf,
@@ -525,7 +514,7 @@ int main() {
         if (retval < 0) {
           printf(" Network error : %d\n", retval);
           while (1);
-        }
+        }*/
         retval = get_UDP(
             SOCKET_NUMBER_MACHINE,
             NW_PORT_MACHINE,
@@ -540,7 +529,7 @@ int main() {
           printf(" Network error : %d\n", retval);
           while (1);
         }
-        retval = put_UDP(
+        /*retval = put_UDP(
             SOCKET_NUMBER_HUMAN,
             NW_PORT_HUMAN,
             tx_buf_human,
@@ -550,7 +539,7 @@ int main() {
         if (retval < 0) {
           printf(" Network error : %d\n", retval);
           while (1);
-        }
+        }*/
         retval = put_UDP(
             SOCKET_NUMBER_MACHINE,
             NW_PORT_MACHINE,

@@ -2,6 +2,11 @@
 #define UPDATE_TYPES__H
 #include <sys/types.h>
 
+/* This file contains objects that are passed over Ethernet UDP between host and RP2040.
+ * Multiple structs can be backed in an array.
+ * The array should be null terminated; The last entry in the array should be a
+ * uint32_t of zero value. */
+
 
 static const char* human_help = 
 "Description              | id | params\r\n"
@@ -28,11 +33,6 @@ static const char* human_help =
 #define MSG_GET_AXIS_CONFIG          8
 #define MSG_GET_AXIS_POS             9
 
-#define REPLY_NONE                   0
-#define REPLY_GLOBAL_CONFIG          1
-#define REPLY_AXIS_CONFIG            2
-#define REPLY_AXIS_POS               3
-
 struct Message {
   uint32_t type;
 };
@@ -53,6 +53,12 @@ struct Message_uint_int {
   uint32_t value0;
   int value1;
 };
+
+
+#define REPLY_NONE                   0
+#define REPLY_GLOBAL_CONFIG          1
+#define REPLY_AXIS_CONFIG            2
+#define REPLY_AXIS_POS               3
 
 struct Reply_global_config {
   uint32_t type;

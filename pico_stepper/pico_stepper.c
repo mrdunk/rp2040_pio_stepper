@@ -117,6 +117,7 @@ struct ConfigGlobal config_c1 = {
 };
 
 
+/*
 #define RB_LEN 1000
 
 struct Rb {
@@ -141,6 +142,7 @@ size_t rb(struct Rb* data, size_t new_val) {
 
   return data->total;
 }
+*/
 
 void axis_to_pio(const uint32_t stepper, PIO* pio, uint32_t* sm) {
   switch (stepper) {
@@ -163,6 +165,48 @@ void axis_to_pio(const uint32_t stepper, PIO* pio, uint32_t* sm) {
   }
 }
 
+void push_to_pio(int16_t section_count, uint8_t axis, uint32_t desired_pos) {
+  static uint32_t accumilator[MAX_AXIS];
+  PIO pio;
+  uint32_t sm;
+  uint32_t direction;
+
+  if(section_count == 0) {
+    accumilator[axis] = 0;
+  }
+
+  uint32_t current_pos = config_c1.axis[axis].abs_pos;
+  int32_t pos_dif = desired_pos - current_pos;
+  uint32_t step_len_ticks = config_c1.update_time_ticks / MESSAGE_SECTIONS;
+
+  if(pos_dif > 0) {
+    direction = 1;
+  } else {
+    direction = 0;
+  }
+
+  // This method is called multiple times per update from core0.
+  // The following aims for a linear distribution of steps over time.
+  uint32_t step_count = abs(pos_dif) / MESSAGE_SECTIONS;
+  uint32_t mod = abs(pos_dif) % MESSAGE_SECTIONS;
+  accumilator[axis] += mod;
+  if(accumilator[axis] >= MESSAGE_SECTIONS) {
+    accumilator[axis] -= MESSAGE_SECTIONS;
+    step_count += 1;
+  }
+  if(direction) {
+    config_c1.axis[axis].abs_pos += step_count;
+  } else {
+    config_c1.axis[axis].abs_pos -= step_count;
+  }
+
+  // Push data to the PIO.
+  axis_to_pio(axis, &pio, &sm);
+  pio_sm_put(pio, sm, direction);
+  pio_sm_put(pio, sm, step_len_ticks);
+  pio_sm_put(pio, sm, step_count);
+}
+
 void core1_entry() {
   static uint32_t last_pos[MAX_AXIS];     // axis abs_pos when we received new data.
   static uint32_t current_pos[MAX_AXIS];  // axis abs_pos we sent to pio.
@@ -170,13 +214,14 @@ void core1_entry() {
   uint8_t axis;
   PIO pio;
   uint32_t sm;
-  struct Rb run_time = rb_default;
-  size_t section_count = 0;
+  //struct Rb run_time = rb_default;
+  int16_t section_count;
   uint32_t message_section_len = config_c0.update_time_us / MESSAGE_SECTIONS;
   uint32_t byte;
   size_t section_start_time, start_time, end_time, diff_time,
          ave_time = 100,
          worst_time = 0, count = 0, buff_eror = 0;
+  uint8_t count_axis_ready;
 
   printf("Hello core1\n");
 
@@ -196,11 +241,18 @@ void core1_entry() {
           break;
         }
       }
-      section_count = 0;
-      // TODO: Send position data via FIFO.
+      //printf("sc: %i\n", section_count);
+      section_count = -1;
+      // TODO: Send position data reply via FIFO.
     }
 
+    count_axis_ready = 0;
     for(axis = 0; axis < MAX_AXIS; axis++) {
+      axis_to_pio(axis, &pio, &sm);
+      if(pio_sm_is_tx_fifo_empty(pio, sm)) {
+        count_axis_ready++;
+      }
+
       if(stepper_mvmnt_c1[axis].updated > 0) {
         printf("core1: "
             "command: %u  axis: %u  value: %lu\r\n",
@@ -208,7 +260,6 @@ void core1_entry() {
             stepper_mvmnt_c1[axis].axis,
             stepper_mvmnt_c1[axis].value);
         stepper_mvmnt_c1[axis].updated = 0;
-        //break;  // Print the rest on the next time around the loop.
       }
     }
 
@@ -221,29 +272,26 @@ void core1_entry() {
           config_c1.axis[axis].min_step_len_ticks = stepper_mvmnt_c1[axis].value;
           break;
         case CMND_SET_DESIRED_POS:
-          axis_to_pio(axis, &pio, &sm);
-          if(pio_sm_is_tx_fifo_empty(pio, sm)) {
-            section_start_time = start_time;
-            uint32_t desired_pos = stepper_mvmnt_c1[axis].value;
-            uint32_t current_pos = config_c1.axis[axis].abs_pos;
-            int32_t pos_dif = desired_pos - current_pos;
-            //part_step_change = 
-            //if(stepper_mvmnt_c1[stepper].step_change > 0) {
-            //  direction = 1;
-            //} else {
-            //  direction = 0;
+          if(count_axis_ready != MAX_AXIS) {
+            //if(count_axis_ready != 0) {
+            //  printf("WARN: Some but not all PIOs are ready.\n");
             //}
-            section_count++;
+            break;
           }
+          if(axis == 0) {
+            section_count++;
+            //printf("* %u\n", section_count);
+          }
+          push_to_pio(section_count, axis, stepper_mvmnt_c1[axis].value);
+
           break;
         default:
           //printf("core1: Unknown update command: %u\n", stepper_mvmnt_c1[axis].command);
           break;
-
-
       }
     }
 
+    /*
     // Below here is gathering stats.
     end_time = time_us_64();
     diff_time = end_time - start_time;
@@ -257,11 +305,8 @@ void core1_entry() {
       worst_time = 0;
     }
     count++;
+    */
   }
-
-  //pio_sm_put(pio, sm, direction);
-  //pio_sm_put(pio, sm, step_len_ticks);
-  //pio_sm_put(pio, sm, step_count);
 }
 
 
@@ -346,6 +391,7 @@ static bool timer_callback_c0(repeating_timer_t *rt) {
     }
     to_serialise->updated = 0;
   }
+  memset((void*)stepper_mvmnt_c0, 0, sizeof(struct AxisUpdate) * MAX_AXIS); 
 
   return true; // keep repeating
 }
@@ -402,33 +448,52 @@ void init_core1() {
 
   sleep_ms(1000);
 
+  // Initialise PIOs.
+  // TODO: Set up pins through config.
+  uint32_t stepper_count = MAX_AXIS;
+  uint32_t pins_step[8] =      {0, 2, 4, 6, 8, 10, 12, 14};
+  uint32_t pins_direction[8] = {1, 3, 5, 7, 9, 11, 13, 15};
+
+  for (uint32_t stepper = 0; stepper < stepper_count; stepper++) {
+    init_pio(stepper, pins_step[stepper], pins_direction[stepper]);
+    //while(1);
+  }
+
+  //sleep_ms(1000);
+
   done = 1;
 }
 
 void init_pio(
     const uint32_t stepper,
     const uint32_t pin_step,
-    const uint32_t pin_direction
-    )
+    const uint32_t pin_direction)
 {
-  uint32_t offset, sm;
+  static uint32_t offset_pio0 = 0;
+  static uint32_t offset_pio1 = 0;
+
+  uint32_t sm;
   switch (stepper) {
     case 0:
     case 1:
     case 2:
     case 3:
-      offset = pio_add_program(pio0, &step_program);
-      sm = stepper;
-      step_program_init(pio0, sm, offset, pin_step, pin_direction);
+      if (offset_pio0 == 0) {
+        offset_pio0 = pio_add_program(pio0, &step_program);
+      }
+      sm = pio_claim_unused_sm(pio0, true);
+      step_program_init(pio0, sm, offset_pio0, pin_step, pin_direction);
       pio_sm_set_enabled(pio0, sm, true);
       break;
     case 4:
     case 5:
     case 6:
     case 7:
-      offset = pio_add_program(pio1, &step_program);
-      sm = stepper - 4;
-      step_program_init(pio1, sm, offset, pin_step, pin_direction);
+      if (offset_pio1 == 0) {
+        offset_pio1 = pio_add_program(pio1, &step_program);
+      }
+      sm = pio_claim_unused_sm(pio1, true);
+      step_program_init(pio1, sm, offset_pio1, pin_step, pin_direction);
       pio_sm_set_enabled(pio1, sm, true);
       break;
     default:
