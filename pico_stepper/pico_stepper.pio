@@ -61,3 +61,52 @@ void step_program_init(PIO pio, uint sm, uint offset, uint pin_step, uint pin_di
    pio_sm_init(pio, sm, offset, &c);
 }
 %}
+
+
+
+.program dma_step
+
+.wrap_target
+    out x,    28
+    mov y, x
+    out pins, 2
+pin_off:
+    jmp y-- pin_off
+    mov y, x
+    out pins, 2
+pin_on:
+    jmp y-- pin_off
+.wrap
+
+% c-sdk {
+// Helper function to configure `dma_step`.
+
+void dma_step_program_init(PIO pio, uint sm, uint offset, uint pin) {
+  // Get default PIO config for modification.
+  pio_sm_config c = step_program_get_default_config(offset);
+
+  // Setup pin and pin+1 to be accessible from the PIO
+  pio_gpio_init(pio, pin);
+  pio_gpio_init(pio, pin+1);
+
+  // Setup PIO SM to control pin and pin + 1
+  pio_sm_set_consecutive_pindirs(pio, sm, pin, 2, true);
+
+  // pin and pin + 1 are controlled by `out pins, ...` instructions
+  sm_config_set_out_pins(&c, pin, 2);
+
+  // Join both FIFO registers.
+  // sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
+
+  // Clock divider
+  // sm_config_set_clkdiv(&c, clk_div);
+
+  //	sm_config_set_in_shift(pio_sm_config*, shift_right, auto_push, push_threshold)
+  sm_config_set_out_shift(&c, true, true, 32);
+
+  pio_sm_init(pio, sm, offset, &c);
+  // Start PIO now.
+  pio_sm_set_enabled(pio, sm, true);
+}
+%}
+

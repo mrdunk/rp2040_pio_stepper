@@ -17,7 +17,8 @@
 #define NW_PORT_HUMAN 5000
 #define NW_PORT_MACHINE 5002
 
-#define NET_ENABLE 1
+#define NET_ENABLE_HUMAN 1
+#define NET_ENABLE_MACHINE 1
 #define DATA_BUF_SIZE 1024
 
 #define LED_PIN 25

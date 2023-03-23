@@ -3,16 +3,18 @@
 
 #define MAX_AXIS 8
 
-#define MESSAGE_SECTIONS 10
+#define MESSAGE_SECTIONS 16
 
 #define LED_PIN 25
 //#define CORE1_STACK_SIZE 4096  // TODO: I have no idea how big this needs to be.
 #define CORE1_STACK_SIZE 0xA000  // TODO: I have no idea how big this needs to be.
 
+#define CMND_SET_POS              1
+#define CMND_SET_MIN_STEP_LEN     2
+#define CMND_SET_MAX_ACCEL        3
+#define CMND_SET_DESIRED_POS      4
 
-#define CMND_SET_POS           1
-#define CMND_SET_MIN_STEP_LEN  2
-#define CMND_SET_DESIRED_POS   3
+#define MAX_STEPS_PER_UPDATE   0xFF
 
 /* Objects passed between core0 and core1 over the FIFO.
  * Used to synchronise the config on either core and request axis moves. */
@@ -28,6 +30,7 @@ struct AxisUpdate {
 struct ConfigAxis {
   uint32_t abs_pos;             // In steps. Default value is UINT_MAX / 2.
   uint32_t min_step_len_ticks;
+  uint32_t max_accel_ticks;     // ticks / update_time_ticks ^ 2
   int32_t velocity;             // Steps per update_time_us.
 };
 

@@ -59,7 +59,7 @@ void help(char* tx_buf) {
 struct Message* process_msg(char** rx_buf) {
   struct Message* message = (struct Message*)(*rx_buf);
 
-  printf("NW UPD message on port %u:\n\ttype: %lu\r\n", NW_PORT_MACHINE, message->type);
+  // printf("NW UPD message on port %u:\n\ttype: %lu\r\n", NW_PORT_MACHINE, message->type);
 
   *rx_buf += sizeof(struct Message);
 
@@ -69,8 +69,8 @@ struct Message* process_msg(char** rx_buf) {
 struct Message_uint* process_msg_uint(char** rx_buf) {
   struct Message_uint* message = (struct Message_uint*)(*rx_buf);
 
-  printf("NW UPD message on port %u:\n\ttype: %lu\n\tvalue0: %lu\r\n",
-      NW_PORT_MACHINE, message->type, message->value0);
+  // printf("NW UPD message on port %u:\n\ttype: %lu\n\tvalue0: %lu\r\n",
+  //    NW_PORT_MACHINE, message->type, message->value0);
 
   *rx_buf += sizeof(struct Message_uint);
 
@@ -80,8 +80,8 @@ struct Message_uint* process_msg_uint(char** rx_buf) {
 struct Message_uint_uint* process_msg_uint_uint(char** rx_buf) {
   struct Message_uint_uint* message = (struct Message_uint_uint*)(*rx_buf);
 
-  printf("NW UPD message on port %u:\n\ttype: %lu\n\tvalue0: %lu\n\tvalue1: %lu\r\n",
-      NW_PORT_MACHINE, message->type, message->value0, message->value1);
+  // printf("NW UPD message on port %u:\n\ttype: %lu\n\tvalue0: %lu\n\tvalue1: %lu\r\n",
+  //    NW_PORT_MACHINE, message->type, message->value0, message->value1);
 
   *rx_buf += sizeof(struct Message_uint_uint);
 
@@ -91,8 +91,8 @@ struct Message_uint_uint* process_msg_uint_uint(char** rx_buf) {
 struct Message_uint_int* process_msg_uint_int(char** rx_buf) {
   struct Message_uint_int* message = (struct Message_uint_int*)(*rx_buf);
 
-  printf("NW UPD message on port %u:\n\ttype: %lu\n\tvalue0: %lu\n\tvalue1: %li\r\n",
-      NW_PORT_MACHINE, message->type, message->value0, message->value1);
+  // printf("NW UPD message on port %u:\n\ttype: %lu\n\tvalue0: %lu\n\tvalue1: %li\r\n",
+  //    NW_PORT_MACHINE, message->type, message->value0, message->value1);
 
   *rx_buf += sizeof(struct Message_uint_uint);
 
@@ -120,24 +120,24 @@ size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* tx_buf_
       case MSG_SET_AXIS_ABS_POS:
         msg_uint_uint = process_msg_uint_uint(&rx_itterator);
         set_absolute_position(msg_uint_uint->value0, msg_uint_uint->value1);
-        get_axis_pos(
+        /*get_axis_pos(
             msg_uint_uint->value0,
             tx_buf,
             DATA_BUF_SIZE,
             tx_buf_machine,
             &tx_buf_machine_len,
-            tx_buf_mach_len_max);
+            tx_buf_mach_len_max);*/
         break;
       case MSG_SET_AXIS_REL_POS:
         msg_uint_int = process_msg_uint_int(&rx_itterator);
         set_relative_position(msg_uint_int->value0, msg_uint_int->value1);
-        get_axis_pos(
+        /*get_axis_pos(
             msg_uint_int->value0,
             tx_buf,
             DATA_BUF_SIZE,
             tx_buf_machine,
             &tx_buf_machine_len,
-            tx_buf_mach_len_max);
+            tx_buf_mach_len_max);*/
         break;
       case MSG_SET_AXIS_MAX_SPEED:
         // TODO.
@@ -475,7 +475,7 @@ int main() {
   init_core1();
   printf("--------------------------------\n");
 
-  if(NET_ENABLE > 0) {
+  if(NET_ENABLE_HUMAN > 0 || NET_ENABLE_MACHINE > 0) {
     wizchip_spi_initialize();
     wizchip_cris_initialize();
     wizchip_reset();
@@ -483,7 +483,7 @@ int main() {
     wizchip_check();
     network_initialize(g_net_info);
     /* Get network information */
-    //print_network_information(g_net_info);
+    print_network_information(g_net_info);
   }
 
 
@@ -500,8 +500,8 @@ int main() {
 
     get_uart(uart_rx_buf, tx_buf_human, tx_buf_machine);
 
-    if (NET_ENABLE > 0) {
-        /*retval = get_UDP(
+    if (NET_ENABLE_HUMAN > 0) {
+        retval = get_UDP(
             SOCKET_NUMBER_HUMAN,
             NW_PORT_HUMAN,
             nw_rx_buf,
@@ -514,7 +514,9 @@ int main() {
         if (retval < 0) {
           printf(" Network error : %d\n", retval);
           while (1);
-        }*/
+        }
+    }
+    if (NET_ENABLE_MACHINE > 0) {
         retval = get_UDP(
             SOCKET_NUMBER_MACHINE,
             NW_PORT_MACHINE,
@@ -529,7 +531,9 @@ int main() {
           printf(" Network error : %d\n", retval);
           while (1);
         }
-        /*retval = put_UDP(
+    }
+    if (NET_ENABLE_HUMAN > 0) {
+        retval = put_UDP(
             SOCKET_NUMBER_HUMAN,
             NW_PORT_HUMAN,
             tx_buf_human,
@@ -539,7 +543,9 @@ int main() {
         if (retval < 0) {
           printf(" Network error : %d\n", retval);
           while (1);
-        }*/
+        }
+    }
+    if (NET_ENABLE_MACHINE > 0) {
         retval = put_UDP(
             SOCKET_NUMBER_MACHINE,
             NW_PORT_MACHINE,
@@ -551,10 +557,6 @@ int main() {
           printf(" Network error : %d\n", retval);
           while (1);
         }
-
-        //for(size_t i = 0; i < tx_buf_machine_len; i += 4) {
-        //  printf("*   %lu\t%lu\n", i, ((uint32_t*)tx_buf_machine)[i/4]);
-        //}
     }
 
     put_uart(tx_buf_human, DATA_BUF_SIZE);
