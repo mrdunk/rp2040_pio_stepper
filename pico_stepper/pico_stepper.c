@@ -180,38 +180,45 @@ void axis_to_pio(const uint32_t stepper, PIO* pio, uint32_t* sm) {
   }
 }
 
-int32_t distribute_steps(struct AxisUpdate* update, uint32_t* step_lens)
+void distribute_steps(struct AxisUpdate* update, uint32_t* step_lens)
 {
   uint8_t axis = update->axis;
   const uint32_t update_time_ticks = config_c1.update_time_ticks;
-  uint32_t step_count = abs(config_c1.axis[axis].abs_pos - update->value);
-  uint8_t direction = (config_c1.axis[axis].abs_pos > update->value) ? 0 : 1;
-  const int32_t prev_step_count = config_c1.axis[axis].velocity;
+  int32_t velocity = update->value - config_c1.axis[axis].abs_pos;
+  //uint8_t direction = (velocity > 0) ? 1 : 0;
+  uint8_t direction = (velocity > 0);
+  const int32_t prev_velocity = abs(config_c1.axis[axis].velocity);
   const uint32_t min_step_len_ticks = config_c1.axis[axis].min_step_len_ticks;
-  const uint32_t max_accel = 0;  // TODO.
+  const uint32_t max_accel = config_c1.axis[axis].max_accel_ticks;
   uint32_t step_len;
+  uint32_t step_count;
 
   //printf("axis: %u\tdirection: %i\tstep_count: %li\tupdate_time_ticks: %lu"
   //    "\tmin_step_len_ticks: %lu \n",
   //    axis, direction, step_count, update_time_ticks, min_step_len_ticks);
 
-  if(step_count > MAX_STEPS_PER_UPDATE) {
+  if(abs(velocity) > MAX_STEPS_PER_UPDATE) {
     // Oops. Trying to send more steps than we have space for.
-    step_count = MAX_STEPS_PER_UPDATE;
+    velocity = direction ? MAX_STEPS_PER_UPDATE : -MAX_STEPS_PER_UPDATE;
   }
 
   // Limit steps according to maximum allowed acceleration/deceleration.
-  if((max_accel > 0) && (step_count > prev_step_count + max_accel)) {
-    step_count = prev_step_count + max_accel;
-  } else if((max_accel > 0) && (step_count < prev_step_count - max_accel)) {
-    step_count = prev_step_count - max_accel;
+  if(max_accel > 0) {
+    if(direction && (velocity > (prev_velocity + (int32_t)max_accel))) {
+      velocity = prev_velocity + max_accel;
+      direction = (velocity > 0);
+    } else if(!direction && (velocity < (prev_velocity - (int32_t)max_accel))) {
+      velocity = prev_velocity - max_accel;
+      direction = (velocity > 0);
+    }
   }
+  step_count = abs(velocity);
 
   if(step_count == 0) {
     // Special case: No steps requested.
     // Just create a single entry spanning the whole duration with no IO pin changes.
     step_lens[0] = update_time_ticks + (direction << 29) + (direction << 31);
-    return 0;
+    return;
   }
 
   uint32_t time_total_ticks = 0;
@@ -243,18 +250,17 @@ int32_t distribute_steps(struct AxisUpdate* update, uint32_t* step_lens)
       step_len = update_time_ticks + (direction << 28) + (direction << 30) + (1 << 31);
     }
     if(step_count > MAX_STEPS_PER_UPDATE) {
-      printf("ERROR: core1: step_lens buffer is full. %ul\n", step);
+      printf("ERROR: core1: step_lens buffer is full. %lu\n", step);
       break;
     }
     step_lens[step] = step_len;
-    //printf("%lu\t%lu\t%lu\n", step, step_lens[step], time_total_ticks);
   }
-  printf("axis: %u\tdirection: %i\tstep_count: %li\tstep_len_ticks: %lu\n",
-      axis, direction, step_count, step_len_ticks);
+  //printf("axis: %u\tdirection: %i\tstep_count: %li\tstep_len_ticks: %lu\n",
+  //    axis, direction, step_count, step_len_ticks);
 
   config_c1.axis[axis].abs_pos += direction ? +step_count : -step_count;
   config_c1.axis[axis].velocity = direction ? +step_count : -step_count;
-  return config_c1.axis[axis].velocity;
+  return;
 }
 
 uint8_t core1_process_updates(uint8_t axis, uint32_t* step_lens) {
