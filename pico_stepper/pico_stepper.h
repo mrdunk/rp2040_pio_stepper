@@ -7,12 +7,14 @@
 
 #define LED_PIN 25
 //#define CORE1_STACK_SIZE 4096  // TODO: I have no idea how big this needs to be.
-#define CORE1_STACK_SIZE 0xA000  // TODO: I have no idea how big this needs to be.
+#define CORE1_STACK_SIZE 0xB000  // TODO: I have no idea how big this needs to be.
 
 #define CMND_SET_POS              1
 #define CMND_SET_MIN_STEP_LEN     2
 #define CMND_SET_MAX_ACCEL        3
 #define CMND_SET_DESIRED_POS      4
+#define CMND_REPORT_ABS_POS       5
+#define CMND_REPORT_VELOCITY      6
 
 #define MAX_STEPS_PER_UPDATE   0xFF
 
@@ -127,7 +129,7 @@ void get_axis_config(
     size_t* msg_machine_len,
     size_t msg_machine_len_max);
 
-/* Gets the abs_pos paramiter for an axis.*/
+/* Gets the abs_pos parameter for an axis.*/
 void get_axis_pos(
     const uint32_t axis,
     uint8_t* msg_human,

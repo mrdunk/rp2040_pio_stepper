@@ -71,6 +71,8 @@ struct Reply_axis_config {
   uint32_t type;
   uint32_t abs_pos;
   uint32_t min_step_len_ticks;
+  uint32_t max_accel_ticks;
+  int32_t velocity;
 } static Reply_axis_config_default = { REPLY_AXIS_CONFIG };
 
 struct Reply_axis_pos {

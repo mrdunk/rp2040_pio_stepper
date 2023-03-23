@@ -20,6 +20,7 @@ uint32_t core1_stack[CORE1_STACK_SIZE];
 repeating_timer_t hw_update_timer;
 volatile struct AxisUpdate axis_mvmnt_c0[MAX_AXIS] = {0};
 queue_t axis_mvmnt_c1;
+queue_t axis_pos_c1;
 
 struct ConfigGlobal config_c0 = {
   .update_rate = 1000,       // 1kHz.
@@ -179,7 +180,7 @@ void axis_to_pio(const uint32_t stepper, PIO* pio, uint32_t* sm) {
   }
 }
 
-void distribute_steps(struct AxisUpdate* update, uint32_t* step_lens)
+int32_t distribute_steps(struct AxisUpdate* update, uint32_t* step_lens)
 {
   uint8_t axis = update->axis;
   const uint32_t update_time_ticks = config_c1.update_time_ticks;
@@ -199,18 +200,18 @@ void distribute_steps(struct AxisUpdate* update, uint32_t* step_lens)
     step_count = MAX_STEPS_PER_UPDATE;
   }
 
-  if(step_count == 0) {
-    // Special case: No steps requested.
-    // Just create a single entry spanning the whole duration with no IO pin changes.
-    step_lens[0] = update_time_ticks + (direction << 29) + (direction << 31);
-    return;
-  }
-
   // Limit steps according to maximum allowed acceleration/deceleration.
   if((max_accel > 0) && (step_count > prev_step_count + max_accel)) {
     step_count = prev_step_count + max_accel;
   } else if((max_accel > 0) && (step_count < prev_step_count - max_accel)) {
     step_count = prev_step_count - max_accel;
+  }
+
+  if(step_count == 0) {
+    // Special case: No steps requested.
+    // Just create a single entry spanning the whole duration with no IO pin changes.
+    step_lens[0] = update_time_ticks + (direction << 29) + (direction << 31);
+    return 0;
   }
 
   uint32_t time_total_ticks = 0;
@@ -232,11 +233,13 @@ void distribute_steps(struct AxisUpdate* update, uint32_t* step_lens)
       time_total_ticks += step_len_ticks + 1;
       // TODO: The PIO has some overhead; It inserts a few extra instructions.
       // Subtract those from the step_lens value here.
+      // Also it actually lasts 2x as long as requested.
       step_len = update_time_ticks + 1 +(direction << 28) + (direction << 30) + (1 << 31);
     } else {
       time_total_ticks += step_len_ticks;
       // TODO: The PIO has some overhead; It inserts a few extra instructions.
       // Subtract those from the step_lens value here.
+      // Also it actually lasts 2x as long as requested.
       step_len = update_time_ticks + (direction << 28) + (direction << 30) + (1 << 31);
     }
     if(step_count > MAX_STEPS_PER_UPDATE) {
@@ -249,10 +252,12 @@ void distribute_steps(struct AxisUpdate* update, uint32_t* step_lens)
   printf("axis: %u\tdirection: %i\tstep_count: %li\tstep_len_ticks: %lu\n",
       axis, direction, step_count, step_len_ticks);
 
-  config_c1.axis[axis].velocity = step_count;
+  config_c1.axis[axis].abs_pos += direction ? +step_count : -step_count;
+  config_c1.axis[axis].velocity = direction ? +step_count : -step_count;
+  return config_c1.axis[axis].velocity;
 }
 
-void core1_do_update(uint8_t axis, uint32_t* step_lens) {
+uint8_t core1_process_updates(uint8_t axis, uint32_t* step_lens) {
   struct AxisUpdate update;
   queue_remove_blocking(&axis_mvmnt_c1, &update);
   switch(update.command) {
@@ -272,10 +277,11 @@ void core1_do_update(uint8_t axis, uint32_t* step_lens) {
       //printf("core1: Unknown update command: %u\n", update.command);
       break;
   }
+  return update.updated;
 }
 
 /* This interrupt handler is triggered when data from core1 appears on the FIFO. */
-void core1_interrupt_handler() {
+void core1_FIFO_interrupt_handler() {
   static size_t last_time = 0;
 
   size_t start_time = time_us_64();
@@ -307,37 +313,74 @@ void core1_interrupt_handler() {
     }
 
   } else {
-    printf("WARN: core1_interrupt_handler fired with no new data.\n");
+    printf("WARN: core1_FIFO_interrupt_handler fired with no new data.\n");
   }
 
   multicore_fifo_clear_irq(); // Clear interrupt
 
   // Time profiling output.
   size_t now = time_us_64();
-  printf("core1.irq:\t\t%lu\t%lu\n", start_time - last_time, now - start_time);
+  printf("core1.FIFO_irq:\t\t%lu\t%lu\n", start_time - last_time, now - start_time);
   last_time = start_time;
 }
 
-void core1_entry() {
-    multicore_fifo_clear_irq();
-    irq_set_exclusive_handler(SIO_IRQ_PROC1, core1_interrupt_handler);
-
-    queue_init(&axis_mvmnt_c1, sizeof(struct AxisUpdate), MAX_AXIS);
-    uint32_t step_lens[MAX_AXIS][MAX_STEPS_PER_UPDATE] = {0};
-
-    irq_set_enabled(SIO_IRQ_PROC1, true);
-
-    // Infinite While Loop to wait for interrupt
-    while (1){
-      if(!queue_is_empty(&axis_mvmnt_c1)) {
-        size_t t1 = time_us_64();
-        for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
-          core1_do_update(axis, step_lens[axis]);
-        }
-        size_t t2 = time_us_64();
-        printf("core1 update took:\t\t%lu\n", t2 - t1);
-      }
+void core1_send_updates() {
+  struct AxisUpdate to_serialise;
+  for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
+    to_serialise.padding = 0;
+    to_serialise.command = CMND_REPORT_ABS_POS;
+    to_serialise.updated = 1;
+    to_serialise.axis = axis;
+    to_serialise.value = config_c1.axis[axis].abs_pos;
+    if(multicore_fifo_push_timeout_us(((uint32_t*)(&to_serialise))[0], 100) == false) {
+      printf("FAIL: core1 push fail for axis %u\n", axis);
+      break;
     }
+    if(multicore_fifo_push_timeout_us(((uint32_t*)(&to_serialise))[1], 100) == false) {
+      printf("FAIL: core1 push fail for axis %u\n", axis);
+      break;
+    }
+
+    to_serialise.padding = 0;
+    to_serialise.command = CMND_REPORT_VELOCITY;
+    to_serialise.updated = 1;
+    to_serialise.axis = axis;
+    to_serialise.value = config_c1.axis[axis].velocity;
+
+    if(multicore_fifo_push_timeout_us(((uint32_t*)(&to_serialise))[0], 100) == false) {
+      printf("FAIL: core0 push fail for axis %u\n", axis);
+      break;
+    }
+    if(multicore_fifo_push_timeout_us(((uint32_t*)(&to_serialise))[1], 100) == false) {
+      printf("FAIL: core0 push fail for axis %u\n", axis);
+      break;
+    }
+  }
+}
+
+void core1_entry() {
+  queue_init(&axis_mvmnt_c1, sizeof(struct AxisUpdate), MAX_AXIS);
+  uint32_t step_lens[MAX_AXIS][MAX_STEPS_PER_UPDATE] = {0};
+
+  // Set up FIFO interrupt for processing data sent from core0 > core1.
+  multicore_fifo_clear_irq();
+  irq_set_exclusive_handler(SIO_IRQ_PROC1, core1_FIFO_interrupt_handler);
+  irq_set_enabled(SIO_IRQ_PROC1, true);
+
+  // Infinite While Loop to wait for interrupt
+  while (1){
+    if(!queue_is_empty(&axis_mvmnt_c1)) {
+      size_t t1 = time_us_64();
+      uint8_t count_updates = 0;
+      for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
+        count_updates += core1_process_updates(axis, step_lens[axis]);
+      }
+      size_t t2 = time_us_64();
+      core1_send_updates();
+
+      printf("core1 process updates took:\t\t%lu\tcount_updates: %u\n", t2 - t1, count_updates);
+    }
+  }
 }
 
 /* Return speed in steps/second for a particular step length. */
@@ -354,12 +397,12 @@ inline static uint32_t time_to_ticks(const uint32_t time_us) {
 }
 
 /* Send data to core1 via FIFO. */
-static bool timer_callback_c0(repeating_timer_t *rt) {
+static bool core0_timer_callback(repeating_timer_t *rt) {
   static size_t last_time = 0;
 
   size_t start_time = time_us_64();
 
-  //printf("timer_callback_c0. %i\n", get_core_num());
+  //printf("core0_timer_callback. %i\n", get_core_num());
   for(size_t stepper = 0; stepper < MAX_AXIS; stepper++) {
     volatile struct AxisUpdate* to_serialise = &(axis_mvmnt_c0[stepper]);
     for (size_t i = 0; i < sizeof(struct AxisUpdate) / sizeof(uint32_t); i++) {
@@ -370,6 +413,7 @@ static bool timer_callback_c0(repeating_timer_t *rt) {
       // As a result it should never block.
       if(multicore_fifo_push_timeout_us(byte, 100) == false) {
         printf("FAIL: core0 push fail for axis %u\n", stepper);
+        break;
       }
     }
     to_serialise->updated = 0;
@@ -383,10 +427,71 @@ static bool timer_callback_c0(repeating_timer_t *rt) {
   return true; // keep repeating
 }
 
+void core0_FIFO_interrupt_handler() {
+  static size_t last_time = 0;
+
+  size_t start_time = time_us_64();
+
+  if (multicore_fifo_rvalid()){
+    uint32_t raw_0;
+    uint32_t raw_1;
+    size_t count = 0;
+    // Pull the data from core0 off the FIFO.
+    while(multicore_fifo_pop_timeout_us(0, &raw_0) &&
+        multicore_fifo_pop_timeout_us(0, &raw_1))
+    {
+      struct AxisUpdate update;
+      ((uint32_t*)(&update))[0] = raw_0;
+      ((uint32_t*)(&update))[1] = raw_1;
+
+      switch(update.command) {
+        case CMND_REPORT_ABS_POS:
+          //printf("%u\t%u\t%u\t%lu\n",
+          //update.command, update.updated, update.axis, update.value);
+          config_c0.axis[update.axis].abs_pos = update.value;
+          break;
+        case CMND_REPORT_VELOCITY:
+          //printf("%u\t%u\t%u\t%li\n",
+          //update.command, update.updated, update.axis, update.value);
+          config_c0.axis[update.axis].velocity = update.value;
+          break;
+
+      }
+      count++;
+    }
+
+    if(count != MAX_AXIS * 2) {
+      printf("WARN: core0: corrupt data received. %u\n", count);
+      // Drain the incomplete queue.
+      while(queue_try_remove(&axis_mvmnt_c1, NULL));
+    }
+
+  } else {
+    printf("WARN: core0_FIFO_interrupt_handler fired with no new data.\n");
+  }
+
+  multicore_fifo_clear_irq(); // Clear interrupt
+
+  // Time profiling output.
+  size_t now = time_us_64();
+  printf("core0.FIFO_irq:\t\t%lu\t%lu\n", start_time - last_time, now - start_time);
+  last_time = start_time;
+}
+
+inline uint8_t number_configured() {
+    uint8_t updated = 0;
+    for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
+      updated += axis_mvmnt_c0[axis].updated;
+    }
+
+    return updated;
+}
+
 /* Push config from core0 to core1. */
 void sync_config_c0_to_c1() {
-  for(size_t prop = 0; prop < sizeof(struct ConfigAxis) / sizeof(uint32_t); prop++) {
+  for(size_t prop = 0; prop < 3; prop++) {
     irq_set_enabled(TIMER_IRQ_3, 0);
+    // Wait for any active timer IRQ to finish.
     for(size_t axis = 0; axis < MAX_AXIS; axis++) {
       switch(prop) {
         case(0):
@@ -402,7 +507,7 @@ void sync_config_c0_to_c1() {
           break;
         case(1):
           printf("CMND_SET_MIN_STEP_LEN axis: %u  value: %lu\r\n",
-              axis, config_c0.axis[axis].abs_pos);
+              axis, config_c0.axis[axis].min_step_len_ticks);
           axis_mvmnt_c0[axis] = (struct AxisUpdate){
             .padding = 0,
               .command = CMND_SET_MIN_STEP_LEN,
@@ -413,7 +518,7 @@ void sync_config_c0_to_c1() {
           break;
         case(2):
           printf("CMND_SET_MAX_ACCEL axis: %u  value: %lu\r\n",
-              axis, config_c0.axis[axis].abs_pos);
+              axis, config_c0.axis[axis].max_accel_ticks);
           axis_mvmnt_c0[axis] = (struct AxisUpdate){
             .padding = 0,
               .command = CMND_SET_MAX_ACCEL,
@@ -428,13 +533,8 @@ void sync_config_c0_to_c1() {
     }
     irq_set_enabled(TIMER_IRQ_3, 1);
 
-
-    size_t all_updated = 1;
-    while(all_updated) {
-      for(size_t axis = 0; axis < MAX_AXIS; axis++) {
-        all_updated &= axis_mvmnt_c0[axis].updated;
-      }
-    }
+    // Wait for timer IRQ to process the updates.
+    while(number_configured() > 0);
   }
 }
 
@@ -451,7 +551,7 @@ void init_core1() {
   // Start timer to push data from core0 > core1.
   // negative timeout means exact delay (rather than delay between callbacks)
   // TODO: Make the period match config_c0.update_time_us.
-  if (!add_repeating_timer_us(-1000000, timer_callback_c0, NULL, &hw_update_timer)) {
+  if (!add_repeating_timer_us(-1000000, core0_timer_callback, NULL, &hw_update_timer)) {
     printf("ERROR: Failed to add timer\n");
   }
 
@@ -465,10 +565,12 @@ void init_core1() {
 
   for (uint32_t stepper = 0; stepper < stepper_count; stepper++) {
     init_pio(stepper, pins_step[stepper], pins_direction[stepper]);
-    //while(1);
   }
 
-  //sleep_ms(1000);
+  // Set up return FIFO path. core1 > core0.
+  multicore_fifo_clear_irq();
+  irq_set_exclusive_handler(SIO_IRQ_PROC0, core0_FIFO_interrupt_handler);
+  irq_set_enabled(SIO_IRQ_PROC0, true);
 
   done = 1;
 }
@@ -516,12 +618,8 @@ uint32_t send_pio_steps(
   if(config_c0.axis[axis].abs_pos == desired_pos) {
     // No steps to add.
     // TODO: Maybe we want to update core1 anyway in case to needs to decelerate?
-    return config_c0.axis[axis].abs_pos;
+    //return config_c0.axis[axis].abs_pos;
   }
-
-  // TODO: This probably wants to be replaced with code that updates config_c0
-  // with the steps performed as reported by core0.
-  config_c0.axis[axis].abs_pos = desired_pos;
 
   // Queue axis movement data;
   // Disable timer interrupt to make sure the ISR doesn't read partial data.
@@ -535,6 +633,9 @@ uint32_t send_pio_steps(
       .axis = axis,
       .value = desired_pos
   };
+  if(number_configured() == 8) {
+    printf("All configured\n");
+  }
   irq_set_enabled(TIMER_IRQ_3, 1);
 
   return config_c0.axis[axis].abs_pos;
@@ -604,6 +705,7 @@ void get_global_config(
     reply.update_rate = config_c0.update_rate;
     reply.update_time_us = config_c0.update_time_us;
     reply.update_time_ticks = config_c0.update_time_ticks;
+
     memcpy(msg_machine + *msg_machine_len, &reply, sizeof(struct Reply_global_config));
     *msg_machine_len += sizeof(struct Reply_global_config);
   }
@@ -623,16 +725,21 @@ void get_axis_config(
         "ConfigAxis[%lu] summary:\r\n"
         "  ConfigAxis.abs_pos:    %lu\r\n"
         "  ConfigAxis.min_step_len_ticks: %lu\r\n"
+        "  ConfigAxis.max_accel_ticks: %lu\r\n"
         "  ConfigAxis.velocity: %li\r\n",
         axis,
         config_c0.axis[axis].abs_pos,
         config_c0.axis[axis].min_step_len_ticks,
+        config_c0.axis[axis].max_accel_ticks,
         config_c0.axis[axis].velocity);
   }
   if(*msg_machine_len + sizeof(struct Reply_axis_config) <= msg_machine_len_max) {
     struct Reply_axis_config reply = Reply_axis_config_default;
     reply.abs_pos = config_c0.axis[axis].abs_pos;
     reply.min_step_len_ticks = config_c0.axis[axis].min_step_len_ticks;
+    reply.max_accel_ticks = config_c0.axis[axis].max_accel_ticks;
+    reply.velocity = config_c0.axis[axis].velocity;
+
     memcpy(msg_machine + *msg_machine_len, &reply, sizeof(struct Reply_axis_config));
     *msg_machine_len += sizeof(struct Reply_axis_config);
   }
@@ -656,6 +763,7 @@ void get_axis_pos(
   if(*msg_machine_len + sizeof(struct Reply_axis_pos) <= msg_machine_len_max) {
     struct Reply_axis_pos reply = Reply_axis_pos_default;
     reply.abs_pos = config_c0.axis[axis].abs_pos;
+
     memcpy(msg_machine + *msg_machine_len, &reply, sizeof(struct Reply_axis_pos));
     *msg_machine_len += sizeof(struct Reply_axis_pos);
   }
