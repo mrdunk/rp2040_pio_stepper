@@ -47,7 +47,7 @@ void help(char* tx_buf) {
         tx_buf,
         DATA_BUF_SIZE,
         "\r\nUsage:\r\n"
-        " > COMMAND[:VALUE[:VALUE[:VALUE]]]\r\n"
+        " > COMMAND[:VALUE][:VALUE][:VALUE]\r\n"
         "eg:\r\n"
         " > 3:0:-15\r\n\r\n"
         "List of available commands:\r\n"

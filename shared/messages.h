@@ -13,7 +13,7 @@ static const char* human_help =
 "-------------------------+----+------------------------\r\n"
 "SET_GLOAL_UPDATE_RATE    | 1  | value: uint32_t\r\n"
 "SET_AXIS_ABS_POS         | 2  | axis: uint32_t, value: uint32_t\r\n"
-"SET_AXIS_REL_POS         | 3  | axis: uint32_t, value: int\r\n"
+"SET_AXIS_REL_POS         | 3  | axis: uint32_t, value: int32_t\r\n"
 "SET_AXIS_MAX_SPEED       | 4  | Not yet implemented\r\n"
 "SET_AXIS_MAX_ACCEL       | 5  | Not yet implemented\r\n"
 "SET_AXIS_ABS_POS_AT_TIME | 6  | Not yet implemented\r\n"

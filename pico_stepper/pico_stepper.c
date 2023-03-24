@@ -289,8 +289,9 @@ uint8_t core1_process_updates(uint8_t axis, uint32_t* step_lens) {
 /* This interrupt handler is triggered when data from core1 appears on the FIFO. */
 void core1_FIFO_interrupt_handler() {
   static size_t last_time = 0;
-
+#ifdef LOG_CORE1_INTERUPTS
   size_t start_time = time_us_64();
+#endif // LOG_CORE1_INTERUPTS
 
   if (multicore_fifo_rvalid()){
     uint32_t raw_0;
@@ -324,10 +325,12 @@ void core1_FIFO_interrupt_handler() {
 
   multicore_fifo_clear_irq(); // Clear interrupt
 
+#ifdef LOG_CORE1_INTERUPTS
   // Time profiling output.
   size_t now = time_us_64();
   printf("core1.FIFO_irq:\t\t%lu\t%lu\n", start_time - last_time, now - start_time);
   last_time = start_time;
+#endif // LOG_CORE1_INTERUPTS
 }
 
 void core1_send_updates() {
@@ -376,15 +379,19 @@ void core1_entry() {
   // Infinite While Loop to wait for interrupt
   while (1){
     if(!queue_is_empty(&axis_mvmnt_c1)) {
+#ifdef LOG_CORE1_MAIN_LOOP
       size_t t1 = time_us_64();
+#endif  // LOG_CORE1_MAIN_LOOP
       uint8_t count_updates = 0;
       for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
         count_updates += core1_process_updates(axis, step_lens[axis]);
       }
-      size_t t2 = time_us_64();
       core1_send_updates();
 
+#ifdef LOG_CORE1_MAIN_LOOP
+      size_t t2 = time_us_64();
       printf("core1 process updates took:\t\t%lu\tcount_updates: %u\n", t2 - t1, count_updates);
+#endif  // LOG_CORE1_MAIN_LOOP
     }
   }
 }
@@ -406,7 +413,9 @@ inline static uint32_t time_to_ticks(const uint32_t time_us) {
 static bool core0_timer_callback(repeating_timer_t *rt) {
   static size_t last_time = 0;
 
+#ifdef LOG_CORE0_INTERUPTS
   size_t start_time = time_us_64();
+#endif // LOG_CORE0_INTERUPTS
 
   //printf("core0_timer_callback. %i\n", get_core_num());
   for(size_t stepper = 0; stepper < MAX_AXIS; stepper++) {
@@ -426,9 +435,11 @@ static bool core0_timer_callback(repeating_timer_t *rt) {
   }
   memset((void*)axis_mvmnt_c0, 0, sizeof(struct AxisUpdate) * MAX_AXIS); 
 
+#ifdef LOG_CORE0_INTERUPTS
   size_t now = time_us_64(); 
   printf("core0.timer_irq:\t%lu\t%lu\n", start_time - last_time, now - start_time);
   last_time = start_time;
+#endif // LOG_CORE0_INTERUPTS
 
   return true; // keep repeating
 }
@@ -436,7 +447,9 @@ static bool core0_timer_callback(repeating_timer_t *rt) {
 void core0_FIFO_interrupt_handler() {
   static size_t last_time = 0;
 
+#ifdef LOG_CORE0_INTERUPTS
   size_t start_time = time_us_64();
+#endif // LOG_CORE0_INTERUPTS
 
   if (multicore_fifo_rvalid()){
     uint32_t raw_0;
@@ -478,10 +491,12 @@ void core0_FIFO_interrupt_handler() {
 
   multicore_fifo_clear_irq(); // Clear interrupt
 
+#ifdef LOG_CORE0_INTERUPTS
   // Time profiling output.
   size_t now = time_us_64();
   printf("core0.FIFO_irq:\t\t%lu\t%lu\n", start_time - last_time, now - start_time);
   last_time = start_time;
+#endif // LOG_CORE0_INTERUPTS
 }
 
 inline uint8_t number_configured() {

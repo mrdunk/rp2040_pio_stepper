@@ -1,6 +1,11 @@
 #ifndef PICO_STEPPER__H
 #define PICO_STEPPER__H
 
+//#define LOG_CORE0_INTERUPTS 1
+//#define LOG_CORE1_INTERUPTS 1
+//#define LOG_CORE0_MAIN_LOOP 1
+//#define LOG_CORE1_MAIN_LOOP 1
+
 #define MAX_AXIS 8
 
 #define MESSAGE_SECTIONS 16

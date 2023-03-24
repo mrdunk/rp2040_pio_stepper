@@ -15,15 +15,16 @@
 #include <netinet/in.h>
 #include <netdb.h> 
 #include <limits.h>
+#include <time.h>
+#include <math.h>
+#include <unistd.h>
 
 #include "../shared/messages.h"
 
 #define BUFSIZE 1024
-#define MAX_DATA 16
 #define MAX_AXIS 8
-#define MAX_TARGETS (MAX_AXIS + 1)
-#define TARGET_GLOBAL = (MAX_TARGETS - 1)
-
+#define MAX_ACCELERATION 200
+#define LOOP_LEN 1000000
 
 /* 
  * error - wrapper for perror
@@ -130,12 +131,14 @@ size_t populate_message_uint_int(
   return message_size;
 }
 
-size_t populate_data(void* packet, size_t* packet_space) {
+size_t populate_data(void* packet) {
   uint32_t msg_type;
   size_t message_size = 0;
   size_t packet_size = 0;
+  // Leave room for an empty terminating record.
+  size_t packet_space = BUFSIZE - sizeof(struct Message);
 
-  memset(packet, 0, *packet_space);
+  memset(packet, 0, packet_space);
 
   printf("%s", human_help);
 
@@ -143,15 +146,15 @@ size_t populate_data(void* packet, size_t* packet_space) {
     switch(msg_type) {
       case MSG_SET_GLOAL_UPDATE_RATE:
         message_size = populate_message_uint(
-            "Set global update rate:", msg_type, &packet, packet_space);
+            "Set global update rate:", msg_type, &packet, &packet_space);
         break;
       case MSG_SET_AXIS_ABS_POS:
         message_size = populate_message_uint_uint(
-            "Axis:", "Set absolute position:", msg_type, &packet, packet_space);
+            "Axis:", "Set absolute position:", msg_type, &packet, &packet_space);
         break;
       case MSG_SET_AXIS_REL_POS:
         message_size = populate_message_uint_int(
-            "Axis:", "Set relative position:", msg_type, &packet, packet_space);
+            "Axis:", "Set relative position:", msg_type, &packet, &packet_space);
         break;
       case MSG_SET_AXIS_MAX_SPEED:
         // TODO.
@@ -160,15 +163,15 @@ size_t populate_data(void* packet, size_t* packet_space) {
       case MSG_SET_AXIS_ABS_POS_AT_TIME:
         // TODO.
       case MSG_GET_GLOBAL_CONFIG:
-        message_size = populate_message(msg_type, &packet, packet_space);
+        message_size = populate_message(msg_type, &packet, &packet_space);
         break;
       case MSG_GET_AXIS_CONFIG:
         message_size = populate_message_uint(
-            "Get configuration for axis:", msg_type, &packet, packet_space);
+            "Get configuration for axis:", msg_type, &packet, &packet_space);
         break;
       case MSG_GET_AXIS_POS:
         message_size = populate_message_uint(
-            "Get absolute position of axis:", msg_type, &packet, packet_space);
+            "Get absolute position of axis:", msg_type, &packet, &packet_space);
         break;
       default:
         printf("Invalid message type: %u\n", msg_type);
@@ -176,7 +179,7 @@ size_t populate_data(void* packet, size_t* packet_space) {
 
     }
     packet_size += message_size;
-    //printf("  %lu\t%lu\t%lu\n", message_size, *packet_space, packet_size);
+    //printf("  %lu\t%lu\t%lu\n", message_size, packet_space, packet_size);
   }
 
   return packet_size;
@@ -240,14 +243,16 @@ size_t store_message(int64_t* values, void** packet, size_t* packet_space) {
   return message_size;
 }
 
-size_t populate_data_oneshot(void* packet, size_t* packet_space) {
+size_t populate_data_oneshot(void* packet) {
   size_t message_size = 0;
   size_t packet_size = 0;
   int64_t values[4] = {0,0,0,0};
   size_t value_num = 0;
   uint32_t val = 0;
+  // Leave room for an empty terminating record.
+  size_t packet_space = BUFSIZE - sizeof(struct Message);
 
-  memset(packet, 0, *packet_space);
+  memset(packet, 0, packet_space);
 
   char buf[BUFSIZE] = "";
   bzero(buf, BUFSIZE);
@@ -264,7 +269,7 @@ size_t populate_data_oneshot(void* packet, size_t* packet_space) {
   while(*itterate) {
     if (*itterate == ',') {
       // New message.
-      packet_size += store_message(values, &packet, packet_space);
+      packet_size += store_message(values, &packet, &packet_space);
       values[0] = 0;
       values[1] = 0;
       values[2] = 0;
@@ -276,7 +281,7 @@ size_t populate_data_oneshot(void* packet, size_t* packet_space) {
       itterate++;
     } else if (*itterate == 10) {
       // Enter
-      packet_size += store_message(values, &packet, packet_space);
+      packet_size += store_message(values, &packet, &packet_space);
       break;
     } else if (isspace(*itterate)) {
       // Whitespace. Ignore and continue.
@@ -297,6 +302,97 @@ size_t populate_data_oneshot(void* packet, size_t* packet_space) {
       return 0;
     }
   }
+
+  return packet_size;
+}
+
+double sampleNormal() {
+    double u = ((double) rand() / (RAND_MAX)) * 2 - 1;
+    double v = ((double) rand() / (RAND_MAX)) * 2 - 1;
+    double r = u * u + v * v;
+    if (r == 0 || r > 1) return sampleNormal();
+    double c = sqrt(-2 * log(r) / r);
+    return u * c;
+}
+
+size_t populate_data_loop(void* packet) {
+  static uint32_t axis_pos[MAX_AXIS];
+  static int32_t axis_velocity[MAX_AXIS];
+  static int32_t axis_acceleration[MAX_AXIS];
+  static struct timespec last_time;
+  static size_t packet_space = 0;
+  static uint8_t first_run = 1;
+
+  size_t packet_size = 0;
+  if(first_run == 1) {
+    for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
+      axis_pos[axis] = UINT_MAX / 2;
+      axis_velocity[axis] = 0;
+      axis_acceleration[axis] = 0;
+    }
+    srand(time(NULL));   // Seed random numbers.
+    first_run = 0;
+
+    clock_gettime(CLOCK_REALTIME, &last_time);
+
+    size_t packet_space = BUFSIZE - sizeof(struct Message);
+  }
+
+
+  for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
+    int32_t accel_mod = 0;
+    if(rand() % 20 == 0) {
+      accel_mod = sampleNormal() * 100;
+    }
+
+    axis_acceleration[axis] *= 8;
+    axis_acceleration[axis] /= 10;
+    axis_acceleration[axis] += accel_mod;
+
+    axis_velocity[axis] *= 18;
+    axis_velocity[axis] /= 20;
+    axis_velocity[axis] += axis_acceleration[axis];
+    
+    axis_pos[axis] += axis_velocity[axis];
+
+
+    if(axis == 0) {
+      printf(
+          "axis: %6u "
+          "accel_mod: %6i "
+          "axis_acceleration: %6i "
+          "axis_velocity: %6i "
+          "axis_pos: %6u\n", 
+          axis,
+          accel_mod,
+          axis_acceleration[axis],
+          axis_velocity[axis],
+          axis_pos[axis]);
+    }
+
+    int64_t values[4] = {
+      MSG_SET_AXIS_REL_POS,
+      axis,
+      axis_pos[axis],
+      0
+    };
+    packet_size += store_message(values, &packet, &packet_space);
+  }
+
+  struct timespec now;
+  clock_gettime(CLOCK_REALTIME, &now);
+  uint64_t now_time_us = 1000000 * now.tv_sec + now.tv_nsec / 1000;
+  uint64_t then_time_us = 1000000 * last_time.tv_sec + last_time.tv_nsec / 1000;
+
+  while(now_time_us - then_time_us < LOOP_LEN) {
+    clock_gettime(CLOCK_REALTIME, &now);
+    now_time_us = 1000000 * now.tv_sec + now.tv_nsec / 1000;
+    if(now_time_us - then_time_us < LOOP_LEN - 100) {
+      usleep(1);
+    }
+  }
+  printf("%40li%40li%40li\n", then_time_us, now_time_us, now_time_us - then_time_us);
+  last_time = now;
 
   return packet_size;
 }
@@ -407,93 +503,109 @@ void display_reply(char* buf) {
   }
 }
 
+uint8_t send_data(
+    struct sockaddr_in* serveraddr, int sockfd, char* packet, size_t packet_size)
+{
+  /* send the message to the server */
+  int serverlen = sizeof(*serveraddr);
+  int n = sendto(
+      sockfd,
+      (void*)packet,
+      packet_size,
+      0,
+      (struct sockaddr *)serveraddr,
+      serverlen);
+  if (n < 0) {
+    error("ERROR in sendto");
+    return 1;
+  }
+  return 0;
+}
+
+void get_reply(struct sockaddr_in* serveraddr, int sockfd) {
+  /* print the server's reply */
+  int serverlen;
+  char buf[BUFSIZE];
+  int flags = MSG_DONTWAIT;
+  while(1) {
+    int n = recvfrom(sockfd, buf, BUFSIZE, flags, (struct sockaddr *)&serveraddr, &serverlen);
+    if (n < 0 && errno != EAGAIN) {
+      error("ERROR in recvfrom");
+    }
+    if(n > 0) {
+      //printf("Echo from server:\r\n %s\r\n", buf);
+      printf("Binary reply received.\n");
+      display_reply(buf);
+    }
+    memset(buf, '\0', BUFSIZE);
+  }
+}
+
 int main(int argc, char **argv) {
-    int sockfd, portno, n;
-    int serverlen;
-    struct sockaddr_in serveraddr;
-    struct hostent *server;
-    char *hostname;
-    char buf[BUFSIZE];
-    char packet[BUFSIZE];
-    uint8_t oneshot = 0;
-    // Leave room for an empty terminating record.
-    size_t packet_space = BUFSIZE - sizeof(struct Message);
+  struct sockaddr_in serveraddr;
+  struct hostent *server;
+  char *hostname;
+  char packet[BUFSIZE];
+  size_t packet_size;
+  uint8_t oneshot = 0;
+  uint8_t loop = 0;
 
-    /* check command line arguments */
-    if (argc < 3 || argc > 4) {
-       fprintf(stderr,"usage: %s <hostname> <port> [-oneshot]\n", argv[0]);
-       exit(0);
-    }
-    hostname = argv[1];
-    portno = atoi(argv[2]);
+  /* check command line arguments */
+  if (argc < 3 || argc > 4) {
+    fprintf(stderr,"usage: %s <hostname> <port> [-oneshot] [-loop]\n", argv[0]);
+    exit(0);
+  }
+  hostname = argv[1];
+  int portno = atoi(argv[2]);
 
-    if(argc == 4) {
-      if(strcmp(argv[3], "-oneshot") == 0) {
-        oneshot = 1;
-      } else {
-        fprintf(stderr,"usage: %s <hostname> <port> [-oneshot]\n", argv[0]);
-        exit(0);
-      }
-    }
-
-    /* socket: create the socket */
-    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sockfd < 0) {
-        error("ERROR opening socket");
-    }
-
-    /* gethostbyname: get the server's DNS entry */
-    server = gethostbyname(hostname);
-    if (server == NULL) {
-        fprintf(stderr,"ERROR, no such host as %s\n", hostname);
-        exit(0);
-    }
-
-    /* build the server's Internet address */
-    bzero((char *) &serveraddr, sizeof(serveraddr));
-    serveraddr.sin_family = AF_INET;
-    bcopy((char *)server->h_addr, 
-	  (char *)&serveraddr.sin_addr.s_addr, server->h_length);
-    serveraddr.sin_port = htons(portno);
-
-
-    size_t packet_size;
-    if(oneshot) {
-      packet_size = populate_data_oneshot(packet, &packet_space);
+  if(argc == 4) {
+    if(strcmp(argv[3], "-oneshot") == 0) {
+      oneshot = 1;
+    } else if(strcmp(argv[3], "-loop") == 0) {
+      loop = 1;
     } else {
-      packet_size = populate_data(packet, &packet_space);
+      fprintf(stderr,"usage: %s <hostname> <port> [-oneshot] [-loop]\n", argv[0]);
+      exit(0);
     }
+  }
 
+  /* socket: create the socket */
+  int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+  if (sockfd < 0) {
+    error("ERROR opening socket");
+  }
+
+  /* gethostbyname: get the server's DNS entry */
+  server = gethostbyname(hostname);
+  if (server == NULL) {
+    fprintf(stderr,"ERROR, no such host as %s\n", hostname);
+    exit(0);
+  }
+
+  /* build the server's Internet address */
+  bzero((char *) &serveraddr, sizeof(serveraddr));
+  serveraddr.sin_family = AF_INET;
+  bcopy((char *)server->h_addr, 
+      (char *)&serveraddr.sin_addr.s_addr, server->h_length);
+  serveraddr.sin_port = htons(portno);
+
+
+  if(oneshot) {
+    packet_size = populate_data_oneshot(packet);
     display_data(packet, packet_size);
-
-
-    /* send the message to the server */
-    serverlen = sizeof(serveraddr);
-    n = sendto(
-        sockfd,
-        (void*)packet,
-        packet_size,
-        0,
-        (struct sockaddr *)&serveraddr,
-        serverlen);
-    if (n < 0) {
-      error("ERROR in sendto");
-    }
-    
-    /* print the server's reply */
-    int flags = MSG_DONTWAIT;
+    send_data(&serveraddr, sockfd, packet, packet_size);
+    get_reply(&serveraddr, sockfd);
+  } else if(loop) {
     while(1) {
-      n = recvfrom(sockfd, buf, BUFSIZE, flags, (struct sockaddr *)&serveraddr, &serverlen);
-      if (n < 0 && errno != EAGAIN) {
-        error("ERROR in recvfrom");
-      }
-      if(n > 0) {
-        //printf("Echo from server:\r\n %s\r\n", buf);
-        printf("Binary reply received.\n");
-        display_reply(buf);
-      }
-      memset(buf, '\0', BUFSIZE);
+      packet_size = populate_data_loop(packet);
+      send_data(&serveraddr, sockfd, packet, packet_size);
     }
+  } else {
+    packet_size = populate_data(packet);
+    display_data(packet, packet_size);
+    send_data(&serveraddr, sockfd, packet, packet_size);
+    get_reply(&serveraddr, sockfd);
+  }
 
-    return 0;
+  return 0;
 }
