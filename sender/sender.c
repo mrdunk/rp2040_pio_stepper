@@ -472,9 +472,6 @@ int main() {
   printf("--------------------------------\n");
   printf("UART up.\n");
 
-  init_core1();
-  printf("--------------------------------\n");
-
   if(NET_ENABLE_HUMAN > 0 || NET_ENABLE_MACHINE > 0) {
     wizchip_spi_initialize();
     wizchip_cris_initialize();
@@ -486,6 +483,9 @@ int main() {
     print_network_information(g_net_info);
   }
 
+
+  init_core1();
+  printf("--------------------------------\n");
 
   //send_pios_steps(0, 10, 500000, 1);
   //send_pios_steps(0, 20, 100000, 0);
@@ -558,6 +558,7 @@ int main() {
           while (1);
         }
     }
+    core0_send_to_core1();
 
     put_uart(tx_buf_human, DATA_BUF_SIZE);
   }

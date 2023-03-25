@@ -1,10 +1,9 @@
 #ifndef PICO_STEPPER__H
 #define PICO_STEPPER__H
 
-//#define LOG_CORE0_INTERUPTS 1
-//#define LOG_CORE1_INTERUPTS 1
-//#define LOG_CORE0_MAIN_LOOP 1
-//#define LOG_CORE1_MAIN_LOOP 1
+#define LOG_CORE0_INTERUPTS 1
+#define LOG_CORE1_INTERUPTS 1
+//#define LOG_CORE1_MAIN_LOOP
 
 #define MAX_AXIS 8
 
@@ -22,6 +21,9 @@
 #define CMND_REPORT_VELOCITY      6
 
 #define MAX_STEPS_PER_UPDATE   0xFF
+
+void core0_send_to_core1();
+void core1_send_to_core0();
 
 /* Objects passed between core0 and core1 over the FIFO.
  * Used to synchronise the config on either core and request axis moves. */

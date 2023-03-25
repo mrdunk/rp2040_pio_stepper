@@ -24,7 +24,7 @@
 #define BUFSIZE 1024
 #define MAX_AXIS 8
 #define MAX_ACCELERATION 200
-#define LOOP_LEN 1000000
+#define LOOP_LEN 1000
 
 /* 
  * error - wrapper for perror
@@ -387,7 +387,7 @@ size_t populate_data_loop(void* packet) {
   while(now_time_us - then_time_us < LOOP_LEN) {
     clock_gettime(CLOCK_REALTIME, &now);
     now_time_us = 1000000 * now.tv_sec + now.tv_nsec / 1000;
-    if(now_time_us - then_time_us < LOOP_LEN - 100) {
+    if(now_time_us - then_time_us < LOOP_LEN * 10 / 9) {
       usleep(1);
     }
   }

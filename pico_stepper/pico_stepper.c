@@ -16,11 +16,12 @@
 #include "pico_stepper.h"
 #include "messages.h"
 
+#define SZOF_AXIS_UPDATE (sizeof(struct AxisUpdate) / sizeof(uint32_t))
+
 uint32_t core1_stack[CORE1_STACK_SIZE];
 repeating_timer_t hw_update_timer;
 volatile struct AxisUpdate axis_mvmnt_c0[MAX_AXIS] = {0};
 queue_t axis_mvmnt_c1;
-queue_t axis_pos_c1;
 
 struct ConfigGlobal config_c0 = {
   .update_rate = 1000,       // 1kHz.
@@ -289,51 +290,94 @@ uint8_t core1_process_updates(uint8_t axis, uint32_t* step_lens) {
 /* This interrupt handler is triggered when data from core1 appears on the FIFO. */
 void core1_FIFO_interrupt_handler() {
   static size_t last_time = 0;
+  static const size_t buffer_in_len = sizeof(struct AxisUpdate) / sizeof(uint32_t) * MAX_AXIS;
+  //static uint32_t buffer_in[sizeof(struct AxisUpdate) / sizeof(uint32_t) * MAX_AXIS];
+  static struct AxisUpdate buffer_in[MAX_AXIS];
+  static size_t buffer_in_point = 0;
+  static size_t update_point = 0;
+  static size_t fail_count = 0;
+
+  uint32_t raw;
+  uint32_t fail = 0;
+
 #ifdef LOG_CORE1_INTERUPTS
   size_t start_time = time_us_64();
 #endif // LOG_CORE1_INTERUPTS
+#if LOG_CORE1_INTERUPTS == 2
+  printf("core1.FIFO_irq start.\n");
+#endif // LOG_CORE1_INTERUPTS
 
-  if (multicore_fifo_rvalid()){
-    uint32_t raw_0;
-    uint32_t raw_1;
-    size_t count = 0;
-    // Pull the data from core0 off the FIFO.
-    while(multicore_fifo_pop_timeout_us(0, &raw_0) &&
-        multicore_fifo_pop_timeout_us(0, &raw_1))
-    {
-      struct AxisUpdate update;
-      ((uint32_t*)(&update))[0] = raw_0;
-      ((uint32_t*)(&update))[1] = raw_1;
-
-      if (!queue_try_add(&axis_mvmnt_c1, &update)) {
-        printf("ERROR: core1.interrupt: FIFO was full\n");
-        break;
-      }
-
-      count++;
-    }
-
-    if(count != MAX_AXIS) {
-      printf("core1: WARN: corrupt data received.\n");
-      // Drain the incomplete queue.
-      while(queue_try_remove(&axis_mvmnt_c1, NULL));
-    }
-
-  } else {
+  if (!multicore_fifo_rvalid()) {
+//#if LOG_CORE1_INTERUPTS == 2
     printf("WARN: core1_FIFO_interrupt_handler fired with no new data.\n");
+//#endif // LOG_CORE1_INTERUPTS
+    return;
   }
 
+  struct AxisUpdate update;
+  while(multicore_fifo_pop_timeout_us(0, &raw) && buffer_in_point < buffer_in_len) {
+    ((uint32_t*)&update)[buffer_in_point % SZOF_AXIS_UPDATE] = raw;
+    buffer_in_point++;
+    if(buffer_in_point % (SZOF_AXIS_UPDATE) == 0) {
+      // Whole AxisUpdate object populated.
+      if(update_point != update.axis) {
+        printf("ERROR: core1.interrupt: Invalid data\n");
+        fail = 1;
+        return;
+      }
+      if (!queue_try_add(&axis_mvmnt_c1, &update)) {
+        printf("ERROR: core1.interrupt: Queue was full\n");
+        fail = 1;
+        break;
+    }
+      update_point++;
+    }
+  }
   multicore_fifo_clear_irq(); // Clear interrupt
+  if(buffer_in_point < buffer_in_len) {
+    return;
+  }
+  if(fail) {
+    // Drain remaining incoming entries and reset everything before restart.
+    while(multicore_fifo_pop_timeout_us(10, &raw));
+    buffer_in_point = 0;
+    update_point = 0;
+    fail_count++;
+  }
 
+  buffer_in_point = 0;
+  update_point = 0;
+
+  // Calculate and cache the step lengths.
+  uint32_t step_lens[MAX_AXIS][MAX_STEPS_PER_UPDATE] = {0};
+  if(queue_get_level(&axis_mvmnt_c1) == MAX_AXIS) {
+    uint8_t count_updates = 0;
+    for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
+      count_updates += core1_process_updates(axis, step_lens[axis]);
+    }
+  }
+
+  core1_send_to_core0();
+
+  // Profiling output.
 #ifdef LOG_CORE1_INTERUPTS
-  // Time profiling output.
   size_t now = time_us_64();
+#endif // LOG_CORE1_INTERUPTS
+#if LOG_CORE1_INTERUPTS == 1
+  printf("\t\t\t\t\t\tc1\t%4lu%6lu%6lu\n",
+      start_time - last_time,
+      now - start_time,
+      fail_count);
+#elif LOG_CORE1_INTERUPTS == 2
   printf("core1.FIFO_irq:\t\t%lu\t%lu\n", start_time - last_time, now - start_time);
+#endif // LOG_CORE1_INTERUPTS
+#ifdef LOG_CORE1_INTERUPTS
   last_time = start_time;
 #endif // LOG_CORE1_INTERUPTS
+
 }
 
-void core1_send_updates() {
+void core1_send_to_core0() {
   struct AxisUpdate to_serialise;
   for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
     to_serialise.padding = 0;
@@ -378,21 +422,7 @@ void core1_entry() {
 
   // Infinite While Loop to wait for interrupt
   while (1){
-    if(!queue_is_empty(&axis_mvmnt_c1)) {
-#ifdef LOG_CORE1_MAIN_LOOP
-      size_t t1 = time_us_64();
-#endif  // LOG_CORE1_MAIN_LOOP
-      uint8_t count_updates = 0;
-      for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
-        count_updates += core1_process_updates(axis, step_lens[axis]);
-      }
-      core1_send_updates();
-
-#ifdef LOG_CORE1_MAIN_LOOP
-      size_t t2 = time_us_64();
-      printf("core1 process updates took:\t\t%lu\tcount_updates: %u\n", t2 - t1, count_updates);
-#endif  // LOG_CORE1_MAIN_LOOP
-    }
+    tight_loop_contents();
   }
 }
 
@@ -409,44 +439,83 @@ inline static uint32_t time_to_ticks(const uint32_t time_us) {
   return time_us * (clock_get_hz(clk_sys) / 1000000);
 }
 
+uint8_t number_configured() {
+    uint8_t updated = 0;
+    for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
+      updated += axis_mvmnt_c0[axis].updated;
+    }
+
+    return updated;
+}
+
 /* Send data to core1 via FIFO. */
-static bool core0_timer_callback(repeating_timer_t *rt) {
+void core0_send_to_core1() {
   static size_t last_time = 0;
+  static size_t fail_count = 0;
+
+  if(! number_configured()) {
+    return;
+  }
 
 #ifdef LOG_CORE0_INTERUPTS
   size_t start_time = time_us_64();
 #endif // LOG_CORE0_INTERUPTS
+#if LOG_CORE0_INTERUPTS == 2
+  printf("core0.timer_irq start.\n");
+#endif // LOG_CORE0_INTERUPTS
 
-  //printf("core0_timer_callback. %i\n", get_core_num());
-  for(size_t stepper = 0; stepper < MAX_AXIS; stepper++) {
-    volatile struct AxisUpdate* to_serialise = &(axis_mvmnt_c0[stepper]);
+  if(number_configured() == 0) {
+#if LOG_CORE0_INTERUPTS == 2
+    printf("core0.timer_irq no work to do.\n");
+#endif // LOG_CORE0_INTERUPTS
+    return;
+#if LOG_CORE0_INTERUPTS == 2
+  } else{
+    printf("core0.timer_irq %u\n", number_configured());
+#endif // LOG_CORE0_INTERUPTS
+  }
+
+  for(size_t axis = 0; axis < MAX_AXIS; axis++) {
+    volatile struct AxisUpdate* to_serialise = &(axis_mvmnt_c0[axis]);
+    to_serialise->axis = axis;
     for (size_t i = 0; i < sizeof(struct AxisUpdate) / sizeof(uint32_t); i++) {
       uint32_t byte = ((uint32_t*)to_serialise)[i];
 
-      // Shouldn't need much of a timeout here as core1 reacts to new data via 
-      // interrupt and drains the buffer immediately.
-      // As a result it should never block.
-      if(multicore_fifo_push_timeout_us(byte, 100) == false) {
-        printf("FAIL: core0 push fail for axis %u\n", stepper);
-        break;
-      }
+      multicore_fifo_push_blocking(byte);
     }
     to_serialise->updated = 0;
+  }
+  if(number_configured() != 0) {
+    printf("core0: ERROR: Data not marked as sent.\n");
+    fail_count++;
   }
   memset((void*)axis_mvmnt_c0, 0, sizeof(struct AxisUpdate) * MAX_AXIS); 
 
 #ifdef LOG_CORE0_INTERUPTS
   size_t now = time_us_64(); 
+#endif // LOG_CORE0_INTERUPTS
+#if LOG_CORE0_INTERUPTS == 1
+  printf("\t\t\t\t\t\tc0.rx\t%4lu%6lu%6lu\n",
+      start_time - last_time,
+      now - start_time,
+      fail_count);
+#elif LOG_CORE0_INTERUPTS == 2
   printf("core0.timer_irq:\t%lu\t%lu\n", start_time - last_time, now - start_time);
+#endif // LOG_CORE0_INTERUPTS
+#ifdef LOG_CORE0_INTERUPTS
   last_time = start_time;
 #endif // LOG_CORE0_INTERUPTS
 
-  return true; // keep repeating
+  return;
 }
 
 void core0_FIFO_interrupt_handler() {
   static size_t last_time = 0;
+  static size_t fail_count = 0;
 
+#if LOG_CORE0_INTERUPTS == 2
+  printf("core0.FIFO_irq start.\n");
+#endif // LOG_CORE0_INTERUPTS == 2
 #ifdef LOG_CORE0_INTERUPTS
   size_t start_time = time_us_64();
 #endif // LOG_CORE0_INTERUPTS
@@ -479,39 +548,40 @@ void core0_FIFO_interrupt_handler() {
       count++;
     }
 
+    multicore_fifo_clear_irq(); // Clear interrupt
+
     if(count != MAX_AXIS * 2) {
       printf("WARN: core0: corrupt data received. %u\n", count);
-      // Drain the incomplete queue.
-      while(queue_try_remove(&axis_mvmnt_c1, NULL));
+      fail_count++;
     }
 
   } else {
+#ifdef LOG_CORE0_INTERUPTS
     printf("WARN: core0_FIFO_interrupt_handler fired with no new data.\n");
+#endif // LOG_CORE0_INTERUPTS
   }
 
-  multicore_fifo_clear_irq(); // Clear interrupt
-
+  // Profiling output.
 #ifdef LOG_CORE0_INTERUPTS
-  // Time profiling output.
   size_t now = time_us_64();
+#endif // LOG_CORE0_INTERUPTS
+#if LOG_CORE0_INTERUPTS == 1
+  printf("\t\t\t\t\t\tc0.rx\t%4lu%6lu%6lu\n",
+      start_time - last_time,
+      now - start_time,
+      fail_count);
+#elif LOG_CORE0_INTERUPTS == 2
+  // Time profiling output.
   printf("core0.FIFO_irq:\t\t%lu\t%lu\n", start_time - last_time, now - start_time);
+#endif // LOG_CORE0_INTERUPTS
+#ifdef LOG_CORE0_INTERUPTS
   last_time = start_time;
 #endif // LOG_CORE0_INTERUPTS
-}
-
-inline uint8_t number_configured() {
-    uint8_t updated = 0;
-    for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
-      updated += axis_mvmnt_c0[axis].updated;
-    }
-
-    return updated;
 }
 
 /* Push config from core0 to core1. */
 void sync_config_c0_to_c1() {
   for(size_t prop = 0; prop < 3; prop++) {
-    irq_set_enabled(TIMER_IRQ_3, 0);
     // Wait for any active timer IRQ to finish.
     for(size_t axis = 0; axis < MAX_AXIS; axis++) {
       switch(prop) {
@@ -552,10 +622,9 @@ void sync_config_c0_to_c1() {
           break;
       }
     }
-    irq_set_enabled(TIMER_IRQ_3, 1);
-
-    // Wait for timer IRQ to process the updates.
-    while(number_configured() > 0);
+    core0_send_to_core1();
+    // Wait for FIFO interrupt on core1 to process.
+    sleep_ms(1);
   }
 }
 
@@ -564,17 +633,10 @@ void init_core1() {
   if(done > 0) {
     return;
   }
-  printf("Initializing PIO handlers.\n");
+  printf("core0: Initializing PIO handlers.\n");
 
   // Launch core1.
   multicore_launch_core1_with_stack(&core1_entry, core1_stack, CORE1_STACK_SIZE);
-
-  // Start timer to push data from core0 > core1.
-  // negative timeout means exact delay (rather than delay between callbacks)
-  // TODO: Make the period match config_c0.update_time_us.
-  if (!add_repeating_timer_us(-1000000, core0_timer_callback, NULL, &hw_update_timer)) {
-    printf("ERROR: Failed to add timer\n");
-  }
 
   sync_config_c0_to_c1();
 
@@ -646,7 +708,6 @@ uint32_t send_pio_steps(
   // Disable timer interrupt to make sure the ISR doesn't read partial data.
   // TODO: Could the timer number change with library updates?
   // TODO: can we disable only this alarm rather than the whole interrupt?
-  irq_set_enabled(TIMER_IRQ_3, 0);
   axis_mvmnt_c0[axis] = (struct AxisUpdate){
       .padding = 0,
       .command = CMND_SET_DESIRED_POS,
@@ -654,10 +715,11 @@ uint32_t send_pio_steps(
       .axis = axis,
       .value = desired_pos
   };
+#if LOG_CORE0_INTERUPTS == 2
   if(number_configured() == 8) {
-    printf("All configured\n");
+    printf("core0: All configured.\n");
   }
-  irq_set_enabled(TIMER_IRQ_3, 1);
+#endif  // LOG_CORE0_INTERUPTS
 
   return config_c0.axis[axis].abs_pos;
 }
