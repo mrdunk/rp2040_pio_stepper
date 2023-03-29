@@ -1,17 +1,16 @@
 #ifndef PICO_STEPPER__H
 #define PICO_STEPPER__H
 
-#define LOG_CORE0_INTERUPTS 1
-#define LOG_CORE1_INTERUPTS 1
-//#define LOG_CORE1_MAIN_LOOP
+//#define LOG_CORE0 1
+//#define LOG_CORE1 1
 
-#define MAX_AXIS 8
+#define MAX_AXIS 6
 
 #define MESSAGE_SECTIONS 16
 
 #define LED_PIN 25
 //#define CORE1_STACK_SIZE 4096  // TODO: I have no idea how big this needs to be.
-#define CORE1_STACK_SIZE 0xB000  // TODO: I have no idea how big this needs to be.
+#define CORE1_STACK_SIZE 0xA000  // TODO: I have no idea how big this needs to be.
 
 #define CMND_SET_POS              1
 #define CMND_SET_MIN_STEP_LEN     2
@@ -22,6 +21,7 @@
 
 #define MAX_STEPS_PER_UPDATE   0xFF
 
+uint8_t number_axis_updated();
 void core0_send_to_core1();
 void core1_send_to_core0();
 
@@ -37,6 +37,7 @@ struct AxisUpdate {
 
 /* Configuration object for an axis. */
 struct ConfigAxis {
+  uint32_t updated;             // Set on core0 when core1 has updated the position.
   uint32_t abs_pos;             // In steps. Default value is UINT_MAX / 2.
   uint32_t min_step_len_ticks;
   uint32_t max_accel_ticks;     // ticks / update_time_ticks ^ 2
@@ -79,7 +80,7 @@ uint32_t get_absolute_position(uint32_t stepper);
  *  stepper: A stepper motor index in the range 0-7.
  *  position_diff: The number of steps to be applied in the next config.update_time_us.
  */
-uint32_t send_pio_steps(
+void send_pio_steps(
     uint32_t stepper,
     int32_t position_diff);
 
@@ -92,7 +93,7 @@ uint32_t send_pio_steps(
  * Returns:
  *  The position of the stepper motor will be in after steps have been performed.
  */
-uint32_t set_relative_position(
+void set_relative_position(
     uint32_t stepper,
     int position_diff);
 
@@ -105,7 +106,7 @@ uint32_t set_relative_position(
  * Returns:
  *  The position of the stepper motor will be in after steps have been performed.
  */
-uint32_t set_absolute_position(
+void set_absolute_position(
     uint32_t stepper,
     uint32_t new_position);
 
@@ -136,6 +137,14 @@ void get_axis_config(
     size_t* msg_machine_len,
     size_t msg_machine_len_max);
 
+void get_axis_config_if_updated(
+    const uint32_t axis,
+    uint8_t* msg_human,
+    size_t msg_human_len_max,
+    uint8_t* msg_machine,
+    size_t* msg_machine_len,
+    size_t msg_machine_len_max);
+
 /* Gets the abs_pos parameter for an axis.*/
 void get_axis_pos(
     const uint32_t axis,
@@ -147,5 +156,7 @@ void get_axis_pos(
 
 /* Convert a time in us to PIO ticks. */
 inline static uint32_t time_to_ticks(const uint32_t time_us);
+
+uint32_t get_global_update_time_us();
 
 #endif  // PICO_STEPPER__H

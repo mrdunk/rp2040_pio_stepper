@@ -21,61 +21,68 @@
 uint32_t core1_stack[CORE1_STACK_SIZE];
 repeating_timer_t hw_update_timer;
 volatile struct AxisUpdate axis_mvmnt_c0[MAX_AXIS] = {0};
-queue_t axis_mvmnt_c1;
 
-struct ConfigGlobal config_c0 = {
+volatile struct ConfigGlobal config_c0 = {
   .update_rate = 1000,       // 1kHz.
   .update_time_us = 1000,    // 1000us.
   .update_time_ticks = 133000,
   .axis = {
     {
       // Azis 0.
+      .updated = 0,
       .abs_pos = UINT_MAX / 2,
       .min_step_len_ticks = 500,
       .max_accel_ticks = 200
     },
     {
       // Azis 1.
+      .updated = 0,
       .abs_pos = UINT_MAX / 2,
       .min_step_len_ticks = 500,
       .max_accel_ticks = 200
     },
     {
       // Azis 2.
+      .updated = 0,
       .abs_pos = UINT_MAX / 2,
       .min_step_len_ticks = 500,
       .max_accel_ticks = 200
     },
     {
       // Azis 3.
+      .updated = 0,
       .abs_pos = UINT_MAX / 2,
       .min_step_len_ticks = 500,
       .max_accel_ticks = 200
     },
     {
       // Azis 4.
+      .updated = 0,
       .abs_pos = UINT_MAX / 2,
       .min_step_len_ticks = 500,
       .max_accel_ticks = 200
     },
     {
       // Azis 5.
+      .updated = 0,
       .abs_pos = UINT_MAX / 2,
       .min_step_len_ticks = 500,
       .max_accel_ticks = 200
     },
-    {
+    /*{
       // Azis 6.
+      .updated = 0,
       .abs_pos = UINT_MAX / 2,
       .min_step_len_ticks = 500,
       .max_accel_ticks = 200
     },
     {
       // Azis 7.
+      .updated = 0,
       .abs_pos = UINT_MAX / 2,
       .min_step_len_ticks = 500,
       .max_accel_ticks = 200
-    }
+    }*/
   }
 };
 
@@ -120,7 +127,7 @@ struct ConfigGlobal config_c1 = {
       .min_step_len_ticks = 500,
       .max_accel_ticks = 200
     },
-    {
+    /*{
       // Azis 6.
       .abs_pos = UINT_MAX / 2,
       .min_step_len_ticks = 500,
@@ -131,34 +138,35 @@ struct ConfigGlobal config_c1 = {
       .abs_pos = UINT_MAX / 2,
       .min_step_len_ticks = 500,
       .max_accel_ticks = 200
-    }
+    }*/
   }
 };
 
-//#define RB_LEN 1000
-//
-//struct Rb {
-//  size_t buf[RB_LEN];
-//  size_t head;
-//  size_t total;
-//} static rb_default = {.buf = {0}, .head = 0, .total = 0};
-//
-//size_t rb(struct Rb* data, size_t new_val) {
-//  //static size_t buf[RB_LEN] = {0};
-//  //static size_t head = 0;
-//  //static size_t total = 0;
-//
-//  size_t tail_val = data->buf[data->head];
-//  data->buf[data->head] = new_val;
-//  data->head++;
-//  if(data->head++ >= RB_LEN) {
-//    data->head = 0;
-//  }
-//  data->total -= tail_val;
-//  data->total += new_val;
-//
-//  return data->total;
-//}
+/* A ring buffer that returns the average value of it's contents. */
+#define RING_BUF_AVE_LEN 1000
+struct Ring_buf_ave {
+  uint32_t buf[RING_BUF_AVE_LEN];
+  size_t head;
+  uint32_t total;
+  size_t count;
+} ring_buf_ave_default = {.buf = {0}, .head = 0, .total = 0, .count=0};
+
+size_t ring_buf_ave(struct Ring_buf_ave* data, uint32_t new_val) {
+  size_t tail_val = data->buf[data->head];
+  data->buf[data->head] = new_val;
+  data->head++;
+  if(data->head >= RING_BUF_AVE_LEN) {
+    data->head = 0;
+  }
+  data->total += new_val;
+  if(data->count < RING_BUF_AVE_LEN) {
+    data->count++;
+  } else {
+    data->total -= tail_val;
+  }
+
+  return data->total / data->count;
+}
 
 void axis_to_pio(const uint32_t stepper, PIO* pio, uint32_t* sm) {
   switch (stepper) {
@@ -264,9 +272,9 @@ void distribute_steps(struct AxisUpdate* update, uint32_t* step_lens)
   return;
 }
 
-uint8_t core1_process_updates(uint8_t axis, uint32_t* step_lens) {
+uint8_t core1_process_updates(queue_t* axis_mvmnt_c1, uint8_t axis, uint32_t* step_lens) {
   struct AxisUpdate update;
-  queue_remove_blocking(&axis_mvmnt_c1, &update);
+  queue_remove_blocking(axis_mvmnt_c1, &update);
   switch(update.command) {
     case CMND_SET_POS:
       config_c1.axis[axis].abs_pos = update.value;
@@ -287,35 +295,86 @@ uint8_t core1_process_updates(uint8_t axis, uint32_t* step_lens) {
   return update.updated;
 }
 
+void core1_send_to_core0() {
+  struct AxisUpdate to_serialise;
+  //printf("c1 > c0\n");
+  for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
+    to_serialise.padding = 0;
+    to_serialise.command = CMND_REPORT_ABS_POS;
+    to_serialise.updated = 1;
+    to_serialise.axis = axis;
+    to_serialise.value = config_c1.axis[axis].abs_pos;
+    if(multicore_fifo_push_timeout_us(((uint32_t*)(&to_serialise))[0], 200) == false) {
+      printf("FAIL: core1 push fail for axis %u\n", axis);
+      break;
+    }
+    if(multicore_fifo_push_timeout_us(((uint32_t*)(&to_serialise))[1], 200) == false) {
+      printf("FAIL: core1 push fail for axis %u\n", axis);
+      break;
+    }
+
+    to_serialise.padding = 0;
+    to_serialise.command = CMND_REPORT_VELOCITY;
+    to_serialise.updated = 1;
+    to_serialise.axis = axis;
+    to_serialise.value = config_c1.axis[axis].velocity;
+
+    if(multicore_fifo_push_timeout_us(((uint32_t*)(&to_serialise))[0], 200) == false) {
+      printf("FAIL: core0 push fail for axis %u\n", axis);
+      break;
+    }
+    if(multicore_fifo_push_timeout_us(((uint32_t*)(&to_serialise))[1], 200) == false) {
+      printf("FAIL: core0 push fail for axis %u\n", axis);
+      break;
+    }
+  }
+}
+
 /* This interrupt handler is triggered when data from core1 appears on the FIFO. */
 void core1_FIFO_interrupt_handler() {
   static size_t last_time = 0;
   static const size_t buffer_in_len = sizeof(struct AxisUpdate) / sizeof(uint32_t) * MAX_AXIS;
-  //static uint32_t buffer_in[sizeof(struct AxisUpdate) / sizeof(uint32_t) * MAX_AXIS];
   static struct AxisUpdate buffer_in[MAX_AXIS];
   static size_t buffer_in_point = 0;
   static size_t update_point = 0;
   static size_t fail_count = 0;
+  static struct Ring_buf_ave period_average_data;
+  static uint32_t ave_period = 0;
+  static size_t start_time = 0;
+  static bool first_run = true;
+  static queue_t axis_mvmnt_c1;
+
+  if(first_run) {
+    first_run = false;
+    queue_init(&axis_mvmnt_c1, sizeof(struct AxisUpdate), MAX_AXIS);
+  }
 
   uint32_t raw;
   uint32_t fail = 0;
 
-#ifdef LOG_CORE1_INTERUPTS
-  size_t start_time = time_us_64();
-#endif // LOG_CORE1_INTERUPTS
-#if LOG_CORE1_INTERUPTS == 2
-  printf("core1.FIFO_irq start.\n");
-#endif // LOG_CORE1_INTERUPTS
-
-  if (!multicore_fifo_rvalid()) {
-//#if LOG_CORE1_INTERUPTS == 2
+  if(!multicore_fifo_rvalid()) {
+    #if LOG_CORE1 == 2
     printf("WARN: core1_FIFO_interrupt_handler fired with no new data.\n");
-//#endif // LOG_CORE1_INTERUPTS
+    #endif // LOG_CORE1
     return;
   }
 
+  if(update_point == 0) {
+    // Starting processing a new data set.
+    start_time = time_us_64();
+    if(last_time == 0) {
+      period_average_data = ring_buf_ave_default;
+    } else {
+      ave_period = ring_buf_ave(&period_average_data, start_time - last_time);
+    }
+  }
+
+  #if LOG_CORE1 == 2
+  printf("core1.FIFO_irq start.\n");
+  #endif // LOG_CORE1
+
   struct AxisUpdate update;
-  while(multicore_fifo_pop_timeout_us(0, &raw) && buffer_in_point < buffer_in_len) {
+  while(multicore_fifo_pop_timeout_us(1, &raw) && buffer_in_point < buffer_in_len) {
     ((uint32_t*)&update)[buffer_in_point % SZOF_AXIS_UPDATE] = raw;
     buffer_in_point++;
     if(buffer_in_point % (SZOF_AXIS_UPDATE) == 0) {
@@ -325,7 +384,7 @@ void core1_FIFO_interrupt_handler() {
         fail = 1;
         return;
       }
-      if (!queue_try_add(&axis_mvmnt_c1, &update)) {
+      if(!queue_try_add(&axis_mvmnt_c1, &update)) {
         printf("ERROR: core1.interrupt: Queue was full\n");
         fail = 1;
         break;
@@ -334,9 +393,11 @@ void core1_FIFO_interrupt_handler() {
     }
   }
   multicore_fifo_clear_irq(); // Clear interrupt
+
   if(buffer_in_point < buffer_in_len) {
     return;
   }
+
   if(fail) {
     // Drain remaining incoming entries and reset everything before restart.
     while(multicore_fifo_pop_timeout_us(10, &raw));
@@ -353,66 +414,32 @@ void core1_FIFO_interrupt_handler() {
   if(queue_get_level(&axis_mvmnt_c1) == MAX_AXIS) {
     uint8_t count_updates = 0;
     for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
-      count_updates += core1_process_updates(axis, step_lens[axis]);
+      count_updates += core1_process_updates(&axis_mvmnt_c1, axis, step_lens[axis]);
     }
   }
 
   core1_send_to_core0();
 
   // Profiling output.
-#ifdef LOG_CORE1_INTERUPTS
+  #ifdef LOG_CORE1
   size_t now = time_us_64();
-#endif // LOG_CORE1_INTERUPTS
-#if LOG_CORE1_INTERUPTS == 1
-  printf("\t\t\t\t\t\tc1\t%4lu%6lu%6lu\n",
+  #endif // LOG_CORE1
+  #if LOG_CORE1 == 1
+  printf("\t\t\t\t\t\tc1\t%4lu%6lu%6lu%6lu\n",
       start_time - last_time,
       now - start_time,
-      fail_count);
-#elif LOG_CORE1_INTERUPTS == 2
+      fail_count,
+      ave_period);
+  #elif LOG_CORE1 == 2
   printf("core1.FIFO_irq:\t\t%lu\t%lu\n", start_time - last_time, now - start_time);
-#endif // LOG_CORE1_INTERUPTS
-#ifdef LOG_CORE1_INTERUPTS
+  #endif // LOG_CORE1
+  #ifdef LOG_CORE1
   last_time = start_time;
-#endif // LOG_CORE1_INTERUPTS
+  #endif // LOG_CORE1
 
-}
-
-void core1_send_to_core0() {
-  struct AxisUpdate to_serialise;
-  for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
-    to_serialise.padding = 0;
-    to_serialise.command = CMND_REPORT_ABS_POS;
-    to_serialise.updated = 1;
-    to_serialise.axis = axis;
-    to_serialise.value = config_c1.axis[axis].abs_pos;
-    if(multicore_fifo_push_timeout_us(((uint32_t*)(&to_serialise))[0], 100) == false) {
-      printf("FAIL: core1 push fail for axis %u\n", axis);
-      break;
-    }
-    if(multicore_fifo_push_timeout_us(((uint32_t*)(&to_serialise))[1], 100) == false) {
-      printf("FAIL: core1 push fail for axis %u\n", axis);
-      break;
-    }
-
-    to_serialise.padding = 0;
-    to_serialise.command = CMND_REPORT_VELOCITY;
-    to_serialise.updated = 1;
-    to_serialise.axis = axis;
-    to_serialise.value = config_c1.axis[axis].velocity;
-
-    if(multicore_fifo_push_timeout_us(((uint32_t*)(&to_serialise))[0], 100) == false) {
-      printf("FAIL: core0 push fail for axis %u\n", axis);
-      break;
-    }
-    if(multicore_fifo_push_timeout_us(((uint32_t*)(&to_serialise))[1], 100) == false) {
-      printf("FAIL: core0 push fail for axis %u\n", axis);
-      break;
-    }
-  }
 }
 
 void core1_entry() {
-  queue_init(&axis_mvmnt_c1, sizeof(struct AxisUpdate), MAX_AXIS);
   uint32_t step_lens[MAX_AXIS][MAX_STEPS_PER_UPDATE] = {0};
 
   // Set up FIFO interrupt for processing data sent from core0 > core1.
@@ -439,7 +466,7 @@ inline static uint32_t time_to_ticks(const uint32_t time_us) {
   return time_us * (clock_get_hz(clk_sys) / 1000000);
 }
 
-uint8_t number_configured() {
+uint8_t number_axis_updated() {
     uint8_t updated = 0;
     for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
       updated += axis_mvmnt_c0[axis].updated;
@@ -452,27 +479,14 @@ uint8_t number_configured() {
 void core0_send_to_core1() {
   static size_t last_time = 0;
   static size_t fail_count = 0;
+  static struct Ring_buf_ave period_average_data;
 
-  if(! number_configured()) {
-    return;
-  }
-
-#ifdef LOG_CORE0_INTERUPTS
   size_t start_time = time_us_64();
-#endif // LOG_CORE0_INTERUPTS
-#if LOG_CORE0_INTERUPTS == 2
-  printf("core0.timer_irq start.\n");
-#endif // LOG_CORE0_INTERUPTS
-
-  if(number_configured() == 0) {
-#if LOG_CORE0_INTERUPTS == 2
-    printf("core0.timer_irq no work to do.\n");
-#endif // LOG_CORE0_INTERUPTS
-    return;
-#if LOG_CORE0_INTERUPTS == 2
-  } else{
-    printf("core0.timer_irq %u\n", number_configured());
-#endif // LOG_CORE0_INTERUPTS
+  uint32_t ave_period = 0;
+  if(last_time == 0) {
+    period_average_data = ring_buf_ave_default;
+  } else {
+    ave_period = ring_buf_ave(&period_average_data, start_time - last_time);
   }
 
   for(size_t axis = 0; axis < MAX_AXIS; axis++) {
@@ -485,26 +499,25 @@ void core0_send_to_core1() {
     }
     to_serialise->updated = 0;
   }
-  if(number_configured() != 0) {
+  if(number_axis_updated() != 0) {
     printf("core0: ERROR: Data not marked as sent.\n");
     fail_count++;
   }
   memset((void*)axis_mvmnt_c0, 0, sizeof(struct AxisUpdate) * MAX_AXIS); 
 
-#ifdef LOG_CORE0_INTERUPTS
+  #ifdef LOG_CORE0
   size_t now = time_us_64(); 
-#endif // LOG_CORE0_INTERUPTS
-#if LOG_CORE0_INTERUPTS == 1
-  printf("\t\t\t\t\t\tc0.rx\t%4lu%6lu%6lu\n",
+  #endif // LOG_CORE0
+  #if LOG_CORE0 == 1
+  printf("\t\t\t\t\t\tc0.tx\t%4lu%6lu%6lu%6lu\n",
       start_time - last_time,
       now - start_time,
-      fail_count);
-#elif LOG_CORE0_INTERUPTS == 2
-  printf("core0.timer_irq:\t%lu\t%lu\n", start_time - last_time, now - start_time);
-#endif // LOG_CORE0_INTERUPTS
-#ifdef LOG_CORE0_INTERUPTS
+      fail_count,
+      ave_period);
+  #elif LOG_CORE0 == 2
+  printf("0tx %lu\n", ave_period);
+  #endif // LOG_CORE0
   last_time = start_time;
-#endif // LOG_CORE0_INTERUPTS
 
   return;
 }
@@ -513,12 +526,9 @@ void core0_FIFO_interrupt_handler() {
   static size_t last_time = 0;
   static size_t fail_count = 0;
 
-#if LOG_CORE0_INTERUPTS == 2
-  printf("core0.FIFO_irq start.\n");
-#endif // LOG_CORE0_INTERUPTS == 2
-#ifdef LOG_CORE0_INTERUPTS
+  #ifdef LOG_CORE0
   size_t start_time = time_us_64();
-#endif // LOG_CORE0_INTERUPTS
+  #endif // LOG_CORE0
 
   if (multicore_fifo_rvalid()){
     uint32_t raw_0;
@@ -536,11 +546,19 @@ void core0_FIFO_interrupt_handler() {
         case CMND_REPORT_ABS_POS:
           //printf("%u\t%u\t%u\t%lu\n",
           //update.command, update.updated, update.axis, update.value);
+          if(config_c0.axis[update.axis].abs_pos != update.value) {
+            // printf("updating axis %u abs_pos\n", update.axis);
+            config_c0.axis[update.axis].updated = 1;
+          }
           config_c0.axis[update.axis].abs_pos = update.value;
           break;
         case CMND_REPORT_VELOCITY:
           //printf("%u\t%u\t%u\t%li\n",
           //update.command, update.updated, update.axis, update.value);
+          if(config_c0.axis[update.axis].velocity != update.value) {
+            // printf("updating axis %u velocity\n", update.axis);
+            config_c0.axis[update.axis].updated = 1;
+          }
           config_c0.axis[update.axis].velocity = update.value;
           break;
 
@@ -556,27 +574,26 @@ void core0_FIFO_interrupt_handler() {
     }
 
   } else {
-#ifdef LOG_CORE0_INTERUPTS
+    #ifdef LOG_CORE0
     printf("WARN: core0_FIFO_interrupt_handler fired with no new data.\n");
-#endif // LOG_CORE0_INTERUPTS
+    #endif // LOG_CORE0
   }
 
   // Profiling output.
-#ifdef LOG_CORE0_INTERUPTS
+  #ifdef LOG_CORE0
   size_t now = time_us_64();
-#endif // LOG_CORE0_INTERUPTS
-#if LOG_CORE0_INTERUPTS == 1
+  #endif // LOG_CORE0
+  #if LOG_CORE0 == 1
   printf("\t\t\t\t\t\tc0.rx\t%4lu%6lu%6lu\n",
       start_time - last_time,
       now - start_time,
       fail_count);
-#elif LOG_CORE0_INTERUPTS == 2
-  // Time profiling output.
-  printf("core0.FIFO_irq:\t\t%lu\t%lu\n", start_time - last_time, now - start_time);
-#endif // LOG_CORE0_INTERUPTS
-#ifdef LOG_CORE0_INTERUPTS
+  #elif LOG_CORE0 == 2
+  printf("0rx %lu\t%lu\n", start_time - last_time, now - start_time);
+  #endif // LOG_CORE0
+  #ifdef LOG_CORE0
   last_time = start_time;
-#endif // LOG_CORE0_INTERUPTS
+  #endif // LOG_CORE0
 }
 
 /* Push config from core0 to core1. */
@@ -695,15 +712,9 @@ void init_pio(
   }
 }
 
-uint32_t send_pio_steps(
+void send_pio_steps(
     const uint32_t axis,
     int32_t desired_pos) {
-  if(config_c0.axis[axis].abs_pos == desired_pos) {
-    // No steps to add.
-    // TODO: Maybe we want to update core1 anyway in case to needs to decelerate?
-    //return config_c0.axis[axis].abs_pos;
-  }
-
   // Queue axis movement data;
   // Disable timer interrupt to make sure the ISR doesn't read partial data.
   // TODO: Could the timer number change with library updates?
@@ -715,27 +726,24 @@ uint32_t send_pio_steps(
       .axis = axis,
       .value = desired_pos
   };
-#if LOG_CORE0_INTERUPTS == 2
-  if(number_configured() == 8) {
-    printf("core0: All configured.\n");
-  }
-#endif  // LOG_CORE0_INTERUPTS
 
-  return config_c0.axis[axis].abs_pos;
+  return;
 }
 
-uint32_t set_relative_position(
+void set_relative_position(
     const uint32_t stepper,
     const int position_diff) {
 
   uint32_t new_position = config_c0.axis[stepper].abs_pos + position_diff;
-  return send_pio_steps(stepper, new_position);
+  send_pio_steps(stepper, new_position);
+  return;
 }
 
-uint32_t set_absolute_position(
+void set_absolute_position(
     const uint32_t stepper,
     const uint32_t new_position) {
-  return send_pio_steps(stepper, new_position);
+  send_pio_steps(stepper, new_position);
+  return;
 }
 
 uint32_t get_absolute_position(uint32_t stepper) {
@@ -749,17 +757,14 @@ void set_max_speed(
   config_c0.axis[stepper].min_step_len_ticks = speed_to_step_ticks(max_speed_step_sec);
 }
 
-uint32_t get_max_speed(
-    const uint32_t stepper,
-    const uint32_t max_speed_step_sec
-    ) {
-  return step_ticks_to_speed(config_c0.axis[stepper].min_step_len_ticks);
-}
-
 uint32_t set_global_update_rate(uint32_t update_rate) {
   config_c0.update_rate = update_rate;
   config_c0.update_time_us = 1000000 / update_rate;
   config_c0.update_time_ticks = time_to_ticks(config_c0.update_time_us);
+  return config_c0.update_time_us;
+}
+
+uint32_t get_global_update_time_us() {
   return config_c0.update_time_us;
 }
 
@@ -818,6 +823,7 @@ void get_axis_config(
   }
   if(*msg_machine_len + sizeof(struct Reply_axis_config) <= msg_machine_len_max) {
     struct Reply_axis_config reply = Reply_axis_config_default;
+    reply.axis = axis;
     reply.abs_pos = config_c0.axis[axis].abs_pos;
     reply.min_step_len_ticks = config_c0.axis[axis].min_step_len_ticks;
     reply.max_accel_ticks = config_c0.axis[axis].max_accel_ticks;
@@ -825,6 +831,21 @@ void get_axis_config(
 
     memcpy(msg_machine + *msg_machine_len, &reply, sizeof(struct Reply_axis_config));
     *msg_machine_len += sizeof(struct Reply_axis_config);
+  }
+}
+
+void get_axis_config_if_updated(
+    const uint32_t axis,
+    uint8_t* msg_human,
+    size_t msg_human_len_max,
+    uint8_t* msg_machine,
+    size_t* msg_machine_len,
+    size_t msg_machine_len_max)
+{
+  if(config_c0.axis[axis].updated) {
+    get_axis_config(
+        axis, msg_human, msg_human_len_max, msg_machine, msg_machine_len, msg_machine_len_max);
+    config_c0.axis[axis].updated = 0;
   }
 }
 
@@ -845,6 +866,7 @@ void get_axis_pos(
   }
   if(*msg_machine_len + sizeof(struct Reply_axis_pos) <= msg_machine_len_max) {
     struct Reply_axis_pos reply = Reply_axis_pos_default;
+    reply.axis = axis;
     reply.abs_pos = config_c0.axis[axis].abs_pos;
 
     memcpy(msg_machine + *msg_machine_len, &reply, sizeof(struct Reply_axis_pos));

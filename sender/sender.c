@@ -94,12 +94,12 @@ struct Message_uint_int* process_msg_uint_int(char** rx_buf) {
   // printf("NW UPD message on port %u:\n\ttype: %lu\n\tvalue0: %lu\n\tvalue1: %li\r\n",
   //    NW_PORT_MACHINE, message->type, message->value0, message->value1);
 
-  *rx_buf += sizeof(struct Message_uint_uint);
+  *rx_buf += sizeof(struct Message_uint_int);
 
   return message;
 }
 
-size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* tx_buf_machine) {
+size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf_human, uint8_t* tx_buf_machine) {
   char* rx_itterator = rx_buf;
   size_t tx_buf_machine_len = 0;
   uint32_t msg_type;
@@ -113,31 +113,62 @@ size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* tx_buf_
     switch(msg_type) {
       case MSG_SET_GLOAL_UPDATE_RATE:
         msg_uint = process_msg_uint(&rx_itterator);
-        set_global_update_rate(msg_uint->value0);
+        set_global_update_rate(msg_uint->value);
         get_global_config(
-            tx_buf, DATA_BUF_SIZE, tx_buf_machine, &tx_buf_machine_len, tx_buf_mach_len_max);
+            tx_buf_human,
+#if defined(UART_ENABLE) || defined(NET_ENABLE_HUMAN)
+            DATA_BUF_SIZE,
+#else
+            0,
+#endif
+            tx_buf_machine,
+            &tx_buf_machine_len,
+#ifdef NET_ENABLE_MACHINE
+            tx_buf_mach_len_max
+#else
+            0
+#endif
+            );
         break;
       case MSG_SET_AXIS_ABS_POS:
         msg_uint_uint = process_msg_uint_uint(&rx_itterator);
-        set_absolute_position(msg_uint_uint->value0, msg_uint_uint->value1);
-        /*get_axis_pos(
-            msg_uint_uint->value0,
-            tx_buf,
+        set_absolute_position(msg_uint_uint->axis, msg_uint_uint->value);
+/*        get_axis_pos(
+            msg_uint_uint->axis,
+            tx_buf_human,
+#if defined(UART_ENABLE) || defined(NET_ENABLE_HUMAN)
             DATA_BUF_SIZE,
+#else
+            0,
+#endif
             tx_buf_machine,
             &tx_buf_machine_len,
-            tx_buf_mach_len_max);*/
+#ifdef NET_ENABLE_MACHINE
+            tx_buf_mach_len_max
+#else
+            0
+#endif
+            );*/
         break;
       case MSG_SET_AXIS_REL_POS:
         msg_uint_int = process_msg_uint_int(&rx_itterator);
-        set_relative_position(msg_uint_int->value0, msg_uint_int->value1);
-        /*get_axis_pos(
-            msg_uint_int->value0,
-            tx_buf,
+        set_relative_position(msg_uint_int->axis, msg_uint_int->value);
+/*        get_axis_pos(
+            msg_uint_int->axis,
+            tx_buf_human,
+#if defined(UART_ENABLE) || defined(NET_ENABLE_HUMAN)
             DATA_BUF_SIZE,
+#else
+            0,
+#endif
             tx_buf_machine,
             &tx_buf_machine_len,
-            tx_buf_mach_len_max);*/
+#ifdef NET_ENABLE_MACHINE
+            tx_buf_mach_len_max
+#else
+            0
+#endif
+            );*/
         break;
       case MSG_SET_AXIS_MAX_SPEED:
         // TODO.
@@ -149,43 +180,70 @@ size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* tx_buf_
       case MSG_GET_GLOBAL_CONFIG:
         msg = process_msg(&rx_itterator);
         get_global_config(
-            tx_buf, DATA_BUF_SIZE, tx_buf_machine, &tx_buf_machine_len, tx_buf_mach_len_max);
+            tx_buf_human,
+#if defined(UART_ENABLE) || defined(NET_ENABLE_HUMAN)
+            DATA_BUF_SIZE,
+#else
+            0,
+#endif
+            tx_buf_machine,
+            &tx_buf_machine_len,
+#ifdef NET_ENABLE_MACHINE
+            tx_buf_mach_len_max
+#else
+            0
+#endif
+            );
         break;
       case MSG_GET_AXIS_CONFIG:
         msg_uint = process_msg_uint(&rx_itterator);
         get_axis_config(
-            msg_uint->value0,
-            tx_buf,
+            msg_uint->value,
+            tx_buf_human,
+#if defined(UART_ENABLE) || defined(NET_ENABLE_HUMAN)
             DATA_BUF_SIZE,
+#else
+            0,
+#endif
             tx_buf_machine,
             &tx_buf_machine_len,
-            tx_buf_mach_len_max);
+#ifdef NET_ENABLE_MACHINE
+            tx_buf_mach_len_max
+#else
+            0
+#endif
+            );
         break;
       case MSG_GET_AXIS_POS:
         msg_uint = process_msg_uint(&rx_itterator);
         get_axis_pos(
-            msg_uint->value0,
-            tx_buf,
+            msg_uint->value,
+            tx_buf_human,
+#if defined(UART_ENABLE) || defined(NET_ENABLE_HUMAN)
             DATA_BUF_SIZE,
+#else
+            0,
+#endif
             tx_buf_machine,
             &tx_buf_machine_len,
-            tx_buf_mach_len_max);
+#ifdef NET_ENABLE_MACHINE
+            tx_buf_mach_len_max
+#else
+            0
+#endif
+            );
         break;
       default:
         printf("Invalid message type: %lu\r\n", msg_type);
+        memset(rx_buf, '\0', DATA_BUF_SIZE);
     }
   }
   memset(rx_buf, '\0', DATA_BUF_SIZE);
 
-  //printf("tx_buf_machine_len: %lu\n", tx_buf_machine_len);
-  //for(size_t i = 0; i < tx_buf_machine_len; i += 4) {
-  //  printf("**  %lu\t%lu\n", i, ((uint32_t*)tx_buf_machine)[i/4]);
-  //}
-
   return tx_buf_machine_len;
 }
 
-size_t process_buffer_human(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* tx_buf_machine) {
+size_t process_buffer_human(uint8_t* rx_buf, uint8_t* tx_buf_human, uint8_t* tx_buf_machine) {
   printf("\nReceived: %s\n", rx_buf);
   int64_t values[4] = {0,0,0,0};
   size_t value_num = 0;
@@ -212,7 +270,7 @@ size_t process_buffer_human(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* tx_buf_ma
       }
       value_num++;
     } else if (*itterate == '?' && value_num == 0) {
-      help(tx_buf);
+      help(tx_buf_human);
       memset(rx_buf, '\0', DATA_BUF_SIZE);
       return 0;
     } else {
@@ -231,7 +289,7 @@ size_t process_buffer_human(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* tx_buf_ma
       }
       set_global_update_rate(values[1]);
       get_global_config(
-          tx_buf, DATA_BUF_SIZE, tx_buf_machine, &tx_buf_machine_len, tx_buf_mach_len_max);
+          tx_buf_human, DATA_BUF_SIZE, tx_buf_machine, &tx_buf_machine_len, tx_buf_mach_len_max);
       break;
     case MSG_SET_AXIS_ABS_POS:
       if(value_num != 3) {
@@ -240,13 +298,6 @@ size_t process_buffer_human(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* tx_buf_ma
         break;
       }
       set_absolute_position(values[1], values[2]);
-      get_axis_pos(
-          values[1],
-          tx_buf,
-          DATA_BUF_SIZE,
-          tx_buf_machine,
-          &tx_buf_machine_len,
-          tx_buf_mach_len_max);
       break;
     case MSG_SET_AXIS_REL_POS:
       if(value_num != 3) {
@@ -255,13 +306,6 @@ size_t process_buffer_human(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* tx_buf_ma
         break;
       }
       set_relative_position(values[1], values[2]);
-      get_axis_pos(
-          values[1],
-          tx_buf,
-          DATA_BUF_SIZE,
-          tx_buf_machine,
-          &tx_buf_machine_len,
-          tx_buf_mach_len_max);
       break;
     case MSG_SET_AXIS_MAX_SPEED:
       // TODO.
@@ -277,7 +321,16 @@ size_t process_buffer_human(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* tx_buf_ma
         break;
       }
       get_global_config(
-          tx_buf, DATA_BUF_SIZE, tx_buf_machine, &tx_buf_machine_len, tx_buf_mach_len_max);
+          tx_buf_human,
+          DATA_BUF_SIZE,
+          tx_buf_machine,
+          &tx_buf_machine_len,
+          #ifdef NET_ENABLE_MACHINE
+          tx_buf_mach_len_max
+          #else
+          0
+          #endif
+          );
       break;
     case MSG_GET_AXIS_CONFIG:
       if(value_num != 2) {
@@ -287,11 +340,16 @@ size_t process_buffer_human(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* tx_buf_ma
       }
       get_axis_config(
           values[1],
-          tx_buf,
+          tx_buf_human,
           DATA_BUF_SIZE,
           tx_buf_machine,
           &tx_buf_machine_len,
-          tx_buf_mach_len_max);
+          #ifdef NET_ENABLE_MACHINE
+          tx_buf_mach_len_max
+          #else
+          0
+          #endif
+          );
       break;
     case MSG_GET_AXIS_POS:
       if(value_num != 2) {
@@ -301,15 +359,20 @@ size_t process_buffer_human(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* tx_buf_ma
       }
       get_axis_pos(
           values[1],
-          tx_buf,
+          tx_buf_human,
           DATA_BUF_SIZE,
           tx_buf_machine,
           &tx_buf_machine_len,
-          tx_buf_mach_len_max);
+          #ifdef NET_ENABLE_MACHINE
+          tx_buf_mach_len_max
+          #else
+          0
+          #endif
+          );
       break;
     default:
       printf("Invalid message type: %lu\r\n", values[0]);
-      help(tx_buf);
+      help(tx_buf_human);
       memset(rx_buf, '\0', DATA_BUF_SIZE);
       return 0;
   }
@@ -360,6 +423,7 @@ int32_t get_UDP(
     ) {
    int32_t  ret;
    uint16_t size;
+   uint16_t val1;
 
    switch(getSn_SR(socket_num)) {
      case SOCK_UDP :
@@ -368,6 +432,7 @@ int32_t get_UDP(
          if(size > DATA_BUF_SIZE) {
            size = DATA_BUF_SIZE;
          }
+
          ret = recvfrom(socket_num, nw_rx_buf, size, destip, destport);
          // printf("RECEIVED: %u %u.%u.%u.%u : %u\r\n",
          //    socket_num, destip[0], destip[1], destip[2], destip[3], *destport);
@@ -400,9 +465,6 @@ int32_t put_UDP(
     uint8_t* destip,
     uint16_t* destport
     ) {
-  if(*destport == 0) {
-    return 0;
-  }
   int32_t  ret;
   uint16_t size;
   uint16_t sentsize;
@@ -419,7 +481,7 @@ int32_t put_UDP(
           ret = sendto(
               socket_num, tx_buf + sentsize, size - sentsize, destip, *destport);
           if(ret < 0) {
-            printf("%d: sendto error. %ld\r\n", socket_num, ret);
+            // printf("%d: sendto error. %ld\r\n", socket_num, ret);
             return ret;
           }
           sentsize += ret; // Don't care SOCKERR_BUSY, because it is zero.
@@ -472,16 +534,17 @@ int main() {
   printf("--------------------------------\n");
   printf("UART up.\n");
 
-  if(NET_ENABLE_HUMAN > 0 || NET_ENABLE_MACHINE > 0) {
-    wizchip_spi_initialize();
-    wizchip_cris_initialize();
-    wizchip_reset();
-    wizchip_initialize();
-    wizchip_check();
-    network_initialize(g_net_info);
-    /* Get network information */
-    print_network_information(g_net_info);
-  }
+  #if defined(NET_ENABLE_HUMAN) || defined(NET_ENABLE_MACHINE)
+  wizchip_spi_initialize();
+  spi_init(SPI_PORT, 48000 * 1000);
+  wizchip_cris_initialize();
+  wizchip_reset();
+  wizchip_initialize();
+  wizchip_check();
+  network_initialize(g_net_info);
+  /* Get network information */
+  print_network_information(g_net_info);
+  #endif  // NET_ENABLE_HUMAN || NET_ENABLE_MACHINE
 
 
   init_core1();
@@ -493,73 +556,112 @@ int main() {
   //send_pios_steps(1, 2, 5000000, 1);
 
 
+  size_t time_last_tx = time_us_64();
+  size_t time_now;
+  bool done_rx = false;
+
   while (1) {
-    memset(tx_buf_machine, '\0', DATA_BUF_SIZE);
-    memset(tx_buf_human, '\0', DATA_BUF_SIZE);
+
+    #ifdef NET_ENABLE_MACHINE
     tx_buf_machine_len = 0;
+    #endif  // NET_ENABLE_MACHINE
+    #if defined(NET_ENABLE_HUMAN) || defined(UART_ENABLE)
+    memset(tx_buf_human, '\0', DATA_BUF_SIZE);
+    #endif  // NET_ENABLE_HUMAN || NET_ENABLE_MACHINE
 
+    #ifdef UART_ENABLE
     get_uart(uart_rx_buf, tx_buf_human, tx_buf_machine);
+    #endif  // UART_ENABLE
 
-    if (NET_ENABLE_HUMAN > 0) {
-        retval = get_UDP(
-            SOCKET_NUMBER_HUMAN,
-            NW_PORT_HUMAN,
-            nw_rx_buf,
-            tx_buf_human,
-            tx_buf_machine,
-            &tx_buf_machine_len,
-            &process_buffer_human,
-            destip_human,
-            &destport_human);
-        if (retval < 0) {
-          printf(" Network error : %d\n", retval);
-          while (1);
-        }
-    }
-    if (NET_ENABLE_MACHINE > 0) {
-        retval = get_UDP(
-            SOCKET_NUMBER_MACHINE,
-            NW_PORT_MACHINE,
-            nw_rx_buf,
-            tx_buf_human,
-            tx_buf_machine,
-            &tx_buf_machine_len,
-            &process_buffer_machine,
-            destip_machine,
-            &destport_machine);
-        if (retval < 0) {
-          printf(" Network error : %d\n", retval);
-          while (1);
-        }
-    }
-    if (NET_ENABLE_HUMAN > 0) {
-        retval = put_UDP(
-            SOCKET_NUMBER_HUMAN,
-            NW_PORT_HUMAN,
-            tx_buf_human,
-            strlen(tx_buf_human),
-            destip_human,
-            &destport_human);
-        if (retval < 0) {
-          printf(" Network error : %d\n", retval);
-          while (1);
-        }
-    }
-    if (NET_ENABLE_MACHINE > 0) {
-        retval = put_UDP(
-            SOCKET_NUMBER_MACHINE,
-            NW_PORT_MACHINE,
-            tx_buf_machine,
-            tx_buf_machine_len,
-            destip_machine,
-            &destport_machine);
-        if (retval < 0) {
-          printf(" Network error : %d\n", retval);
-          while (1);
-        }
-    }
-    core0_send_to_core1();
+    #ifdef NET_ENABLE_HUMAN
+    retval = get_UDP(
+        SOCKET_NUMBER_HUMAN,
+        NW_PORT_HUMAN,
+        nw_rx_buf,
+        tx_buf_human,
+        tx_buf_machine,
+        &tx_buf_machine_len,
+        &process_buffer_human,
+        destip_human,
+        &destport_human);
+    //if (retval < 0) {
+    //  printf(" Network error : %d\n", retval);
+    //}
+    #endif // NET_ENABLE_HUMAN
 
-    put_uart(tx_buf_human, DATA_BUF_SIZE);
+    #ifdef NET_ENABLE_MACHINE
+    retval = get_UDP(
+        SOCKET_NUMBER_MACHINE,
+        NW_PORT_MACHINE,
+        nw_rx_buf,
+        tx_buf_human,
+        tx_buf_machine,
+        &tx_buf_machine_len,
+        &process_buffer_machine,
+        destip_machine,
+        &destport_machine);
+    //if (retval < 0) {
+    //  printf(" Network error : %d\n", retval);
+    //  while (1);
+    //}
+    #endif  // NET_ENABLE_MACHINE
+
+    for(size_t axis = 0; axis < MAX_AXIS; axis++) {
+      get_axis_config_if_updated(
+          axis,
+          tx_buf_human,
+          DATA_BUF_SIZE,
+          tx_buf_machine,
+          &tx_buf_machine_len,
+          DATA_BUF_SIZE - sizeof(uint32_t)
+          );
+    }
+
+    if(! done_rx) {
+      #ifdef NET_ENABLE_HUMAN
+      retval = put_UDP(
+          SOCKET_NUMBER_HUMAN,
+          NW_PORT_HUMAN,
+          tx_buf_human,
+          strlen(tx_buf_human),
+          destip_human,
+          &destport_human);
+      //if (retval < 0) {
+      //  printf(" Network error : %d\n", retval);
+      //  while (1);
+      //}
+      #endif // NET_ENABLE_HUMAN
+
+      #ifdef NET_ENABLE_MACHINE
+      retval = put_UDP(
+          SOCKET_NUMBER_MACHINE,
+          NW_PORT_MACHINE,
+          tx_buf_machine,
+          tx_buf_machine_len,
+          destip_machine,
+          &destport_machine);
+      //if (retval < 0) {
+      //  printf(" Network error : %d\n", retval);
+      //  while (1);
+      //}
+      #endif  // NET_ENABLE_MACHINE
+
+      #ifdef UART_ENABLE
+      put_uart(tx_buf_human, DATA_BUF_SIZE);
+      #endif  // UART_ENABLE
+
+      //done_rx = true;
+    }
+
+    time_now = time_us_64();
+    //if(number_axis_updated() > 0 || (time_now - time_last_tx) > get_global_update_time_us()) {
+    if(number_axis_updated() > 0) {
+      printf("%5lu\n", time_now - time_last_tx);
+      time_last_tx = time_now;
+      core0_send_to_core1();
+      done_rx = false;
+    }
+
   }
+  return 0;
 }

@@ -22,7 +22,7 @@
 #include "../shared/messages.h"
 
 #define BUFSIZE 1024
-#define MAX_AXIS 8
+#define MAX_AXIS 6
 #define MAX_ACCELERATION 200
 #define LOOP_LEN 1000
 
@@ -69,7 +69,7 @@ uint32_t get_property_int(const char* msg) {
 }
 
 size_t populate_message(uint32_t type, void** packet, size_t* packet_space) {
-  struct Message_uint message = { type };
+  struct Message message = { type };
   size_t message_size = sizeof(struct Message);
   if(*packet_space < message_size) {
     printf("ERROR: No space left in packet\n");
@@ -83,8 +83,8 @@ size_t populate_message(uint32_t type, void** packet, size_t* packet_space) {
 }
 
 size_t populate_message_uint(char* text, uint32_t type, void** packet, size_t* packet_space) {
-  uint32_t value0 = get_property_uint(text);
-  struct Message_uint message = { type, value0 };
+  uint32_t value = get_property_uint(text);
+  struct Message_uint message = { type, value };
   size_t message_size = sizeof(struct Message_uint);
   if(*packet_space < message_size) {
     printf("ERROR: No space left in packet\n");
@@ -138,7 +138,7 @@ size_t populate_data(void* packet) {
   // Leave room for an empty terminating record.
   size_t packet_space = BUFSIZE - sizeof(struct Message);
 
-  memset(packet, 0, packet_space);
+  memset(packet, 0, BUFSIZE);
 
   printf("%s", human_help);
 
@@ -195,19 +195,19 @@ size_t store_message(int64_t* values, void** packet, size_t* packet_space) {
 
   switch(values[0]) {
     case MSG_SET_GLOAL_UPDATE_RATE:
-      message_uint = (struct Message_uint){.type=values[0], .value0=values[1]};
+      message_uint = (struct Message_uint){.type=values[0], .value=values[1]};
       message_size = sizeof(struct Message_uint);
       memcpy(*packet, &message_uint, message_size);
       break;
     case MSG_SET_AXIS_ABS_POS:
       message_uint_uint = 
-        (struct Message_uint_uint){.type=values[0], .value0=values[1], .value1=values[2]};
+        (struct Message_uint_uint){.type=values[0], .axis=values[1], .value=values[2]};
       message_size = sizeof(struct Message_uint_uint);
       memcpy(*packet, &message_uint_uint, message_size);
       break;
     case MSG_SET_AXIS_REL_POS:
       message_uint_int = 
-        (struct Message_uint_int){.type=values[0], .value0=values[1], .value1=values[2]};
+        (struct Message_uint_int){.type=values[0], .axis=values[1], .value=values[2]};
       message_size = sizeof(struct Message_uint_int);
       memcpy(*packet, &message_uint_int, message_size);
       break;
@@ -223,18 +223,23 @@ size_t store_message(int64_t* values, void** packet, size_t* packet_space) {
       memcpy(*packet, &message, message_size);
       break;
     case MSG_GET_AXIS_CONFIG:
-      message_uint = (struct Message_uint){.type=values[0], .value0=values[1]};
+      message_uint = (struct Message_uint){.type=values[0], .value=values[1]};
       message_size = sizeof(struct Message_uint);
       memcpy(*packet, &message_uint, message_size);
       break;
     case MSG_GET_AXIS_POS:
-      message_uint = (struct Message_uint){.type=values[0], .value0=values[1]};
+      message_uint = (struct Message_uint){.type=values[0], .value=values[1]};
       message_size = sizeof(struct Message_uint);
       memcpy(*packet, &message_uint, message_size);
       break;
     default:
       printf("Invalid message type: %lu\n", values[0]);
       exit(0);
+  }
+
+  if(*packet_space < message_size) {
+    printf("ERROR: No space left in packet\n");
+    exit(0);
   }
 
   packet_space -= message_size;
@@ -320,10 +325,8 @@ size_t populate_data_loop(void* packet) {
   static int32_t axis_velocity[MAX_AXIS];
   static int32_t axis_acceleration[MAX_AXIS];
   static struct timespec last_time;
-  static size_t packet_space = 0;
   static uint8_t first_run = 1;
 
-  size_t packet_size = 0;
   if(first_run == 1) {
     for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
       axis_pos[axis] = UINT_MAX / 2;
@@ -334,10 +337,13 @@ size_t populate_data_loop(void* packet) {
     first_run = 0;
 
     clock_gettime(CLOCK_REALTIME, &last_time);
-
-    size_t packet_space = BUFSIZE - sizeof(struct Message);
   }
 
+  size_t packet_space = BUFSIZE - sizeof(struct Message);
+  memset(packet, 0, BUFSIZE);
+  //size_t packet_size = 2;  // The first uint16_t will contain the data length.
+  size_t packet_size = 0;
+  void* packet_itterator = packet + packet_size;
 
   for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
     int32_t accel_mod = 0;
@@ -356,6 +362,7 @@ size_t populate_data_loop(void* packet) {
     axis_pos[axis] += axis_velocity[axis];
 
 
+    /*
     if(axis == 0) {
       printf(
           "axis: %6u "
@@ -369,6 +376,7 @@ size_t populate_data_loop(void* packet) {
           axis_velocity[axis],
           axis_pos[axis]);
     }
+    */
 
     int64_t values[4] = {
       MSG_SET_AXIS_REL_POS,
@@ -376,7 +384,7 @@ size_t populate_data_loop(void* packet) {
       axis_pos[axis],
       0
     };
-    packet_size += store_message(values, &packet, &packet_space);
+    packet_size += store_message(values, &packet_itterator, &packet_space);
   }
 
   struct timespec now;
@@ -394,6 +402,8 @@ size_t populate_data_loop(void* packet) {
   printf("%40li%40li%40li\n", then_time_us, now_time_us, now_time_us - then_time_us);
   last_time = now;
 
+  //((uint16_t*)packet)[0] = packet_size;
+  //printf("%lu\n", packet_size);
   return packet_size;
 }
 
@@ -407,8 +417,9 @@ void display_data(void* packet, size_t packet_size) {
 
   printf("\nSending messages:\n");
   printf("Raw:\n");
-  printf("  addr\t| val\n");
+  printf("  addr | val\n");
   printf("  --------+-------\n");
+
   for(size_t i = 0; i < packet_size / sizeof(uint32_t); i++) {
     printf("    %lu\t| %u\n", i, ((uint32_t*)packet)[i]);
   }
@@ -421,19 +432,19 @@ void display_data(void* packet, size_t packet_size) {
         message_size = sizeof(struct Message_uint);
         memcpy(&message_uint, packet, message_size);
         printf("  msg type: %u\tvalue0: %u\n",
-            message_uint.type, message_uint.value0);
+            message_uint.type, message_uint.value);
         break;
       case MSG_SET_AXIS_ABS_POS:
         message_size = sizeof(struct Message_uint_uint);
         memcpy(&message_uint_int, packet, message_size);
         printf("  msg type: %u\tvalue0: %u\tvalue1: %u\n",
-            message_uint_int.type, message_uint_int.value0, message_uint_int.value1);
+            message_uint_int.type, message_uint_int.axis, message_uint_int.value);
         break;
       case MSG_SET_AXIS_REL_POS:
         message_size = sizeof(struct Message_uint_uint);
         memcpy(&message_uint_int, packet, message_size);
         printf("  msg type: %u\tvalue0: %u\tvalue1: %i\n",
-            message_uint_int.type, message_uint_int.value0, message_uint_int.value1);
+            message_uint_int.type, message_uint_int.axis, message_uint_int.value);
         break;
       case MSG_SET_AXIS_MAX_SPEED:
       case MSG_SET_AXIS_MAX_ACCEL:
@@ -450,7 +461,7 @@ void display_data(void* packet, size_t packet_size) {
         message_size = sizeof(struct Message_uint);
         memcpy(&message_uint, packet, message_size);
         printf("  msg type: %u\tvalue0: %u\n",
-            message_uint.type, message_uint.value0);
+            message_uint.type, message_uint.value);
         break;
       default:
         printf("  Invalid message type: %u\n", msg_type);
@@ -484,16 +495,25 @@ void display_reply(char* buf) {
         struct Reply_axis_config reply_axis_config;
         size = sizeof(struct Reply_axis_config);
         memcpy(&reply_axis_config, itterator, size);
-        printf("Reply_axis_config\n  type: %u\n  abs_pos: %u\n  min_step_len_ticks: %u\n",
-            msg_type, reply_axis_config.abs_pos, reply_axis_config.min_step_len_ticks);
+        printf("Reply_axis_config\n"
+            "  type: %u\n  axis: %u\n  abs_pos: %u\n  min_step_len_ticks: %u\n"
+            "  max_accel_ticks: %u\n  velocity: %u\n",
+            msg_type,
+            reply_axis_config.axis,
+            reply_axis_config.abs_pos,
+            reply_axis_config.min_step_len_ticks,
+            reply_axis_config.max_accel_ticks,
+            reply_axis_config.velocity);
         itterator += size;
         break;
       case REPLY_AXIS_POS:
         struct Reply_axis_pos reply_axis_pos;
         size = sizeof(struct Reply_axis_pos);
         memcpy(&reply_axis_pos, itterator, size);
-        printf("Reply_axis_pos\n  type: %u\n  abs_pos: %u\n",
-            msg_type, reply_axis_pos.abs_pos);
+        printf("Reply_axis_pos\n  type: %u\n  axis: %u\n abs_pos: %u\n",
+            msg_type,
+            reply_axis_pos.axis,
+            reply_axis_pos.abs_pos);
         itterator += size;
         break;
       default:
@@ -598,6 +618,7 @@ int main(int argc, char **argv) {
   } else if(loop) {
     while(1) {
       packet_size = populate_data_loop(packet);
+      //display_data(packet, packet_size);
       send_data(&serveraddr, sockfd, packet, packet_size);
     }
   } else {

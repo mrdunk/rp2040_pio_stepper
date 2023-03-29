@@ -39,19 +39,19 @@ struct Message {
 
 struct Message_uint {
   uint32_t type;
-  uint32_t value0;
+  uint32_t value;
 };
 
 struct Message_uint_uint {
   uint32_t type;
-  uint32_t value0;
-  uint32_t value1;
+  uint32_t axis;
+  uint32_t value;
 };
 
 struct Message_uint_int {
   uint32_t type;
-  uint32_t value0;
-  int value1;
+  uint32_t axis;
+  int32_t value;
 };
 
 
@@ -69,6 +69,7 @@ struct Reply_global_config {
 
 struct Reply_axis_config {
   uint32_t type;
+  uint32_t axis;
   uint32_t abs_pos;
   uint32_t min_step_len_ticks;
   uint32_t max_accel_ticks;
@@ -77,6 +78,7 @@ struct Reply_axis_config {
 
 struct Reply_axis_pos {
   uint32_t type;
+  uint32_t axis;
   uint32_t abs_pos;
 } static Reply_axis_pos_default = { REPLY_AXIS_POS };
 
