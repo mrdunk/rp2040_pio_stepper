@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/param.h>
 
 // PIO related.
 #include "hardware/pio.h"
@@ -19,7 +20,6 @@
 #define SZOF_AXIS_UPDATE (sizeof(struct AxisUpdate) / sizeof(uint32_t))
 
 uint32_t core1_stack[CORE1_STACK_SIZE];
-repeating_timer_t hw_update_timer;
 volatile struct AxisUpdate axis_mvmnt_c0[MAX_AXIS] = {0};
 
 volatile struct ConfigGlobal config_c0 = {
@@ -31,56 +31,56 @@ volatile struct ConfigGlobal config_c0 = {
       // Azis 0.
       .updated = 0,
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_ticks = 500,
+      .min_step_len_ticks = 50,
       .max_accel_ticks = 200
     },
     {
       // Azis 1.
       .updated = 0,
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_ticks = 500,
+      .min_step_len_ticks = 50,
       .max_accel_ticks = 200
     },
     {
       // Azis 2.
       .updated = 0,
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_ticks = 500,
+      .min_step_len_ticks = 50,
       .max_accel_ticks = 200
     },
     {
       // Azis 3.
       .updated = 0,
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_ticks = 500,
+      .min_step_len_ticks = 50,
       .max_accel_ticks = 200
     },
-    {
+    /*{
       // Azis 4.
       .updated = 0,
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_ticks = 500,
+      .min_step_len_ticks = 50,
       .max_accel_ticks = 200
     },
     {
       // Azis 5.
       .updated = 0,
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_ticks = 500,
+      .min_step_len_ticks = 50,
       .max_accel_ticks = 200
     },
     /*{
       // Azis 6.
       .updated = 0,
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_ticks = 500,
+      .min_step_len_ticks = 50,
       .max_accel_ticks = 200
     },
     {
       // Azis 7.
       .updated = 0,
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_ticks = 500,
+      .min_step_len_ticks = 50,
       .max_accel_ticks = 200
     }*/
   }
@@ -94,49 +94,49 @@ struct ConfigGlobal config_c1 = {
     {
       // Azis 0.
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_ticks = 500,
+      .min_step_len_ticks = 50,
       .max_accel_ticks = 200,
     },
     {
       // Azis 1.
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_ticks = 500,
+      .min_step_len_ticks = 50,
       .max_accel_ticks = 200
     },
     {
       // Azis 2.
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_ticks = 500,
+      .min_step_len_ticks = 50,
       .max_accel_ticks = 200
     },
     {
       // Azis 3.
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_ticks = 500,
+      .min_step_len_ticks = 50,
       .max_accel_ticks = 200
     },
-    {
+    /*{
       // Azis 4.
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_ticks = 500,
+      .min_step_len_ticks = 50,
       .max_accel_ticks = 200
     },
     {
       // Azis 5.
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_ticks = 500,
+      .min_step_len_ticks = 50,
       .max_accel_ticks = 200
     },
     /*{
       // Azis 6.
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_ticks = 500,
+      .min_step_len_ticks = 50,
       .max_accel_ticks = 200
     },
     {
       // Azis 7.
       .abs_pos = UINT_MAX / 2,
-      .min_step_len_ticks = 500,
+      .min_step_len_ticks = 50,
       .max_accel_ticks = 200
     }*/
   }
@@ -189,12 +189,100 @@ void axis_to_pio(const uint32_t stepper, PIO* pio, uint32_t* sm) {
   }
 }
 
-void distribute_steps(struct AxisUpdate* update, uint32_t* step_lens)
+void distribute_steps(struct AxisUpdate* update, uint32_t* step_lens, const uint32_t ave_period)
+{
+  // Aiming for 256kHz step rate.
+  // Search term: Trapezoidal Motion Profile.
+  // TODO: We accelerate or decelerate as hard as we can at the start.
+  // Assuming we reach a velocity that will get us to the desired target position,
+  // we then stop accelerating and continue at constant velocity.
+  // Would it be better to accelerate less aggressively so smearing the acceleration
+  // over the whole time segment?
+
+  const uint8_t axis = update->axis;
+  const uint32_t target_pos = update->value;
+  const int32_t start_step_rate_kHz = config_c1.axis[axis].velocity;
+  const uint32_t min_step_len_ticks = config_c1.axis[axis].min_step_len_ticks;
+  const uint32_t max_accel = config_c1.axis[axis].max_accel_ticks;
+  const uint32_t time_period = ave_period;
+  int32_t curr_step_rate_kHz;
+
+  uint32_t step = 0;
+  uint32_t elapsed_time = 0;
+  uint32_t remaining_steps;
+  uint32_t remaining_time;
+  uint32_t constant_step;
+  uint32_t accelerating_step;
+  int8_t direction;
+  int8_t accel_decel;
+  uint32_t step_len_ticks;
+
+  //printf("%u%12u\t\t\t%li\n", update->axis, update->value, target_pos - config_c1.axis[axis].abs_pos);
+
+  while(elapsed_time < time_period) {
+    remaining_steps = target_pos - config_c1.axis[axis].abs_pos;
+    remaining_time = time_period - elapsed_time;
+
+    // Step duration assuming we do need to accelerate/decelerate.
+    accelerating_step =
+      (max_accel * elapsed_time / time_period) + start_step_rate_kHz;
+    // Step duration assuming we don't need to accelerate/decelerate.
+    constant_step = remaining_steps * time_period / remaining_time;
+
+    if(remaining_steps >= 0) {
+      curr_step_rate_kHz = MIN(accelerating_step, constant_step);
+    } else {
+      curr_step_rate_kHz = MAX(-accelerating_step, constant_step);
+    }
+
+    curr_step_rate_kHz = constant_step;
+
+    if(curr_step_rate_kHz > -4 && curr_step_rate_kHz < 0) {
+      curr_step_rate_kHz = -4;
+      //printf("curr_step_rate_kHz: %li\n", curr_step_rate_kHz);
+    } else if (curr_step_rate_kHz >= 0 && curr_step_rate_kHz < 4) {
+      curr_step_rate_kHz = 4;
+      //printf("curr_step_rate_kHz: %li\n", curr_step_rate_kHz);
+    }
+
+    step_len_ticks = time_period / abs(curr_step_rate_kHz);
+
+    if(step_len_ticks < min_step_len_ticks) {
+      // Limit the minimum allowed step length.
+      // This is another way of saying "limit the max speed."
+      //printf("clamp step_len_ticks: %lu\t%lu\n", step_len_ticks, min_step_len_ticks);
+
+      int32_t tmp_step_rate = time_period / min_step_len_ticks;
+      curr_step_rate_kHz = (curr_step_rate_kHz >= 0) ? tmp_step_rate : -tmp_step_rate;
+      step_len_ticks = min_step_len_ticks;
+    }
+
+    if(curr_step_rate_kHz > 0) {
+      config_c1.axis[axis].abs_pos++;
+    } else if(curr_step_rate_kHz < 0) {
+      config_c1.axis[axis].abs_pos--;
+    }
+
+    elapsed_time += step_len_ticks;
+
+    if(step > MAX_STEPS_PER_UPDATE) {
+      //printf("ERROR: step: %lu\t%lu\t%lu\t%lu\n",
+      //    step, step_len_ticks, elapsed_time, time_period);
+      //while(1);
+      break;
+    }
+    step_lens[step++] = abs(step_len_ticks);
+  }
+  config_c1.axis[axis].velocity = curr_step_rate_kHz;
+  //printf("%u%12lu\t%lu\t%lu\t%lu\n",
+  //    axis, config_c1.axis[axis].abs_pos, elapsed_time, ave_period, step);
+}
+
+void distribute_steps_no_dynamic_accel(struct AxisUpdate* update, uint32_t* step_lens)
 {
   uint8_t axis = update->axis;
   const uint32_t update_time_ticks = config_c1.update_time_ticks;
   int32_t velocity = update->value - config_c1.axis[axis].abs_pos;
-  //uint8_t direction = (velocity > 0) ? 1 : 0;
   uint8_t direction = (velocity > 0);
   const int32_t prev_velocity = abs(config_c1.axis[axis].velocity);
   const uint32_t min_step_len_ticks = config_c1.axis[axis].min_step_len_ticks;
@@ -242,7 +330,8 @@ void distribute_steps(struct AxisUpdate* update, uint32_t* step_lens)
   uint32_t mod = update_time_ticks % step_count;
 
   // Work out how long each step needs to be to fit step_count in update_time_ticks.
-  for(uint32_t step = 0; step < step_count; step++) {
+  uint32_t step;
+  for(step = 0; step < step_count; step++) {
     accumilator += mod;
     if(accumilator > step_count) {
       accumilator -= step_count;
@@ -267,12 +356,14 @@ void distribute_steps(struct AxisUpdate* update, uint32_t* step_lens)
   //printf("axis: %u\tdirection: %i\tstep_count: %li\tstep_len_ticks: %lu\n",
   //    axis, direction, step_count, step_len_ticks);
 
-  config_c1.axis[axis].abs_pos += direction ? +step_count : -step_count;
-  config_c1.axis[axis].velocity = direction ? +step_count : -step_count;
+  config_c1.axis[axis].abs_pos += direction ? +step : -step;
+  config_c1.axis[axis].velocity = direction ? +step : -step;
   return;
 }
 
-uint8_t core1_process_updates(queue_t* axis_mvmnt_c1, uint8_t axis, uint32_t* step_lens) {
+uint8_t core1_process_updates(
+    queue_t* axis_mvmnt_c1, uint8_t axis, uint32_t* step_lens, uint32_t ave_period)
+{
   struct AxisUpdate update;
   queue_remove_blocking(axis_mvmnt_c1, &update);
   switch(update.command) {
@@ -286,7 +377,7 @@ uint8_t core1_process_updates(queue_t* axis_mvmnt_c1, uint8_t axis, uint32_t* st
       config_c1.axis[axis].max_accel_ticks = update.value;
       break;
     case CMND_SET_DESIRED_POS:
-      distribute_steps(&update, step_lens);
+      distribute_steps(&update, step_lens, ave_period);
       break;
     default:
       //printf("core1: Unknown update command: %u\n", update.command);
@@ -304,14 +395,16 @@ void core1_send_to_core0() {
     to_serialise.updated = 1;
     to_serialise.axis = axis;
     to_serialise.value = config_c1.axis[axis].abs_pos;
-    if(multicore_fifo_push_timeout_us(((uint32_t*)(&to_serialise))[0], 200) == false) {
+    if(multicore_fifo_push_timeout_us(((uint32_t*)(&to_serialise))[0], 150) == false) {
       printf("FAIL: core1 push fail for axis %u\n", axis);
       break;
     }
-    if(multicore_fifo_push_timeout_us(((uint32_t*)(&to_serialise))[1], 200) == false) {
+    if(multicore_fifo_push_timeout_us(((uint32_t*)(&to_serialise))[1], 150) == false) {
       printf("FAIL: core1 push fail for axis %u\n", axis);
       break;
     }
+    //multicore_fifo_push_blocking(((uint32_t*)(&to_serialise))[0]);
+    //multicore_fifo_push_blocking(((uint32_t*)(&to_serialise))[1]);
 
     to_serialise.padding = 0;
     to_serialise.command = CMND_REPORT_VELOCITY;
@@ -319,25 +412,29 @@ void core1_send_to_core0() {
     to_serialise.axis = axis;
     to_serialise.value = config_c1.axis[axis].velocity;
 
-    if(multicore_fifo_push_timeout_us(((uint32_t*)(&to_serialise))[0], 200) == false) {
+    if(multicore_fifo_push_timeout_us(((uint32_t*)(&to_serialise))[0], 150) == false) {
       printf("FAIL: core0 push fail for axis %u\n", axis);
       break;
     }
-    if(multicore_fifo_push_timeout_us(((uint32_t*)(&to_serialise))[1], 200) == false) {
+    if(multicore_fifo_push_timeout_us(((uint32_t*)(&to_serialise))[1], 150) == false) {
       printf("FAIL: core0 push fail for axis %u\n", axis);
       break;
     }
+    //multicore_fifo_push_blocking(((uint32_t*)(&to_serialise))[0]);
+    //multicore_fifo_push_blocking(((uint32_t*)(&to_serialise))[1]);
   }
 }
 
 /* This interrupt handler is triggered when data from core1 appears on the FIFO. */
 void core1_FIFO_interrupt_handler() {
   static size_t last_time = 0;
+  static size_t last_sync_time = 0;
   static const size_t buffer_in_len = sizeof(struct AxisUpdate) / sizeof(uint32_t) * MAX_AXIS;
   static struct AxisUpdate buffer_in[MAX_AXIS];
   static size_t buffer_in_point = 0;
   static size_t update_point = 0;
   static size_t fail_count = 0;
+  static size_t sync_fail_count = 0;
   static struct Ring_buf_ave period_average_data;
   static uint32_t ave_period = 0;
   static size_t start_time = 0;
@@ -355,6 +452,10 @@ void core1_FIFO_interrupt_handler() {
   if(!multicore_fifo_rvalid()) {
     #if LOG_CORE1 == 2
     printf("WARN: core1_FIFO_interrupt_handler fired with no new data.\n");
+    #else
+    printf("-");
+    //size_t now = time_us_64();
+    //while(time_us_64() - now < 10);
     #endif // LOG_CORE1
     return;
   }
@@ -368,6 +469,7 @@ void core1_FIFO_interrupt_handler() {
       ave_period = ring_buf_ave(&period_average_data, start_time - last_time);
     }
   }
+  //printf("*\t%lu\t%lu\t%lu\t%lu\n", update_point, start_time, last_time, ave_period);
 
   #if LOG_CORE1 == 2
   printf("core1.FIFO_irq start.\n");
@@ -392,7 +494,7 @@ void core1_FIFO_interrupt_handler() {
       update_point++;
     }
   }
-  multicore_fifo_clear_irq(); // Clear interrupt
+  //multicore_fifo_clear_irq(); // Clear interrupt
 
   if(buffer_in_point < buffer_in_len) {
     return;
@@ -401,8 +503,8 @@ void core1_FIFO_interrupt_handler() {
   if(fail) {
     // Drain remaining incoming entries and reset everything before restart.
     while(multicore_fifo_pop_timeout_us(10, &raw));
-    buffer_in_point = 0;
-    update_point = 0;
+    //buffer_in_point = 0;
+    //update_point = 0;
     fail_count++;
   }
 
@@ -414,7 +516,7 @@ void core1_FIFO_interrupt_handler() {
   if(queue_get_level(&axis_mvmnt_c1) == MAX_AXIS) {
     uint8_t count_updates = 0;
     for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
-      count_updates += core1_process_updates(&axis_mvmnt_c1, axis, step_lens[axis]);
+      count_updates += core1_process_updates(&axis_mvmnt_c1, axis, step_lens[axis], ave_period);
     }
   }
 
@@ -425,18 +527,27 @@ void core1_FIFO_interrupt_handler() {
   size_t now = time_us_64();
   #endif // LOG_CORE1
   #if LOG_CORE1 == 1
-  printf("\t\t\t\t\t\tc1\t%4lu%6lu%6lu%6lu\n",
+  printf("\t\t\t\t\t\tc1\t%4lu%6lu%6lu%6lu%6lu\n",
       start_time - last_time,
       now - start_time,
       fail_count,
+      sync_fail_count,
       ave_period);
   #elif LOG_CORE1 == 2
   printf("core1.FIFO_irq:\t\t%lu\t%lu\n", start_time - last_time, now - start_time);
   #endif // LOG_CORE1
-  #ifdef LOG_CORE1
   last_time = start_time;
-  #endif // LOG_CORE1
 
+  if(start_time - last_sync_time > ave_period * 2)
+  {
+    sync_fail_count++;
+    printf("%lu\t%lu\t%lu\t%lu\t%lu\n",
+        last_sync_time, start_time, start_time - last_sync_time, ave_period, sync_fail_count);
+    //if(sync_fail_count > 5) {
+    //  while(1);
+    //}
+  }
+  last_sync_time = start_time;
 }
 
 void core1_entry() {
@@ -444,12 +555,17 @@ void core1_entry() {
 
   // Set up FIFO interrupt for processing data sent from core0 > core1.
   multicore_fifo_clear_irq();
-  irq_set_exclusive_handler(SIO_IRQ_PROC1, core1_FIFO_interrupt_handler);
-  irq_set_enabled(SIO_IRQ_PROC1, true);
+  //irq_set_exclusive_handler(SIO_IRQ_PROC1, core1_FIFO_interrupt_handler);
+  //irq_set_enabled(SIO_IRQ_PROC1, true);
 
   // Infinite While Loop to wait for interrupt
+  //save_and_disable_interrupts();
   while (1){
-    tight_loop_contents();
+    //tight_loop_contents();
+
+    core1_FIFO_interrupt_handler();
+    //printf("*\n");
+    //sleep_us(100);
   }
 }
 
@@ -503,10 +619,10 @@ void core0_send_to_core1() {
     printf("core0: ERROR: Data not marked as sent.\n");
     fail_count++;
   }
-  memset((void*)axis_mvmnt_c0, 0, sizeof(struct AxisUpdate) * MAX_AXIS); 
+  memset((void*)axis_mvmnt_c0, 0, sizeof(struct AxisUpdate) * MAX_AXIS);
 
   #ifdef LOG_CORE0
-  size_t now = time_us_64(); 
+  size_t now = time_us_64();
   #endif // LOG_CORE0
   #if LOG_CORE0 == 1
   printf("\t\t\t\t\t\tc0.tx\t%4lu%6lu%6lu%6lu\n",
@@ -535,8 +651,8 @@ void core0_FIFO_interrupt_handler() {
     uint32_t raw_1;
     size_t count = 0;
     // Pull the data from core0 off the FIFO.
-    while(multicore_fifo_pop_timeout_us(0, &raw_0) &&
-        multicore_fifo_pop_timeout_us(0, &raw_1))
+    while(multicore_fifo_pop_timeout_us(1, &raw_0) &&
+        multicore_fifo_pop_timeout_us(1, &raw_1))
     {
       struct AxisUpdate update;
       ((uint32_t*)(&update))[0] = raw_0;
@@ -732,21 +848,27 @@ void send_pio_steps(
 
 void set_relative_position(
     const uint32_t stepper,
-    const int position_diff) {
-
-  uint32_t new_position = config_c0.axis[stepper].abs_pos + position_diff;
-  send_pio_steps(stepper, new_position);
+    const int32_t position_diff) {
+  if(stepper < MAX_AXIS) {
+    uint32_t new_position = config_c0.axis[stepper].abs_pos + position_diff;
+    send_pio_steps(stepper, new_position);
+  }
   return;
 }
 
 void set_absolute_position(
     const uint32_t stepper,
     const uint32_t new_position) {
-  send_pio_steps(stepper, new_position);
+  if(stepper < MAX_AXIS) {
+    send_pio_steps(stepper, new_position);
+  }
   return;
 }
 
 uint32_t get_absolute_position(uint32_t stepper) {
+  if(stepper >= MAX_AXIS) {
+    return 0;
+  }
   return config_c0.axis[stepper].abs_pos;
 }
 
@@ -754,7 +876,9 @@ void set_max_speed(
     const uint32_t stepper,
     const uint32_t max_speed_step_sec
     ) {
-  config_c0.axis[stepper].min_step_len_ticks = speed_to_step_ticks(max_speed_step_sec);
+  if(stepper < MAX_AXIS) {
+    config_c0.axis[stepper].min_step_len_ticks = speed_to_step_ticks(max_speed_step_sec);
+  }
 }
 
 uint32_t set_global_update_rate(uint32_t update_rate) {
@@ -805,7 +929,12 @@ void get_axis_config(
     size_t msg_human_len_max,
     uint8_t* msg_machine,
     size_t* msg_machine_len,
-    size_t msg_machine_len_max) {
+    size_t msg_machine_len_max)
+{
+  if(axis >= MAX_AXIS) {
+    return;
+  }
+
   if(msg_human_len_max > 0) {
     size_t len = strlen(msg_human);
     snprintf(msg_human + len,
@@ -842,6 +971,10 @@ void get_axis_config_if_updated(
     size_t* msg_machine_len,
     size_t msg_machine_len_max)
 {
+  if(axis >= MAX_AXIS) {
+    return;
+  }
+
   if(config_c0.axis[axis].updated) {
     get_axis_config(
         axis, msg_human, msg_human_len_max, msg_machine, msg_machine_len, msg_machine_len_max);
@@ -855,7 +988,12 @@ void get_axis_pos(
     size_t msg_human_len_max,
     uint8_t* msg_machine,
     size_t* msg_machine_len,
-    size_t msg_machine_len_max) {
+    size_t msg_machine_len_max)
+{
+  if(axis >= MAX_AXIS) {
+    return;
+  }
+
   if(msg_human_len_max > 0) {
     size_t len = strlen(msg_human);
     snprintf(msg_human + len, msg_human_len_max - len,

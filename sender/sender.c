@@ -109,6 +109,8 @@ size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf_human, uint8_t* t
   struct Message_uint_uint* msg_uint_uint;
   struct Message_uint_int* msg_uint_int;
 
+  uint32_t axis;
+
   while(msg_type = *(uint32_t*)(rx_itterator)) {  // msg_type of 0 indicates end of data.
     switch(msg_type) {
       case MSG_SET_GLOAL_UPDATE_RATE:
@@ -133,42 +135,10 @@ size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf_human, uint8_t* t
       case MSG_SET_AXIS_ABS_POS:
         msg_uint_uint = process_msg_uint_uint(&rx_itterator);
         set_absolute_position(msg_uint_uint->axis, msg_uint_uint->value);
-/*        get_axis_pos(
-            msg_uint_uint->axis,
-            tx_buf_human,
-#if defined(UART_ENABLE) || defined(NET_ENABLE_HUMAN)
-            DATA_BUF_SIZE,
-#else
-            0,
-#endif
-            tx_buf_machine,
-            &tx_buf_machine_len,
-#ifdef NET_ENABLE_MACHINE
-            tx_buf_mach_len_max
-#else
-            0
-#endif
-            );*/
         break;
       case MSG_SET_AXIS_REL_POS:
         msg_uint_int = process_msg_uint_int(&rx_itterator);
         set_relative_position(msg_uint_int->axis, msg_uint_int->value);
-/*        get_axis_pos(
-            msg_uint_int->axis,
-            tx_buf_human,
-#if defined(UART_ENABLE) || defined(NET_ENABLE_HUMAN)
-            DATA_BUF_SIZE,
-#else
-            0,
-#endif
-            tx_buf_machine,
-            &tx_buf_machine_len,
-#ifdef NET_ENABLE_MACHINE
-            tx_buf_mach_len_max
-#else
-            0
-#endif
-            );*/
         break;
       case MSG_SET_AXIS_MAX_SPEED:
         // TODO.
@@ -546,15 +516,8 @@ int main() {
   print_network_information(g_net_info);
   #endif  // NET_ENABLE_HUMAN || NET_ENABLE_MACHINE
 
-
   init_core1();
   printf("--------------------------------\n");
-
-  //send_pios_steps(0, 10, 500000, 1);
-  //send_pios_steps(0, 20, 100000, 0);
-  //send_pios_steps(1, 4, 2000000, 0);
-  //send_pios_steps(1, 2, 5000000, 1);
-
 
   size_t time_last_tx = time_us_64();
   size_t time_now;
@@ -567,7 +530,7 @@ int main() {
     #endif  // NET_ENABLE_MACHINE
     #if defined(NET_ENABLE_HUMAN) || defined(UART_ENABLE)
     memset(tx_buf_human, '\0', DATA_BUF_SIZE);
-    #endif  // NET_ENABLE_HUMAN || NET_ENABLE_MACHINE
+    #endif  // NET_ENABLE_HUMAN || UART_ENABLE
 
     #ifdef UART_ENABLE
     get_uart(uart_rx_buf, tx_buf_human, tx_buf_machine);
@@ -584,9 +547,6 @@ int main() {
         &process_buffer_human,
         destip_human,
         &destport_human);
-    //if (retval < 0) {
-    //  printf(" Network error : %d\n", retval);
-    //}
     #endif // NET_ENABLE_HUMAN
 
     #ifdef NET_ENABLE_MACHINE
@@ -600,10 +560,6 @@ int main() {
         &process_buffer_machine,
         destip_machine,
         &destport_machine);
-    //if (retval < 0) {
-    //  printf(" Network error : %d\n", retval);
-    //  while (1);
-    //}
     #endif  // NET_ENABLE_MACHINE
 
     for(size_t axis = 0; axis < MAX_AXIS; axis++) {
@@ -626,10 +582,6 @@ int main() {
           strlen(tx_buf_human),
           destip_human,
           &destport_human);
-      //if (retval < 0) {
-      //  printf(" Network error : %d\n", retval);
-      //  while (1);
-      //}
       #endif // NET_ENABLE_HUMAN
 
       #ifdef NET_ENABLE_MACHINE
@@ -640,10 +592,6 @@ int main() {
           tx_buf_machine_len,
           destip_machine,
           &destport_machine);
-      //if (retval < 0) {
-      //  printf(" Network error : %d\n", retval);
-      //  while (1);
-      //}
       #endif  // NET_ENABLE_MACHINE
 
       #ifdef UART_ENABLE
@@ -656,7 +604,7 @@ int main() {
     time_now = time_us_64();
     //if(number_axis_updated() > 0 || (time_now - time_last_tx) > get_global_update_time_us()) {
     if(number_axis_updated() > 0) {
-      printf("%5lu\n", time_now - time_last_tx);
+      //printf("%5lu\n", time_now - time_last_tx);
       time_last_tx = time_now;
       core0_send_to_core1();
       done_rx = false;

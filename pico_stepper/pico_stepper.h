@@ -1,10 +1,10 @@
 #ifndef PICO_STEPPER__H
 #define PICO_STEPPER__H
 
-//#define LOG_CORE0 1
+#define LOG_CORE0 1
 //#define LOG_CORE1 1
 
-#define MAX_AXIS 6
+#define MAX_AXIS 4
 
 #define MESSAGE_SECTIONS 16
 
@@ -95,7 +95,7 @@ void send_pio_steps(
  */
 void set_relative_position(
     uint32_t stepper,
-    int position_diff);
+    int32_t position_diff);
 
 /* Reach a specified step count in the globally configured update_time_us.
  *

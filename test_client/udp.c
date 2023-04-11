@@ -2,6 +2,9 @@
  * Based on https://www.google.com/url?sa=t&rct=j&q=&esrc=s&source=web&cd=&cad=rja&uact=8&ved=2ahUKEwi8t8CwxOD9AhWxQ0EAHWFHBVQQFnoECA4QAQ&url=https%3A%2F%2Fwww.cs.cmu.edu%2Fafs%2Fcs%2Facademic%2Fclass%2F15213-f99%2Fwww%2Fclass26%2Fudpclient.c&usg=AOvVaw2MXuxXL8tVHtLjHFYKrEpg
  * udpclient.c - A simple UDP client
  * usage: udpclient <host> <port>
+ *
+ * BUILD:
+ *  gcc ../test_client/udp.c -lm
  */
 
 #include <ctype.h>
@@ -379,7 +382,7 @@ size_t populate_data_loop(void* packet) {
     */
 
     int64_t values[4] = {
-      MSG_SET_AXIS_REL_POS,
+      MSG_SET_AXIS_ABS_POS,
       axis,
       axis_pos[axis],
       0
