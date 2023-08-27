@@ -8,7 +8,7 @@
  * uint32_t of zero value. */
 
 
-static const char* human_help = 
+static const char* human_help =
 "Description              | id | params\r\n"
 "-------------------------+----+------------------------\r\n"
 "SET_GLOAL_UPDATE_RATE    | 1  | value: uint32_t\r\n"

@@ -17,7 +17,7 @@
 #include "pico_stepper.h"
 #include "messages.h"
 
-#define SZOF_AXIS_UPDATE (sizeof(struct AxisUpdate) / sizeof(uint32_t))
+#define SIZOF_AXIS_UPDATE (sizeof(struct AxisUpdate) / sizeof(uint32_t))
 
 uint32_t core1_stack[CORE1_STACK_SIZE];
 volatile struct AxisUpdate axis_mvmnt_c0[MAX_AXIS] = {0};
@@ -86,7 +86,7 @@ volatile struct ConfigGlobal config_c0 = {
   }
 };
 
-struct ConfigGlobal config_c1 = {
+volatile struct ConfigGlobal config_c1 = {
   .update_rate = 1000,       // 1kHz.
   .update_time_us = 1000,    // 1000us.
   .update_time_ticks = 133000,
@@ -168,30 +168,99 @@ size_t ring_buf_ave(struct Ring_buf_ave* data, uint32_t new_val) {
   return data->total / data->count;
 }
 
-void axis_to_pio(const uint32_t stepper, PIO* pio, uint32_t* sm) {
-  switch (stepper) {
+void axis_to_pio(const uint32_t axis, PIO* pio, uint32_t* sm) {
+  switch (axis) {
     case 0:
     case 1:
     case 2:
     case 3:
       *pio = pio0;
-      *sm = stepper;
+      *sm = axis;
       break;
     case 4:
     case 5:
     case 6:
     case 7:
       *pio = pio1;
-      *sm = stepper - 4;
+      *sm = axis - 4;
       break;
     default:
-      printf("WARN: Invalid stepper index: %ld\n", stepper);
+      printf("WARN: Invalid axis index: %ld\n", axis);
   }
 }
 
-void distribute_steps(struct AxisUpdate* update, uint32_t* step_lens, const uint32_t ave_period)
+uint32_t time_overrun_ticks = 0;
+
+/* In progress. */
+void do_steps(struct AxisUpdate* update, const uint32_t ave_update_time_ticks){
+  const uint32_t time_window_ticks = ave_update_time_ticks - time_overrun_ticks;
+  const uint8_t axis = update->axis;
+  const uint32_t target_pos = update->value;
+  const uint32_t min_step_len_ticks = config_c1.axis[axis].min_step_len_ticks;
+  const uint32_t max_accel = config_c1.axis[axis].max_accel_ticks;
+
+  int32_t velocity = update->value - config_c1.axis[axis].abs_pos;
+  uint8_t direction = (velocity > 0);
+  const int32_t prev_velocity = abs(config_c1.axis[axis].velocity);
+  uint32_t step_count;
+  uint32_t step_len_ticks;
+
+  // Limit steps according to maximum allowed acceleration/deceleration.
+  if(max_accel > 0) {
+    if(direction && (velocity > (prev_velocity + (int32_t)max_accel))) {
+      velocity = prev_velocity + max_accel;
+      direction = (velocity > 0);
+    } else if(!direction && (velocity < (prev_velocity - (int32_t)max_accel))) {
+      velocity = prev_velocity - max_accel;
+      direction = (velocity > 0);
+    }
+  }
+  step_count = abs(velocity);
+
+  if(step_count == 0) {
+    // Special case: No steps requested.
+    step_len_ticks = 0;
+    time_overrun_ticks = 0;
+  } else {
+    step_len_ticks = time_window_ticks / step_count;
+
+    if(step_len_ticks < min_step_len_ticks) {
+      // Limit the minimum allowed step length.
+      // This is another way of saying "limit the max speed."
+      step_count = time_window_ticks / min_step_len_ticks;
+      step_len_ticks = time_window_ticks / step_count;
+    }
+
+    if(time_overrun_ticks > step_len_ticks / 2) {
+      step_count++;
+    } else {
+      step_len_ticks++;
+    }
+
+    time_overrun_ticks = (step_len_ticks * step_count) - time_window_ticks;
+  }
+
+  PIO pio;
+  uint32_t sm;
+  axis_to_pio(update->axis, &pio, &sm);
+
+  // Request steps.
+  pio_sm_put(pio, sm, (step_count - 11) / 2);
+
+  // Wait for report on starting position.
+  //config_c1.axis[axis].abs_pos += direction ? +step : -step;
+  config_c1.axis[axis].abs_pos = pio_sm_get_blocking(pio, sm);
+  config_c1.axis[axis].velocity = direction ? +step_count : -step_count;
+  return;
+}
+
+/* Untested attempt to use the `dma_step` PIO program. */
+void distribute_steps_dynamic(struct AxisUpdate* update, uint32_t* step_lens, const uint32_t ave_period)
 {
   // Aiming for 256kHz step rate.
+  // We assemble the desired step lengths for the whole time window in a buffer
+  // then use DMA to populate the PIO input as requred.
+  //
   // Search term: Trapezoidal Motion Profile.
   // TODO: We accelerate or decelerate as hard as we can at the start.
   // Assuming we reach a velocity that will get us to the desired target position,
@@ -278,6 +347,7 @@ void distribute_steps(struct AxisUpdate* update, uint32_t* step_lens, const uint
   //    axis, config_c1.axis[axis].abs_pos, elapsed_time, ave_period, step);
 }
 
+/* Untested attempt to use the `dma_step` PIO program. */
 void distribute_steps_no_dynamic_accel(struct AxisUpdate* update, uint32_t* step_lens)
 {
   uint8_t axis = update->axis;
@@ -339,7 +409,7 @@ void distribute_steps_no_dynamic_accel(struct AxisUpdate* update, uint32_t* step
       // TODO: The PIO has some overhead; It inserts a few extra instructions.
       // Subtract those from the step_lens value here.
       // Also it actually lasts 2x as long as requested.
-      step_len = update_time_ticks + 1 +(direction << 28) + (direction << 30) + (1 << 31);
+      step_len = update_time_ticks + 1 + (direction << 28) + (direction << 30) + (1 << 31);
     } else {
       time_total_ticks += step_len_ticks;
       // TODO: The PIO has some overhead; It inserts a few extra instructions.
@@ -377,7 +447,8 @@ uint8_t core1_process_updates(
       config_c1.axis[axis].max_accel_ticks = update.value;
       break;
     case CMND_SET_DESIRED_POS:
-      distribute_steps(&update, step_lens, ave_period);
+      //distribute_steps_dynamic(&update, step_lens, ave_period);
+      do_steps(&update, ave_period);
       break;
     default:
       //printf("core1: Unknown update command: %u\n", update.command);
@@ -425,8 +496,8 @@ void core1_send_to_core0() {
   }
 }
 
-/* This interrupt handler is triggered when data from core1 appears on the FIFO. */
-void core1_FIFO_interrupt_handler() {
+/* Handle data from core1 FIFO. */
+void core1_payload() {
   static size_t last_time = 0;
   static size_t last_sync_time = 0;
   static const size_t buffer_in_len = sizeof(struct AxisUpdate) / sizeof(uint32_t) * MAX_AXIS;
@@ -451,7 +522,7 @@ void core1_FIFO_interrupt_handler() {
 
   if(!multicore_fifo_rvalid()) {
     #if LOG_CORE1 == 2
-    printf("WARN: core1_FIFO_interrupt_handler fired with no new data.\n");
+    printf("WARN: core1_payload called with no new data.\n");
     #else
     printf("-");
     //size_t now = time_us_64();
@@ -477,9 +548,9 @@ void core1_FIFO_interrupt_handler() {
 
   struct AxisUpdate update;
   while(multicore_fifo_pop_timeout_us(1, &raw) && buffer_in_point < buffer_in_len) {
-    ((uint32_t*)&update)[buffer_in_point % SZOF_AXIS_UPDATE] = raw;
+    ((uint32_t*)&update)[buffer_in_point % SIZOF_AXIS_UPDATE] = raw;
     buffer_in_point++;
-    if(buffer_in_point % (SZOF_AXIS_UPDATE) == 0) {
+    if(buffer_in_point % (SIZOF_AXIS_UPDATE) == 0) {
       // Whole AxisUpdate object populated.
       if(update_point != update.axis) {
         printf("ERROR: core1.interrupt: Invalid data\n");
@@ -494,7 +565,6 @@ void core1_FIFO_interrupt_handler() {
       update_point++;
     }
   }
-  //multicore_fifo_clear_irq(); // Clear interrupt
 
   if(buffer_in_point < buffer_in_len) {
     return;
@@ -502,9 +572,7 @@ void core1_FIFO_interrupt_handler() {
 
   if(fail) {
     // Drain remaining incoming entries and reset everything before restart.
-    while(multicore_fifo_pop_timeout_us(10, &raw));
-    //buffer_in_point = 0;
-    //update_point = 0;
+    multicore_fifo_drain();
     fail_count++;
   }
 
@@ -551,19 +619,14 @@ void core1_FIFO_interrupt_handler() {
 }
 
 void core1_entry() {
-  uint32_t step_lens[MAX_AXIS][MAX_STEPS_PER_UPDATE] = {0};
-
   // Set up FIFO interrupt for processing data sent from core0 > core1.
   multicore_fifo_clear_irq();
-  //irq_set_exclusive_handler(SIO_IRQ_PROC1, core1_FIFO_interrupt_handler);
+  //irq_set_exclusive_handler(SIO_IRQ_PROC1, core1_payload);
   //irq_set_enabled(SIO_IRQ_PROC1, true);
 
   // Infinite While Loop to wait for interrupt
-  //save_and_disable_interrupts();
   while (1){
-    //tight_loop_contents();
-
-    core1_FIFO_interrupt_handler();
+    core1_payload();
     //printf("*\n");
     //sleep_us(100);
   }
@@ -712,7 +775,8 @@ void core0_FIFO_interrupt_handler() {
   #endif // LOG_CORE0
 }
 
-/* Push config from core0 to core1. */
+/* Push config from core0 to core1.
+ * Done once at startup. */
 void sync_config_c0_to_c1() {
   for(size_t prop = 0; prop < 3; prop++) {
     // Wait for any active timer IRQ to finish.
@@ -775,9 +839,9 @@ void init_core1() {
 
   // Initialise PIOs.
   // TODO: Set up pins through config.
-  uint32_t stepper_count = MAX_AXIS;
-  uint32_t pins_step[8] =      {0, 2, 4, 6, 8, 10, 12, 14};
-  uint32_t pins_direction[8] = {1, 3, 5, 7, 9, 11, 13, 15};
+  const uint32_t stepper_count = MAX_AXIS;
+  const uint32_t pins_step[8] =      {0, 2, 4, 6, 8, 10, 12, 14};
+  const uint32_t pins_direction[8] = {1, 3, 5, 7, 9, 11, 13, 15};
 
   for (uint32_t stepper = 0; stepper < stepper_count; stepper++) {
     init_pio(stepper, pins_step[stepper], pins_direction[stepper]);
@@ -794,10 +858,19 @@ void init_core1() {
 void init_pio(
     const uint32_t stepper,
     const uint32_t pin_step,
-    const uint32_t pin_direction)
+    const uint32_t pin_direction
+    )
 {
   static uint32_t offset_pio0 = 0;
   static uint32_t offset_pio1 = 0;
+  static uint8_t init_done = 0;
+
+  if(init_done == 0)
+  {
+    offset_pio0 = pio_add_program(pio0, &step_repeated_program);
+    offset_pio1 = pio_add_program(pio1, &step_repeated_program);
+    init_done = 1;
+  }
 
   uint32_t sm;
   switch (stepper) {
@@ -805,22 +878,18 @@ void init_pio(
     case 1:
     case 2:
     case 3:
-      if (offset_pio0 == 0) {
-        offset_pio0 = pio_add_program(pio0, &step_program);
-      }
       sm = pio_claim_unused_sm(pio0, true);
-      step_program_init(pio0, sm, offset_pio0, pin_step, pin_direction);
+      // From pico_stepper.pio
+      step_repeated_program_init(pio0, sm, offset_pio0, pin_step);
       pio_sm_set_enabled(pio0, sm, true);
       break;
     case 4:
     case 5:
     case 6:
     case 7:
-      if (offset_pio1 == 0) {
-        offset_pio1 = pio_add_program(pio1, &step_program);
-      }
       sm = pio_claim_unused_sm(pio1, true);
-      step_program_init(pio1, sm, offset_pio1, pin_step, pin_direction);
+      // From pico_stepper.pio
+      step_repeated_program_init(pio1, sm, offset_pio0, pin_step);
       pio_sm_set_enabled(pio1, sm, true);
       break;
     default:

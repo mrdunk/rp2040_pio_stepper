@@ -50,6 +50,7 @@ struct ConfigGlobal {
   // Update using set_global_update_rate(...).
   uint32_t update_rate;
   uint32_t update_time_us;  // (1,000,000) / update_rate
+                            //
   uint32_t update_time_ticks;  // clock_speed / update_rate
 
   struct ConfigAxis axis[MAX_AXIS];

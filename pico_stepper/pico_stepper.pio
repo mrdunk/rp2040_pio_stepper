@@ -1,6 +1,11 @@
 
 
 
+; This program takes direction, number of steps and a step length as seperate
+; 32bit words on the FIFO.
+; Provides no feedback.
+; Confirmed working.
+
 .program step
 .side_set 1 opt
 
@@ -14,7 +19,7 @@ direction_off:
 direction_done:
 
     out isr, 32               ; Abuse isr register as a general purpose register.
-                              ; It will store the length of each step.
+                              ; It will store the step length.
 
     out y, 32                 ; y contains number of steps.
 
@@ -28,7 +33,7 @@ step_entry:
 pause_off:
     jmp x-- pause_off
 
-    mov x, isr    side 1      ; Restore the step length. Turn step LED on
+    mov x, isr    side 1      ; Restore the step length. Turn step pin on
 pause_on:
     jmp x-- pause_on
 
@@ -41,49 +46,129 @@ pause_on:
 % c-sdk {
 // this is a raw helper function for use by the user which sets up the GPIO output, and configures the SM to output on a particular pin
 
-void step_program_init(PIO pio, uint sm, uint offset, uint pin_step, uint pin_direction) {
-   pio_sm_config c = step_program_get_default_config(offset);
+static inline void step_program_init(
+    PIO pio, uint sm, uint offset, uint pin_step, uint pin_direction
+) {
+   pio_sm_config config = step_program_get_default_config(offset);
 
    pio_gpio_init(pio, pin_direction);
    pio_sm_set_consecutive_pindirs(pio, sm, pin_direction, 1, true);
-   sm_config_set_set_pins(&c, pin_direction, 1);
+   sm_config_set_set_pins(&config, pin_direction, 1);
 
    pio_gpio_init(pio, pin_step);
    pio_sm_set_consecutive_pindirs(pio, sm, pin_step, 1, true);
-   sm_config_set_sideset_pins(&c, pin_step);
+   sm_config_set_sideset_pins(&config, pin_step);
 
    //  	sm_config_set_in_shift(pio_sm_config*, shift_right, auto_push, push_threshold)
-   sm_config_set_out_shift(&c, 1, 1, 32);
+   sm_config_set_out_shift(&config, 1, 1, 32);
 
    // Join both FIFO registers.
-   sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
+   sm_config_set_fifo_join(&config, PIO_FIFO_JOIN_TX);
 
-   pio_sm_init(pio, sm, offset, &c);
+   pio_sm_init(pio, sm, offset, &config);
 }
 %}
 
+
+
+.program step_repeated
+.side_set 1 opt
+
+.wrap_target
+start:
+
+    out x, 32     side 0      ; X contains step length.
+
+    jmp !x, start             ; Special case. Treat step length of 0 as no steps
+                              ; until further data is received.
+
+    mov y, x
+pause_off:
+    jmp y-- pause_off
+
+    mov y, x      side 1      ; Restore the step length. Turn step pin on.
+pause_on:
+    jmp y-- pause_on
+
+    mov y, isr;
+    jmp y--, incr_count     ; Decrease step counter. (Will invert before sending.)
+incr_count:
+    mov isr, y
+
+    mov y, STATUS             ; By default, get's the TX FIFO. Returns all 0s if there is data.
+    jmp !y, new_data
+    jmp start   [1]
+
+new_data:
+    mov isr, ~isr             ; Invert the negative step count.
+    push                      ; Since new data has arrived on the FIFO, export the step count.
+.wrap                         ; Back to the start.
+
+
+% c-sdk {
+
+// Setup helper function.
+static inline void step_repeated_program_init(PIO pio, uint sm, uint offset, uint pin_step) {
+  pio_sm_config config = step_program_get_default_config(offset);
+
+  // Setup GPIO
+  pio_gpio_init(pio, pin_step);
+  pio_sm_set_consecutive_pindirs(pio, sm, pin_step, 1, true);
+  sm_config_set_sideset_pins(&config, pin_step);
+
+  // Configure FIFOs.
+  // Out.
+  // sm_config_set_out_shift(pio_sm_config *c, bool shift_right, bool autopull, uint pull_threshold)
+  sm_config_set_out_shift(&config, true, true, 32);
+  // In.
+  // sm_config_set_in_shift(pio_sm_config *c, bool shift_right, bool autopush, uint push_threshold)
+  sm_config_set_in_shift(&config, true, false, 32);
+
+  // Enable feedback on input FIFO buffer contents.
+  sm_config_set_mov_status(&config, STATUS_TX_LESSTHAN, 1);
+
+  pio_sm_init(pio, sm, offset, &config);
+}
+
+%}
+
+
+
+
+; This program expects the step and direction pin values to be encoded in the FIFO data.
+; Packet format:
+;   bit 0-27:  step length.
+;   bit 28:    step pin value at start of step.
+;   bit 29:     direction pin value at start of step.
+;   bit 30:     step pin value for 2nd half of step.
+;   bit 31:     direction pin value for 2nd half of step.
+; Does not repeat. New data must be on FIFO for each step.
+; Intended to be fed by DMA.
+; Not tested.
 
 
 .program dma_step
 
 .wrap_target
     out x,    28
+
     mov y, x
     out pins, 2
 pin_off:
     jmp y-- pin_off
+
     mov y, x
     out pins, 2
 pin_on:
-    jmp y-- pin_off
+    jmp y-- pin_on
 .wrap
 
 % c-sdk {
-// Helper function to configure `dma_step`.
+// Helper function to configure `dma_step_program`.
 
-void dma_step_program_init(PIO pio, uint sm, uint offset, uint pin) {
+static inline void dma_step_program_init(PIO pio, uint sm, uint offset, uint pin) {
   // Get default PIO config for modification.
-  pio_sm_config c = step_program_get_default_config(offset);
+  pio_sm_config c = dma_step_program_get_default_config(offset);
 
   // Setup pin and pin+1 to be accessible from the PIO
   pio_gpio_init(pio, pin);
