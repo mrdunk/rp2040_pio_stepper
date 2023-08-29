@@ -5,7 +5,7 @@ add_executable(${TARGET_NAME}
         )
 
 target_include_directories (${TARGET_NAME} PUBLIC ../shared/)
-target_sources(${TARGET_NAME} PRIVATE ${TARGET_NAME}.c config.c)
+target_sources(${TARGET_NAME} PRIVATE ${TARGET_NAME}.c config.c core1.c)
 
 target_link_libraries(${TARGET_NAME} PRIVATE
         #pico_stepper

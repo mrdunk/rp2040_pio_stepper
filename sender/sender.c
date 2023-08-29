@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include "pico/stdlib.h"
-#include "pico/multicore.h"
 
 // w5x00 related.
 #include "port_common.h"
@@ -14,6 +13,7 @@
 #include "sender.h"
 #include "messages.h"
 #include "config.h"
+#include "core1.h"
 
 
 /* Network */
@@ -85,9 +85,9 @@ struct Message_uint_int* process_msg_uint_int(char** rx_buf) {
   return message;
 }
 
-size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf_machine) {
+size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return_data) {
   char* rx_itterator = rx_buf;
-  size_t tx_buf_machine_len = 0;
+  size_t tx_buf_len = 0;
   uint32_t msg_type;
   size_t tx_buf_mach_len_max = DATA_BUF_SIZE - sizeof(uint32_t);
   struct Message* msg;
@@ -96,7 +96,7 @@ size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf_machine) {
   struct Message_uint_int* msg_uint_int;
 
   uint32_t axis;
-  uint32_t abs_pos;
+  uint32_t abs_pos_requested;
 
   while(msg_type = *(uint32_t*)(rx_itterator)) {  // msg_type of 0 indicates end of data.
     switch(msg_type) {
@@ -104,8 +104,8 @@ size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf_machine) {
         //msg_uint = process_msg_uint(&rx_itterator);
         //set_global_update_rate(msg_uint->value);
         //get_global_config(
-        //    tx_buf_machine,
-        //    &tx_buf_machine_len,
+        //    tx_buf,
+        //    &tx_buf_len,
         //    tx_buf_mach_len_max
         //    );
         break;
@@ -113,12 +113,14 @@ size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf_machine) {
         msg_uint_uint = process_msg_uint_uint(&rx_itterator);
         //set_absolute_position(msg_uint_uint->axis, msg_uint_uint->value);
         axis = msg_uint_uint->axis;
-        abs_pos = msg_uint_uint->value;
-        update_axis(axis, &abs_pos, NULL, NULL, NULL);
+        abs_pos_requested = msg_uint_uint->value;
+        update_axis_config(axis, CORE0, &abs_pos_requested, NULL, NULL, NULL, NULL);
+        (*return_data)++;
         break;
       case MSG_SET_AXIS_REL_POS:
         msg_uint_int = process_msg_uint_int(&rx_itterator);
         //set_relative_position(msg_uint_int->axis, msg_uint_int->value);
+        //(*return_data)++;
         break;
       case MSG_SET_AXIS_MAX_SPEED:
         // TODO.
@@ -130,8 +132,8 @@ size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf_machine) {
       case MSG_GET_GLOBAL_CONFIG:
         msg = process_msg(&rx_itterator);
         //get_global_config(
-        //    tx_buf_machine,
-        //    &tx_buf_machine_len,
+        //    tx_buf,
+        //    &tx_buf_len,
         //    tx_buf_mach_len_max
         //    );
         break;
@@ -139,8 +141,8 @@ size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf_machine) {
         msg_uint = process_msg_uint(&rx_itterator);
         //get_axis_config(
         //    msg_uint->value,
-        //    tx_buf_machine,
-        //    &tx_buf_machine_len,
+        //    tx_buf,
+        //    &tx_buf_len,
         //    tx_buf_mach_len_max
         //    );
         break;
@@ -148,8 +150,8 @@ size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf_machine) {
         msg_uint = process_msg_uint(&rx_itterator);
         //get_axis_pos(
         //    msg_uint->value,
-        //    tx_buf_machine,
-        //    &tx_buf_machine_len,
+        //    tx_buf,
+        //    &tx_buf_len,
         //    tx_buf_mach_len_max
         //    );
         break;
@@ -160,7 +162,7 @@ size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf_machine) {
   }
   memset(rx_buf, '\0', DATA_BUF_SIZE);
 
-  return tx_buf_machine_len;
+  return tx_buf_len;
 }
 
 
@@ -171,9 +173,10 @@ int32_t get_UDP(
     uint8_t socket_num,
     uint16_t port,
     uint8_t* nw_rx_buf,
-    uint8_t* tx_buf_machine,
-    size_t* tx_buf_machine_len,
-    size_t (*callback)(uint8_t*, uint8_t*),
+    uint8_t* tx_buf,
+    size_t* tx_buf_len,
+    size_t (*callback)(uint8_t*, uint8_t*, uint8_t*),
+    uint8_t* callback_return_data,
     uint8_t* destip,
     uint16_t* destport)
 {
@@ -200,7 +203,7 @@ int32_t get_UDP(
            return ret;
          }
 
-         *tx_buf_machine_len = callback(nw_rx_buf, tx_buf_machine);
+         *tx_buf_len = callback(nw_rx_buf, tx_buf, callback_return_data);
        }
        break;
      case SOCK_CLOSED:
@@ -260,50 +263,23 @@ int32_t put_UDP(
   return 1;
 }
 
-void core1_main() {
-  uint32_t abs_pos;
-  uint32_t min_step_len_ticks;
-  uint32_t max_accel_ticks;
-  uint32_t velocity;
-  uint32_t updated;
-
-  uint32_t count = 0;
-  while (1) {
-    //gpio_put(LED_PIN, (time_us_64() / 1000000) % 2);
-    //gpio_put(LED_PIN, 1);
-    //sleep_us(100000);
-    //gpio_put(LED_PIN, 0);
-
-    //sleep_us(100000);
-    //printf(".");
-    //if((count++ % 200) == 0) {
-    //  printf("\n");
-    //}
-
-
-    //sleep_us(1000);
-    for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
-      updated = get_axis(axis, &abs_pos, &min_step_len_ticks, &max_accel_ticks, &velocity);
-      if(updated > 0) {
-        printf("%u \t %lu \t %lu \t %lu \t %lu \n",
-            axis, abs_pos, min_step_len_ticks, max_accel_ticks, velocity);
-      }
-    }
-  }
-}
-
-void init_core1_b() {
-  printf("core0: Initializing.\n");
-
-  // Launch core1.
-  multicore_launch_core1(&core1_main);
-}
-
 int main() {
+  static struct Ring_buf_ave period_average_data;
+  uint32_t ave_period_us = 0;
+  uint32_t last_ave_period_us = 0;
+
   int retval = 0;
   char nw_rx_buf[DATA_BUF_SIZE] = "";
-  char tx_buf_machine[DATA_BUF_SIZE] = {0};
-  size_t tx_buf_machine_len = 0;
+  char tx_buf[DATA_BUF_SIZE] = {0};
+  size_t tx_buf_len = 0;
+  uint8_t callback_return_data;
+
+  uint32_t abs_pos_requested;
+  uint32_t abs_pos_acheived;
+  uint32_t min_step_len_ticks;
+  uint32_t max_accel_ticks;
+  uint32_t velocity_acheived;
+  uint32_t updated;
 
   // Need these to store the IP and port.
   // We get the remote values when receiving data.
@@ -326,7 +302,7 @@ int main() {
   stdio_usb_init();
   setup_default_uart();
   sleep_ms(2000);
-  init_core1_b();
+  init_core1();
   init_config();
   printf("--------------------------------\n");
   printf("UART up.\n");
@@ -344,18 +320,19 @@ int main() {
   //init_core1();
   printf("--------------------------------\n");
 
-  size_t time_last_tx = time_us_64();
+  size_t time_last = time_us_64();
   size_t time_now;
   while (1) {
-    tx_buf_machine_len = 0;
+    tx_buf_len = 0;
 
     retval = get_UDP(
         SOCKET_NUMBER,
         NW_PORT,
         nw_rx_buf,
-        tx_buf_machine,
-        &tx_buf_machine_len,
-        &process_buffer_machine,
+        tx_buf,
+        &tx_buf_len,
+        &process_received_buffer,
+        &callback_return_data,
         destip_machine,
         &destport_machine);
 
@@ -364,28 +341,52 @@ int main() {
       /*
       get_axis_config_if_updated(
           axis,
-          tx_buf_machine,
-          &tx_buf_machine_len,
+          tx_buf,
+          &tx_buf_len,
           DATA_BUF_SIZE - sizeof(uint32_t)
           );
       */
+      uint8_t updated = get_axis_config(
+          axis,
+          CORE0,
+          &abs_pos_requested,
+          &abs_pos_acheived,
+          &min_step_len_ticks,
+          &max_accel_ticks,
+          &velocity_acheived
+          );
+      if(updated > 0) {
+        if(updated > 1) {
+          printf("WARN: C0, multiple updates: %u \t%lu\n", axis, updated);
+        }
+        printf("%u \t%lu\n", axis, abs_pos_acheived);
+      }
     }
 
     retval = put_UDP(
         SOCKET_NUMBER,
         NW_PORT,
-        tx_buf_machine,
-        tx_buf_machine_len,
+        tx_buf,
+        tx_buf_len,
         destip_machine,
         &destport_machine);
 
 
-    //time_now = time_us_64();
-    //if(number_axis_updated() > 0) {
-    //  time_last_tx = time_now;
-      //core0_send_to_core1();
-    //}
+    if(callback_return_data > 0) {
+      // Have received axis updates.
+      // Save the update period to config if appropriate.
+      time_now = time_us_64();
+      ave_period_us = ring_buf_ave(&period_average_data, time_now - time_last);
+      time_last = time_now;
+      if(last_ave_period_us != ave_period_us) {
+        update_config(ave_period_us);
+        last_ave_period_us = ave_period_us;
+      }
+      printf("Received: %u \t%lu\n", callback_return_data, ave_period_us);
+      callback_return_data = 0;
 
+      gpio_put(LED_PIN, (time_now / 1000000) % 2);
+    }
   }
   return 0;
 }
