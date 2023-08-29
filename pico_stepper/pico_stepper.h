@@ -2,7 +2,7 @@
 #define PICO_STEPPER__H
 
 #define LOG_CORE0 1
-//#define LOG_CORE1 1
+#define LOG_CORE1 1
 
 #define MAX_AXIS 4
 
@@ -123,8 +123,6 @@ uint32_t set_global_update_rate(uint32_t update_rate);
 
 /* Gets summary of global config. */
 void get_global_config(
-    uint8_t* msg_human,
-    size_t msg_human_len_max,
     uint8_t* msg_machine,
     size_t* msg_machine_len,
     size_t msg_machine_len_max);
@@ -132,16 +130,12 @@ void get_global_config(
 /* Gets summary of specified axis config.*/
 void get_axis_config(
     const uint32_t axis,
-    uint8_t* msg_human,
-    size_t msg_human_len_max,
     uint8_t* msg_machine,
     size_t* msg_machine_len,
     size_t msg_machine_len_max);
 
 void get_axis_config_if_updated(
     const uint32_t axis,
-    uint8_t* msg_human,
-    size_t msg_human_len_max,
     uint8_t* msg_machine,
     size_t* msg_machine_len,
     size_t msg_machine_len_max);
@@ -149,8 +143,6 @@ void get_axis_config_if_updated(
 /* Gets the abs_pos parameter for an axis.*/
 void get_axis_pos(
     const uint32_t axis,
-    uint8_t* msg_human,
-    size_t msg_human_len_max,
     uint8_t* msg_machine,
     size_t* msg_machine_len,
     size_t msg_machine_len_max);

@@ -61,7 +61,7 @@ add_definitions(-DMBEDTLS_CONFIG_FILE="${PORT_DIR}/mbedtls/inc/ssl_config.h")
 add_definitions(-DSET_TRUSTED_CERT_IN_SAMPLES)
 
 # Code to include:
-add_subdirectory(pico_stepper)
+#add_subdirectory(pico_stepper)
 add_subdirectory(sender)
 
 # Add libraries in subdirectories

@@ -5,10 +5,10 @@ add_executable(${TARGET_NAME}
         )
 
 target_include_directories (${TARGET_NAME} PUBLIC ../shared/)
-target_sources(${TARGET_NAME} PRIVATE ${TARGET_NAME}.c)
+target_sources(${TARGET_NAME} PRIVATE ${TARGET_NAME}.c config.c)
 
 target_link_libraries(${TARGET_NAME} PRIVATE
-        pico_stepper
+        #pico_stepper
         pico_stdlib
         pico_multicore
         hardware_spi

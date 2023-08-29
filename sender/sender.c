@@ -11,9 +11,9 @@
 #include "w5x00_spi.h"
 #include "socket.h"
 
-#include "pico_stepper.h"
 #include "sender.h"
 #include "messages.h"
+#include "config.h"
 
 
 /* Network */
@@ -42,24 +42,10 @@ static void set_clock_khz(void)
     );
 }
 
-void help(char* tx_buf) {
-    snprintf(
-        tx_buf,
-        DATA_BUF_SIZE,
-        "\r\nUsage:\r\n"
-        " > COMMAND[:VALUE][:VALUE][:VALUE]\r\n"
-        "eg:\r\n"
-        " > 3:0:-15\r\n\r\n"
-        "List of available commands:\r\n"
-        "%s\r\n",
-        human_help
-        );
-}
-
 struct Message* process_msg(char** rx_buf) {
   struct Message* message = (struct Message*)(*rx_buf);
 
-  // printf("NW UPD message on port %u:\n\ttype: %lu\r\n", NW_PORT_MACHINE, message->type);
+  // printf("NW UPD message on port %u:\n\ttype: %lu\r\n", NW_PORT, message->type);
 
   *rx_buf += sizeof(struct Message);
 
@@ -70,7 +56,7 @@ struct Message_uint* process_msg_uint(char** rx_buf) {
   struct Message_uint* message = (struct Message_uint*)(*rx_buf);
 
   // printf("NW UPD message on port %u:\n\ttype: %lu\n\tvalue0: %lu\r\n",
-  //    NW_PORT_MACHINE, message->type, message->value0);
+  //    NW_PORT, message->type, message->value0);
 
   *rx_buf += sizeof(struct Message_uint);
 
@@ -81,7 +67,7 @@ struct Message_uint_uint* process_msg_uint_uint(char** rx_buf) {
   struct Message_uint_uint* message = (struct Message_uint_uint*)(*rx_buf);
 
   // printf("NW UPD message on port %u:\n\ttype: %lu\n\tvalue0: %lu\n\tvalue1: %lu\r\n",
-  //    NW_PORT_MACHINE, message->type, message->value0, message->value1);
+  //    NW_PORT, message->type, message->value0, message->value1);
 
   *rx_buf += sizeof(struct Message_uint_uint);
 
@@ -92,14 +78,14 @@ struct Message_uint_int* process_msg_uint_int(char** rx_buf) {
   struct Message_uint_int* message = (struct Message_uint_int*)(*rx_buf);
 
   // printf("NW UPD message on port %u:\n\ttype: %lu\n\tvalue0: %lu\n\tvalue1: %li\r\n",
-  //    NW_PORT_MACHINE, message->type, message->value0, message->value1);
+  //    NW_PORT, message->type, message->value0, message->value1);
 
   *rx_buf += sizeof(struct Message_uint_int);
 
   return message;
 }
 
-size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf_human, uint8_t* tx_buf_machine) {
+size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf_machine) {
   char* rx_itterator = rx_buf;
   size_t tx_buf_machine_len = 0;
   uint32_t msg_type;
@@ -110,35 +96,29 @@ size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf_human, uint8_t* t
   struct Message_uint_int* msg_uint_int;
 
   uint32_t axis;
+  uint32_t abs_pos;
 
   while(msg_type = *(uint32_t*)(rx_itterator)) {  // msg_type of 0 indicates end of data.
     switch(msg_type) {
       case MSG_SET_GLOAL_UPDATE_RATE:
-        msg_uint = process_msg_uint(&rx_itterator);
-        set_global_update_rate(msg_uint->value);
-        get_global_config(
-            tx_buf_human,
-#if defined(UART_ENABLE) || defined(NET_ENABLE_HUMAN)
-            DATA_BUF_SIZE,
-#else
-            0,
-#endif
-            tx_buf_machine,
-            &tx_buf_machine_len,
-#ifdef NET_ENABLE_MACHINE
-            tx_buf_mach_len_max
-#else
-            0
-#endif
-            );
+        //msg_uint = process_msg_uint(&rx_itterator);
+        //set_global_update_rate(msg_uint->value);
+        //get_global_config(
+        //    tx_buf_machine,
+        //    &tx_buf_machine_len,
+        //    tx_buf_mach_len_max
+        //    );
         break;
       case MSG_SET_AXIS_ABS_POS:
         msg_uint_uint = process_msg_uint_uint(&rx_itterator);
-        set_absolute_position(msg_uint_uint->axis, msg_uint_uint->value);
+        //set_absolute_position(msg_uint_uint->axis, msg_uint_uint->value);
+        axis = msg_uint_uint->axis;
+        abs_pos = msg_uint_uint->value;
+        update_axis(axis, &abs_pos, NULL, NULL, NULL);
         break;
       case MSG_SET_AXIS_REL_POS:
         msg_uint_int = process_msg_uint_int(&rx_itterator);
-        set_relative_position(msg_uint_int->axis, msg_uint_int->value);
+        //set_relative_position(msg_uint_int->axis, msg_uint_int->value);
         break;
       case MSG_SET_AXIS_MAX_SPEED:
         // TODO.
@@ -149,59 +129,29 @@ size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf_human, uint8_t* t
         break;
       case MSG_GET_GLOBAL_CONFIG:
         msg = process_msg(&rx_itterator);
-        get_global_config(
-            tx_buf_human,
-#if defined(UART_ENABLE) || defined(NET_ENABLE_HUMAN)
-            DATA_BUF_SIZE,
-#else
-            0,
-#endif
-            tx_buf_machine,
-            &tx_buf_machine_len,
-#ifdef NET_ENABLE_MACHINE
-            tx_buf_mach_len_max
-#else
-            0
-#endif
-            );
+        //get_global_config(
+        //    tx_buf_machine,
+        //    &tx_buf_machine_len,
+        //    tx_buf_mach_len_max
+        //    );
         break;
       case MSG_GET_AXIS_CONFIG:
         msg_uint = process_msg_uint(&rx_itterator);
-        get_axis_config(
-            msg_uint->value,
-            tx_buf_human,
-#if defined(UART_ENABLE) || defined(NET_ENABLE_HUMAN)
-            DATA_BUF_SIZE,
-#else
-            0,
-#endif
-            tx_buf_machine,
-            &tx_buf_machine_len,
-#ifdef NET_ENABLE_MACHINE
-            tx_buf_mach_len_max
-#else
-            0
-#endif
-            );
+        //get_axis_config(
+        //    msg_uint->value,
+        //    tx_buf_machine,
+        //    &tx_buf_machine_len,
+        //    tx_buf_mach_len_max
+        //    );
         break;
       case MSG_GET_AXIS_POS:
         msg_uint = process_msg_uint(&rx_itterator);
-        get_axis_pos(
-            msg_uint->value,
-            tx_buf_human,
-#if defined(UART_ENABLE) || defined(NET_ENABLE_HUMAN)
-            DATA_BUF_SIZE,
-#else
-            0,
-#endif
-            tx_buf_machine,
-            &tx_buf_machine_len,
-#ifdef NET_ENABLE_MACHINE
-            tx_buf_mach_len_max
-#else
-            0
-#endif
-            );
+        //get_axis_pos(
+        //    msg_uint->value,
+        //    tx_buf_machine,
+        //    &tx_buf_machine_len,
+        //    tx_buf_mach_len_max
+        //    );
         break;
       default:
         printf("Invalid message type: %lu\r\n", msg_type);
@@ -213,169 +163,6 @@ size_t process_buffer_machine(uint8_t* rx_buf, uint8_t* tx_buf_human, uint8_t* t
   return tx_buf_machine_len;
 }
 
-size_t process_buffer_human(uint8_t* rx_buf, uint8_t* tx_buf_human, uint8_t* tx_buf_machine) {
-  printf("\nReceived: %s\n", rx_buf);
-  int64_t values[4] = {0,0,0,0};
-  size_t value_num = 0;
-  char* itterate = rx_buf;
-  uint32_t val = 0;
-  size_t tx_buf_machine_len = 0;
-  size_t tx_buf_mach_len_max = DATA_BUF_SIZE - sizeof(uint32_t);
-
-  while(*itterate) {
-    if (*itterate == ':') {
-      // Separator.
-      itterate++;
-    } else if (isspace(*itterate)) {
-      // Whitespace. Ignore and continue.
-      itterate++;
-    } else if (isdigit(*itterate) || *itterate == '-') {
-      val = strtol(itterate, &itterate, 10);
-      if (value_num < 4) {
-        values[value_num] = val;
-      } else {
-        printf("Too many values. %ld\n", val);
-        memset(rx_buf, '\0', DATA_BUF_SIZE);
-        return 0;
-      }
-      value_num++;
-    } else if (*itterate == '?' && value_num == 0) {
-      help(tx_buf_human);
-      memset(rx_buf, '\0', DATA_BUF_SIZE);
-      return 0;
-    } else {
-      printf("Unexpected character: %u : %c\n", *itterate, *itterate);
-      memset(rx_buf, '\0', DATA_BUF_SIZE);
-      return 0;
-    }
-  }
-
-  switch(values[0]) {
-    case MSG_SET_GLOAL_UPDATE_RATE:
-      if(value_num != 2) {
-        printf("Wrong number of values for type %lu. Got: %u. Expected: 2\n",
-            (uint32_t)values[0], value_num);
-        break;
-      }
-      set_global_update_rate(values[1]);
-      get_global_config(
-          tx_buf_human, DATA_BUF_SIZE, tx_buf_machine, &tx_buf_machine_len, tx_buf_mach_len_max);
-      break;
-    case MSG_SET_AXIS_ABS_POS:
-      if(value_num != 3) {
-        printf("Wrong number of values for type %lu. Got: %u. Expected: 3\n",
-            (uint32_t)values[0], value_num);
-        break;
-      }
-      set_absolute_position(values[1], values[2]);
-      break;
-    case MSG_SET_AXIS_REL_POS:
-      if(value_num != 3) {
-        printf("Wrong number of values for type %lu. Got: %u. Expected: 3\n",
-            (uint32_t)values[0], value_num);
-        break;
-      }
-      set_relative_position(values[1], values[2]);
-      break;
-    case MSG_SET_AXIS_MAX_SPEED:
-      // TODO.
-    case MSG_SET_AXIS_MAX_ACCEL:
-      // TODO.
-    case MSG_SET_AXIS_ABS_POS_AT_TIME:
-      // TODO.
-      break;
-    case MSG_GET_GLOBAL_CONFIG:
-      if(value_num != 1) {
-        printf("Wrong number of values for type %lu. Got: %u. Expected: 1\n",
-            (uint32_t)values[0], value_num);
-        break;
-      }
-      get_global_config(
-          tx_buf_human,
-          DATA_BUF_SIZE,
-          tx_buf_machine,
-          &tx_buf_machine_len,
-          #ifdef NET_ENABLE_MACHINE
-          tx_buf_mach_len_max
-          #else
-          0
-          #endif
-          );
-      break;
-    case MSG_GET_AXIS_CONFIG:
-      if(value_num != 2) {
-        printf("Wrong number of values for type %lu. Got: %u. Expected: 2\n",
-            (uint32_t)values[0], value_num);
-        break;
-      }
-      get_axis_config(
-          values[1],
-          tx_buf_human,
-          DATA_BUF_SIZE,
-          tx_buf_machine,
-          &tx_buf_machine_len,
-          #ifdef NET_ENABLE_MACHINE
-          tx_buf_mach_len_max
-          #else
-          0
-          #endif
-          );
-      break;
-    case MSG_GET_AXIS_POS:
-      if(value_num != 2) {
-        printf("Wrong number of values for type %lu. Got: %u. Expected: 2\n",
-            (uint32_t)values[0], value_num);
-        break;
-      }
-      get_axis_pos(
-          values[1],
-          tx_buf_human,
-          DATA_BUF_SIZE,
-          tx_buf_machine,
-          &tx_buf_machine_len,
-          #ifdef NET_ENABLE_MACHINE
-          tx_buf_mach_len_max
-          #else
-          0
-          #endif
-          );
-      break;
-    default:
-      printf("Invalid message type: %lu\r\n", values[0]);
-      help(tx_buf_human);
-      memset(rx_buf, '\0', DATA_BUF_SIZE);
-      return 0;
-  }
-  memset(rx_buf, '\0', DATA_BUF_SIZE);
-
-  return 0;
-}
-
-uint8_t get_uart(uint8_t* uart_rx_buf, uint8_t* tx_buf_human, uint8_t* tx_buf_machine) {
-  char* start_update = &uart_rx_buf[strlen(uart_rx_buf)];
-
-  int ch = getchar_timeout_us(0);
-  while (ch > 0) {
-    size_t pos = strlen(uart_rx_buf);
-    if (ch == 13) {
-      // Return pressed.
-      process_buffer_human(uart_rx_buf, tx_buf_human, tx_buf_machine);
-    } else if (pos < DATA_BUF_SIZE - 1 && isprint(ch)) {
-      uart_rx_buf[pos] = ch;
-      printf("%c", ch);
-    }
-    ch = getchar_timeout_us(0);
-  }
-
-  return 0;
-}
-
-void put_uart(char* tx_buf, size_t buffer_len) {
-  if(tx_buf[0] == '\0') {
-    return;
-  }
-  puts_raw(tx_buf);
-}
 
 /* Get data over UDP.
  * $ nc -u <host> <port>
@@ -384,16 +171,18 @@ int32_t get_UDP(
     uint8_t socket_num,
     uint16_t port,
     uint8_t* nw_rx_buf,
-    uint8_t* tx_buf_human,
     uint8_t* tx_buf_machine,
     size_t* tx_buf_machine_len,
-    size_t (*callback)(uint8_t*, uint8_t*, uint8_t*),
+    size_t (*callback)(uint8_t*, uint8_t*),
     uint8_t* destip,
-    uint16_t* destport
-    ) {
+    uint16_t* destport)
+{
    int32_t  ret;
    uint16_t size;
    uint16_t val1;
+
+   //printf("NW: %u %u.%u.%u.%u : %u\r\n",
+   //    socket_num, destip[0], destip[1], destip[2], destip[3], *destport);
 
    switch(getSn_SR(socket_num)) {
      case SOCK_UDP :
@@ -404,25 +193,26 @@ int32_t get_UDP(
          }
 
          ret = recvfrom(socket_num, nw_rx_buf, size, destip, destport);
-         // printf("RECEIVED: %u %u.%u.%u.%u : %u\r\n",
+         //printf("RECEIVED: %u %u.%u.%u.%u : %u\r\n",
          //    socket_num, destip[0], destip[1], destip[2], destip[3], *destport);
          if(ret <= 0) {
            printf("%d: recvfrom error. %ld\r\n", socket_num,ret);
            return ret;
          }
 
-         *tx_buf_machine_len = callback(nw_rx_buf, tx_buf_human, tx_buf_machine);
+         *tx_buf_machine_len = callback(nw_rx_buf, tx_buf_machine);
        }
        break;
      case SOCK_CLOSED:
        if((ret = socket(socket_num, Sn_MR_UDP, port, 0x00)) != socket_num) {
          return ret;
        }
-       printf("%d:Opened, UDP connection, port [%d]\r\n", socket_num, port);
+       printf("%d:Closed, UDP connection, port [%d]\r\n", socket_num, port);
        break;
      default :
        break;
    }
+
    return 1;
 }
 
@@ -470,21 +260,55 @@ int32_t put_UDP(
   return 1;
 }
 
-int main() {
+void core1_main() {
+  uint32_t abs_pos;
+  uint32_t min_step_len_ticks;
+  uint32_t max_accel_ticks;
+  uint32_t velocity;
+  uint32_t updated;
 
+  uint32_t count = 0;
+  while (1) {
+    //gpio_put(LED_PIN, (time_us_64() / 1000000) % 2);
+    //gpio_put(LED_PIN, 1);
+    //sleep_us(100000);
+    //gpio_put(LED_PIN, 0);
+
+    //sleep_us(100000);
+    //printf(".");
+    //if((count++ % 200) == 0) {
+    //  printf("\n");
+    //}
+
+
+    //sleep_us(1000);
+    for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
+      updated = get_axis(axis, &abs_pos, &min_step_len_ticks, &max_accel_ticks, &velocity);
+      if(updated > 0) {
+        printf("%u \t %lu \t %lu \t %lu \t %lu \n",
+            axis, abs_pos, min_step_len_ticks, max_accel_ticks, velocity);
+      }
+    }
+  }
+}
+
+void init_core1_b() {
+  printf("core0: Initializing.\n");
+
+  // Launch core1.
+  multicore_launch_core1(&core1_main);
+}
+
+int main() {
   int retval = 0;
-  char uart_rx_buf[DATA_BUF_SIZE] = "";
   char nw_rx_buf[DATA_BUF_SIZE] = "";
-  char tx_buf_human[DATA_BUF_SIZE] = "";
   char tx_buf_machine[DATA_BUF_SIZE] = {0};
   size_t tx_buf_machine_len = 0;
 
   // Need these to store the IP and port.
   // We get the remote values when receiving data.
   // These store them for when we want to reply later.
-  uint8_t  destip_human[4] = {0, 0, 0, 0};
   uint8_t  destip_machine[4] = {0, 0, 0, 0};
-  uint16_t destport_human = 0;
   uint16_t destport_machine = 0;
   memset(nw_rx_buf, '\0', DATA_BUF_SIZE);
 
@@ -498,13 +322,15 @@ int main() {
   gpio_init(LED_PIN);
   gpio_set_dir(LED_PIN, GPIO_OUT);
 
+
   stdio_usb_init();
   setup_default_uart();
-  sleep_ms(1000);
+  sleep_ms(2000);
+  init_core1_b();
+  init_config();
   printf("--------------------------------\n");
   printf("UART up.\n");
 
-  #if defined(NET_ENABLE_HUMAN) || defined(NET_ENABLE_MACHINE)
   wizchip_spi_initialize();
   spi_init(SPI_PORT, 48000 * 1000);
   wizchip_cris_initialize();
@@ -514,101 +340,51 @@ int main() {
   network_initialize(g_net_info);
   /* Get network information */
   print_network_information(g_net_info);
-  #endif  // NET_ENABLE_HUMAN || NET_ENABLE_MACHINE
 
-  init_core1();
+  //init_core1();
   printf("--------------------------------\n");
 
   size_t time_last_tx = time_us_64();
   size_t time_now;
-  bool done_rx = false;
-
   while (1) {
-
-    #ifdef NET_ENABLE_MACHINE
     tx_buf_machine_len = 0;
-    #endif  // NET_ENABLE_MACHINE
-    #if defined(NET_ENABLE_HUMAN) || defined(UART_ENABLE)
-    memset(tx_buf_human, '\0', DATA_BUF_SIZE);
-    #endif  // NET_ENABLE_HUMAN || UART_ENABLE
 
-    #ifdef UART_ENABLE
-    get_uart(uart_rx_buf, tx_buf_human, tx_buf_machine);
-    #endif  // UART_ENABLE
-
-    #ifdef NET_ENABLE_HUMAN
     retval = get_UDP(
-        SOCKET_NUMBER_HUMAN,
-        NW_PORT_HUMAN,
+        SOCKET_NUMBER,
+        NW_PORT,
         nw_rx_buf,
-        tx_buf_human,
-        tx_buf_machine,
-        &tx_buf_machine_len,
-        &process_buffer_human,
-        destip_human,
-        &destport_human);
-    #endif // NET_ENABLE_HUMAN
-
-    #ifdef NET_ENABLE_MACHINE
-    retval = get_UDP(
-        SOCKET_NUMBER_MACHINE,
-        NW_PORT_MACHINE,
-        nw_rx_buf,
-        tx_buf_human,
         tx_buf_machine,
         &tx_buf_machine_len,
         &process_buffer_machine,
         destip_machine,
         &destport_machine);
-    #endif  // NET_ENABLE_MACHINE
 
     for(size_t axis = 0; axis < MAX_AXIS; axis++) {
+      // Get data from config and put in TX buffer.
+      /*
       get_axis_config_if_updated(
           axis,
-          tx_buf_human,
-          DATA_BUF_SIZE,
           tx_buf_machine,
           &tx_buf_machine_len,
           DATA_BUF_SIZE - sizeof(uint32_t)
           );
+      */
     }
 
-    if(! done_rx) {
-      #ifdef NET_ENABLE_HUMAN
-      retval = put_UDP(
-          SOCKET_NUMBER_HUMAN,
-          NW_PORT_HUMAN,
-          tx_buf_human,
-          strlen(tx_buf_human),
-          destip_human,
-          &destport_human);
-      #endif // NET_ENABLE_HUMAN
+    retval = put_UDP(
+        SOCKET_NUMBER,
+        NW_PORT,
+        tx_buf_machine,
+        tx_buf_machine_len,
+        destip_machine,
+        &destport_machine);
 
-      #ifdef NET_ENABLE_MACHINE
-      retval = put_UDP(
-          SOCKET_NUMBER_MACHINE,
-          NW_PORT_MACHINE,
-          tx_buf_machine,
-          tx_buf_machine_len,
-          destip_machine,
-          &destport_machine);
-      #endif  // NET_ENABLE_MACHINE
 
-      #ifdef UART_ENABLE
-      put_uart(tx_buf_human, DATA_BUF_SIZE);
-      #endif  // UART_ENABLE
-
-      //done_rx = true;
-    }
-
-    time_now = time_us_64();
-    //if(number_axis_updated() > 0 || (time_now - time_last_tx) > get_global_update_time_us()) {
-    if(number_axis_updated() > 0) {
-      //printf("%5lu\n", time_now - time_last_tx);
-      time_last_tx = time_now;
-      core0_send_to_core1();
-      done_rx = false;
-    }
+    //time_now = time_us_64();
+    //if(number_axis_updated() > 0) {
+    //  time_last_tx = time_now;
+      //core0_send_to_core1();
+    //}
 
   }
   return 0;

@@ -7,6 +7,7 @@
 // PIO related.
 #include "hardware/pio.h"
 #include "hardware/clocks.h"
+#include "hardware/structs/systick.h"
 // The compiled .pio.
 #include "pico_stepper.pio.h"
 // Core1
@@ -86,7 +87,7 @@ volatile struct ConfigGlobal config_c0 = {
   }
 };
 
-volatile struct ConfigGlobal config_c1 = {
+struct ConfigGlobal config_c1 = {
   .update_rate = 1000,       // 1kHz.
   .update_time_us = 1000,    // 1000us.
   .update_time_ticks = 133000,
@@ -189,11 +190,8 @@ void axis_to_pio(const uint32_t axis, PIO* pio, uint32_t* sm) {
   }
 }
 
-uint32_t time_overrun_ticks = 0;
-
 /* In progress. */
-void do_steps(struct AxisUpdate* update, const uint32_t ave_update_time_ticks){
-  const uint32_t time_window_ticks = ave_update_time_ticks - time_overrun_ticks;
+void do_steps(struct AxisUpdate* update, const uint32_t update_time_us){
   const uint8_t axis = update->axis;
   const uint32_t target_pos = update->value;
   const uint32_t min_step_len_ticks = config_c1.axis[axis].min_step_len_ticks;
@@ -203,7 +201,7 @@ void do_steps(struct AxisUpdate* update, const uint32_t ave_update_time_ticks){
   uint8_t direction = (velocity > 0);
   const int32_t prev_velocity = abs(config_c1.axis[axis].velocity);
   uint32_t step_count;
-  uint32_t step_len_ticks;
+  uint32_t step_len_us;
 
   // Limit steps according to maximum allowed acceleration/deceleration.
   if(max_accel > 0) {
@@ -219,25 +217,22 @@ void do_steps(struct AxisUpdate* update, const uint32_t ave_update_time_ticks){
 
   if(step_count == 0) {
     // Special case: No steps requested.
-    step_len_ticks = 0;
-    time_overrun_ticks = 0;
+    step_len_us = 0;
   } else {
-    step_len_ticks = time_window_ticks / step_count;
+    step_len_us = update_time_us / step_count;
 
-    if(step_len_ticks < min_step_len_ticks) {
+    if(step_len_us < min_step_len_ticks * 100 / 133) {
       // Limit the minimum allowed step length.
       // This is another way of saying "limit the max speed."
-      step_count = time_window_ticks / min_step_len_ticks;
-      step_len_ticks = time_window_ticks / step_count;
+      step_count = update_time_us / (min_step_len_ticks * 100 / 133);
+      step_len_us = update_time_us / step_count;
     }
 
-    if(time_overrun_ticks > step_len_ticks / 2) {
-      step_count++;
-    } else {
-      step_len_ticks++;
-    }
-
-    time_overrun_ticks = (step_len_ticks * step_count) - time_window_ticks;
+    //if() {
+    //  step_count++;
+    //} else {
+    //  step_len_us++;
+    //}
   }
 
   PIO pio;
@@ -245,17 +240,33 @@ void do_steps(struct AxisUpdate* update, const uint32_t ave_update_time_ticks){
   axis_to_pio(update->axis, &pio, &sm);
 
   // Request steps.
-  pio_sm_put(pio, sm, (step_count - 11) / 2);
+  pio_sm_put(pio, sm, (step_len_us / 2) - 15);
 
   // Wait for report on starting position.
-  //config_c1.axis[axis].abs_pos += direction ? +step : -step;
-  config_c1.axis[axis].abs_pos = pio_sm_get_blocking(pio, sm);
-  config_c1.axis[axis].velocity = direction ? +step_count : -step_count;
+
+  uint32_t step_count_acheived = pio_sm_get_blocking(pio, sm);
+
+  config_c1.axis[axis].abs_pos += direction ? +step_count_acheived : -step_count_acheived;
+  config_c1.axis[axis].velocity = direction ? +step_count_acheived : -step_count_acheived;
+
+  if(sm != 0) {
+    return;
+  }
+
+  //printf("%lu\n", sm);
+  printf("s: %lu\n", step_count);
+  //printf("t: %lu\n", step_len_us);
+  //printf("a: %lu\n", step_count_acheived);
+  //printf("T: %lu\n", update_time_us);
+  printf("a: %lu\n", (step_count_acheived * update_time_us * 1000000) / clock_get_hz(clk_sys));
+  //printf("c: %lu\n", clock_get_hz(clk_sys));
+  //printf("r: %lu\n", target_pos);
+
   return;
 }
 
 /* Untested attempt to use the `dma_step` PIO program. */
-void distribute_steps_dynamic(struct AxisUpdate* update, uint32_t* step_lens, const uint32_t ave_period)
+void distribute_steps_dynamic(struct AxisUpdate* update, uint32_t* step_lens, const uint32_t ave_period_us)
 {
   // Aiming for 256kHz step rate.
   // We assemble the desired step lengths for the whole time window in a buffer
@@ -273,7 +284,7 @@ void distribute_steps_dynamic(struct AxisUpdate* update, uint32_t* step_lens, co
   const int32_t start_step_rate_kHz = config_c1.axis[axis].velocity;
   const uint32_t min_step_len_ticks = config_c1.axis[axis].min_step_len_ticks;
   const uint32_t max_accel = config_c1.axis[axis].max_accel_ticks;
-  const uint32_t time_period = ave_period;
+  const uint32_t time_period = ave_period_us;
   int32_t curr_step_rate_kHz;
 
   uint32_t step = 0;
@@ -344,95 +355,11 @@ void distribute_steps_dynamic(struct AxisUpdate* update, uint32_t* step_lens, co
   }
   config_c1.axis[axis].velocity = curr_step_rate_kHz;
   //printf("%u%12lu\t%lu\t%lu\t%lu\n",
-  //    axis, config_c1.axis[axis].abs_pos, elapsed_time, ave_period, step);
-}
-
-/* Untested attempt to use the `dma_step` PIO program. */
-void distribute_steps_no_dynamic_accel(struct AxisUpdate* update, uint32_t* step_lens)
-{
-  uint8_t axis = update->axis;
-  const uint32_t update_time_ticks = config_c1.update_time_ticks;
-  int32_t velocity = update->value - config_c1.axis[axis].abs_pos;
-  uint8_t direction = (velocity > 0);
-  const int32_t prev_velocity = abs(config_c1.axis[axis].velocity);
-  const uint32_t min_step_len_ticks = config_c1.axis[axis].min_step_len_ticks;
-  const uint32_t max_accel = config_c1.axis[axis].max_accel_ticks;
-  uint32_t step_len;
-  uint32_t step_count;
-
-  //printf("axis: %u\tdirection: %i\tstep_count: %li\tupdate_time_ticks: %lu"
-  //    "\tmin_step_len_ticks: %lu \n",
-  //    axis, direction, step_count, update_time_ticks, min_step_len_ticks);
-
-  if(abs(velocity) > MAX_STEPS_PER_UPDATE) {
-    // Oops. Trying to send more steps than we have space for.
-    velocity = direction ? MAX_STEPS_PER_UPDATE : -MAX_STEPS_PER_UPDATE;
-  }
-
-  // Limit steps according to maximum allowed acceleration/deceleration.
-  if(max_accel > 0) {
-    if(direction && (velocity > (prev_velocity + (int32_t)max_accel))) {
-      velocity = prev_velocity + max_accel;
-      direction = (velocity > 0);
-    } else if(!direction && (velocity < (prev_velocity - (int32_t)max_accel))) {
-      velocity = prev_velocity - max_accel;
-      direction = (velocity > 0);
-    }
-  }
-  step_count = abs(velocity);
-
-  if(step_count == 0) {
-    // Special case: No steps requested.
-    // Just create a single entry spanning the whole duration with no IO pin changes.
-    step_lens[0] = update_time_ticks + (direction << 29) + (direction << 31);
-    return;
-  }
-
-  uint32_t time_total_ticks = 0;
-  uint32_t accumilator = 0;
-  uint32_t step_len_ticks = update_time_ticks / step_count;
-  if(step_len_ticks < min_step_len_ticks) {
-    // Limit the minimum allowed step length.
-    // This is another way of saying "limit the max speed."
-    step_count = update_time_ticks / min_step_len_ticks;
-    step_len_ticks = update_time_ticks / step_count;
-  }
-  uint32_t mod = update_time_ticks % step_count;
-
-  // Work out how long each step needs to be to fit step_count in update_time_ticks.
-  uint32_t step;
-  for(step = 0; step < step_count; step++) {
-    accumilator += mod;
-    if(accumilator > step_count) {
-      accumilator -= step_count;
-      time_total_ticks += step_len_ticks + 1;
-      // TODO: The PIO has some overhead; It inserts a few extra instructions.
-      // Subtract those from the step_lens value here.
-      // Also it actually lasts 2x as long as requested.
-      step_len = update_time_ticks + 1 + (direction << 28) + (direction << 30) + (1 << 31);
-    } else {
-      time_total_ticks += step_len_ticks;
-      // TODO: The PIO has some overhead; It inserts a few extra instructions.
-      // Subtract those from the step_lens value here.
-      // Also it actually lasts 2x as long as requested.
-      step_len = update_time_ticks + (direction << 28) + (direction << 30) + (1 << 31);
-    }
-    if(step_count > MAX_STEPS_PER_UPDATE) {
-      printf("ERROR: core1: step_lens buffer is full. %lu\n", step);
-      break;
-    }
-    step_lens[step] = step_len;
-  }
-  //printf("axis: %u\tdirection: %i\tstep_count: %li\tstep_len_ticks: %lu\n",
-  //    axis, direction, step_count, step_len_ticks);
-
-  config_c1.axis[axis].abs_pos += direction ? +step : -step;
-  config_c1.axis[axis].velocity = direction ? +step : -step;
-  return;
+  //    axis, config_c1.axis[axis].abs_pos, elapsed_time, ave_period_us, step);
 }
 
 uint8_t core1_process_updates(
-    queue_t* axis_mvmnt_c1, uint8_t axis, uint32_t* step_lens, uint32_t ave_period)
+    queue_t* axis_mvmnt_c1, uint8_t axis, uint32_t* step_lens, uint32_t update_period_us)
 {
   struct AxisUpdate update;
   queue_remove_blocking(axis_mvmnt_c1, &update);
@@ -447,8 +374,7 @@ uint8_t core1_process_updates(
       config_c1.axis[axis].max_accel_ticks = update.value;
       break;
     case CMND_SET_DESIRED_POS:
-      //distribute_steps_dynamic(&update, step_lens, ave_period);
-      do_steps(&update, ave_period);
+      do_steps(&update, update_period_us);
       break;
     default:
       //printf("core1: Unknown update command: %u\n", update.command);
@@ -459,7 +385,6 @@ uint8_t core1_process_updates(
 
 void core1_send_to_core0() {
   struct AxisUpdate to_serialise;
-  //printf("c1 > c0\n");
   for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
     to_serialise.padding = 0;
     to_serialise.command = CMND_REPORT_ABS_POS;
@@ -474,8 +399,6 @@ void core1_send_to_core0() {
       printf("FAIL: core1 push fail for axis %u\n", axis);
       break;
     }
-    //multicore_fifo_push_blocking(((uint32_t*)(&to_serialise))[0]);
-    //multicore_fifo_push_blocking(((uint32_t*)(&to_serialise))[1]);
 
     to_serialise.padding = 0;
     to_serialise.command = CMND_REPORT_VELOCITY;
@@ -491,12 +414,10 @@ void core1_send_to_core0() {
       printf("FAIL: core0 push fail for axis %u\n", axis);
       break;
     }
-    //multicore_fifo_push_blocking(((uint32_t*)(&to_serialise))[0]);
-    //multicore_fifo_push_blocking(((uint32_t*)(&to_serialise))[1]);
   }
 }
 
-/* Handle data from core1 FIFO. */
+/* Handle data from core0 FIFO. */
 void core1_payload() {
   static size_t last_time = 0;
   static size_t last_sync_time = 0;
@@ -507,7 +428,7 @@ void core1_payload() {
   static size_t fail_count = 0;
   static size_t sync_fail_count = 0;
   static struct Ring_buf_ave period_average_data;
-  static uint32_t ave_period = 0;
+  static uint32_t ave_period_us = 0;
   static size_t start_time = 0;
   static bool first_run = true;
   static queue_t axis_mvmnt_c1;
@@ -521,12 +442,10 @@ void core1_payload() {
   uint32_t fail = 0;
 
   if(!multicore_fifo_rvalid()) {
-    #if LOG_CORE1 == 2
-    printf("WARN: core1_payload called with no new data.\n");
-    #else
+    #if LOG_CORE1 == 1
     printf("-");
-    //size_t now = time_us_64();
-    //while(time_us_64() - now < 10);
+    #elif LOG_CORE1 == 2
+    printf("WARN: core1_payload called with no new data.\n");
     #endif // LOG_CORE1
     return;
   }
@@ -537,10 +456,10 @@ void core1_payload() {
     if(last_time == 0) {
       period_average_data = ring_buf_ave_default;
     } else {
-      ave_period = ring_buf_ave(&period_average_data, start_time - last_time);
+      ave_period_us = ring_buf_ave(&period_average_data, start_time - last_time);
     }
   }
-  //printf("*\t%lu\t%lu\t%lu\t%lu\n", update_point, start_time, last_time, ave_period);
+  //printf("*\t%lu\t%lu\t%lu\t%lu\n", update_point, start_time, last_time, ave_period_us);
 
   #if LOG_CORE1 == 2
   printf("core1.FIFO_irq start.\n");
@@ -581,10 +500,13 @@ void core1_payload() {
 
   // Calculate and cache the step lengths.
   uint32_t step_lens[MAX_AXIS][MAX_STEPS_PER_UPDATE] = {0};
+  
+  //uint32_t ave_period_ticks =
+  //  ave_period_us * config_c1.update_time_ticks / config_c1.update_time_us;
+
   if(queue_get_level(&axis_mvmnt_c1) == MAX_AXIS) {
-    uint8_t count_updates = 0;
     for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
-      count_updates += core1_process_updates(&axis_mvmnt_c1, axis, step_lens[axis], ave_period);
+      core1_process_updates(&axis_mvmnt_c1, axis, step_lens[axis], ave_period_us);
     }
   }
 
@@ -600,35 +522,26 @@ void core1_payload() {
       now - start_time,
       fail_count,
       sync_fail_count,
-      ave_period);
+      ave_period_us);
   #elif LOG_CORE1 == 2
   printf("core1.FIFO_irq:\t\t%lu\t%lu\n", start_time - last_time, now - start_time);
   #endif // LOG_CORE1
   last_time = start_time;
 
-  if(start_time - last_sync_time > ave_period * 2)
+  if(start_time - last_sync_time > ave_period_us * 2)
   {
     sync_fail_count++;
-    printf("%lu\t%lu\t%lu\t%lu\t%lu\n",
-        last_sync_time, start_time, start_time - last_sync_time, ave_period, sync_fail_count);
-    //if(sync_fail_count > 5) {
-    //  while(1);
-    //}
+    printf("WARN: syncfail: %lu\t%lu\t%lu\t%lu\t%lu\n",
+        last_sync_time, start_time, start_time - last_sync_time, ave_period_us, sync_fail_count);
   }
   last_sync_time = start_time;
 }
 
 void core1_entry() {
-  // Set up FIFO interrupt for processing data sent from core0 > core1.
-  multicore_fifo_clear_irq();
-  //irq_set_exclusive_handler(SIO_IRQ_PROC1, core1_payload);
-  //irq_set_enabled(SIO_IRQ_PROC1, true);
-
   // Infinite While Loop to wait for interrupt
   while (1){
     core1_payload();
-    //printf("*\n");
-    //sleep_us(100);
+    sleep_us(100);
   }
 }
 
@@ -661,12 +574,7 @@ void core0_send_to_core1() {
   static struct Ring_buf_ave period_average_data;
 
   size_t start_time = time_us_64();
-  uint32_t ave_period = 0;
-  if(last_time == 0) {
-    period_average_data = ring_buf_ave_default;
-  } else {
-    ave_period = ring_buf_ave(&period_average_data, start_time - last_time);
-  }
+  //size_t start_time = systick_hw->cvr;
 
   for(size_t axis = 0; axis < MAX_AXIS; axis++) {
     volatile struct AxisUpdate* to_serialise = &(axis_mvmnt_c0[axis]);
@@ -691,10 +599,8 @@ void core0_send_to_core1() {
   printf("\t\t\t\t\t\tc0.tx\t%4lu%6lu%6lu%6lu\n",
       start_time - last_time,
       now - start_time,
-      fail_count,
-      ave_period);
+      fail_count);
   #elif LOG_CORE0 == 2
-  printf("0tx %lu\n", ave_period);
   #endif // LOG_CORE0
   last_time = start_time;
 
@@ -897,13 +803,8 @@ void init_pio(
   }
 }
 
-void send_pio_steps(
-    const uint32_t axis,
-    int32_t desired_pos) {
+void send_pio_steps(const uint32_t axis, int32_t desired_pos) {
   // Queue axis movement data;
-  // Disable timer interrupt to make sure the ISR doesn't read partial data.
-  // TODO: Could the timer number change with library updates?
-  // TODO: can we disable only this alarm rather than the whole interrupt?
   axis_mvmnt_c0[axis] = (struct AxisUpdate){
       .padding = 0,
       .command = CMND_SET_DESIRED_POS,
@@ -915,9 +816,7 @@ void send_pio_steps(
   return;
 }
 
-void set_relative_position(
-    const uint32_t stepper,
-    const int32_t position_diff) {
+void set_relative_position(const uint32_t stepper, const int32_t position_diff) {
   if(stepper < MAX_AXIS) {
     uint32_t new_position = config_c0.axis[stepper].abs_pos + position_diff;
     send_pio_steps(stepper, new_position);
@@ -925,9 +824,7 @@ void set_relative_position(
   return;
 }
 
-void set_absolute_position(
-    const uint32_t stepper,
-    const uint32_t new_position) {
+void set_absolute_position(const uint32_t stepper, const uint32_t new_position) {
   if(stepper < MAX_AXIS) {
     send_pio_steps(stepper, new_position);
   }
@@ -962,25 +859,10 @@ uint32_t get_global_update_time_us() {
 }
 
 void get_global_config(
-    uint8_t* msg_human,
-    size_t msg_human_len_max,
     uint8_t* msg_machine,
     size_t* msg_machine_len,
-    size_t msg_machine_len_max) {
-  if(msg_human_len_max > 0) {
-    size_t len = strlen(msg_human);
-    snprintf(msg_human + len,
-        msg_human_len_max - len,
-        "ConfigGlobal summary:\r\n"
-        "  ConfigGlobal.update_rate:    %lu\r\n"
-        "  ConfigGlobal.update_time_us: %lu\r\n"
-        "  ConfigGlobal.update_time_ticks: %lu\r\n"
-        "  ConfigGlobal.cpu_frequency: %lu\r\n" ,
-        config_c0.update_rate,
-        config_c0.update_time_us,
-        config_c0.update_time_ticks,
-        clock_get_hz(clk_sys));
-  }
+    size_t msg_machine_len_max)
+{
   if(*msg_machine_len + sizeof(struct Reply_global_config) <= msg_machine_len_max) {
     struct Reply_global_config reply = Reply_global_conf_default;
     reply.update_rate = config_c0.update_rate;
@@ -994,8 +876,6 @@ void get_global_config(
 
 void get_axis_config(
     const uint32_t axis,
-    uint8_t* msg_human,
-    size_t msg_human_len_max,
     uint8_t* msg_machine,
     size_t* msg_machine_len,
     size_t msg_machine_len_max)
@@ -1004,21 +884,6 @@ void get_axis_config(
     return;
   }
 
-  if(msg_human_len_max > 0) {
-    size_t len = strlen(msg_human);
-    snprintf(msg_human + len,
-        msg_human_len_max - len,
-        "ConfigAxis[%lu] summary:\r\n"
-        "  ConfigAxis.abs_pos:    %lu\r\n"
-        "  ConfigAxis.min_step_len_ticks: %lu\r\n"
-        "  ConfigAxis.max_accel_ticks: %lu\r\n"
-        "  ConfigAxis.velocity: %li\r\n",
-        axis,
-        config_c0.axis[axis].abs_pos,
-        config_c0.axis[axis].min_step_len_ticks,
-        config_c0.axis[axis].max_accel_ticks,
-        config_c0.axis[axis].velocity);
-  }
   if(*msg_machine_len + sizeof(struct Reply_axis_config) <= msg_machine_len_max) {
     struct Reply_axis_config reply = Reply_axis_config_default;
     reply.axis = axis;
@@ -1034,8 +899,6 @@ void get_axis_config(
 
 void get_axis_config_if_updated(
     const uint32_t axis,
-    uint8_t* msg_human,
-    size_t msg_human_len_max,
     uint8_t* msg_machine,
     size_t* msg_machine_len,
     size_t msg_machine_len_max)
@@ -1045,16 +908,13 @@ void get_axis_config_if_updated(
   }
 
   if(config_c0.axis[axis].updated) {
-    get_axis_config(
-        axis, msg_human, msg_human_len_max, msg_machine, msg_machine_len, msg_machine_len_max);
+    get_axis_config(axis, msg_machine, msg_machine_len, msg_machine_len_max);
     config_c0.axis[axis].updated = 0;
   }
 }
 
 void get_axis_pos(
     const uint32_t axis,
-    uint8_t* msg_human,
-    size_t msg_human_len_max,
     uint8_t* msg_machine,
     size_t* msg_machine_len,
     size_t msg_machine_len_max)
@@ -1063,14 +923,6 @@ void get_axis_pos(
     return;
   }
 
-  if(msg_human_len_max > 0) {
-    size_t len = strlen(msg_human);
-    snprintf(msg_human + len, msg_human_len_max - len,
-        "ConfigAxis[%lu] summary:\r\n"
-        "  ConfigAxis.abs_pos:    %lu\r\n",
-        axis,
-        config_c0.axis[axis].abs_pos);
-  }
   if(*msg_machine_len + sizeof(struct Reply_axis_pos) <= msg_machine_len_max) {
     struct Reply_axis_pos reply = Reply_axis_pos_default;
     reply.axis = axis;

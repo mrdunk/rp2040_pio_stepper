@@ -1,7 +1,7 @@
 #ifndef SENDER__H
 #define SENDER__H
 
-#include "pico_stepper.h"
+#define MAX_AXIS 4
 
 /* Clock */
 #define PLL_SYS_KHZ (133 * 1000)
@@ -10,16 +10,11 @@
 #define ETHERNET_BUF_MAX_SIZE (1024 * 4)
 
 /* Socket */
-#define SOCKET_NUMBER_HUMAN 0
-#define SOCKET_NUMBER_MACHINE 1
+#define SOCKET_NUMBER 0
 
 /* Port */
-#define NW_PORT_HUMAN 5000
-#define NW_PORT_MACHINE 5002
+#define NW_PORT 5002
 
-//#define UART_ENABLE
-//#define NET_ENABLE_HUMAN
-#define NET_ENABLE_MACHINE
 
 #define DATA_BUF_SIZE 1024
 
