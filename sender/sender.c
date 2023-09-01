@@ -139,6 +139,9 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
         break;
       case MSG_GET_AXIS_CONFIG:
         msg_uint = process_msg_uint(&rx_itterator);
+        axis = msg_uint->value;
+        // TODO: Test this works.
+        serialise_axis_config(axis, tx_buf, &tx_buf_len, DATA_BUF_SIZE - sizeof(uint32_t), false);
         //get_axis_config(
         //    msg_uint->value,
         //    tx_buf,
@@ -173,10 +176,7 @@ int32_t get_UDP(
     uint8_t socket_num,
     uint16_t port,
     uint8_t* nw_rx_buf,
-    uint8_t* tx_buf,
-    size_t* tx_buf_len,
-    size_t (*callback)(uint8_t*, uint8_t*, uint8_t*),
-    uint8_t* callback_return_data,
+    uint8_t* data_received,
     uint8_t* destip,
     uint16_t* destport)
 {
@@ -202,8 +202,7 @@ int32_t get_UDP(
            printf("%d: recvfrom error. %ld\r\n", socket_num,ret);
            return ret;
          }
-
-         *tx_buf_len = callback(nw_rx_buf, tx_buf, callback_return_data);
+         (*data_received)++;
        }
        break;
      case SOCK_CLOSED:
@@ -273,13 +272,7 @@ int main() {
   char tx_buf[DATA_BUF_SIZE] = {0};
   size_t tx_buf_len = 0;
   uint8_t callback_return_data;
-
-  uint32_t abs_pos_requested;
-  uint32_t abs_pos_acheived;
-  uint32_t min_step_len_ticks;
-  uint32_t max_accel_ticks;
-  uint32_t velocity_acheived;
-  uint32_t updated;
+  uint8_t data_received = 0;
 
   // Need these to store the IP and port.
   // We get the remote values when receiving data.
@@ -324,43 +317,23 @@ int main() {
   size_t time_now;
   while (1) {
     tx_buf_len = 0;
+    data_received = 0;
 
-    retval = get_UDP(
-        SOCKET_NUMBER,
-        NW_PORT,
-        nw_rx_buf,
-        tx_buf,
-        &tx_buf_len,
-        &process_received_buffer,
-        &callback_return_data,
-        destip_machine,
-        &destport_machine);
+    while(data_received == 0) {
+      retval = get_UDP(
+          SOCKET_NUMBER,
+          NW_PORT,
+          nw_rx_buf,
+          &data_received,
+          destip_machine,
+          &destport_machine);
+    }
+
+    tx_buf_len = process_received_buffer(nw_rx_buf, tx_buf, &callback_return_data);
 
     for(size_t axis = 0; axis < MAX_AXIS; axis++) {
       // Get data from config and put in TX buffer.
-      /*
-      get_axis_config_if_updated(
-          axis,
-          tx_buf,
-          &tx_buf_len,
-          DATA_BUF_SIZE - sizeof(uint32_t)
-          );
-      */
-      uint8_t updated = get_axis_config(
-          axis,
-          CORE0,
-          &abs_pos_requested,
-          &abs_pos_acheived,
-          &min_step_len_ticks,
-          &max_accel_ticks,
-          &velocity_acheived
-          );
-      if(updated > 0) {
-        if(updated > 1) {
-          printf("WARN: C0, multiple updates: %u \t%lu\n", axis, updated);
-        }
-        printf("%u \t%lu\n", axis, abs_pos_acheived);
-      }
+      serialise_axis_config(axis, tx_buf, &tx_buf_len, DATA_BUF_SIZE - sizeof(uint32_t), false);
     }
 
     retval = put_UDP(

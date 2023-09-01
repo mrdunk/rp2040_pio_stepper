@@ -52,6 +52,13 @@ uint32_t get_axis_config(
     uint32_t* max_accel_ticks,
     int32_t* velocity_acheived);
 
+void serialise_axis_config(
+    const uint32_t axis,
+    uint8_t* msg_machine,
+    size_t* msg_machine_len,
+    size_t msg_machine_len_max,
+    uint8_t always);
+
 /* A ring buffer that returns the average value of it's contents. */
 #define RING_BUF_AVE_LEN 1000
 struct Ring_buf_ave {

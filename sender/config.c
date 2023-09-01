@@ -1,8 +1,10 @@
 #include <stdio.h>
+#include <string.h>
 #include "pico/mutex.h"
 #include "port_common.h"
 
 #include "config.h"
+#include "messages.h"
 
 mutex_t mtx;
 
@@ -161,7 +163,7 @@ uint32_t get_axis_config(
     int32_t* velocity_acheived)
 {
   if(axis >= MAX_AXIS) {
-    return;
+    return 0;
   }
 
   mutex_enter_blocking(&mtx);
@@ -192,6 +194,59 @@ uint32_t get_axis_config(
 
   return updated_by_other_core;
 }
+
+void serialise_axis_config(
+    const uint32_t axis,
+    uint8_t* msg_machine,
+    size_t* msg_machine_len,
+    size_t msg_machine_len_max,
+    uint8_t always)
+{
+  if(axis >= MAX_AXIS) {
+    return;
+  }
+
+  uint32_t abs_pos_acheived;
+  uint32_t abs_pos_requested;
+  uint32_t min_step_len_ticks;
+  uint32_t max_accel_ticks;
+  uint32_t velocity_acheived;
+  uint32_t updated;
+
+  updated = get_axis_config(
+      axis,
+      CORE0,
+      &abs_pos_requested,
+      &abs_pos_acheived,
+      &min_step_len_ticks,
+      &max_accel_ticks,
+      &velocity_acheived
+      );
+
+  if(updated > 0) {
+    if(updated > 1) {
+      printf("WARN: C0, multiple updates: %u \t%lu\n", axis, updated);
+    }
+    printf("%u \t%lu\n", axis, abs_pos_acheived);
+  } else if (always == false) {
+    // No new data since last call.
+    printf("No new data since last call.  %u \t%lu\n", axis, updated);
+    return;
+  }
+
+  if(*msg_machine_len + sizeof(struct Reply_axis_config) <= msg_machine_len_max) {
+    struct Reply_axis_config reply = Reply_axis_config_default;
+    reply.axis = axis;
+    reply.abs_pos_acheived = abs_pos_acheived;
+    reply.min_step_len_ticks = min_step_len_ticks;
+    reply.max_accel_ticks = max_accel_ticks;
+    reply.velocity_acheived = velocity_acheived;
+
+    memcpy(msg_machine + *msg_machine_len, &reply, sizeof(struct Reply_axis_config));
+    *msg_machine_len += sizeof(struct Reply_axis_config);
+  }
+}
+
 
 size_t ring_buf_ave(struct Ring_buf_ave* data, uint32_t new_val) {
   size_t tail_val = data->buf[data->head];

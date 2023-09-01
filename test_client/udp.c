@@ -9,18 +9,20 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <limits.h>
+#include <math.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <sys/types.h>
+#include <sys/select.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <limits.h>
+#include <sys/ioctl.h>
+#include <sys/types.h>
 #include <time.h>
-#include <math.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 
 #include "../shared/messages.h"
 
@@ -28,6 +30,10 @@
 #define MAX_AXIS 6
 #define MAX_ACCELERATION 200
 #define LOOP_LEN 1000
+
+/* Forward defines. */
+void get_reply_non_block(struct sockaddr_in* serveraddr, int sockfd);
+/* --- */
 
 /*
  * error - wrapper for perror
@@ -145,7 +151,7 @@ size_t populate_data(void* packet) {
 
   printf("%s", human_help);
 
-  while(msg_type = get_property_uint("\nPacket message type. (Leave empty to finish.): ")) {
+  while((msg_type = get_property_uint("\nPacket message type. (Leave empty to finish.): "))) {
     switch(msg_type) {
       case MSG_SET_GLOAL_UPDATE_RATE:
         message_size = populate_message_uint(
@@ -189,7 +195,7 @@ size_t populate_data(void* packet) {
 }
 
 size_t store_message(int64_t* values, void** packet, size_t* packet_space) {
-  printf("store_message [%li, %li, %li, %li]\n", values[0], values[1], values[2], values[3]);
+  //printf("store_message [%li, %li, %li, %li]\n", values[0], values[1], values[2], values[3]);
   struct Message message;
   struct Message_uint message_uint;
   struct Message_uint_uint message_uint_uint;
@@ -323,7 +329,7 @@ double sampleNormal() {
     return u * c;
 }
 
-size_t populate_data_loop(void* packet) {
+size_t populate_data_loop(void* packet, struct sockaddr_in* clientaddr, int sockfd) {
   static uint32_t axis_pos[MAX_AXIS];
   static int32_t axis_velocity[MAX_AXIS];
   static int32_t axis_acceleration[MAX_AXIS];
@@ -365,22 +371,6 @@ size_t populate_data_loop(void* packet) {
     axis_pos[axis] += axis_velocity[axis];
 
 
-    /*
-    if(axis == 0) {
-      printf(
-          "axis: %6u "
-          "accel_mod: %6i "
-          "axis_acceleration: %6i "
-          "axis_velocity: %6i "
-          "axis_pos: %6u\n", 
-          axis,
-          accel_mod,
-          axis_acceleration[axis],
-          axis_velocity[axis],
-          axis_pos[axis]);
-    }
-    */
-
     int64_t values[4] = {
       MSG_SET_AXIS_ABS_POS,
       axis,
@@ -394,19 +384,21 @@ size_t populate_data_loop(void* packet) {
   clock_gettime(CLOCK_REALTIME, &now);
   uint64_t now_time_us = 1000000 * now.tv_sec + now.tv_nsec / 1000;
   uint64_t then_time_us = 1000000 * last_time.tv_sec + last_time.tv_nsec / 1000;
+  uint8_t rx_atempt_count = 0;
 
   while(now_time_us - then_time_us < LOOP_LEN) {
     clock_gettime(CLOCK_REALTIME, &now);
     now_time_us = 1000000 * now.tv_sec + now.tv_nsec / 1000;
-    if(now_time_us - then_time_us < LOOP_LEN * 10 / 9) {
-      usleep(1);
-    }
   }
   printf("%40li%40li%40li\n", then_time_us, now_time_us, now_time_us - then_time_us);
+
+  // Note: If there is more than two data transmission in a single time window,
+  // this will not keep up.
+  get_reply_non_block(clientaddr, sockfd);
+  get_reply_non_block(clientaddr, sockfd);
+
   last_time = now;
 
-  //((uint16_t*)packet)[0] = packet_size;
-  //printf("%lu\n", packet_size);
   return packet_size;
 }
 
@@ -477,13 +469,15 @@ void display_data(void* packet, size_t packet_size) {
 }
 
 void display_reply(char* buf) {
+  struct Reply_global_config reply_global_config;
+  struct Reply_axis_config reply_axis_config;
+  struct Reply_axis_pos reply_axis_pos;
   char* itterator = buf;
   size_t size;
   uint32_t msg_type;
-  while(msg_type = *(uint32_t*)itterator) {
+  while((msg_type = *(uint32_t*)itterator)) {
     switch(msg_type) {
       case REPLY_GLOBAL_CONFIG:
-        struct Reply_global_config reply_global_config;
         size = sizeof(struct Reply_global_config);
         memcpy(&reply_global_config, itterator, size);
         printf("Reply_global_config\n  "
@@ -495,28 +489,26 @@ void display_reply(char* buf) {
         itterator += size;
         break;
       case REPLY_AXIS_CONFIG:
-        struct Reply_axis_config reply_axis_config;
         size = sizeof(struct Reply_axis_config);
         memcpy(&reply_axis_config, itterator, size);
         printf("Reply_axis_config\n"
-            "  type: %u\n  axis: %u\n  abs_pos: %u\n  min_step_len_ticks: %u\n"
+            "  type: %u\n  axis: %u\n  abs_pos_acheived: %u\n  min_step_len_ticks: %u\n"
             "  max_accel_ticks: %u\n  velocity: %u\n",
             msg_type,
             reply_axis_config.axis,
-            reply_axis_config.abs_pos,
+            reply_axis_config.abs_pos_acheived,
             reply_axis_config.min_step_len_ticks,
             reply_axis_config.max_accel_ticks,
-            reply_axis_config.velocity);
+            reply_axis_config.velocity_acheived);
         itterator += size;
         break;
       case REPLY_AXIS_POS:
-        struct Reply_axis_pos reply_axis_pos;
         size = sizeof(struct Reply_axis_pos);
         memcpy(&reply_axis_pos, itterator, size);
-        printf("Reply_axis_pos\n  type: %u\n  axis: %u\n abs_pos: %u\n",
+        printf("Reply_axis_pos\n  type: %u\n  axis: %u\n abs_pos_acheived: %u\n",
             msg_type,
             reply_axis_pos.axis,
-            reply_axis_pos.abs_pos);
+            reply_axis_pos.abs_pos_acheived);
         itterator += size;
         break;
       default:
@@ -530,14 +522,14 @@ uint8_t send_data(
     struct sockaddr_in* serveraddr, int sockfd, char* packet, size_t packet_size)
 {
   /* send the message to the server */
-  int serverlen = sizeof(*serveraddr);
+  int addr_len = sizeof(*serveraddr);
   int n = sendto(
       sockfd,
       (void*)packet,
       packet_size,
       0,
       (struct sockaddr *)serveraddr,
-      serverlen);
+      addr_len);
   if (n < 0) {
     error("ERROR in sendto");
     return 1;
@@ -545,13 +537,15 @@ uint8_t send_data(
   return 0;
 }
 
-void get_reply(struct sockaddr_in* serveraddr, int sockfd) {
+void get_reply(struct sockaddr_in* clientaddr, int sockfd) {
   /* print the server's reply */
-  int serverlen;
+  int addr_len;
   char buf[BUFSIZE];
-  int flags = MSG_DONTWAIT;
+  int flags = 0;  //MSG_DONTWAIT;
   while(1) {
-    int n = recvfrom(sockfd, buf, BUFSIZE, flags, (struct sockaddr *)&serveraddr, &serverlen);
+    memset(buf, '\0', BUFSIZE);
+    int n = recvfrom(
+        sockfd, buf, BUFSIZE, flags, (struct sockaddr *)&clientaddr, (socklen_t *)&addr_len);
     if (n < 0 && errno != EAGAIN) {
       error("ERROR in recvfrom");
     }
@@ -559,13 +553,36 @@ void get_reply(struct sockaddr_in* serveraddr, int sockfd) {
       //printf("Echo from server:\r\n %s\r\n", buf);
       printf("Binary reply received.\n");
       display_reply(buf);
+
+      if(clientaddr) {
+        //printf("Received from %s:%d\n",
+        //    inet_ntoa(clientaddr->sin_addr), ntohs(clientaddr->sin_port));
+      }
     }
-    memset(buf, '\0', BUFSIZE);
+  }
+}
+
+void get_reply_non_block(struct sockaddr_in* clientaddr, int sockfd) {
+  int addr_len;
+  char buf[BUFSIZE];
+  memset(buf, '\0', BUFSIZE);
+  int flags = MSG_DONTWAIT;
+  int n = recvfrom(
+      sockfd, buf, BUFSIZE, flags, (struct sockaddr *)clientaddr, (socklen_t *)&addr_len);
+  if (n < 0 && errno != EAGAIN) {
+    //error("ERROR in recvfrom");
+    printf("rx error: %i\n", n);
+  }
+  if(n > 0) {
+    //printf("Echo from server:\r\n %s\r\n", buf);
+    printf("Binary reply received.\n");
+    //display_reply(buf);
   }
 }
 
 int main(int argc, char **argv) {
   struct sockaddr_in serveraddr;
+  struct sockaddr_in clientaddr;
   struct hostent *server;
   char *hostname;
   char packet[BUFSIZE];
@@ -593,10 +610,27 @@ int main(int argc, char **argv) {
   }
 
   /* socket: create the socket */
-  int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-  if (sockfd < 0) {
+  int sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  //int sockfd_rx = socket(AF_INET, SOCK_DGRAM, 0);
+  if (sockfd < 0) { // || sockfd_rx < 0) {
     error("ERROR opening socket");
   }
+
+  struct timeval timeout;
+  timeout.tv_sec  = 0;
+  timeout.tv_usec = 0;
+
+  setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(struct timeval));
+
+  // Make socket non-blocking.
+  /*
+  int on = 1;
+  if(ioctl(sockfd, FIONBIO, (char *)&on) < 0) {
+    perror("ioctl() failed");
+    close(sockfd);
+    exit(-1);
+  }
+  */
 
   /* gethostbyname: get the server's DNS entry */
   server = gethostbyname(hostname);
@@ -606,12 +640,12 @@ int main(int argc, char **argv) {
   }
 
   /* build the server's Internet address */
-  bzero((char *) &serveraddr, sizeof(serveraddr));
-  serveraddr.sin_family = AF_INET;
-  bcopy((char *)server->h_addr, 
-      (char *)&serveraddr.sin_addr.s_addr, server->h_length);
-  serveraddr.sin_port = htons(portno);
+  memset(&serveraddr, 0, sizeof(serveraddr));
+  memset(&clientaddr, 0, sizeof(clientaddr));
 
+  serveraddr.sin_family = AF_INET;  // IPv4
+  memmove((char *)&serveraddr.sin_addr.s_addr, (char *)server->h_addr, server->h_length);
+  serveraddr.sin_port = htons(portno);
 
   if(oneshot) {
     packet_size = populate_data_oneshot(packet);
@@ -620,7 +654,7 @@ int main(int argc, char **argv) {
     get_reply(&serveraddr, sockfd);
   } else if(loop) {
     while(1) {
-      packet_size = populate_data_loop(packet);
+      packet_size = populate_data_loop(packet, &serveraddr, sockfd);
       //display_data(packet, packet_size);
       send_data(&serveraddr, sockfd, packet, packet_size);
     }
@@ -628,7 +662,7 @@ int main(int argc, char **argv) {
     packet_size = populate_data(packet);
     display_data(packet, packet_size);
     send_data(&serveraddr, sockfd, packet, packet_size);
-    get_reply(&serveraddr, sockfd);
+    get_reply(&clientaddr, sockfd);
   }
 
   return 0;
