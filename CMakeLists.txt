@@ -71,8 +71,8 @@ add_subdirectory(${PORT_DIR})
 
 # Set compile options
 add_compile_options(
-    # -Ofast
-    -O0
+    -Ofast
+    #-O0
     -Wall
     -Wno-format          # int != int32_t as far as the compiler is concerned because gcc has int32_t as long int
     -Wno-unused-function # we have some for the docs that aren't called

@@ -6,7 +6,8 @@
 #include "config.h"
 #include "messages.h"
 
-mutex_t mtx;
+mutex_t mtx_top;
+mutex_t mtx_axis[MAX_AXIS];
 
 volatile struct ConfigGlobal config = {
   .update_time_us = 1000,    // 1000us.
@@ -18,7 +19,7 @@ volatile struct ConfigGlobal config = {
       .abs_pos_requested = UINT_MAX / 2,
       .abs_pos_acheived = UINT_MAX / 2,
       .min_step_len_ticks = 50,
-      .max_accel_ticks = 200,
+      .max_accel_ticks = 2,
       .velocity_acheived = 0
     },
     {
@@ -28,7 +29,7 @@ volatile struct ConfigGlobal config = {
       .abs_pos_requested = UINT_MAX / 2,
       .abs_pos_acheived = UINT_MAX / 2,
       .min_step_len_ticks = 50,
-      .max_accel_ticks = 200,
+      .max_accel_ticks = 10,
       .velocity_acheived = 0
     },
     {
@@ -97,29 +98,36 @@ volatile struct ConfigGlobal config = {
 
 void init_config()
 {
-  mutex_init(&mtx);
+  mutex_init(&mtx_top);
+  for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
+    mutex_init(&mtx_axis[axis]);
+  }
 }
 
 void update_config(uint32_t update_time_us) {
-  mutex_enter_blocking(&mtx);
+  mutex_enter_blocking(&mtx_top);
 
   config.update_time_us = update_time_us;
   
-  mutex_exit(&mtx);
+  mutex_exit(&mtx_top);
 }
 
 uint32_t get_config() {
-  //mutex_enter_blocking(&mtx);
+  mutex_enter_blocking(&mtx_top);
 
   uint32_t retval = config.update_time_us;
   
-  //mutex_exit(&mtx);
+  mutex_exit(&mtx_top);
 
   return retval;
 }
 
 uint8_t has_new_c0_data(const uint8_t axis) {
-  return config.axis[axis].updated_from_c0;
+  mutex_enter_blocking(&mtx_axis[axis]);
+  uint8_t updated = config.axis[axis].updated_from_c0;
+  mutex_exit(&mtx_axis[axis]);
+
+  return updated;
 }
 
 void update_axis_config(
@@ -136,7 +144,7 @@ void update_axis_config(
   }
 
   // printf("Setting CORE%i:%i\n", core, axis);
-  mutex_enter_blocking(&mtx);
+  mutex_enter_blocking(&mtx_axis[axis]);
 
   if(abs_pos_requested != NULL) {
     config.axis[axis].abs_pos_requested = *abs_pos_requested;
@@ -162,7 +170,7 @@ void update_axis_config(
       break;
   }
 
-  mutex_exit(&mtx);
+  mutex_exit(&mtx_axis[axis]);
 }
 
 
@@ -179,8 +187,8 @@ uint32_t get_axis_config(
     return 0;
   }
 
-  mutex_enter_blocking(&mtx);
-  //if(mutex_try_enter(&mtx, NULL) == false) {
+  mutex_enter_blocking(&mtx_axis[axis]);
+  //if(mutex_try_enter(&mtx_axis[axis], NULL) == false) {
   //  return 0;
   //}
 
@@ -203,7 +211,7 @@ uint32_t get_axis_config(
   *velocity_acheived = config.axis[axis].velocity_acheived;
 
 
-  mutex_exit(&mtx);
+  mutex_exit(&mtx_axis[axis]);
 
   return updated_by_other_core;
 }

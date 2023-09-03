@@ -296,7 +296,6 @@ int main() {
   stdio_usb_init();
   setup_default_uart();
   sleep_ms(2000);
-  init_core1();
   init_config();
   printf("--------------------------------\n");
   printf("UART up.\n");
@@ -311,7 +310,7 @@ int main() {
   /* Get network information */
   print_network_information(g_net_info);
 
-  //init_core1();
+  init_core1();
   printf("--------------------------------\n");
 
   size_t time_last = time_us_64();

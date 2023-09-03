@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 void init_pio(
-    const uint32_t stepper,
+    const uint32_t axis,
     const uint32_t pin_step,
     const uint32_t pin_direction
     );

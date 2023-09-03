@@ -489,6 +489,42 @@ void display_data(void* packet, size_t packet_size) {
   printf("\n");
 }
 
+//#define GRAPH_LEN 10000
+#define GRAPH_LEN 2000
+uint32_t graph_data_pos[GRAPH_LEN] = {0};
+uint32_t graph_data_vel[GRAPH_LEN] = {0};
+uint32_t graph_index = 0;
+uint8_t graph_axis = 0;
+
+void draw_graph() {
+  printf("draw_graph. axis: %u\n", graph_axis);
+
+  FILE *data_file_pos = fopen("/tmp/graph_pos", "w");
+  for(uint32_t i = 0; i < GRAPH_LEN; i++) {
+    fprintf(data_file_pos, "%u\n", graph_data_pos[i]);
+  }
+  fflush(data_file_pos);
+  fclose(data_file_pos);
+
+  FILE *data_file_vel = fopen("/tmp/graph_vel", "w");
+  for(uint32_t i = 0; i < GRAPH_LEN; i++) {
+    fprintf(data_file_vel, "%i\n", graph_data_vel[i]);
+  }
+  fflush(data_file_vel);
+  fclose(data_file_vel);
+
+  FILE *gnuplot = popen("gnuplot -persistent", "w");
+  fprintf(gnuplot, 
+      "plot "
+      "\"/tmp/graph_pos\" w line title \"pos\""
+      ", "
+      "\"/tmp/graph_vel\" w line title \"vel\" axis x1y2"
+      "\n"
+           );
+  fflush(gnuplot);
+  pclose(gnuplot);
+}
+
 void display_reply(char* buf) {
   struct Reply_global_config reply_global_config;
   struct Reply_axis_config reply_axis_config;
@@ -522,6 +558,17 @@ void display_reply(char* buf) {
             reply_axis_config.max_accel_ticks,
             reply_axis_config.velocity_acheived);
         itterator += size;
+
+        if(reply_axis_config.axis == graph_axis && graph_index < GRAPH_LEN) {
+          graph_data_pos[graph_index] = reply_axis_config.abs_pos_acheived;
+          graph_data_vel[graph_index] = reply_axis_config.velocity_acheived;
+          graph_index++;
+        }
+        if(graph_index == GRAPH_LEN) {
+          draw_graph();
+          graph_index++;
+        }
+
         break;
       case REPLY_AXIS_POS:
         size = sizeof(struct Reply_axis_pos);
@@ -531,6 +578,15 @@ void display_reply(char* buf) {
             reply_axis_pos.axis,
             reply_axis_pos.abs_pos_acheived);
         itterator += size;
+
+        if(reply_axis_pos.axis == graph_axis && graph_index < GRAPH_LEN) {
+          graph_data_pos[graph_index++] = reply_axis_pos.abs_pos_acheived;
+        }
+        if(graph_index == GRAPH_LEN) {
+          graph_index++;
+          draw_graph();
+        }
+
         break;
       default:
         printf("ERROR: Unexpected reply type: %u\n", msg_type);

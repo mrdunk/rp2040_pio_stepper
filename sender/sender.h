@@ -3,6 +3,7 @@
 
 //#define DEBUG_OUTPUT 1
 
+//#define MAX_AXIS 2
 #define MAX_AXIS 4
 //#define MAX_AXIS 6
 
