@@ -10,6 +10,7 @@
 #define CORE0 0
 #define CORE1 1
 
+
 /* Configuration object for an axis. */
 struct ConfigAxis {
   uint8_t updated_from_c0;      // Data was updated on core 0.
@@ -34,6 +35,8 @@ void update_config(uint32_t update_time_us);
 
 uint32_t get_config();
 
+uint8_t has_new_c0_data(const uint8_t axis);
+
 void update_axis_config(
     const uint8_t axis,
     const uint8_t core,
@@ -52,7 +55,7 @@ uint32_t get_axis_config(
     uint32_t* max_accel_ticks,
     int32_t* velocity_acheived);
 
-void serialise_axis_config(
+size_t serialise_axis_config(
     const uint32_t axis,
     uint8_t* msg_machine,
     size_t* msg_machine_len,

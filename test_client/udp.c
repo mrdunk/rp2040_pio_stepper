@@ -8,6 +8,7 @@
  */
 
 #include <ctype.h>
+#include <math.h>
 #include <errno.h>
 #include <limits.h>
 #include <math.h>
@@ -329,21 +330,36 @@ double sampleNormal() {
     return u * c;
 }
 
+/* Oscillate requested position using different step sizes for each axis. */
 size_t populate_data_loop(void* packet, struct sockaddr_in* clientaddr, int sockfd) {
   static uint32_t axis_pos[MAX_AXIS];
-  static int32_t axis_velocity[MAX_AXIS];
-  static int32_t axis_acceleration[MAX_AXIS];
+  static uint8_t axis_direction[MAX_AXIS];
+  static uint32_t axis_period[MAX_AXIS];
+  static uint32_t axis_speed[MAX_AXIS];
+  static uint32_t axis_destination[MAX_AXIS];
+  static uint32_t axis_start = UINT_MAX / 2;
   static struct timespec last_time;
-  static uint8_t first_run = 1;
+  static uint32_t run_count = 0;
 
-  if(first_run == 1) {
+  if(run_count == 0) {
+    printf("Init\n");
     for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
-      axis_pos[axis] = UINT_MAX / 2;
-      axis_velocity[axis] = 0;
-      axis_acceleration[axis] = 0;
+      axis_pos[axis] = axis_start;
+      axis_direction[axis] = (axis % 2);
+      axis_period[axis] = (axis + 1) * 1000;
     }
-    srand(time(NULL));   // Seed random numbers.
-    first_run = 0;
+    axis_speed[0] = 1;
+    axis_speed[1] = 10;
+    axis_speed[2] = 100;
+    axis_speed[3] = 1000;
+    axis_speed[4] = 10000;
+    axis_speed[5] = 10000;
+    axis_destination[0] = axis_pos[0] + 10000;
+    axis_destination[1] = axis_pos[1] + 10000;
+    axis_destination[2] = axis_pos[2] + 10000;
+    axis_destination[3] = axis_pos[3] + 10000;
+    axis_destination[4] = axis_pos[4] + 10000;
+    axis_destination[5] = axis_pos[5] + 10000;
 
     clock_gettime(CLOCK_REALTIME, &last_time);
   }
@@ -355,21 +371,22 @@ size_t populate_data_loop(void* packet, struct sockaddr_in* clientaddr, int sock
   void* packet_itterator = packet + packet_size;
 
   for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
-    int32_t accel_mod = 0;
-    if(rand() % 20 == 0) {
-      accel_mod = sampleNormal() * 100;
+    if((run_count % axis_period[axis]) == 0) {
+      // flip direction.
+      axis_direction[axis] = !axis_direction[axis];
     }
 
-    axis_acceleration[axis] *= 8;
-    axis_acceleration[axis] /= 10;
-    axis_acceleration[axis] += accel_mod;
-
-    axis_velocity[axis] *= 18;
-    axis_velocity[axis] /= 20;
-    axis_velocity[axis] += axis_acceleration[axis];
-    
-    axis_pos[axis] += axis_velocity[axis];
-
+    if(axis_direction[axis] == 0) {
+      axis_pos[axis] += axis_speed[axis];
+      if(axis_pos[axis] > axis_destination[axis]) {
+        axis_pos[axis] = axis_destination[axis];
+      }
+    } else {
+      axis_pos[axis] -= axis_speed[axis];
+      if(axis_pos[axis] < axis_start) {
+        axis_pos[axis] = axis_start;
+      }
+    }
 
     int64_t values[4] = {
       MSG_SET_AXIS_ABS_POS,
@@ -378,6 +395,8 @@ size_t populate_data_loop(void* packet, struct sockaddr_in* clientaddr, int sock
       0
     };
     packet_size += store_message(values, &packet_itterator, &packet_space);
+
+    //printf("%u\t%u\t%u\n", axis, axis_direction[axis], axis_pos[axis]);
   }
 
   struct timespec now;
@@ -392,12 +411,14 @@ size_t populate_data_loop(void* packet, struct sockaddr_in* clientaddr, int sock
   }
   printf("%40li%40li%40li\n", then_time_us, now_time_us, now_time_us - then_time_us);
 
-  // Note: If there is more than two data transmission in a single time window,
+  // Note: If there is more than two data transmissions in a single time window,
   // this will not keep up.
+  // (Only one expected.)
   get_reply_non_block(clientaddr, sockfd);
   get_reply_non_block(clientaddr, sockfd);
 
   last_time = now;
+  run_count++;
 
   return packet_size;
 }
@@ -493,7 +514,7 @@ void display_reply(char* buf) {
         memcpy(&reply_axis_config, itterator, size);
         printf("Reply_axis_config\n"
             "  type: %u\n  axis: %u\n  abs_pos_acheived: %u\n  min_step_len_ticks: %u\n"
-            "  max_accel_ticks: %u\n  velocity: %u\n",
+            "  max_accel_ticks: %u\n  velocity: %i\n",
             msg_type,
             reply_axis_config.axis,
             reply_axis_config.abs_pos_acheived,
@@ -576,7 +597,7 @@ void get_reply_non_block(struct sockaddr_in* clientaddr, int sockfd) {
   if(n > 0) {
     //printf("Echo from server:\r\n %s\r\n", buf);
     printf("Binary reply received.\n");
-    //display_reply(buf);
+    display_reply(buf);
   }
 }
 
@@ -616,11 +637,15 @@ int main(int argc, char **argv) {
     error("ERROR opening socket");
   }
 
+  /* Set zero timeout on socket. */
   struct timeval timeout;
   timeout.tv_sec  = 0;
   timeout.tv_usec = 0;
-
   setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(struct timeval));
+
+  /* SO_REUSEADDR should allow reuse of IP/port combo when quickly stopping and restarting program. */
+  int option = 1;
+  setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, (void *)&option, sizeof(option));
 
   // Make socket non-blocking.
   /*

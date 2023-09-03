@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+
 #include "pico/stdlib.h"
 
 // w5x00 related.
@@ -141,7 +142,7 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
         msg_uint = process_msg_uint(&rx_itterator);
         axis = msg_uint->value;
         // TODO: Test this works.
-        serialise_axis_config(axis, tx_buf, &tx_buf_len, DATA_BUF_SIZE - sizeof(uint32_t), false);
+        serialise_axis_config(axis, tx_buf, &tx_buf_len, DATA_BUF_SIZE - sizeof(uint32_t), true);
         //get_axis_config(
         //    msg_uint->value,
         //    tx_buf,
@@ -271,7 +272,7 @@ int main() {
   char nw_rx_buf[DATA_BUF_SIZE] = "";
   char tx_buf[DATA_BUF_SIZE] = {0};
   size_t tx_buf_len = 0;
-  uint8_t callback_return_data;
+  uint8_t received_msg_count;
   uint8_t data_received = 0;
 
   // Need these to store the IP and port.
@@ -329,12 +330,17 @@ int main() {
           &destport_machine);
     }
 
-    tx_buf_len = process_received_buffer(nw_rx_buf, tx_buf, &callback_return_data);
+    tx_buf_len = process_received_buffer(nw_rx_buf, tx_buf, &received_msg_count);
 
+    size_t axis_count = 0;
     for(size_t axis = 0; axis < MAX_AXIS; axis++) {
       // Get data from config and put in TX buffer.
-      serialise_axis_config(axis, tx_buf, &tx_buf_len, DATA_BUF_SIZE - sizeof(uint32_t), false);
+      axis_count += serialise_axis_config(
+          axis, tx_buf, &tx_buf_len, DATA_BUF_SIZE - sizeof(uint32_t), false);
     }
+#if DEBUG_OUTPUT
+    printf("Sending: %lu\n", axis_count);
+#endif
 
     retval = put_UDP(
         SOCKET_NUMBER,
@@ -345,7 +351,7 @@ int main() {
         &destport_machine);
 
 
-    if(callback_return_data > 0) {
+    if(received_msg_count > 0) {
       // Have received axis updates.
       // Save the update period to config if appropriate.
       time_now = time_us_64();
@@ -355,8 +361,10 @@ int main() {
         update_config(ave_period_us);
         last_ave_period_us = ave_period_us;
       }
-      printf("Received: %u \t%lu\n", callback_return_data, ave_period_us);
-      callback_return_data = 0;
+#if DEBUG_OUTPUT
+      printf("Received: %u \t%lu\n", received_msg_count, ave_period_us);
+#endif
+      received_msg_count = 0;
 
       gpio_put(LED_PIN, (time_now / 1000000) % 2);
     }

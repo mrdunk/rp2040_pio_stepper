@@ -18,7 +18,8 @@ volatile struct ConfigGlobal config = {
       .abs_pos_requested = UINT_MAX / 2,
       .abs_pos_acheived = UINT_MAX / 2,
       .min_step_len_ticks = 50,
-      .max_accel_ticks = 200
+      .max_accel_ticks = 200,
+      .velocity_acheived = 0
     },
     {
       // Axis 1.
@@ -27,7 +28,8 @@ volatile struct ConfigGlobal config = {
       .abs_pos_requested = UINT_MAX / 2,
       .abs_pos_acheived = UINT_MAX / 2,
       .min_step_len_ticks = 50,
-      .max_accel_ticks = 200
+      .max_accel_ticks = 200,
+      .velocity_acheived = 0
     },
     {
       // Axis 2.
@@ -36,7 +38,8 @@ volatile struct ConfigGlobal config = {
       .abs_pos_requested = UINT_MAX / 2,
       .abs_pos_acheived = UINT_MAX / 2,
       .min_step_len_ticks = 50,
-      .max_accel_ticks = 200
+      .max_accel_ticks = 200,
+      .velocity_acheived = 0
     },
     {
       // Axis 3.
@@ -45,7 +48,8 @@ volatile struct ConfigGlobal config = {
       .abs_pos_requested = UINT_MAX / 2,
       .abs_pos_acheived = UINT_MAX / 2,
       .min_step_len_ticks = 50,
-      .max_accel_ticks = 200
+      .max_accel_ticks = 200,
+      .velocity_acheived = 0
     },
     {
       // Axis 4.
@@ -54,7 +58,8 @@ volatile struct ConfigGlobal config = {
       .abs_pos_requested = UINT_MAX / 2,
       .abs_pos_acheived = UINT_MAX / 2,
       .min_step_len_ticks = 50,
-      .max_accel_ticks = 200
+      .max_accel_ticks = 200,
+      .velocity_acheived = 0
     },
     {
       // Axis 5.
@@ -63,7 +68,8 @@ volatile struct ConfigGlobal config = {
       .abs_pos_requested = UINT_MAX / 2,
       .abs_pos_acheived = UINT_MAX / 2,
       .min_step_len_ticks = 50,
-      .max_accel_ticks = 200
+      .max_accel_ticks = 200,
+      .velocity_acheived = 0
     },
     {
       // Axis 6.
@@ -72,7 +78,8 @@ volatile struct ConfigGlobal config = {
       .abs_pos_requested = UINT_MAX / 2,
       .abs_pos_acheived = UINT_MAX / 2,
       .min_step_len_ticks = 50,
-      .max_accel_ticks = 200
+      .max_accel_ticks = 200,
+      .velocity_acheived = 0
     },
     {
       // Axis 7.
@@ -81,7 +88,8 @@ volatile struct ConfigGlobal config = {
       .abs_pos_requested = UINT_MAX / 2,
       .abs_pos_acheived = UINT_MAX / 2,
       .min_step_len_ticks = 50,
-      .max_accel_ticks = 200
+      .max_accel_ticks = 200,
+      .velocity_acheived = 0
     },
   }
 };
@@ -101,13 +109,17 @@ void update_config(uint32_t update_time_us) {
 }
 
 uint32_t get_config() {
-  mutex_enter_blocking(&mtx);
+  //mutex_enter_blocking(&mtx);
 
   uint32_t retval = config.update_time_us;
   
-  mutex_exit(&mtx);
+  //mutex_exit(&mtx);
 
   return retval;
+}
+
+uint8_t has_new_c0_data(const uint8_t axis) {
+  return config.axis[axis].updated_from_c0;
 }
 
 void update_axis_config(
@@ -123,6 +135,7 @@ void update_axis_config(
     return;
   }
 
+  // printf("Setting CORE%i:%i\n", core, axis);
   mutex_enter_blocking(&mtx);
 
   if(abs_pos_requested != NULL) {
@@ -195,7 +208,7 @@ uint32_t get_axis_config(
   return updated_by_other_core;
 }
 
-void serialise_axis_config(
+size_t serialise_axis_config(
     const uint32_t axis,
     uint8_t* msg_machine,
     size_t* msg_machine_len,
@@ -203,14 +216,17 @@ void serialise_axis_config(
     uint8_t always)
 {
   if(axis >= MAX_AXIS) {
-    return;
+    return 0;
   }
+
+  static uint32_t failcount = 0;
+  static uint32_t count = 0;
 
   uint32_t abs_pos_acheived;
   uint32_t abs_pos_requested;
   uint32_t min_step_len_ticks;
   uint32_t max_accel_ticks;
-  uint32_t velocity_acheived;
+  int32_t velocity_acheived;
   uint32_t updated;
 
   updated = get_axis_config(
@@ -223,15 +239,21 @@ void serialise_axis_config(
       &velocity_acheived
       );
 
-  if(updated > 0) {
-    if(updated > 1) {
-      printf("WARN: C0, multiple updates: %u \t%lu\n", axis, updated);
+  if(updated == 0) {
+    //printf("No new data to send since last call. Axis: %u\n", axis);
+    if(always == false) {
+      return 0;
     }
-    printf("%u \t%lu\n", axis, abs_pos_acheived);
-  } else if (always == false) {
-    // No new data since last call.
-    printf("No new data since last call.  %u \t%lu\n", axis, updated);
-    return;
+  }
+  count++;
+  if(updated > 1) {
+    failcount++;
+    printf("WARN: C0, multiple updates: %u \t%lu \t%f\n",
+        axis, updated, (double)failcount / (double)count);
+  }
+
+  if(axis == 0) {
+    //printf("\tC0\t%f\n", (double)failcount / (double)count);
   }
 
   if(*msg_machine_len + sizeof(struct Reply_axis_config) <= msg_machine_len_max) {
@@ -244,6 +266,8 @@ void serialise_axis_config(
 
     memcpy(msg_machine + *msg_machine_len, &reply, sizeof(struct Reply_axis_config));
     *msg_machine_len += sizeof(struct Reply_axis_config);
+
+    return 1;
   }
 }
 
