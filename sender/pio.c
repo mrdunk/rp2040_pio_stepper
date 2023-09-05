@@ -80,10 +80,13 @@ void axis_to_pio(const uint32_t axis, PIO* pio, uint32_t* sm) {
 int32_t pid(const uint8_t axis, const uint32_t curent_pos, const uint32_t desired_pos) {
   static int32_t integral[MAX_AXIS] = {0};
   static int32_t last_error[MAX_AXIS] = {0};
+  //const double kp = 1.0;
   const double kp = 0.1;
-  const int32_t ki = 0;
-  const int32_t kd = 0;
-  const int32_t max_velocity = 10;
+  //const int32_t ki = 0.0;
+  const int32_t ki = 0.2;
+  //const int32_t kd = 0;
+  const int32_t kd = 0.5;
+  const int32_t max_velocity = 100;
 
   int32_t error = desired_pos - curent_pos;
   integral[axis] += error;

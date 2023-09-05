@@ -24,6 +24,9 @@
 #include <time.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <signal.h>
 
 #include "../shared/messages.h"
 
@@ -141,6 +144,133 @@ size_t populate_message_uint_int(
   return message_size;
 }
 
+size_t log_data_index = 0;
+
+void log_data_init() {
+  // Create named pipes.
+  const char * fifo_c_to_py = "/tmp/fifo_c_to_py";
+  const char * fifo_py_to_c = "/tmp/fifo_py_to_c";
+  mkfifo(fifo_c_to_py, 0666);
+  mkfifo(fifo_py_to_c, 0666);
+
+  sigaction(SIGPIPE, &(struct sigaction){SIG_IGN}, NULL);
+}
+
+void log_data(const uint8_t axis, const uint8_t key, const int32_t value) {
+  static uint32_t count = 0;
+  const char * fifo_c_to_py = "/tmp/fifo_c_to_py";
+  const char * fifo_py_to_c = "/tmp/fifo_py_to_c";
+
+  // printf("writing...\n"); 
+  static FILE* fifo_write;
+  if(!fifo_write) {
+    fifo_write = fopen(fifo_c_to_py, "w");
+    //setbuf(fifo_write, NULL); // make it unbuffered
+  }
+  //printf("%p\n", fifo_write);
+  //fprintf(fifo_write, "%u,%u,%s,%i|", count++, axis, key, value);
+  //fflush(fifo_write);
+  //char tx_buffer[5] = {0xff, 1, 2, 3, 0};
+  char tx_buffer[28] = {0};
+  sprintf(tx_buffer, "%u,%u,%u,%i|", count++, axis, key, value);
+  //printf("%lu\n", strlen(tx_buffer));
+  int rc = -1;
+  while(rc < 0) {
+    rc = fputs(tx_buffer, fifo_write);
+    //printf("rc: %i\n", rc);
+  }
+
+  if(count % 1000 == 0) {
+    // Close the FIFO occasionally to force data to be written.
+    fclose( fifo_write );
+    fifo_write = 0;
+  }
+
+  
+  /*
+  static int fd = 0;
+  char tx_buffer[128] = {0};
+  sprintf(tx_buffer, "%u,%u,%s,%i|", count++, axis, key, value);
+
+  if(fd == 0) {
+    //fd = open(fifo_c_to_py, O_WRONLY | O_NONBLOCK | O_SYNC);
+    fd = open(fifo_c_to_py, O_WRONLY);
+  }
+  int rc = -1;
+  while(rc < 0) {
+    rc = write(fd, tx_buffer, sizeof(tx_buffer));
+  }
+
+  if(count % 1000 == 0) {
+    // Close the FIFO occasionally to force data to be written.
+    //close(fd);
+    //fd = 0;
+  }
+  */
+
+  char rx_buffer[128] = {0};
+
+  /*
+  printf("reading...\n"); 
+  fd = open(fifo_py_to_c, O_RDONLY | O_NONBLOCK);
+  read(fd, rx_buffer, sizeof(rx_buffer));
+  printf("%s\n", rx_buffer);
+  close(fd);
+  */
+}
+
+//#define GRAPH_LEN 10000
+#define GRAPH_LEN 4000           // How much data to record.
+#define GRAPH_RX_THRESHOLD 2000  // How many successful RX before start recording data.
+#define GRAPH_RANGE 10000
+uint32_t graph_data_requested[GRAPH_LEN] = {0};
+uint32_t graph_data_pos[GRAPH_LEN] = {0};
+uint32_t graph_data_vel[GRAPH_LEN] = {0};
+uint32_t graph_index = 0;
+uint8_t graph_axis = 1;
+uint32_t graph_sucessful_rx = 0;
+
+void draw_graph() {
+  printf("draw_graph. axis: %u\n", graph_axis);
+
+  FILE *data_file_req = fopen("/tmp/graph_req", "w");
+  for(uint32_t i = 0; i < GRAPH_LEN; i++) {
+    fprintf(data_file_req, "%u\n", graph_data_requested[i]);
+  }
+  fflush(data_file_req);
+  fclose(data_file_req);
+
+  FILE *data_file_pos = fopen("/tmp/graph_pos", "w");
+  for(uint32_t i = 0; i < GRAPH_LEN; i++) {
+    fprintf(data_file_pos, "%u\n", graph_data_pos[i]);
+  }
+  fflush(data_file_pos);
+  fclose(data_file_pos);
+
+  FILE *data_file_vel = fopen("/tmp/graph_vel", "w");
+  for(uint32_t i = 0; i < GRAPH_LEN; i++) {
+    fprintf(data_file_vel, "%i\n", graph_data_vel[i]);
+  }
+  fflush(data_file_vel);
+  fclose(data_file_vel);
+
+  FILE *gnuplot = popen("gnuplot -persistent", "w");
+  fprintf(gnuplot, "set yrange [%u:%u] \n",
+      (UINT_MAX / 2) - 100, (UINT_MAX / 2) + 100 + GRAPH_RANGE);
+  fprintf(gnuplot, "set y2tics -10, 2 \n");
+  fprintf(gnuplot, 
+      "plot "
+      "\"/tmp/graph_req\" w line title \"req\" axis x1y1"
+      ", "
+      "\"/tmp/graph_pos\" w line title \"pos\" axis x1y1"
+      ", "
+      "\"/tmp/graph_vel\" w line title \"vel\" axis x1y2"
+      "\n"
+           );
+  fflush(gnuplot);
+  pclose(gnuplot);
+}
+
 size_t populate_data(void* packet) {
   uint32_t msg_type;
   size_t message_size = 0;
@@ -214,6 +344,12 @@ size_t store_message(int64_t* values, void** packet, size_t* packet_space) {
         (struct Message_uint_uint){.type=values[0], .axis=values[1], .value=values[2]};
       message_size = sizeof(struct Message_uint_uint);
       memcpy(*packet, &message_uint_uint, message_size);
+
+      log_data(values[1], 1, values[2]);
+      //if(values[1] == graph_axis && graph_index < GRAPH_LEN) {
+      //  graph_data_requested[graph_index] = values[2];
+      //}
+      
       break;
     case MSG_SET_AXIS_REL_POS:
       message_uint_int = 
@@ -405,17 +541,17 @@ size_t populate_data_loop(void* packet, struct sockaddr_in* clientaddr, int sock
   uint64_t then_time_us = 1000000 * last_time.tv_sec + last_time.tv_nsec / 1000;
   uint8_t rx_atempt_count = 0;
 
-  while(now_time_us - then_time_us < LOOP_LEN) {
-    clock_gettime(CLOCK_REALTIME, &now);
-    now_time_us = 1000000 * now.tv_sec + now.tv_nsec / 1000;
-  }
-  printf("%40li%40li%40li\n", then_time_us, now_time_us, now_time_us - then_time_us);
-
   // Note: If there is more than two data transmissions in a single time window,
   // this will not keep up.
   // (Only one expected.)
   get_reply_non_block(clientaddr, sockfd);
   get_reply_non_block(clientaddr, sockfd);
+
+  while(now_time_us - then_time_us < LOOP_LEN) {
+    clock_gettime(CLOCK_REALTIME, &now);
+    now_time_us = 1000000 * now.tv_sec + now.tv_nsec / 1000;
+  }
+  printf("%40li%40li%40li\n", then_time_us, now_time_us, now_time_us - then_time_us);
 
   last_time = now;
   run_count++;
@@ -489,42 +625,6 @@ void display_data(void* packet, size_t packet_size) {
   printf("\n");
 }
 
-//#define GRAPH_LEN 10000
-#define GRAPH_LEN 2000
-uint32_t graph_data_pos[GRAPH_LEN] = {0};
-uint32_t graph_data_vel[GRAPH_LEN] = {0};
-uint32_t graph_index = 0;
-uint8_t graph_axis = 0;
-
-void draw_graph() {
-  printf("draw_graph. axis: %u\n", graph_axis);
-
-  FILE *data_file_pos = fopen("/tmp/graph_pos", "w");
-  for(uint32_t i = 0; i < GRAPH_LEN; i++) {
-    fprintf(data_file_pos, "%u\n", graph_data_pos[i]);
-  }
-  fflush(data_file_pos);
-  fclose(data_file_pos);
-
-  FILE *data_file_vel = fopen("/tmp/graph_vel", "w");
-  for(uint32_t i = 0; i < GRAPH_LEN; i++) {
-    fprintf(data_file_vel, "%i\n", graph_data_vel[i]);
-  }
-  fflush(data_file_vel);
-  fclose(data_file_vel);
-
-  FILE *gnuplot = popen("gnuplot -persistent", "w");
-  fprintf(gnuplot, 
-      "plot "
-      "\"/tmp/graph_pos\" w line title \"pos\""
-      ", "
-      "\"/tmp/graph_vel\" w line title \"vel\" axis x1y2"
-      "\n"
-           );
-  fflush(gnuplot);
-  pclose(gnuplot);
-}
-
 void display_reply(char* buf) {
   struct Reply_global_config reply_global_config;
   struct Reply_axis_config reply_axis_config;
@@ -559,15 +659,18 @@ void display_reply(char* buf) {
             reply_axis_config.velocity_acheived);
         itterator += size;
 
-        if(reply_axis_config.axis == graph_axis && graph_index < GRAPH_LEN) {
-          graph_data_pos[graph_index] = reply_axis_config.abs_pos_acheived;
-          graph_data_vel[graph_index] = reply_axis_config.velocity_acheived;
-          graph_index++;
-        }
-        if(graph_index == GRAPH_LEN) {
-          draw_graph();
-          graph_index++;
-        }
+        log_data(reply_axis_config.axis, 0, reply_axis_config.abs_pos_acheived);
+        log_data(reply_axis_config.axis, 2, reply_axis_config.velocity_acheived);
+        //if(reply_axis_config.axis == graph_axis) {
+        //  graph_sucessful_rx++;
+        //  if(graph_index < GRAPH_LEN) {
+        //    graph_data_pos[graph_index] = reply_axis_config.abs_pos_acheived;
+        //    graph_data_vel[graph_index] = reply_axis_config.velocity_acheived;
+        //  }
+        //  if(graph_index == GRAPH_LEN) {
+        //    draw_graph();
+        //  }
+        //}
 
         break;
       case REPLY_AXIS_POS:
@@ -579,13 +682,16 @@ void display_reply(char* buf) {
             reply_axis_pos.abs_pos_acheived);
         itterator += size;
 
-        if(reply_axis_pos.axis == graph_axis && graph_index < GRAPH_LEN) {
-          graph_data_pos[graph_index++] = reply_axis_pos.abs_pos_acheived;
-        }
-        if(graph_index == GRAPH_LEN) {
-          graph_index++;
-          draw_graph();
-        }
+        log_data(reply_axis_config.axis, 0, reply_axis_config.abs_pos_acheived);
+        //if(reply_axis_pos.axis == graph_axis) {
+        //  graph_sucessful_rx++;
+        //  if(graph_index < GRAPH_LEN) {
+        //    graph_data_pos[graph_index++] = reply_axis_pos.abs_pos_acheived;
+        //  }
+        //  if(graph_index == GRAPH_LEN) {
+        //    draw_graph();
+        //  }
+        //}
 
         break;
       default:
@@ -667,6 +773,9 @@ int main(int argc, char **argv) {
   uint8_t oneshot = 0;
   uint8_t loop = 0;
 
+  // Set up FIFOs to stream data to graphs.
+  log_data_init();
+
   /* check command line arguments */
   if (argc < 3 || argc > 4) {
     fprintf(stderr,"usage: %s <hostname> <port> [-oneshot] [-loop]\n", argv[0]);
@@ -688,8 +797,7 @@ int main(int argc, char **argv) {
 
   /* socket: create the socket */
   int sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-  //int sockfd_rx = socket(AF_INET, SOCK_DGRAM, 0);
-  if (sockfd < 0) { // || sockfd_rx < 0) {
+  if (sockfd < 0) {
     error("ERROR opening socket");
   }
 
@@ -699,7 +807,8 @@ int main(int argc, char **argv) {
   timeout.tv_usec = 0;
   setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(struct timeval));
 
-  /* SO_REUSEADDR should allow reuse of IP/port combo when quickly stopping and restarting program. */
+  /* SO_REUSEADDR should allow reuse of IP/port combo when quickly stopping and
+   * restarting program. */
   int option = 1;
   setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, (void *)&option, sizeof(option));
 
@@ -738,6 +847,10 @@ int main(int argc, char **argv) {
       packet_size = populate_data_loop(packet, &serveraddr, sockfd);
       //display_data(packet, packet_size);
       send_data(&serveraddr, sockfd, packet, packet_size);
+      //if(graph_sucessful_rx > GRAPH_RX_THRESHOLD) {
+      //  graph_index++;
+      //}
+      log_data_index++;
     }
   } else {
     packet_size = populate_data(packet);
