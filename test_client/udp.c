@@ -156,119 +156,38 @@ void log_data_init() {
   sigaction(SIGPIPE, &(struct sigaction){SIG_IGN}, NULL);
 }
 
-void log_data(const uint8_t axis, const uint8_t key, const int32_t value) {
+void log_data(const uint8_t axis, const uint8_t data_type, const int32_t value) {
   static uint32_t count = 0;
   const char * fifo_c_to_py = "/tmp/fifo_c_to_py";
   const char * fifo_py_to_c = "/tmp/fifo_py_to_c";
 
-  // printf("writing...\n"); 
   static FILE* fifo_write;
   if(!fifo_write) {
     fifo_write = fopen(fifo_c_to_py, "w");
     //setbuf(fifo_write, NULL); // make it unbuffered
   }
-  //printf("%p\n", fifo_write);
-  //fprintf(fifo_write, "%u,%u,%s,%i|", count++, axis, key, value);
-  //fflush(fifo_write);
-  //char tx_buffer[5] = {0xff, 1, 2, 3, 0};
   char tx_buffer[28] = {0};
-  sprintf(tx_buffer, "%u,%u,%u,%i|", count++, axis, key, value);
-  //printf("%lu\n", strlen(tx_buffer));
+  switch(data_type) {
+    case 2:
+      // Value can be negative.
+      sprintf(tx_buffer, "%u,%u,%u,%i|", count++, axis, data_type, value);
+      break;
+    case 0:
+    case 1:
+      // Value is unsigned.
+      sprintf(tx_buffer, "%u,%u,%u,%u|", count++, axis, data_type, value);
+      break;
+  }
+  // printf("%u,%u,%u,%u|", count++, axis, data_type, value);
   int rc = -1;
   while(rc < 0) {
     rc = fputs(tx_buffer, fifo_write);
-    //printf("rc: %i\n", rc);
   }
 
   if(count % 1000 == 0) {
-    // Close the FIFO occasionally to force data to be written.
     fclose( fifo_write );
     fifo_write = 0;
   }
-
-  
-  /*
-  static int fd = 0;
-  char tx_buffer[128] = {0};
-  sprintf(tx_buffer, "%u,%u,%s,%i|", count++, axis, key, value);
-
-  if(fd == 0) {
-    //fd = open(fifo_c_to_py, O_WRONLY | O_NONBLOCK | O_SYNC);
-    fd = open(fifo_c_to_py, O_WRONLY);
-  }
-  int rc = -1;
-  while(rc < 0) {
-    rc = write(fd, tx_buffer, sizeof(tx_buffer));
-  }
-
-  if(count % 1000 == 0) {
-    // Close the FIFO occasionally to force data to be written.
-    //close(fd);
-    //fd = 0;
-  }
-  */
-
-  char rx_buffer[128] = {0};
-
-  /*
-  printf("reading...\n"); 
-  fd = open(fifo_py_to_c, O_RDONLY | O_NONBLOCK);
-  read(fd, rx_buffer, sizeof(rx_buffer));
-  printf("%s\n", rx_buffer);
-  close(fd);
-  */
-}
-
-//#define GRAPH_LEN 10000
-#define GRAPH_LEN 4000           // How much data to record.
-#define GRAPH_RX_THRESHOLD 2000  // How many successful RX before start recording data.
-#define GRAPH_RANGE 10000
-uint32_t graph_data_requested[GRAPH_LEN] = {0};
-uint32_t graph_data_pos[GRAPH_LEN] = {0};
-uint32_t graph_data_vel[GRAPH_LEN] = {0};
-uint32_t graph_index = 0;
-uint8_t graph_axis = 1;
-uint32_t graph_sucessful_rx = 0;
-
-void draw_graph() {
-  printf("draw_graph. axis: %u\n", graph_axis);
-
-  FILE *data_file_req = fopen("/tmp/graph_req", "w");
-  for(uint32_t i = 0; i < GRAPH_LEN; i++) {
-    fprintf(data_file_req, "%u\n", graph_data_requested[i]);
-  }
-  fflush(data_file_req);
-  fclose(data_file_req);
-
-  FILE *data_file_pos = fopen("/tmp/graph_pos", "w");
-  for(uint32_t i = 0; i < GRAPH_LEN; i++) {
-    fprintf(data_file_pos, "%u\n", graph_data_pos[i]);
-  }
-  fflush(data_file_pos);
-  fclose(data_file_pos);
-
-  FILE *data_file_vel = fopen("/tmp/graph_vel", "w");
-  for(uint32_t i = 0; i < GRAPH_LEN; i++) {
-    fprintf(data_file_vel, "%i\n", graph_data_vel[i]);
-  }
-  fflush(data_file_vel);
-  fclose(data_file_vel);
-
-  FILE *gnuplot = popen("gnuplot -persistent", "w");
-  fprintf(gnuplot, "set yrange [%u:%u] \n",
-      (UINT_MAX / 2) - 100, (UINT_MAX / 2) + 100 + GRAPH_RANGE);
-  fprintf(gnuplot, "set y2tics -10, 2 \n");
-  fprintf(gnuplot, 
-      "plot "
-      "\"/tmp/graph_req\" w line title \"req\" axis x1y1"
-      ", "
-      "\"/tmp/graph_pos\" w line title \"pos\" axis x1y1"
-      ", "
-      "\"/tmp/graph_vel\" w line title \"vel\" axis x1y2"
-      "\n"
-           );
-  fflush(gnuplot);
-  pclose(gnuplot);
 }
 
 size_t populate_data(void* packet) {
@@ -344,12 +263,7 @@ size_t store_message(int64_t* values, void** packet, size_t* packet_space) {
         (struct Message_uint_uint){.type=values[0], .axis=values[1], .value=values[2]};
       message_size = sizeof(struct Message_uint_uint);
       memcpy(*packet, &message_uint_uint, message_size);
-
       log_data(values[1], 1, values[2]);
-      //if(values[1] == graph_axis && graph_index < GRAPH_LEN) {
-      //  graph_data_requested[graph_index] = values[2];
-      //}
-      
       break;
     case MSG_SET_AXIS_REL_POS:
       message_uint_int = 
@@ -661,16 +575,6 @@ void display_reply(char* buf) {
 
         log_data(reply_axis_config.axis, 0, reply_axis_config.abs_pos_acheived);
         log_data(reply_axis_config.axis, 2, reply_axis_config.velocity_acheived);
-        //if(reply_axis_config.axis == graph_axis) {
-        //  graph_sucessful_rx++;
-        //  if(graph_index < GRAPH_LEN) {
-        //    graph_data_pos[graph_index] = reply_axis_config.abs_pos_acheived;
-        //    graph_data_vel[graph_index] = reply_axis_config.velocity_acheived;
-        //  }
-        //  if(graph_index == GRAPH_LEN) {
-        //    draw_graph();
-        //  }
-        //}
 
         break;
       case REPLY_AXIS_POS:
@@ -683,15 +587,6 @@ void display_reply(char* buf) {
         itterator += size;
 
         log_data(reply_axis_config.axis, 0, reply_axis_config.abs_pos_acheived);
-        //if(reply_axis_pos.axis == graph_axis) {
-        //  graph_sucessful_rx++;
-        //  if(graph_index < GRAPH_LEN) {
-        //    graph_data_pos[graph_index++] = reply_axis_pos.abs_pos_acheived;
-        //  }
-        //  if(graph_index == GRAPH_LEN) {
-        //    draw_graph();
-        //  }
-        //}
 
         break;
       default:
@@ -847,9 +742,6 @@ int main(int argc, char **argv) {
       packet_size = populate_data_loop(packet, &serveraddr, sockfd);
       //display_data(packet, packet_size);
       send_data(&serveraddr, sockfd, packet, packet_size);
-      //if(graph_sucessful_rx > GRAPH_RX_THRESHOLD) {
-      //  graph_index++;
-      //}
       log_data_index++;
     }
   } else {
