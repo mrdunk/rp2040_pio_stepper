@@ -17,9 +17,12 @@ static const char* human_help =
 "SET_AXIS_MAX_SPEED       | 4  | Not yet implemented\r\n"
 "SET_AXIS_MAX_ACCEL       | 5  | Not yet implemented\r\n"
 "SET_AXIS_ABS_POS_AT_TIME | 6  | Not yet implemented\r\n"
-"GET_GLOBAL_CONFIG        | 7  | no params\r\n"
-"GET_AXIS_CONFIG          | 8  | axis: uint32_t\r\n"
-"GET_AXIS_POS             | 9  | axis: uint32_t\r\n";
+"SET_PID_KP               | 7  | \r\n"
+"SET_PID_KD               | 8  | \r\n"
+"SET_PID_KD               | 9  | \r\n"
+"GET_GLOBAL_CONFIG        | 10 | no params\r\n"
+"GET_AXIS_CONFIG          | 11 | axis: uint32_t\r\n"
+"GET_AXIS_POS             | 12 | axis: uint32_t\r\n";
 
 #define MSG_NONE                     0
 #define MSG_SET_GLOAL_UPDATE_RATE    1
@@ -28,10 +31,13 @@ static const char* human_help =
 #define MSG_SET_AXIS_MAX_SPEED       4
 #define MSG_SET_AXIS_MAX_ACCEL       5
 #define MSG_SET_AXIS_ABS_POS_AT_TIME 6
+#define MSG_SET_PID_KP               7
+#define MSG_SET_PID_KI               8
+#define MSG_SET_PID_KD               9
 
-#define MSG_GET_GLOBAL_CONFIG        7
-#define MSG_GET_AXIS_CONFIG          8
-#define MSG_GET_AXIS_POS             9
+#define MSG_GET_GLOBAL_CONFIG        10
+#define MSG_GET_AXIS_CONFIG          11
+#define MSG_GET_AXIS_POS             12
 
 struct Message {
   uint32_t type;
@@ -52,6 +58,12 @@ struct Message_uint_int {
   uint32_t type;
   uint32_t axis;
   int32_t value;
+};
+
+struct Message_uint_float {
+  uint32_t type;
+  uint32_t axis;
+  float value;
 };
 
 

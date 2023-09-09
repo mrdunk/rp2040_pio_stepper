@@ -20,6 +20,9 @@ struct ConfigAxis {
   uint32_t min_step_len_ticks;
   uint32_t max_accel_ticks;     // ticks / update_time_ticks ^ 2
   int32_t velocity_acheived;    // Steps per update_time_us.
+  float kp;                     // PID tuning
+  float ki;                     // PID tuning
+  float kd;                     // PID tuning
 };
 
 /* Configuration object for global settings. */
@@ -44,7 +47,11 @@ void update_axis_config(
     const uint32_t* abs_pos_acheived,
     const uint32_t* min_step_len_ticks,
     const uint32_t* max_accel_ticks,
-    const int32_t* velocity_acheived);
+    const int32_t* velocity_acheived,
+    const float* kp,
+    const float* ki,
+    const float* kd
+);
 
 uint32_t get_axis_config(
     const uint8_t axis,
@@ -53,7 +60,11 @@ uint32_t get_axis_config(
     uint32_t* abs_pos_acheived,
     uint32_t* min_step_len_ticks,
     uint32_t* max_accel_ticks,
-    int32_t* velocity_acheived);
+    int32_t* velocity_acheived,
+    float* kp,
+    float* ki,
+    float* kd
+    );
 
 size_t serialise_axis_config(
     const uint32_t axis,

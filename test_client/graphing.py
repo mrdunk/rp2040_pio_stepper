@@ -5,6 +5,7 @@ Display data logged from test_client/udp.c
 
 import pygame
 import collections
+import struct
 
 FIFO_C_TO_PY = '/tmp/fifo_c_to_py'
 FIFO_PY_TO_C = '/tmp/fifo_py_to_c'
@@ -12,13 +13,23 @@ MAX_AXIS = 4
 DATA_LEN = 100
 SCREEN_WIDTH = 1280
 SCREEN_HEIGHT = 710
+MENU_HEIGHT = 50
 UINT_MAX = pow(2, 32)
 
 def get_data(data_chunk):
-    with open(FIFO_C_TO_PY, mode='r') as fifo:
+    with open(FIFO_C_TO_PY, mode='rb') as fifo:
         new_data = fifo.read()
         if new_data:
             parse_data(new_data, data_chunk)
+
+def send_data(data):
+    print(data)
+
+    serialised = struct.pack('cf', *data)
+    print(serialised)
+    print(len(serialised))
+    with open(FIFO_PY_TO_C, mode='wb') as fifo:
+        new_data = fifo.write(serialised)
 
 def clear_data(data_chunk):
     for axis_data in data_chunk:
@@ -29,22 +40,22 @@ last_count = 0;
 def parse_data(new_data, data_chunk):
     global last_count;
 
-    for entry in new_data.split('|'):
-        entry = entry.strip('\x00')
-        if not entry:
-            continue
-        count, axis, data_type, value = entry.split(',')[0:4]
-        count = int(count)
-        axis = int(axis)
-        data_type = int(data_type)
-        value = int(value)
+    for index in range(0, len(new_data), 10):
+        count = struct.unpack('I', new_data[index:index + 4])[0]
+        axis = int(new_data[index + 4])
+        data_type = int(new_data[index + 5])
+        if(data_type == 2):
+            value = struct.unpack('i', new_data[index + 6:index + 10])[0]
+        else:
+            value = struct.unpack('I', new_data[index + 6:index + 10])[0]
+
         if last_count >= count:
-            print(f"wat? {last_count} !< {count}")
+            print(f"Out of sequence: {last_count} !< {count}")
         elif count - last_count != 1:
-            print(f"wat? {last_count} {count}  {count - last_count}")
+            print(f"Missing updates: {last_count} {count}  {count - last_count}")
 
         if int(axis) < MAX_AXIS:
-            #print(f'{count},\t {axis},\t {data_type},\t {value}')
+            #print(len(new_data[index:]), count, axis, data_type, value)
             data_chunk[axis][data_type].append(value)
 
         last_count = count
@@ -64,21 +75,6 @@ def convert_coord(screen, data_type, x, y):
     x = int(width - x * x_scale)
     return (x, y)
 
-def scroll_x(screen, offset_x):
-    width, height = screen.get_size()
-    screen_copy = screen.copy()
-
-    if offset_x > 0:
-        screen.set_clip((0, 0, offset_x, height))
-        screen.fill("black")
-        screen.set_clip(None)
-        screen.blit(screen_copy, (offset_x, 0), (0, 0, width, height))
-    else:
-        screen.set_clip((-offset_x, 0, width + offset_x, height))
-        screen.fill("black")
-        screen.set_clip(None)
-        screen.blit(screen_copy, (0, 0), (width + offset_x, 0, width, height))
-
 
 def data_count(data_chunk, requested_axis):
     shortest = UINT_MAX
@@ -93,6 +89,21 @@ def data_count(data_chunk, requested_axis):
             longest = max(longest, len(data))
 
     return shortest, longest
+
+def scroll_x(screen, offset_x):
+    width, height = screen.get_size()
+    screen_copy = screen.copy().convert()
+
+    if offset_x > 0:
+        screen.set_clip((0, 0, offset_x, height - MENU_HEIGHT))
+        screen.fill("black")
+        screen.set_clip(None)
+        screen.blit(screen_copy, (offset_x, 0), (0, 0, width, height - MENU_HEIGHT))
+    else:
+        screen.set_clip((-offset_x, 0, width + offset_x, height - MENU_HEIGHT))
+        screen.fill("black")
+        screen.set_clip(None)
+        screen.blit(screen_copy, (0, 0), (width + offset_x, 0, width, height - MENU_HEIGHT))
 
 colors = ["purple", "green", "red"]
 def draw_graph(screen, data_chunk, requested_axis):
@@ -126,7 +137,67 @@ def draw_graph(screen, data_chunk, requested_axis):
         count -= 1
 
 
+def draw_button(screen, font, index, value, selected):
+    y_offset = 10
+    colour = "grey"
+    if selected:
+        colour = "white"
+
+    pygame.draw.rect(
+            screen,
+            "white",
+            (index * MENU_HEIGHT, SCREEN_HEIGHT - MENU_HEIGHT + y_offset,
+                MENU_HEIGHT, MENU_HEIGHT)
+            )
+    pygame.draw.rect(
+            screen,
+            colour,
+            (index * MENU_HEIGHT, SCREEN_HEIGHT - MENU_HEIGHT + y_offset,
+                MENU_HEIGHT, MENU_HEIGHT),
+            width = 2)
+
+    colour = "green"
+    if selected:
+        colour = "red"
+    text = font.render(f'{value:.3}', True, colour)
+    screen.blit(text, (index * MENU_HEIGHT, SCREEN_HEIGHT - MENU_HEIGHT + y_offset))
+
+
+menu_data = [0.1, 0.0, 0.0]
+menu_selected = 0
+def draw_menu(screen, events):
+    global menu_selected
+    menu_changed = False
+
+    pygame.key.set_repeat = 0
+
+
+    for event in events:
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_LEFT:
+                menu_selected -= 1
+                menu_changed = True
+            elif event.key == pygame.K_RIGHT:
+                menu_selected += 1
+                menu_changed = True
+            elif event.key == pygame.K_UP:
+                menu_data[menu_selected] += 0.01
+                menu_changed = True
+            elif event.key == pygame.K_DOWN:
+                menu_data[menu_selected] -= 0.01
+                menu_changed = True
+    menu_selected = menu_selected % len(menu_data)
+
+    font = pygame.font.Font(None, int(MENU_HEIGHT / 2))
+    for pos, data in enumerate(menu_data):
+        draw_button(screen, font, pos, menu_data[pos], menu_selected == pos)
+
+    if menu_changed:
+        send_data([bytes([menu_selected]), menu_data[menu_selected]]);
+
 def main():
+    print(pygame.version.ver)
+
     data_chunk = []
     for axis in range(MAX_AXIS):
         data_chunk.append((
@@ -140,9 +211,9 @@ def main():
     clock = pygame.time.Clock()
     running = True
 
-    screen.fill("black")
+    screen.fill("white")
 
-    requested_axis = 2
+    requested_axis = 0
 
     # Clear FIFO.
     while True:
@@ -153,12 +224,14 @@ def main():
         clear_data(data_chunk)
 
     while running:
-        for event in pygame.event.get():
+        events = pygame.event.get()
+        for event in events:
             if event.type == pygame.QUIT:
                 running = False
 
         get_data(data_chunk)
         draw_graph(screen, data_chunk, requested_axis)
+        draw_menu(screen, events)
 
         pygame.display.flip()
         clock.tick(60)  # limits FPS to 60

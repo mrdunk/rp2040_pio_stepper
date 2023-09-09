@@ -86,6 +86,17 @@ struct Message_uint_int* process_msg_uint_int(char** rx_buf) {
   return message;
 }
 
+struct Message_uint_float* process_msg_uint_float(char** rx_buf) {
+  struct Message_uint_float* message = (struct Message_uint_float*)(*rx_buf);
+
+  //printf("NW UPD message on port %u:\n\ttype: %u\n\taxis: %u\n\tvalue: %f\r\n",
+  //    NW_PORT, message->type, message->axis, message->value);
+
+  *rx_buf += sizeof(struct Message_uint_float);
+
+  return message;
+}
+
 size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return_data) {
   char* rx_itterator = rx_buf;
   size_t tx_buf_len = 0;
@@ -95,11 +106,15 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
   struct Message_uint* msg_uint;
   struct Message_uint_uint* msg_uint_uint;
   struct Message_uint_int* msg_uint_int;
+  struct Message_uint_float* msg_uint_float;
 
   uint32_t axis;
   uint32_t abs_pos_requested;
 
   while(msg_type = *(uint32_t*)(rx_itterator)) {  // msg_type of 0 indicates end of data.
+    if(msg_type != 2) {
+      printf("%u\n", msg_type);
+    }
     switch(msg_type) {
       case MSG_SET_GLOAL_UPDATE_RATE:
         //msg_uint = process_msg_uint(&rx_itterator);
@@ -112,10 +127,10 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
         break;
       case MSG_SET_AXIS_ABS_POS:
         msg_uint_uint = process_msg_uint_uint(&rx_itterator);
-        //set_absolute_position(msg_uint_uint->axis, msg_uint_uint->value);
         axis = msg_uint_uint->axis;
         abs_pos_requested = msg_uint_uint->value;
-        update_axis_config(axis, CORE0, &abs_pos_requested, NULL, NULL, NULL, NULL);
+        update_axis_config(
+            axis, CORE0, &abs_pos_requested, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
         (*return_data)++;
         break;
       case MSG_SET_AXIS_REL_POS:
@@ -129,6 +144,25 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
         // TODO.
       case MSG_SET_AXIS_ABS_POS_AT_TIME:
         // TODO.
+        msg_uint_uint = process_msg_uint_uint(&rx_itterator);
+        break;
+      case MSG_SET_PID_KP:
+        msg_uint_float = process_msg_uint_float(&rx_itterator);
+        axis = msg_uint_float->axis;
+        update_axis_config(
+            axis, CORE0, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value, NULL, NULL);
+        break;
+      case MSG_SET_PID_KI:
+        msg_uint_float = process_msg_uint_float(&rx_itterator);
+        axis = msg_uint_float->axis;
+        update_axis_config(
+            axis, CORE0, NULL, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value, NULL);
+        break;
+      case MSG_SET_PID_KD:
+        msg_uint_float = process_msg_uint_float(&rx_itterator);
+        axis = msg_uint_float->axis;
+        update_axis_config(
+            axis, CORE0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value);
         break;
       case MSG_GET_GLOBAL_CONFIG:
         msg = process_msg(&rx_itterator);
@@ -161,7 +195,6 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
         break;
       default:
         printf("Invalid message type: %lu\r\n", msg_type);
-        memset(rx_buf, '\0', DATA_BUF_SIZE);
     }
   }
   memset(rx_buf, '\0', DATA_BUF_SIZE);

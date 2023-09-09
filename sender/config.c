@@ -20,7 +20,10 @@ volatile struct ConfigGlobal config = {
       .abs_pos_acheived = UINT_MAX / 2,
       .min_step_len_ticks = 50,
       .max_accel_ticks = 2,
-      .velocity_acheived = 0
+      .velocity_acheived = 0,
+      .kp = 0.1f,
+      .ki = 0.0f,
+      .kd = 0.0f
     },
     {
       // Axis 1.
@@ -30,7 +33,10 @@ volatile struct ConfigGlobal config = {
       .abs_pos_acheived = UINT_MAX / 2,
       .min_step_len_ticks = 50,
       .max_accel_ticks = 10,
-      .velocity_acheived = 0
+      .velocity_acheived = 0,
+      .kp = 0.1f,
+      .ki = 0.0f,
+      .kd = 0.0f
     },
     {
       // Axis 2.
@@ -40,7 +46,10 @@ volatile struct ConfigGlobal config = {
       .abs_pos_acheived = UINT_MAX / 2,
       .min_step_len_ticks = 50,
       .max_accel_ticks = 200,
-      .velocity_acheived = 0
+      .velocity_acheived = 0,
+      .kp = 0.1f,
+      .ki = 0.0f,
+      .kd = 0.0f
     },
     {
       // Axis 3.
@@ -50,7 +59,10 @@ volatile struct ConfigGlobal config = {
       .abs_pos_acheived = UINT_MAX / 2,
       .min_step_len_ticks = 50,
       .max_accel_ticks = 200,
-      .velocity_acheived = 0
+      .velocity_acheived = 0,
+      .kp = 0.1f,
+      .ki = 0.0f,
+      .kd = 0.0f
     },
     {
       // Axis 4.
@@ -60,7 +72,10 @@ volatile struct ConfigGlobal config = {
       .abs_pos_acheived = UINT_MAX / 2,
       .min_step_len_ticks = 50,
       .max_accel_ticks = 200,
-      .velocity_acheived = 0
+      .velocity_acheived = 0,
+      .kp = 0.1f,
+      .ki = 0.0f,
+      .kd = 0.0f
     },
     {
       // Axis 5.
@@ -70,7 +85,10 @@ volatile struct ConfigGlobal config = {
       .abs_pos_acheived = UINT_MAX / 2,
       .min_step_len_ticks = 50,
       .max_accel_ticks = 200,
-      .velocity_acheived = 0
+      .velocity_acheived = 0,
+      .kp = 0.1f,
+      .ki = 0.0f,
+      .kd = 0.0f
     },
     {
       // Axis 6.
@@ -80,7 +98,10 @@ volatile struct ConfigGlobal config = {
       .abs_pos_acheived = UINT_MAX / 2,
       .min_step_len_ticks = 50,
       .max_accel_ticks = 200,
-      .velocity_acheived = 0
+      .velocity_acheived = 0,
+      .kp = 0.1f,
+      .ki = 0.0f,
+      .kd = 0.0f
     },
     {
       // Axis 7.
@@ -90,7 +111,10 @@ volatile struct ConfigGlobal config = {
       .abs_pos_acheived = UINT_MAX / 2,
       .min_step_len_ticks = 50,
       .max_accel_ticks = 200,
-      .velocity_acheived = 0
+      .velocity_acheived = 0,
+      .kp = 0.1f,
+      .ki = 0.0f,
+      .kd = 0.0f
     },
   }
 };
@@ -137,7 +161,11 @@ void update_axis_config(
     const uint32_t* abs_pos_acheived,
     const uint32_t* min_step_len_ticks,
     const uint32_t* max_accel_ticks,
-    const int32_t* velocity_acheived)
+    const int32_t* velocity_acheived,
+    const float* kp,
+    const float* ki,
+    const float* kd
+)
 {
   if(axis >= MAX_AXIS) {
     return;
@@ -161,6 +189,16 @@ void update_axis_config(
   if(velocity_acheived != NULL) {
     config.axis[axis].velocity_acheived = *velocity_acheived;
   }
+  if(kp != NULL) {
+    config.axis[axis].kp = *kp;
+  }
+  if(ki != NULL) {
+    config.axis[axis].ki = *ki;
+  }
+  if(kd != NULL) {
+    config.axis[axis].kd = *kd;
+  }
+
   switch(core) {
     case CORE0:
       config.axis[axis].updated_from_c0++;
@@ -181,7 +219,10 @@ uint32_t get_axis_config(
     uint32_t* abs_pos_acheived,
     uint32_t* min_step_len_ticks,
     uint32_t* max_accel_ticks,
-    int32_t* velocity_acheived)
+    int32_t* velocity_acheived,
+    float* kp,
+    float* ki,
+    float* kd)
 {
   if(axis >= MAX_AXIS) {
     return 0;
@@ -209,7 +250,9 @@ uint32_t get_axis_config(
   *min_step_len_ticks = config.axis[axis].min_step_len_ticks;
   *max_accel_ticks = config.axis[axis].max_accel_ticks;
   *velocity_acheived = config.axis[axis].velocity_acheived;
-
+  *kp = config.axis[axis].kp;
+  *ki = config.axis[axis].ki;
+  *kd = config.axis[axis].kd;
 
   mutex_exit(&mtx_axis[axis]);
 
@@ -235,6 +278,9 @@ size_t serialise_axis_config(
   uint32_t min_step_len_ticks;
   uint32_t max_accel_ticks;
   int32_t velocity_acheived;
+  float kp;
+  float ki;
+  float kd;
   uint32_t updated;
 
   updated = get_axis_config(
@@ -244,7 +290,10 @@ size_t serialise_axis_config(
       &abs_pos_acheived,
       &min_step_len_ticks,
       &max_accel_ticks,
-      &velocity_acheived
+      &velocity_acheived,
+      &kp,
+      &ki,
+      &kd
       );
 
   if(updated == 0) {
