@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Display data logged from test_client/udp.c
+Display data logged from test_client/udp.c.
+Gets and sends data via Linux FIFO. (FIFOs are file like objects.)
 """
 
 import pygame
@@ -17,15 +18,19 @@ MENU_HEIGHT = 50
 UINT_MAX = pow(2, 32)
 
 def get_data(data_chunk):
+    """ Get data from FIFO. """
     with open(FIFO_C_TO_PY, mode='rb') as fifo:
         new_data = fifo.read()
         if new_data:
             parse_data(new_data, data_chunk)
 
-def send_data(data):
-    print(data)
+def send_data(menu_selected):
+    """ Send data to FIFO. """
 
-    serialised = struct.pack('cf', *data)
+    if menu_selected == 0:
+        return
+
+    serialised = struct.pack('cf', bytes([menu_selected - 1]), menu_data[menu_selected])
     print(serialised)
     print(len(serialised))
     with open(FIFO_PY_TO_C, mode='wb') as fifo:
@@ -38,6 +43,9 @@ def clear_data(data_chunk):
 
 last_count = 0;
 def parse_data(new_data, data_chunk):
+    """
+    De-serialize data that arrived on the FIFO.
+    """
     global last_count;
 
     for index in range(0, len(new_data), 10):
@@ -64,6 +72,9 @@ y_offset = [-UINT_MAX / 2 - 5000, -UINT_MAX / 2 - 5000, 0]
 y_scale = [0.05, 0.05, 10]
 x_scale = 0.25
 def convert_coord(screen, data_type, x, y):
+    """
+    Convert data into something that fits between the graph axis.
+    """
     width, height = screen.get_size()
     
     y = y + y_offset[data_type]
@@ -77,6 +88,12 @@ def convert_coord(screen, data_type, x, y):
 
 
 def data_count(data_chunk, requested_axis):
+    """
+    Count how much data exists.
+    Returns:
+        (shortest, longest): shortest: The axis with least data in it.
+                             longest: The axis with most data in it.
+    """
     shortest = UINT_MAX
     longest = 0
 
@@ -91,6 +108,9 @@ def data_count(data_chunk, requested_axis):
     return shortest, longest
 
 def scroll_x(screen, offset_x):
+    """
+    Scroll the graph display along the x axis.
+    """
     width, height = screen.get_size()
     screen_copy = screen.copy().convert()
 
@@ -163,8 +183,21 @@ def draw_button(screen, font, index, value, selected):
     screen.blit(text, (index * MENU_HEIGHT, SCREEN_HEIGHT - MENU_HEIGHT + y_offset))
 
 
-menu_data = [0.1, 0.0, 0.0]
+menu_data = [1.0, 0.1, 0.0, 0.0]
+menu_update_size = [1.0, 0.01, 0.001, 0.01]
+menu_min_max = [(0.0, float(MAX_AXIS - 1)), None, None, None]
 menu_selected = 0
+
+def clamp_menu(menu_selected):
+    data = round(menu_data[menu_selected], 4)
+    if menu_min_max[menu_selected] is None:
+        return data
+
+    data = min(data, menu_min_max[menu_selected][1])
+    data = max(data, menu_min_max[menu_selected][0])
+
+    return data
+
 def draw_menu(screen, events):
     global menu_selected
     menu_changed = False
@@ -181,19 +214,24 @@ def draw_menu(screen, events):
                 menu_selected += 1
                 menu_changed = True
             elif event.key == pygame.K_UP:
-                menu_data[menu_selected] += 0.01
+                menu_data[menu_selected] += menu_update_size[menu_selected]
                 menu_changed = True
+                menu_data[menu_selected] = clamp_menu(menu_selected)
             elif event.key == pygame.K_DOWN:
-                menu_data[menu_selected] -= 0.01
+                menu_data[menu_selected] -= menu_update_size[menu_selected]
                 menu_changed = True
+                menu_data[menu_selected] = clamp_menu(menu_selected)
     menu_selected = menu_selected % len(menu_data)
+
 
     font = pygame.font.Font(None, int(MENU_HEIGHT / 2))
     for pos, data in enumerate(menu_data):
         draw_button(screen, font, pos, menu_data[pos], menu_selected == pos)
 
     if menu_changed:
-        send_data([bytes([menu_selected]), menu_data[menu_selected]]);
+        send_data(menu_selected);
+
+    return menu_data[0]
 
 def main():
     print(pygame.version.ver)
@@ -213,7 +251,7 @@ def main():
 
     screen.fill("white")
 
-    requested_axis = 0
+    requested_axis = 1
 
     # Clear FIFO.
     while True:
@@ -231,7 +269,7 @@ def main():
 
         get_data(data_chunk)
         draw_graph(screen, data_chunk, requested_axis)
-        draw_menu(screen, events)
+        requested_axis = draw_menu(screen, events)
 
         pygame.display.flip()
         clock.tick(60)  # limits FPS to 60

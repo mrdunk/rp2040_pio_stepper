@@ -93,12 +93,15 @@ int32_t pid(
   int32_t error = desired_pos - curent_pos;
   integral[axis] += error;
   int32_t derivative = error - last_error[axis];
-  int32_t velocity = (kp * error) + (ki * integral[axis]) + (kd * derivative);
+  int32_t velocity = 
+    (kp * (float)error) + (ki * (float)integral[axis]) + (kd * (float)derivative);
   if(velocity > max_velocity) {
     velocity = max_velocity;
   } else if(velocity < -max_velocity) {
     velocity = -max_velocity;
   }
+
+  last_error[axis] = error;
 
   return velocity;
 }
@@ -133,7 +136,6 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
       &kd
       );
 
-
   if(updated <= 0) {
     return 0;
   }
@@ -148,8 +150,6 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   uint32_t sm;
   axis_to_pio(axis, &pio, &sm);
 
-
-  // --------------------
 
   int32_t velocity = pid(axis, abs_pos_acheived, abs_pos_requested, kp, ki, kd); 
   uint8_t direction = (velocity > 0);
@@ -169,8 +169,6 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   gpio_put(pin_directions[axis], direction);
   // Request steps.
   pio_sm_put(pio, sm, step_len_ticks);
-
-  // --------------------
 
 
   // Wait for report on step count achieved in previous iteration.
