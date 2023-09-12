@@ -8,7 +8,6 @@
  */
 
 #include <ctype.h>
-#include <math.h>
 #include <errno.h>
 #include <limits.h>
 #include <math.h>
@@ -37,7 +36,7 @@
 
 /* Forward defines. */
 void get_reply_non_block(struct sockaddr_in* serveraddr, int sockfd);
-size_t store_message(void* values, void** packet, size_t* packet_space);
+size_t serialize_data(void* values, void** packet, size_t* packet_space);
 uint8_t send_data(
     struct sockaddr_in* serveraddr, int sockfd, char* packet, size_t packet_size);
 void display_data(void* packet, size_t packet_size);
@@ -231,7 +230,7 @@ void log_data_read(struct sockaddr_in* serveraddr, int sockfd) {
     char packet[BUFSIZE];
     void* packet_itterator = packet;
     memset(packet, 0, packet_space);
-    packet_size += store_message(values, &packet_itterator, &packet_space);
+    packet_size += serialize_data(values, &packet_itterator, &packet_space);
     packet_itterator = packet;
     //display_data(packet_itterator, packet_size);
     send_data(serveraddr, sockfd, packet, packet_size);
@@ -299,8 +298,8 @@ size_t populate_data(void* packet) {
 }
 
 /* Serialize data and write to packet for later transmission. */
-size_t store_message(void* values, void** packet, size_t* packet_space) {
-  //printf("store_message [%i, %i, %i, %i]\n",
+size_t serialize_data(void* values, void** packet, size_t* packet_space) {
+  //printf("serialize_data [%i, %i, %i, %i]\n",
   //    ((uint32_t*)values)[0], ((uint32_t*)values)[1],
   //      ((uint32_t*)values)[2], ((uint32_t*)values)[3]);
   struct Message message;
@@ -412,7 +411,7 @@ size_t populate_data_oneshot(void* packet) {
   while(*itterate) {
     if (*itterate == ',') {
       // New message.
-      packet_size += store_message(values, &packet, &packet_space);
+      packet_size += serialize_data(values, &packet, &packet_space);
       values[0] = 0;
       values[1] = 0;
       values[2] = 0;
@@ -424,7 +423,7 @@ size_t populate_data_oneshot(void* packet) {
       itterate++;
     } else if (*itterate == 10) {
       // Enter
-      packet_size += store_message(values, &packet, &packet_space);
+      packet_size += serialize_data(values, &packet, &packet_space);
       break;
     } else if (isspace(*itterate)) {
       // Whitespace. Ignore and continue.
@@ -524,7 +523,7 @@ size_t populate_data_loop(void* packet, struct sockaddr_in* clientaddr, int sock
       axis_pos[axis],
       0
     };
-    packet_size += store_message(values, &packet_itterator, &packet_space);
+    packet_size += serialize_data(values, &packet_itterator, &packet_space);
 
     //printf("%u\t%u\t%u\n", axis, axis_direction[axis], axis_pos[axis]);
   }
