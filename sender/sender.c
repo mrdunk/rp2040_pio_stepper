@@ -390,7 +390,7 @@ int main() {
       ave_period_us = ring_buf_ave(&period_average_data, time_now - time_last);
       time_last = time_now;
       if(last_ave_period_us != ave_period_us) {
-        update_config(ave_period_us);
+        update_period(ave_period_us);
         last_ave_period_us = ave_period_us;
       }
 #if DEBUG_OUTPUT

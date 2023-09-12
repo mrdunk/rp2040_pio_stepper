@@ -7,7 +7,7 @@
 
 
 void update_all_axis() {
-  uint32_t update_time_us = get_config();
+  uint32_t update_time_us = get_period();
   uint8_t updated_count = 0;
 
   for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
@@ -23,7 +23,7 @@ void update_all_axis() {
 
 #if DEBUG_OUTPUT
   if(updated_count > 0) {
-    printf("Updated: %u \t%lu\n", updated_count, get_config());
+    printf("Updated: %u \t%lu\n", updated_count, get_period());
   }
 #endif
 }

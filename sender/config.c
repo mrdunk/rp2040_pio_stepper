@@ -6,6 +6,7 @@
 #include "config.h"
 #include "messages.h"
 
+// Mutexes for locking the main config which is shared between cores.
 mutex_t mtx_top;
 mutex_t mtx_axis[MAX_AXIS];
 
@@ -128,7 +129,9 @@ void init_config()
   }
 }
 
-void update_config(uint32_t update_time_us) {
+/* Update the period of the main timing loop. 
+ * This should closely match the rate at which we receive axis position data. */
+void update_period(uint32_t update_time_us) {
   mutex_enter_blocking(&mtx_top);
 
   config.update_time_us = update_time_us;
@@ -136,7 +139,9 @@ void update_config(uint32_t update_time_us) {
   mutex_exit(&mtx_top);
 }
 
-uint32_t get_config() {
+/* Get the period of the main timing loop. 
+ * This should closely match the rate at which we receive axis position data. */
+uint32_t get_period() {
   mutex_enter_blocking(&mtx_top);
 
   uint32_t retval = config.update_time_us;
@@ -259,6 +264,7 @@ uint32_t get_axis_config(
   return updated_by_other_core;
 }
 
+/* Serialise data stored in global config in a format for sending over UDP. */
 size_t serialise_axis_config(
     const uint32_t axis,
     uint8_t* msg_machine,
@@ -329,6 +335,8 @@ size_t serialise_axis_config(
 }
 
 
+/* A ring buffer that returns the average value of it's contents.
+ * Used for calculating average period between incoming network updates. */
 size_t ring_buf_ave(struct Ring_buf_ave* data, uint32_t new_val) {
   size_t tail_val = data->buf[data->head];
   data->buf[data->head] = new_val;

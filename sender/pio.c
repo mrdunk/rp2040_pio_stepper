@@ -8,8 +8,13 @@
 #include "pio.h"
 #include "config.h"
 
+#define STEP_LEN_OVERHEAD 14
+
 uint32_t last_pos[MAX_AXIS] = {0};
 
+/* Initialize a pair of PIO programmes.
+ * One for step generation on pio0 and one for counting said steps on pio1.
+ */
 void init_pio(
     const uint32_t axis,
     const uint32_t pin_step,
@@ -22,7 +27,7 @@ void init_pio(
 
   if(init_done == 0)
   {
-    offset_pio0 = pio_add_program(pio0, &step_pulse_program);
+    offset_pio0 = pio_add_program(pio0, &step_gen_program);
     offset_pio1 = pio_add_program(pio1, &step_count_program);
     init_done = 1;
   }
@@ -31,7 +36,7 @@ void init_pio(
 
   sm = pio_claim_unused_sm(pio0, true);
   // From pico_axs.pio
-  step_pulse_program_init(pio0, sm, offset_pio0, pin_step, pin_direction);
+  step_gen_program_init(pio0, sm, offset_pio0, pin_step, pin_direction);
   pio_sm_set_enabled(pio0, sm, true);
 
   if(sm != axis) {
@@ -51,6 +56,7 @@ void init_pio(
   pio_sm_put(pio1, axis, UINT_MAX / 2);
 }
 
+/* A PID function for experimental tuning of step lengths. */
 int32_t pid(
     const uint8_t axis,
     const uint32_t curent_pos,
@@ -80,6 +86,20 @@ int32_t pid(
   return velocity;
 }
 
+uint32_t get_velocity(
+    uint32_t abs_pos_acheived, uint32_t abs_pos_requested, float kp, float ki, float kd) {
+  //int32_t velocity = 
+    //pid(axis, abs_pos_acheived, abs_pos_requested, kp, ki, kd); 
+  
+  int32_t velocity = 
+    abs_pos_requested - abs_pos_acheived;
+
+  //velocity = pid(axis, velocity_acheived, velocity, kp, ki, kd);
+
+  return velocity;
+}
+
+/* Generate step counts and send to PIOs. */
 uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   static uint32_t failcount = 0;
   static uint32_t count = 0;
@@ -125,27 +145,26 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   while(pio_sm_get_rx_fifo_level(pio1, axis) > 0 && n > 0) {
     abs_pos_acheived = pio_sm_get_blocking(pio1, axis);
     //printf("%u\t%u\n", n, abs_pos_acheived);
-    printf(".");
+    printf("%u", axis);
     n--;
   }
   printf("\n");
   
 
-  int32_t velocity = 
-    //pid(axis, abs_pos_acheived, abs_pos_requested, kp, ki, kd); 
-    abs_pos_requested - abs_pos_acheived;
-    
+  int32_t velocity = get_velocity(abs_pos_acheived, abs_pos_requested, kp, ki, kd);
+
   uint8_t direction = (velocity > 0);
   uint32_t requested_step_count = abs(velocity);
 
   int32_t step_len_ticks = 0;
   
   if(requested_step_count > 0) {
+    //requested = (actual - 14) / 2
     step_len_ticks = 
-      (((update_time_us * clock_multiplier) / requested_step_count) / 2) - 14;
-    if(step_len_ticks < 3) {
+      (((update_time_us * clock_multiplier) / (requested_step_count * 2))) - STEP_LEN_OVERHEAD;
+    if(step_len_ticks < 1) {
       // TODO: use min_step_len_ticks for this.
-      step_len_ticks = 3;
+      step_len_ticks = 1;
     }
   }
 

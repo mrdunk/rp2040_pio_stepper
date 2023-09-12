@@ -11,7 +11,8 @@
 #define CORE1 1
 
 
-/* Configuration object for an axis. */
+/* Configuration object for an axis.
+ * This is the format for the global config that is shared between cores. */
 struct ConfigAxis {
   uint8_t updated_from_c0;      // Data was updated on core 0.
   uint8_t updated_from_c1;      // Data was updated on core 1.
@@ -25,18 +26,24 @@ struct ConfigAxis {
   float kd;                     // PID tuning
 };
 
-/* Configuration object for global settings. */
+/* Configuration object for global settings.
+ * This is the format for the global config that is shared between cores. */
 struct ConfigGlobal {
   uint32_t update_time_us;  // Driven by how often we get axis updates from controlling host.
 
   struct ConfigAxis axis[MAX_AXIS];
 };
 
+
 void init_config();
 
-void update_config(uint32_t update_time_us);
+/* Update the period of the main timing loop. 
+ * This should closely match the rate at which we receive axis position data. */
+void update_period(uint32_t update_time_us);
 
-uint32_t get_config();
+/* Get the period of the main timing loop. 
+ * This should closely match the rate at which we receive axis position data. */
+uint32_t get_period();
 
 uint8_t has_new_c0_data(const uint8_t axis);
 
@@ -66,6 +73,7 @@ uint32_t get_axis_config(
     float* kd
     );
 
+/* Serialise data stored in global config in a format for sending over UDP. */
 size_t serialise_axis_config(
     const uint32_t axis,
     uint8_t* msg_machine,
@@ -73,7 +81,8 @@ size_t serialise_axis_config(
     size_t msg_machine_len_max,
     uint8_t always);
 
-/* A ring buffer that returns the average value of it's contents. */
+/* A ring buffer that returns the average value of it's contents.
+ * Used for calculating average period between incoming network updates. */
 #define RING_BUF_AVE_LEN 1000
 struct Ring_buf_ave {
   uint32_t buf[RING_BUF_AVE_LEN];
