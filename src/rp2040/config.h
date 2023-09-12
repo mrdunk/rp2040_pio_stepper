@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <limits.h>
 
-#include "sender.h"
+#include "stepper_control.h"
 
 #define CORE0 0
 #define CORE1 1

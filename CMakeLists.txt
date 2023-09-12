@@ -54,7 +54,7 @@ if(NOT DEFINED PORT_DIR)
     message(STATUS "PORT_DIR = ${PORT_DIR}")
 endif()
 
-# Turn off mbedtls test mode 
+# Turn off mbedtls test mode
 set(ENABLE_PROGRAMS OFF CACHE BOOL "Build mbedtls programs")
 set(ENABLE_TESTING OFF CACHE BOOL "Build mbedtls testing")
 add_definitions(-DMBEDTLS_CONFIG_FILE="${PORT_DIR}/mbedtls/inc/ssl_config.h")
@@ -62,7 +62,7 @@ add_definitions(-DSET_TRUSTED_CERT_IN_SAMPLES)
 
 # Code to include:
 #add_subdirectory(pico_stepper)
-add_subdirectory(sender)
+add_subdirectory(src/rp2040)
 
 # Add libraries in subdirectories
 add_subdirectory(${CMAKE_SOURCE_DIR}/libraries)

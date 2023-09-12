@@ -1,4 +1,4 @@
-set(TARGET_NAME sender)
+set(TARGET_NAME stepper_control)
 
 add_executable(${TARGET_NAME}
         ${TARGET_NAME}.c

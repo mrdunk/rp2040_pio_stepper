@@ -10,5 +10,8 @@ $ export PICO_SDK_PATH=../../pico-sdk
 $ cmake ..
 $ make
 
+Generated image:
+$ ls -l src/rp2040/stepper_control.uf2
+
 $ sudo blkid -o list | grep RPI-RP2
 

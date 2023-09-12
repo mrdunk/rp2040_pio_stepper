@@ -11,7 +11,7 @@
 #include "w5x00_spi.h"
 #include "socket.h"
 
-#include "sender.h"
+#include "stepper_control.h"
 #include "messages.h"
 #include "config.h"
 #include "core1.h"
