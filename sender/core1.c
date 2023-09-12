@@ -46,6 +46,13 @@ void core1_main() {
 void init_core1() {
   printf("core0: Initializing.\n");
 
+  if(MAX_AXIS > 4) {
+    printf("ERROR: Maximum axis count: 4. Configured: %u\n", MAX_AXIS);
+    while (1) {
+      tight_loop_contents();
+    }
+  }
+
   // Initialise PIOs.
   // TODO: Set up pins through config.
   const uint32_t pins_step[8] =      {0, 2, 4, 6, 8, 10, 12, 14};

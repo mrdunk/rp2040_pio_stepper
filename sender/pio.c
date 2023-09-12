@@ -8,7 +8,7 @@
 #include "pio.h"
 #include "config.h"
 
-uint32_t pin_directions[MAX_AXIS] = {0};
+uint32_t last_pos[MAX_AXIS] = {0};
 
 void init_pio(
     const uint32_t axis,
@@ -20,61 +20,35 @@ void init_pio(
   static uint32_t offset_pio1 = 0;
   static uint8_t init_done = 0;
 
-  pin_directions[axis] = pin_direction;
-  gpio_init(pin_direction);
-  gpio_set_dir(pin_direction, GPIO_OUT);
-
   if(init_done == 0)
   {
-    offset_pio0 = pio_add_program(pio0, &step_repeated_program);
-    offset_pio1 = pio_add_program(pio1, &step_repeated_program);
+    offset_pio0 = pio_add_program(pio0, &step_pulse_program);
+    offset_pio1 = pio_add_program(pio1, &step_count_program);
     init_done = 1;
   }
 
   uint32_t sm;
-  switch (axis) {
-    case 0:
-    case 1:
-    case 2:
-    case 3:
-      sm = pio_claim_unused_sm(pio0, true);
-      // From pico_axs.pio
-      step_repeated_program_init(pio0, sm, offset_pio0, pin_step);
-      pio_sm_set_enabled(pio0, sm, true);
-      break;
-    case 4:
-    case 5:
-    case 6:
-    case 7:
-      sm = pio_claim_unused_sm(pio1, true);
-      // From pico_axs.pio
-      step_repeated_program_init(pio1, sm, offset_pio1, pin_step);
-      pio_sm_set_enabled(pio1, sm, true);
-      break;
-    default:
-      printf("WARN: Invalid axis index: %ld\n", axis);
-  }
-}
 
-void axis_to_pio(const uint32_t axis, PIO* pio, uint32_t* sm) {
-  switch (axis) {
-    case 0:
-    case 1:
-    case 2:
-    case 3:
-      *pio = pio0;
-      *sm = axis;
-      break;
-    case 4:
-    case 5:
-    case 6:
-    case 7:
-      *pio = pio1;
-      *sm = axis - 4;
-      break;
-    default:
-      printf("WARN: Invalid axis index: %ld\n", axis);
+  sm = pio_claim_unused_sm(pio0, true);
+  // From pico_axs.pio
+  step_pulse_program_init(pio0, sm, offset_pio0, pin_step, pin_direction);
+  pio_sm_set_enabled(pio0, sm, true);
+
+  if(sm != axis) {
+    printf("ERROR: Incorrect PIO initialization order for pio0. axis: %u  sm: %u", axis, sm);
   }
+
+  sm = pio_claim_unused_sm(pio1, true);
+  // From pico_axs.pio
+  step_count_program_init(pio1, sm, offset_pio1, pin_step, pin_direction);
+  pio_sm_set_enabled(pio1, sm, true);
+
+  if(sm != axis) {
+    printf("ERROR: Incorrect PIO initialization order for pio1. axis: %u  sm: %u", axis, sm);
+  }
+
+  // Initial value for counter.
+  pio_sm_put(pio1, axis, UINT_MAX / 2);
 }
 
 int32_t pid(
@@ -146,36 +120,42 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
         axis, updated, (double)failcount / (double)count);
   }
 
-  PIO pio;
-  uint32_t sm;
-  axis_to_pio(axis, &pio, &sm);
 
+  uint32_t n = 5;
+  while(pio_sm_get_rx_fifo_level(pio1, axis) > 0 && n > 0) {
+    abs_pos_acheived = pio_sm_get_blocking(pio1, axis);
+    //printf("%u\t%u\n", n, abs_pos_acheived);
+    printf(".");
+    n--;
+  }
+  printf("\n");
+  
 
-  int32_t velocity = pid(axis, abs_pos_acheived, abs_pos_requested, kp, ki, kd); 
+  int32_t velocity = 
+    //pid(axis, abs_pos_acheived, abs_pos_requested, kp, ki, kd); 
+    abs_pos_requested - abs_pos_acheived;
+    
   uint8_t direction = (velocity > 0);
-
   uint32_t requested_step_count = abs(velocity);
 
   int32_t step_len_ticks = 0;
   
-  if(requested_step_count > 1) {
-    step_len_ticks = (((update_time_us * clock_multiplier) / requested_step_count) / 2) - 15;
+  if(requested_step_count > 0) {
+    step_len_ticks = 
+      (((update_time_us * clock_multiplier) / requested_step_count) / 2) - 14;
     if(step_len_ticks < 3) {
       // TODO: use min_step_len_ticks for this.
-      step_len_ticks = 1;
+      step_len_ticks = 3;
     }
   }
 
-  gpio_put(pin_directions[axis], direction);
   // Request steps.
-  pio_sm_put(pio, sm, step_len_ticks);
+  pio_sm_put(pio0, axis, direction);
+  pio_sm_put(pio0, axis, step_len_ticks);
+  //printf("pio0 axis: %u\ttx: %u\n", axis, pio_sm_get_tx_fifo_level(pio0, axis));
 
-
-  // Wait for report on step count achieved in previous iteration.
-  uint32_t step_count_acheived = pio_sm_get_blocking(pio, sm);
-
-  abs_pos_acheived += direction ? +step_count_acheived : -step_count_acheived;
-  velocity_acheived = direction ? +step_count_acheived : -step_count_acheived;
+  velocity_acheived = abs_pos_acheived - last_pos[axis];
+  last_pos[axis] = abs_pos_acheived; 
 
   update_axis_config(
       axis, CORE1, NULL, &abs_pos_acheived, NULL, NULL, &velocity_acheived, NULL, NULL, NULL);

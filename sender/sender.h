@@ -3,9 +3,8 @@
 
 //#define DEBUG_OUTPUT 1
 
-//#define MAX_AXIS 2
-#define MAX_AXIS 4
-//#define MAX_AXIS 6
+#define MAX_AXIS 2
+//#define MAX_AXIS 4
 
 /* Clock */
 #define PLL_SYS_KHZ (133 * 1000)
