@@ -21,9 +21,9 @@
 static wiz_NetInfo g_net_info =
     {
         .mac = {0x00, 0x08, 0xDC, 0x12, 0x34, 0x56}, // MAC address
-        .ip = {192, 168, 11, 2},                     // IP address
+        .ip = {192, 168, 12, 2},                     // IP address
         .sn = {255, 255, 255, 0},                    // Subnet Mask
-        .gw = {192, 168, 11, 1},                     // Gateway
+        .gw = {192, 168, 12, 1},                     // Gateway
         .dns = {8, 8, 8, 8},                         // DNS server
         .dhcp = NETINFO_STATIC                       // DHCP enable/disable
 };
@@ -75,6 +75,17 @@ struct Message_uint_uint* process_msg_uint_uint(char** rx_buf) {
   return message;
 }
 
+struct Message_timing* process_msg_timing(char** rx_buf) {
+  struct Message_timing* message = (struct Message_timing*)(*rx_buf);
+
+  // printf("NW UPD message on port %u:\n\ttype: %lu\n\tvalue0: %lu\n\tvalue1: %lu\r\n",
+  //    NW_PORT, message->type, message->value0, message->value1);
+
+  *rx_buf += sizeof(struct Message_timing);
+
+  return message;
+}
+
 struct Message_uint_int* process_msg_uint_int(char** rx_buf) {
   struct Message_uint_int* message = (struct Message_uint_int*)(*rx_buf);
 
@@ -103,19 +114,22 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
   uint32_t msg_type;
   size_t tx_buf_mach_len_max = DATA_BUF_SIZE - sizeof(uint32_t);
   struct Message* msg;
+  struct Message_timing* msg_timing;
   struct Message_uint* msg_uint;
   struct Message_uint_uint* msg_uint_uint;
   struct Message_uint_int* msg_uint_int;
   struct Message_uint_float* msg_uint_float;
 
-  uint32_t axis;
+  uint32_t axis, count, tx_time;
   uint32_t abs_pos_requested;
 
   while(msg_type = *(uint32_t*)(rx_itterator)) {  // msg_type of 0 indicates end of data.
-    if(msg_type != 2) {
-      printf("%u\n", msg_type);
-    }
     switch(msg_type) {
+      case MSG_TIMING:
+        msg_timing = process_msg_timing(&rx_itterator);
+        count = msg_timing->count;
+        tx_time = msg_timing->time;
+        //printf("%u\t%u\n", count, tx_time);
       case MSG_SET_GLOAL_UPDATE_RATE:
         //msg_uint = process_msg_uint(&rx_itterator);
         //set_global_update_rate(msg_uint->value);

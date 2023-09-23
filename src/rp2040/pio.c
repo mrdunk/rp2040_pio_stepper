@@ -145,10 +145,10 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   while(pio_sm_get_rx_fifo_level(pio1, axis) > 0 && n > 0) {
     abs_pos_acheived = pio_sm_get_blocking(pio1, axis);
     //printf("%u\t%u\n", n, abs_pos_acheived);
-    printf("%u", axis);
+    //printf("%u", axis);
     n--;
   }
-  printf("\n");
+  //printf("\n");
   
 
   int32_t velocity = get_velocity(abs_pos_acheived, abs_pos_requested, kp, ki, kd);

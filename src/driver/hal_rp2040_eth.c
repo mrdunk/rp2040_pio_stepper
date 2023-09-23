@@ -1,94 +1,19 @@
-/********************************************************************
- * Description:  hal_skeleton.c
- *               This file, 'hal_skeleton.c', is a example that shows 
- *               how drivers for HAL components will work and serve as 
- *               a skeleton for new hardware drivers.
- *
- * Author: John Kasunich
- * License: GPL Version 2
- *    
- * Copyright (c) 2003 All rights reserved.
- *
- * Last change: 
- ********************************************************************/
 
-/** This file, 'hal_skeleton.c', is a example that shows how
-drivers for HAL components will work and serve as a skeleton
-for new hardware drivers.
 
-Most of this code is taken from the hal_parport driver from John Kasunich,
-which is also a good starting point for new drivers.
-
-This driver supports only for demonstration how to write a byte (char)
-to a hardware address, here we use the parallel port (0x378).
-
-This driver support no configuration strings so installing is easy:
-  realtime: halcmd loadrt hal_skeleton
-
-The driver creates a HAL pin and if it run in realtime a function
-as follows:
-
-Pin: 'skeleton.<portnum>.pin-<pinnum>-out'
-Function: 'skeleton.<portnum>.write'
-
-This skeleton driver also doesn't use arguments you can pass to the driver
-at startup. Please look at the parport driver how to implement this if you need
-this for your driver.
-
-(added 17 Nov 2006)
-The approach used for writing HAL drivers has evolved quite a bit over the
-three years since this was written.  Driver writers should consult the HAL
-User Manual for information about canonical device interfaces, and should
-examine some of the more complex drivers, before using this as a basis for
-a new driver.
-
-*/
-
-/** Copyright (C) 2003 John Kasunich
-  <jmkasunich AT users DOT sourceforge DOT net>
-  Martin Kuhnle
-  <mkuhnle AT users DOT sourceforge DOT net>
-  */
-
-/** This program is free software; you can redistribute it and/or
-  modify it under the terms of version 2 of the GNU General
-  Public License as published by the Free Software Foundation.
-  This library is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
-
-  You should have received a copy of the GNU General Public
-  License along with this library; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-
-  THE AUTHORS OF THIS LIBRARY ACCEPT ABSOLUTELY NO LIABILITY FOR
-  ANY HARM OR LOSS RESULTING FROM ITS USE.  IT IS _EXTREMELY_ UNWISE
-  TO RELY ON SOFTWARE ALONE FOR SAFETY.  Any machinery capable of
-  harming persons must have provisions for completely removing power
-  from all motors, etc, before persons enter any danger area.  All
-  machinery must be designed to comply with local and national safety
-  codes, and the authors of this software can not, and do not, take
-  any responsibility for such compliance.
-
-  This code was written as part of the EMC HAL project.  For more
-  information, go to www.linuxcnc.org.
-  */
-
-#include <stdio.h>
-
-#include "rtapi.h"    /* RTAPI realtime OS API */
+#include "rtapi.h"      /* RTAPI realtime OS API */
 #include "rtapi_app.h"    /* RTAPI realtime module decls */
 
-#include "hal.h"    /* HAL public API decls */
+#include "hal.h"        /* HAL public API decls */
+
+#include <limits.h>
+
+#include "rp2040_defines.h"
 
 /* module information */
-MODULE_AUTHOR("Martin Kuhnle");
-MODULE_DESCRIPTION("Test Driver for ISA-LED Board for EMC HAL");
+MODULE_AUTHOR("Duncan Law");
+MODULE_DESCRIPTION("RP2040 based IO for LinuxCNC HAL");
 MODULE_LICENSE("GPL");
 
-#define JOINTS 4    /* number of joints on each device. */
-#define IO 16       /* number of input and output pins on each device. */
 
 /***********************************************************************
  *                STRUCTURES AND GLOBAL VARIABLES                       *
@@ -106,12 +31,16 @@ typedef struct {
   hal_bit_t* pin_in[IO];
 } skeleton_t;
 
+
+#include "rp2040_network.c"    /* This project's network code. */
+
 /* pointer to array of skeleton_t structs in shared memory, 1 per port */
 static skeleton_t *port_data_array;
 
 /* other globals */
 static int comp_id;    /* component ID */
 static int num_devices;    /* number of devices configured */
+
 
 /***********************************************************************
  *                  LOCAL FUNCTION DECLARATIONS                         *
@@ -121,13 +50,10 @@ static int num_devices;    /* number of devices configured */
    */
 static void write_port(void *arg, long period);
 
+
 /***********************************************************************
  *                       INIT AND EXIT CODE                             *
  ************************************************************************/
-
-#define MAX_PORTS 8
-
-#define MAX_TOK ((MAX_PORTS*2)+3)
 
 int rtapi_app_main(void)
 {
@@ -223,6 +149,16 @@ int rtapi_app_main(void)
     return -1;
   }
 
+  retval = init_eth(num_device);
+
+  if (retval < 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR,
+        "SKELETON: ERROR: Failed to find device %d on the network.\n",
+        num_device);
+    hal_exit(comp_id);
+    return -1;
+  }
+
   rtapi_print_msg(RTAPI_MSG_INFO,
       "SKELETON: installed driver for %d ports\n", num_devices);
   hal_ready(comp_id);
@@ -240,29 +176,52 @@ void rtapi_app_exit(void)
 
 static void write_port(void *arg, long period)
 {
+  int num_device = 0;
+
+
 	static uint count = 0;
-  skeleton_t *device = arg;
+  skeleton_t *data = arg;
+
+
+  char buffer[BUFSIZE];
+  void* buffer_iterator = &buffer[0];
+  uint32_t values[4] = {0};
+  values[0] = MSG_TIMING;
+  values[1] = count;
+  values[2] = period;
+  size_t buffer_space = BUFSIZE - sizeof(struct Message);
+  size_t buffer_size = serialize_data(values, &buffer_iterator, &buffer_space);
 
 	for(int num_io = 0; num_io < IO; num_io++) {
-    *device->pin_in[num_io] = ((count / 1000) % 2 == 0);
+    *data->pin_in[num_io] = ((count / 1000) % 2 == 0);
   }
 	for(int num_joint = 0; num_joint < JOINTS; num_joint++) {
-		*device->received_pos[num_joint] = *device->requested_pos[num_joint];
+		//*data->received_pos[num_joint] = *data->requested_pos[num_joint];
 
-    //printf("%u\t%u\n", count, period);
-    /*
-		if(count % 10000 == 0) {
-			if(num_joint == 0) {
-				printf("%u\n", count);
-			}
-			printf("\t %i\t %u\t %f\t %f\n", num_joint, arg, *device->received_pos[num_joint], *device->requested_pos[num_joint]);
-		}
-    */
+    values[0] = MSG_SET_AXIS_ABS_POS;
+    values[1] = num_joint;
+    values[2] = 1000 * (*data->requested_pos[num_joint]) + (UINT_MAX / 2);
+    buffer_space = BUFSIZE - sizeof(struct Message_uint_uint);
+    buffer_size += serialize_data(values, &buffer_iterator, &buffer_space);
 	}
+
+  send_data(num_device, buffer, buffer_size);
+
+  int receive_count;
+  receive_count = get_reply_non_block(num_device, buffer);
+  if(receive_count > 0) {
+    process_data(buffer, data, (count % 10000 == 0));
+  } else {
+    printf("!");
+    if (count % 200 == 0) {
+      printf("\n");
+    }
+  }
+
 	count++;
 
   //unsigned char outdata;
-  //outdata = *(device->data_out[0]) & 0xFF;
+  //outdata = *(data->data_out[0]) & 0xFF;
   /* write it to the hardware */
   //rtapi_outb(outdata, 0x378);
   //printf("%i\t%c\n", outdata);
