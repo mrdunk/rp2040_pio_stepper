@@ -47,7 +47,7 @@ struct Message {
 
 struct Message_timing {
   uint32_t type;
-  uint32_t count;
+  uint32_t update_id;
   uint32_t time;
 };
 
@@ -76,9 +76,16 @@ struct Message_uint_float {
 
 
 #define REPLY_NONE                   0
-#define REPLY_GLOBAL_CONFIG          1
-#define REPLY_AXIS_CONFIG            2
-#define REPLY_AXIS_POS               3
+#define REPLY_METRICS                1
+#define REPLY_GLOBAL_CONFIG          2
+#define REPLY_AXIS_CONFIG            3
+#define REPLY_AXIS_POS               4
+
+struct Reply_metrics {
+  uint32_t type;
+  uint32_t update_id;
+  int32_t time_diff;
+} static Reply_metrics_default = { REPLY_METRICS };
 
 struct Reply_global_config {
   uint32_t type;

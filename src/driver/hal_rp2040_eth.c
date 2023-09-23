@@ -24,6 +24,8 @@ MODULE_LICENSE("GPL");
    */
 
 typedef struct {
+  uint32_t metric_update_id;
+  int32_t metric_time_diff;
 	hal_bit_t* joint_enable[JOINTS];
   hal_float_t* requested_pos[JOINTS];
   hal_float_t* received_pos[JOINTS];
@@ -65,7 +67,7 @@ int rtapi_app_main(void)
   num_device = 0;
 
   /* STEP 1: initialise the driver */
-  comp_id = hal_init("hal_skeleton");
+  comp_id = hal_init("hal_rp2040_eth");
   if (comp_id < 0) {
     rtapi_print_msg(RTAPI_MSG_ERR,
         "SKELETON: ERROR: hal_init() failed\n");
@@ -84,7 +86,7 @@ int rtapi_app_main(void)
 	for(int num_io = 0; num_io < IO; num_io++) {
 		/* Export the IO pin(s) */
 		retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->pin_in[num_io]),
-				comp_id, "skeleton.%d.pin-%02d-in", num_device, num_io);
+				comp_id, "rp2040_eth.%d.pin-%02d-in", num_device, num_io);
 		if (retval < 0) {
 			rtapi_print_msg(RTAPI_MSG_ERR,
 					"SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -94,7 +96,7 @@ int rtapi_app_main(void)
 		}
 
 		retval = hal_pin_bit_newf(HAL_OUT, &(port_data_array->pin_out[num_io]),
-				comp_id, "skeleton.%d.pin-%02d-out", num_device, num_io);
+				comp_id, "rp2040_eth.%d.pin-%02d-out", num_device, num_io);
 		if (retval < 0) {
 			rtapi_print_msg(RTAPI_MSG_ERR,
 					"SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -107,7 +109,7 @@ int rtapi_app_main(void)
 	for(int num_joint = 0; num_joint < JOINTS; num_joint++) {
 		/* Export the joint position pin(s) */
 		retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->joint_enable[num_joint]),
-				comp_id, "skeleton.%d.joint-enable-%02d", num_device, num_joint);
+				comp_id, "rp2040_eth.%d.joint-enable-%02d", num_device, num_joint);
 		if (retval < 0) {
 			rtapi_print_msg(RTAPI_MSG_ERR,
 					"SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -117,7 +119,7 @@ int rtapi_app_main(void)
 		}
 
 		retval = hal_pin_float_newf(HAL_IN, &(port_data_array->requested_pos[num_joint]),
-				comp_id, "skeleton.%d.pos-cmd-%02d", num_device, num_joint);
+				comp_id, "rp2040_eth.%d.pos-cmd-%02d", num_device, num_joint);
 		if (retval < 0) {
 			rtapi_print_msg(RTAPI_MSG_ERR,
 					"SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -127,7 +129,7 @@ int rtapi_app_main(void)
 		}
 
 		retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->received_pos[num_joint]),
-				comp_id, "skeleton.%d.pos-fb-%02d", num_device, num_joint);
+				comp_id, "rp2040_eth.%d.pos-fb-%02d", num_device, num_joint);
 		if (retval < 0) {
 			rtapi_print_msg(RTAPI_MSG_ERR,
 					"SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -138,7 +140,7 @@ int rtapi_app_main(void)
 	}
 
   /* STEP 4: export write function */
-  rtapi_snprintf(name, sizeof(name), "skeleton.%d.write", num_device);
+  rtapi_snprintf(name, sizeof(name), "rp2040_eth.%d.write", num_device);
   retval = hal_export_funct(name, write_port, &(port_data_array[num_device]), 1, 0,
       comp_id);
   if (retval < 0) {
@@ -180,15 +182,17 @@ static void write_port(void *arg, long period)
 
 
 	static uint count = 0;
+  static uint32_t last_update_id = 0;
   skeleton_t *data = arg;
 
 
   char buffer[BUFSIZE];
+  memset(buffer, '\0', BUFSIZE);
   void* buffer_iterator = &buffer[0];
   uint32_t values[4] = {0};
   values[0] = MSG_TIMING;
   values[1] = count;
-  values[2] = period;
+  values[2] = rtapi_get_time();
   size_t buffer_space = BUFSIZE - sizeof(struct Message);
   size_t buffer_size = serialize_data(values, &buffer_iterator, &buffer_space);
 
@@ -210,13 +214,20 @@ static void write_port(void *arg, long period)
   int receive_count;
   receive_count = get_reply_non_block(num_device, buffer);
   if(receive_count > 0) {
-    process_data(buffer, data, (count % 10000 == 0));
+    //process_data(buffer, data, (count % 10000 == 0));
+    process_data(buffer, data, 0);
   } else {
     printf("!");
     if (count % 200 == 0) {
       printf("\n");
     }
   }
+
+  if(last_update_id +1 != data->metric_update_id) {
+    printf("WARN: %i missing updates.\n", data->metric_update_id - last_update_id - 1);
+  }
+  last_update_id = data->metric_update_id;
+       
 
 	count++;
 

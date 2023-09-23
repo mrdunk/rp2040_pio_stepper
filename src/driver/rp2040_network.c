@@ -113,14 +113,14 @@ size_t serialize_data(void* values, void** packet, size_t* packet_space) {
   uint32_t msg_type = ((uint32_t*)values)[0];
   uint32_t uint_value;
   float float_value;
-  uint32_t axis, count, time;
+  uint32_t axis, update_id, time;
 
   switch(msg_type) {
     case MSG_TIMING:
-      count = ((uint32_t*)values)[1];
+      update_id = ((uint32_t*)values)[1];
       time = ((uint32_t*)values)[2];
       uint_value = ((uint32_t*)values)[1];
-      message_timing = (struct Message_timing){.type=msg_type, .count=count, .time=time};
+      message_timing = (struct Message_timing){.type=msg_type, .update_id=update_id, .time=time};
       message_size = sizeof(struct Message_timing);
       memcpy(*packet, &message_timing, message_size);
       break;
@@ -197,14 +197,26 @@ size_t serialize_data(void* values, void** packet, size_t* packet_space) {
 }
 
 void process_data(char* buf, skeleton_t* data, int debug) {
+  struct Reply_metrics reply_metrics;
   struct Reply_global_config reply_global_config;
   struct Reply_axis_config reply_axis_config;
   struct Reply_axis_pos reply_axis_pos;
   char* itterator = buf;
   size_t size;
   uint32_t msg_type;
-  while((msg_type = *(uint32_t*)itterator)) {
+  size_t msg_count = 0;
+  while((msg_type = *(uint32_t*)itterator)) {  // First uint32_t of each massage is the type.
     switch(msg_type) {
+      case REPLY_METRICS:
+        size = sizeof(struct Reply_metrics);
+        memcpy(&reply_metrics, itterator, size);
+        if(debug) {
+          printf("Reply_metrics: %i\t%i\n", reply_metrics.update_id, reply_metrics.time_diff);
+        }
+        data->metric_update_id = reply_metrics.update_id;
+        data->metric_time_diff = reply_metrics.time_diff;
+        itterator += size;
+        break;
       case REPLY_GLOBAL_CONFIG:
         size = sizeof(struct Reply_global_config);
         memcpy(&reply_global_config, itterator, size);
@@ -250,9 +262,14 @@ void process_data(char* buf, skeleton_t* data, int debug) {
 
         break;
       default:
-        printf("ERROR: Unexpected reply type: %u\n", msg_type);
+        printf("ERROR: Unexpected reply type: %u  msg_count: %u  update_id: %u\n",
+            msg_type, msg_count, data->metric_update_id);
         return;
     }
+    msg_count++;
+  }
+  if(msg_count != 5) {
+    printf("msg_count: %u  %u\n", msg_count, data->metric_update_id);
   }
 }
 
