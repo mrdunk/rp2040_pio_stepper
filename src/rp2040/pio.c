@@ -87,9 +87,13 @@ int32_t pid(
 }
 
 uint32_t get_velocity(
-    uint32_t abs_pos_acheived, uint32_t abs_pos_requested, float kp, float ki, float kd) {
+    const uint8_t axis,
+    uint32_t abs_pos_acheived,
+    uint32_t abs_pos_requested,
+    float kp, float ki, float kd)
+{
   //int32_t velocity = 
-    //pid(axis, abs_pos_acheived, abs_pos_requested, kp, ki, kd); 
+  //  pid(axis, abs_pos_acheived, abs_pos_requested, kp, ki, kd); 
   
   int32_t velocity = 
     abs_pos_requested - abs_pos_acheived;
@@ -111,6 +115,7 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   uint32_t abs_pos_requested;
   uint32_t min_step_len_ticks;
   uint32_t max_accel_ticks;
+  int32_t velocity_requested;
   int32_t velocity_acheived;
   float kp;
   float ki;
@@ -124,6 +129,7 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
       &abs_pos_acheived,
       &min_step_len_ticks,
       &max_accel_ticks,
+      &velocity_requested,
       &velocity_acheived,
       &kp,
       &ki,
@@ -140,18 +146,15 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
         axis, updated, (double)failcount / (double)count);
   }
 
+  // Stop from getting stuck continually reading FIFO when steps are short.
+  uint32_t max_retries = 4; 
 
-  uint32_t n = 5;
-  while(pio_sm_get_rx_fifo_level(pio1, axis) > 0 && n > 0) {
+  while(pio_sm_get_rx_fifo_level(pio1, axis) > 0 && max_retries > 0) {
     abs_pos_acheived = pio_sm_get_blocking(pio1, axis);
-    //printf("%u\t%u\n", n, abs_pos_acheived);
-    //printf("%u", axis);
-    n--;
+    max_retries--;
   }
-  //printf("\n");
   
-
-  int32_t velocity = get_velocity(abs_pos_acheived, abs_pos_requested, kp, ki, kd);
+  int32_t velocity = get_velocity(axis, abs_pos_acheived, abs_pos_requested, kp, ki, kd);
 
   uint8_t direction = (velocity > 0);
   uint32_t requested_step_count = abs(velocity);
@@ -177,7 +180,17 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   last_pos[axis] = abs_pos_acheived; 
 
   update_axis_config(
-      axis, CORE1, NULL, &abs_pos_acheived, NULL, NULL, &velocity_acheived, NULL, NULL, NULL);
+      axis,
+      CORE1,
+      NULL,
+      &abs_pos_acheived,
+      NULL,
+      NULL,
+      &velocity,
+      &velocity_acheived,
+      NULL,
+      NULL,
+      NULL);
 
   return 1;
 }

@@ -213,8 +213,9 @@ void process_data(char* buf, skeleton_t* data, int debug) {
         if(debug) {
           printf("Reply_metrics: %i\t%i\n", reply_metrics.update_id, reply_metrics.time_diff);
         }
-        data->metric_update_id = reply_metrics.update_id;
-        data->metric_time_diff = reply_metrics.time_diff;
+        *data->metric_update_id = reply_metrics.update_id;
+        *data->metric_time_diff = reply_metrics.time_diff;
+        *data->metric_rp_update_len = reply_metrics.rp_update_len;
         itterator += size;
         break;
       case REPLY_GLOBAL_CONFIG:
@@ -246,6 +247,10 @@ void process_data(char* buf, skeleton_t* data, int debug) {
         }
         *data->received_pos[reply_axis_config.axis] =
           ((float)reply_axis_config.abs_pos_acheived - (UINT_MAX / 2)) / 1000;
+        *data->requested_velocity[reply_axis_config.axis] = 
+          (float)reply_axis_config.velocity_requested;
+        *data->received_velocity[reply_axis_config.axis] = 
+          (float)reply_axis_config.velocity_acheived;
         itterator += size;
 
         break;
@@ -263,13 +268,13 @@ void process_data(char* buf, skeleton_t* data, int debug) {
         break;
       default:
         printf("ERROR: Unexpected reply type: %u  msg_count: %u  update_id: %u\n",
-            msg_type, msg_count, data->metric_update_id);
+            msg_type, msg_count, *data->metric_update_id);
         return;
     }
     msg_count++;
   }
   if(msg_count != 5) {
-    printf("msg_count: %u  %u\n", msg_count, data->metric_update_id);
+    printf("msg_count: %u  %u\n", msg_count, *data->metric_update_id);
   }
 }
 

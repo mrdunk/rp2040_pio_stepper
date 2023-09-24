@@ -85,6 +85,7 @@ struct Reply_metrics {
   uint32_t type;
   uint32_t update_id;
   int32_t time_diff;
+  uint32_t rp_update_len;
 } static Reply_metrics_default = { REPLY_METRICS };
 
 struct Reply_global_config {
@@ -100,6 +101,7 @@ struct Reply_axis_config {
   uint32_t abs_pos_acheived;
   uint32_t min_step_len_ticks;
   uint32_t max_accel_ticks;
+  int32_t velocity_requested;  // TODO: Remove me once done debugging.
   int32_t velocity_acheived;
 } static Reply_axis_config_default = { REPLY_AXIS_CONFIG };
 

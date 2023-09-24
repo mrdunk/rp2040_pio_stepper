@@ -1,0 +1,39 @@
+loadrt [KINS]KINEMATICS
+loadrt [EMCMOT]EMCMOT base_period_nsec=[EMCMOT]BASE_PERIOD servo_period_nsec=[EMCMOT]SERVO_PERIOD num_joints=[KINS]JOINTS
+loadrt hal_rp2040_eth
+
+addf motion-command-handler servo-thread
+addf motion-controller servo-thread
+addf rp2040_eth.0.write servo-thread
+
+
+# Joint 0
+net xpos-cmd joint.0.motor-pos-cmd => rp2040_eth.0.pos-cmd-00
+net xpos-fb rp2040_eth.0.pos-fb-00 => joint.0.motor-pos-fb
+net xvelocity-calc rp2040_eth.0.velocity-calc-00
+net xvelocity-fb rp2040_eth.0.velocity-fb-00
+net xenable joint.0.amp-enable-out => rp2040_eth.0.joint-enable-00
+
+# Joint 1
+net ypos-cmd joint.1.motor-pos-cmd => rp2040_eth.0.pos-cmd-01
+net ypos-fb rp2040_eth.0.pos-fb-01 => joint.1.motor-pos-fb
+net yvelocity-calc rp2040_eth.0.velocity-calc-01
+net yvelocity-fb rp2040_eth.0.velocity-fb-01
+net yenable joint.1.amp-enable-out => rp2040_eth.0.joint-enable-01
+
+# Joint 2
+net zpos-cmd joint.2.motor-pos-cmd => rp2040_eth.0.pos-cmd-02
+net zpos-fb rp2040_eth.0.pos-fb-02 => joint.2.motor-pos-fb
+net zvelocity-calc rp2040_eth.0.velocity-calc-02
+net zvelocity-fb rp2040_eth.0.velocity-fb-02
+net zenable joint.2.amp-enable-out => rp2040_eth.0.joint-enable-02
+
+
+# Other.
+net estop-out <= iocontrol.0.user-enable-out
+net estop-out => iocontrol.0.emc-enable-in
+
+net metrics-time-diff rp2040_eth.0.metrics-time-diff
+net metrics-update-id rp2040_eth.0.metrics-update-id
+net metrics-rp-update-len rp2040_eth.0.metrics-rp-update-len
+

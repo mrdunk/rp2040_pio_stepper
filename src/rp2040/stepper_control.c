@@ -148,7 +148,7 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
         axis = msg_uint_uint->axis;
         abs_pos_requested = msg_uint_uint->value;
         update_axis_config(
-            axis, CORE0, &abs_pos_requested, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+            axis, CORE0, &abs_pos_requested, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
         (*return_data)++;
         break;
       case MSG_SET_AXIS_REL_POS:
@@ -168,19 +168,19 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
         msg_uint_float = process_msg_uint_float(&rx_itterator);
         axis = msg_uint_float->axis;
         update_axis_config(
-            axis, CORE0, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value, NULL, NULL);
+            axis, CORE0, NULL, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value, NULL, NULL);
         break;
       case MSG_SET_PID_KI:
         msg_uint_float = process_msg_uint_float(&rx_itterator);
         axis = msg_uint_float->axis;
         update_axis_config(
-            axis, CORE0, NULL, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value, NULL);
+            axis, CORE0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value, NULL);
         break;
       case MSG_SET_PID_KD:
         msg_uint_float = process_msg_uint_float(&rx_itterator);
         axis = msg_uint_float->axis;
         update_axis_config(
-            axis, CORE0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value);
+            axis, CORE0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value);
         break;
       case MSG_GET_GLOBAL_CONFIG:
         msg = process_msg(&rx_itterator);
@@ -194,7 +194,7 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
         msg_uint = process_msg_uint(&rx_itterator);
         axis = msg_uint->value;
         // TODO: Test this works.
-        serialise_axis_config(axis, tx_buf, &tx_buf_len, true);
+        serialise_axis_config(axis, tx_buf, &tx_buf_len, false);
         //get_axis_config(
         //    msg_uint->value,
         //    tx_buf,
@@ -386,7 +386,7 @@ int main() {
     size_t axis_count = 0;
     for(size_t axis = 0; axis < MAX_AXIS; axis++) {
       // Get data from config and put in TX buffer.
-      axis_count += serialise_axis_config(axis, tx_buf, &tx_buf_len, false);
+      axis_count += serialise_axis_config(axis, tx_buf, &tx_buf_len, true);
     }
 #if DEBUG_OUTPUT
     printf("Sending: %lu\n", axis_count);

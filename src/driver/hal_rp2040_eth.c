@@ -24,11 +24,14 @@ MODULE_LICENSE("GPL");
    */
 
 typedef struct {
-  uint32_t metric_update_id;
-  int32_t metric_time_diff;
+  hal_u32_t* metric_update_id;
+  hal_s32_t* metric_time_diff;
+  hal_u32_t* metric_rp_update_len;
 	hal_bit_t* joint_enable[JOINTS];
   hal_float_t* requested_pos[JOINTS];
   hal_float_t* received_pos[JOINTS];
+  hal_float_t* requested_velocity[JOINTS];
+  hal_float_t* received_velocity[JOINTS];
   hal_bit_t* pin_out[IO];
   hal_bit_t* pin_in[IO];
 } skeleton_t;
@@ -137,7 +140,59 @@ int rtapi_app_main(void)
 			hal_exit(comp_id);
 			return -1;
 		}
+
+		retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->requested_velocity[num_joint]),
+				comp_id, "rp2040_eth.%d.velocity-calc-%02d", num_device, num_joint);
+		if (retval < 0) {
+			rtapi_print_msg(RTAPI_MSG_ERR,
+					"SKELETON: ERROR: port %d var export failed with err=%i\n",
+          num_device, retval);
+			hal_exit(comp_id);
+			return -1;
+		}
+
+		retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->received_velocity[num_joint]),
+				comp_id, "rp2040_eth.%d.velocity-fb-%02d", num_device, num_joint);
+		if (retval < 0) {
+			rtapi_print_msg(RTAPI_MSG_ERR,
+					"SKELETON: ERROR: port %d var export failed with err=%i\n",
+          num_device, retval);
+			hal_exit(comp_id);
+			return -1;
+		}
 	}
+
+  /* Export metrics pins, */
+  retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->metric_update_id),
+      comp_id, "rp2040_eth.%d.metrics-update-id", num_device);
+  if (retval < 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR,
+        "SKELETON: ERROR: port %d var export failed with err=%i\n",
+        num_device, retval);
+    hal_exit(comp_id);
+    return -1;
+  }
+
+  retval = hal_pin_s32_newf(HAL_IN, &(port_data_array->metric_time_diff),
+      comp_id, "rp2040_eth.%d.metrics-time-diff", num_device);
+  if (retval < 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR,
+        "SKELETON: ERROR: port %d var export failed with err=%i\n",
+        num_device, retval);
+    hal_exit(comp_id);
+    return -1;
+  }
+
+  retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->metric_rp_update_len),
+      comp_id, "rp2040_eth.%d.metrics-rp-update-len", num_device);
+  if (retval < 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR,
+        "SKELETON: ERROR: port %d var export failed with err=%i\n",
+        num_device, retval);
+    hal_exit(comp_id);
+    return -1;
+  }
+
 
   /* STEP 4: export write function */
   rtapi_snprintf(name, sizeof(name), "rp2040_eth.%d.write", num_device);
@@ -223,17 +278,11 @@ static void write_port(void *arg, long period)
     }
   }
 
-  if(last_update_id +1 != data->metric_update_id) {
-    printf("WARN: %i missing updates.\n", data->metric_update_id - last_update_id - 1);
+  if(last_update_id +1 != *data->metric_update_id && last_update_id != 0) {
+    printf("WARN: %i missing updates.\n", *data->metric_update_id - last_update_id - 1);
   }
-  last_update_id = data->metric_update_id;
+  last_update_id = *data->metric_update_id;
        
 
 	count++;
-
-  //unsigned char outdata;
-  //outdata = *(data->data_out[0]) & 0xFF;
-  /* write it to the hardware */
-  //rtapi_outb(outdata, 0x378);
-  //printf("%i\t%c\n", outdata);
 }

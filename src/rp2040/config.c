@@ -24,7 +24,7 @@ volatile struct ConfigGlobal config = {
       .min_step_len_ticks = 50,
       .max_accel_ticks = 2,
       .velocity_acheived = 0,
-      .kp = 0.1f,
+      .kp = 0.5f,
       .ki = 0.0f,
       .kd = 0.0f
     },
@@ -136,6 +136,7 @@ void update_axis_config(
     const uint32_t* abs_pos_acheived,
     const uint32_t* min_step_len_ticks,
     const uint32_t* max_accel_ticks,
+    const int32_t* velocity_requested,
     const int32_t* velocity_acheived,
     const float* kp,
     const float* ki,
@@ -160,6 +161,9 @@ void update_axis_config(
   }
   if(max_accel_ticks != NULL) {
     config.axis[axis].max_accel_ticks = *max_accel_ticks;
+  }
+  if(velocity_requested != NULL) {
+    config.axis[axis].velocity_requested = *velocity_requested;
   }
   if(velocity_acheived != NULL) {
     config.axis[axis].velocity_acheived = *velocity_acheived;
@@ -194,6 +198,7 @@ uint32_t get_axis_config(
     uint32_t* abs_pos_acheived,
     uint32_t* min_step_len_ticks,
     uint32_t* max_accel_ticks,
+    int32_t* velocity_requested,
     int32_t* velocity_acheived,
     float* kp,
     float* ki,
@@ -224,6 +229,7 @@ uint32_t get_axis_config(
   *abs_pos_acheived = config.axis[axis].abs_pos_acheived;
   *min_step_len_ticks = config.axis[axis].min_step_len_ticks;
   *max_accel_ticks = config.axis[axis].max_accel_ticks;
+  *velocity_requested = config.axis[axis].velocity_requested;
   *velocity_acheived = config.axis[axis].velocity_acheived;
   *kp = config.axis[axis].kp;
   *ki = config.axis[axis].ki;
@@ -242,6 +248,7 @@ size_t serialise_metrics(uint8_t* tx_buf, size_t* tx_buf_len, int32_t update_id,
     struct Reply_metrics reply = Reply_metrics_default;
     reply.update_id = update_id;
     reply.time_diff = time_diff;
+    reply.rp_update_len = get_period();
 
     memcpy(tx_buf + *tx_buf_len, &reply, sizeof(struct Reply_metrics));
     *tx_buf_len += sizeof(struct Reply_metrics);
@@ -257,14 +264,14 @@ size_t serialise_axis_config(
     const uint32_t axis,
     uint8_t* tx_buf,
     size_t* tx_buf_len,
-    uint8_t always)
+    uint8_t wait_for_data)
 {
   if(axis >= MAX_AXIS) {
     return 0;
   }
 
   static uint32_t failcount = 0;
-  static uint32_t count = 0;
+  //static uint32_t count = 0;
 
 	size_t max_buf_len = DATA_BUF_SIZE - sizeof(uint32_t);
 
@@ -272,32 +279,30 @@ size_t serialise_axis_config(
   uint32_t abs_pos_requested;
   uint32_t min_step_len_ticks;
   uint32_t max_accel_ticks;
+  int32_t velocity_requested;
   int32_t velocity_acheived;
   float kp;
   float ki;
   float kd;
-  uint32_t updated;
+  uint32_t updated = 0;
 
-  updated = get_axis_config(
-      axis,
-      CORE0,
-      &abs_pos_requested,
-      &abs_pos_acheived,
-      &min_step_len_ticks,
-      &max_accel_ticks,
-      &velocity_acheived,
-      &kp,
-      &ki,
-      &kd
-      );
+  do {
+    updated = get_axis_config(
+        axis,
+        CORE0,
+        &abs_pos_requested,
+        &abs_pos_acheived,
+        &min_step_len_ticks,
+        &max_accel_ticks,
+        &velocity_requested,
+        &velocity_acheived,
+        &kp,
+        &ki,
+        &kd
+        );
+  } while(updated == 0 && wait_for_data);
 
-  if(updated == 0) {
-    //printf("No new data to send since last call. Axis: %u\n", axis);
-    if(always == false) {
-      return 0;
-    }
-  }
-  count++;
+  //count++;
   if(updated > 1) {
     failcount++;
     //printf("WC0, mult ud: %u \t%lu \t%f\n",
@@ -311,6 +316,7 @@ size_t serialise_axis_config(
     reply.abs_pos_acheived = abs_pos_acheived;
     reply.min_step_len_ticks = min_step_len_ticks;
     reply.max_accel_ticks = max_accel_ticks;
+    reply.velocity_requested = velocity_requested;
     reply.velocity_acheived = velocity_acheived;
 
     memcpy(tx_buf + *tx_buf_len, &reply, sizeof(struct Reply_axis_config));
