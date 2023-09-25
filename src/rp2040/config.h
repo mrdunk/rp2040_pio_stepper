@@ -20,6 +20,7 @@ struct ConfigAxis {
   uint32_t abs_pos_acheived;    // In steps. Default value is UINT_MAX / 2.
   uint32_t min_step_len_ticks;
   uint32_t max_accel_ticks;     // ticks / update_time_ticks ^ 2
+  int32_t velocity_requested;   // Calculated steps per update_time_us.
   int32_t velocity_acheived;    // Steps per update_time_us.
   float kp;                     // PID tuning
   float ki;                     // PID tuning
@@ -29,7 +30,9 @@ struct ConfigAxis {
 /* Configuration object for global settings.
  * This is the format for the global config that is shared between cores. */
 struct ConfigGlobal {
-  uint32_t update_time_us;  // Driven by how often we get axis updates from controlling host.
+  uint32_t last_update_id;    // Sequence number of last packet received.
+  int32_t last_update_time;   // Sequence number of last packet received.
+  uint32_t update_time_us;    // Driven by how often we get axis updates from controlling host.
 
   struct ConfigAxis axis[MAX_AXIS];
 };
@@ -45,6 +48,10 @@ void update_period(uint32_t update_time_us);
  * This should closely match the rate at which we receive axis position data. */
 uint32_t get_period();
 
+/* Set metrics for tracking successful update transmission and jitter. */
+uint32_t update_packet_metrics(
+    uint32_t update_id, uint32_t time, int32_t* id_dif, int32_t* time_dif);
+
 uint8_t has_new_c0_data(const uint8_t axis);
 
 void update_axis_config(
@@ -54,6 +61,7 @@ void update_axis_config(
     const uint32_t* abs_pos_acheived,
     const uint32_t* min_step_len_ticks,
     const uint32_t* max_accel_ticks,
+    const int32_t* velocity_requested,
     const int32_t* velocity_acheived,
     const float* kp,
     const float* ki,
@@ -67,19 +75,22 @@ uint32_t get_axis_config(
     uint32_t* abs_pos_acheived,
     uint32_t* min_step_len_ticks,
     uint32_t* max_accel_ticks,
+    int32_t* velocity_requested,
     int32_t* velocity_acheived,
     float* kp,
     float* ki,
     float* kd
     );
 
+/* Serialise metrics stored in global config in a format for sending over UDP. */
+size_t serialise_metrics(uint8_t* tx_buf, size_t* tx_buf_len, int32_t update_id, int32_t time_diff);
+
 /* Serialise data stored in global config in a format for sending over UDP. */
 size_t serialise_axis_config(
     const uint32_t axis,
-    uint8_t* msg_machine,
-    size_t* msg_machine_len,
-    size_t msg_machine_len_max,
-    uint8_t always);
+    uint8_t* tx_buf,
+    size_t* tx_buf_len,
+    uint8_t wait_for_data);
 
 /* A ring buffer that returns the average value of it's contents.
  * Used for calculating average period between incoming network updates. */

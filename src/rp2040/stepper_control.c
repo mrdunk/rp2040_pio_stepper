@@ -21,9 +21,9 @@
 static wiz_NetInfo g_net_info =
     {
         .mac = {0x00, 0x08, 0xDC, 0x12, 0x34, 0x56}, // MAC address
-        .ip = {192, 168, 11, 2},                     // IP address
+        .ip = {192, 168, 12, 2},                     // IP address
         .sn = {255, 255, 255, 0},                    // Subnet Mask
-        .gw = {192, 168, 11, 1},                     // Gateway
+        .gw = {192, 168, 12, 1},                     // Gateway
         .dns = {8, 8, 8, 8},                         // DNS server
         .dhcp = NETINFO_STATIC                       // DHCP enable/disable
 };
@@ -75,6 +75,17 @@ struct Message_uint_uint* process_msg_uint_uint(char** rx_buf) {
   return message;
 }
 
+struct Message_timing* process_msg_timing(char** rx_buf) {
+  struct Message_timing* message = (struct Message_timing*)(*rx_buf);
+
+  // printf("NW UPD message on port %u:\n\ttype: %lu\n\tvalue0: %lu\n\tvalue1: %lu\r\n",
+  //    NW_PORT, message->type, message->value0, message->value1);
+
+  *rx_buf += sizeof(struct Message_timing);
+
+  return message;
+}
+
 struct Message_uint_int* process_msg_uint_int(char** rx_buf) {
   struct Message_uint_int* message = (struct Message_uint_int*)(*rx_buf);
 
@@ -103,19 +114,26 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
   uint32_t msg_type;
   size_t tx_buf_mach_len_max = DATA_BUF_SIZE - sizeof(uint32_t);
   struct Message* msg;
+  struct Message_timing* msg_timing;
   struct Message_uint* msg_uint;
   struct Message_uint_uint* msg_uint_uint;
   struct Message_uint_int* msg_uint_int;
   struct Message_uint_float* msg_uint_float;
 
-  uint32_t axis;
+  uint32_t axis, update_id, tx_time;
   uint32_t abs_pos_requested;
 
   while(msg_type = *(uint32_t*)(rx_itterator)) {  // msg_type of 0 indicates end of data.
-    if(msg_type != 2) {
-      printf("%u\n", msg_type);
-    }
     switch(msg_type) {
+      case MSG_TIMING:
+        msg_timing = process_msg_timing(&rx_itterator);
+        update_id = msg_timing->update_id;
+        tx_time = msg_timing->time;
+        //printf("%u\t%u\n", count, tx_time);
+        int32_t id_diff;
+        int32_t time_diff;
+        update_packet_metrics(update_id, tx_time, &id_diff, &time_diff);
+        serialise_metrics(tx_buf, &tx_buf_len, update_id, time_diff);
       case MSG_SET_GLOAL_UPDATE_RATE:
         //msg_uint = process_msg_uint(&rx_itterator);
         //set_global_update_rate(msg_uint->value);
@@ -130,7 +148,7 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
         axis = msg_uint_uint->axis;
         abs_pos_requested = msg_uint_uint->value;
         update_axis_config(
-            axis, CORE0, &abs_pos_requested, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+            axis, CORE0, &abs_pos_requested, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
         (*return_data)++;
         break;
       case MSG_SET_AXIS_REL_POS:
@@ -150,19 +168,19 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
         msg_uint_float = process_msg_uint_float(&rx_itterator);
         axis = msg_uint_float->axis;
         update_axis_config(
-            axis, CORE0, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value, NULL, NULL);
+            axis, CORE0, NULL, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value, NULL, NULL);
         break;
       case MSG_SET_PID_KI:
         msg_uint_float = process_msg_uint_float(&rx_itterator);
         axis = msg_uint_float->axis;
         update_axis_config(
-            axis, CORE0, NULL, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value, NULL);
+            axis, CORE0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value, NULL);
         break;
       case MSG_SET_PID_KD:
         msg_uint_float = process_msg_uint_float(&rx_itterator);
         axis = msg_uint_float->axis;
         update_axis_config(
-            axis, CORE0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value);
+            axis, CORE0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value);
         break;
       case MSG_GET_GLOBAL_CONFIG:
         msg = process_msg(&rx_itterator);
@@ -176,7 +194,7 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
         msg_uint = process_msg_uint(&rx_itterator);
         axis = msg_uint->value;
         // TODO: Test this works.
-        serialise_axis_config(axis, tx_buf, &tx_buf_len, DATA_BUF_SIZE - sizeof(uint32_t), true);
+        serialise_axis_config(axis, tx_buf, &tx_buf_len, false);
         //get_axis_config(
         //    msg_uint->value,
         //    tx_buf,
@@ -209,7 +227,7 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
 int32_t get_UDP(
     uint8_t socket_num,
     uint16_t port,
-    uint8_t* nw_rx_buf,
+    uint8_t* rx_buf,
     uint8_t* data_received,
     uint8_t* destip,
     uint16_t* destport)
@@ -229,7 +247,7 @@ int32_t get_UDP(
            size = DATA_BUF_SIZE;
          }
 
-         ret = recvfrom(socket_num, nw_rx_buf, size, destip, destport);
+         ret = recvfrom(socket_num, rx_buf, size, destip, destport);
          //printf("RECEIVED: %u %u.%u.%u.%u : %u\r\n",
          //    socket_num, destip[0], destip[1], destip[2], destip[3], *destport);
          if(ret <= 0) {
@@ -302,7 +320,7 @@ int main() {
   uint32_t last_ave_period_us = 0;
 
   int retval = 0;
-  char nw_rx_buf[DATA_BUF_SIZE] = "";
+  char rx_buf[DATA_BUF_SIZE] = "";
   char tx_buf[DATA_BUF_SIZE] = {0};
   size_t tx_buf_len = 0;
   uint8_t received_msg_count;
@@ -313,7 +331,7 @@ int main() {
   // These store them for when we want to reply later.
   uint8_t  destip_machine[4] = {0, 0, 0, 0};
   uint16_t destport_machine = 0;
-  memset(nw_rx_buf, '\0', DATA_BUF_SIZE);
+  memset(rx_buf, '\0', DATA_BUF_SIZE);
 
   bi_decl(bi_program_description("Ethernet controlled stepper motor controller."));
   bi_decl(bi_1pin_with_name(LED_PIN, "On-board LED"));
@@ -351,24 +369,24 @@ int main() {
   while (1) {
     tx_buf_len = 0;
     data_received = 0;
+		memset(tx_buf, '\0', DATA_BUF_SIZE);
 
-    while(data_received == 0) {
+    while(data_received == 0 || retval <= 0) {
       retval = get_UDP(
           SOCKET_NUMBER,
           NW_PORT,
-          nw_rx_buf,
+          rx_buf,
           &data_received,
           destip_machine,
           &destport_machine);
     }
 
-    tx_buf_len = process_received_buffer(nw_rx_buf, tx_buf, &received_msg_count);
+    tx_buf_len = process_received_buffer(rx_buf, tx_buf, &received_msg_count);
 
     size_t axis_count = 0;
     for(size_t axis = 0; axis < MAX_AXIS; axis++) {
       // Get data from config and put in TX buffer.
-      axis_count += serialise_axis_config(
-          axis, tx_buf, &tx_buf_len, DATA_BUF_SIZE - sizeof(uint32_t), false);
+      axis_count += serialise_axis_config(axis, tx_buf, &tx_buf_len, true);
     }
 #if DEBUG_OUTPUT
     printf("Sending: %lu\n", axis_count);

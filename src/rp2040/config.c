@@ -11,6 +11,8 @@ mutex_t mtx_top;
 mutex_t mtx_axis[MAX_AXIS];
 
 volatile struct ConfigGlobal config = {
+  .last_update_id = 0,
+  .last_update_time = 0,
   .update_time_us = 1000,    // 1000us.
   .axis = {
     {
@@ -22,7 +24,7 @@ volatile struct ConfigGlobal config = {
       .min_step_len_ticks = 50,
       .max_accel_ticks = 2,
       .velocity_acheived = 0,
-      .kp = 0.1f,
+      .kp = 0.5f,
       .ki = 0.0f,
       .kd = 0.0f
     },
@@ -65,58 +67,6 @@ volatile struct ConfigGlobal config = {
       .ki = 0.0f,
       .kd = 0.0f
     },
-    {
-      // Axis 4.
-      .updated_from_c0 = 0,
-      .updated_from_c1 = 0,
-      .abs_pos_requested = UINT_MAX / 2,
-      .abs_pos_acheived = UINT_MAX / 2,
-      .min_step_len_ticks = 50,
-      .max_accel_ticks = 200,
-      .velocity_acheived = 0,
-      .kp = 0.1f,
-      .ki = 0.0f,
-      .kd = 0.0f
-    },
-    {
-      // Axis 5.
-      .updated_from_c0 = 0,
-      .updated_from_c1 = 0,
-      .abs_pos_requested = UINT_MAX / 2,
-      .abs_pos_acheived = UINT_MAX / 2,
-      .min_step_len_ticks = 50,
-      .max_accel_ticks = 200,
-      .velocity_acheived = 0,
-      .kp = 0.1f,
-      .ki = 0.0f,
-      .kd = 0.0f
-    },
-    {
-      // Axis 6.
-      .updated_from_c0 = 0,
-      .updated_from_c1 = 0,
-      .abs_pos_requested = UINT_MAX / 2,
-      .abs_pos_acheived = UINT_MAX / 2,
-      .min_step_len_ticks = 50,
-      .max_accel_ticks = 200,
-      .velocity_acheived = 0,
-      .kp = 0.1f,
-      .ki = 0.0f,
-      .kd = 0.0f
-    },
-    {
-      // Axis 7.
-      .updated_from_c0 = 0,
-      .updated_from_c1 = 0,
-      .abs_pos_requested = UINT_MAX / 2,
-      .abs_pos_acheived = UINT_MAX / 2,
-      .min_step_len_ticks = 50,
-      .max_accel_ticks = 200,
-      .velocity_acheived = 0,
-      .kp = 0.1f,
-      .ki = 0.0f,
-      .kd = 0.0f
-    },
   }
 };
 
@@ -129,26 +79,46 @@ void init_config()
   }
 }
 
-/* Update the period of the main timing loop. 
+/* Update the period of the main timing loop.
  * This should closely match the rate at which we receive axis position data. */
 void update_period(uint32_t update_time_us) {
   mutex_enter_blocking(&mtx_top);
 
   config.update_time_us = update_time_us;
-  
+
   mutex_exit(&mtx_top);
 }
 
-/* Get the period of the main timing loop. 
+/* Get the period of the main timing loop.
  * This should closely match the rate at which we receive axis position data. */
 uint32_t get_period() {
   mutex_enter_blocking(&mtx_top);
 
   uint32_t retval = config.update_time_us;
-  
+
   mutex_exit(&mtx_top);
 
   return retval;
+}
+
+/* Set metrics for tracking successful update transmission and jitter. */
+uint32_t update_packet_metrics(
+    uint32_t update_id, uint32_t time, int32_t* id_diff, int32_t* time_diff
+) {
+  mutex_enter_blocking(&mtx_top);
+
+  *id_diff = update_id - config.last_update_id;
+  *time_diff = time - config.last_update_time;
+
+  if(*id_diff != 1) {
+    printf("WARNING: Updates out of sequence. %i %i %i\n",
+        config.last_update_id, update_id, *id_diff);
+  }
+
+  config.last_update_id = update_id;
+  config.last_update_time = time;
+
+  mutex_exit(&mtx_top);
 }
 
 uint8_t has_new_c0_data(const uint8_t axis) {
@@ -166,6 +136,7 @@ void update_axis_config(
     const uint32_t* abs_pos_acheived,
     const uint32_t* min_step_len_ticks,
     const uint32_t* max_accel_ticks,
+    const int32_t* velocity_requested,
     const int32_t* velocity_acheived,
     const float* kp,
     const float* ki,
@@ -190,6 +161,9 @@ void update_axis_config(
   }
   if(max_accel_ticks != NULL) {
     config.axis[axis].max_accel_ticks = *max_accel_ticks;
+  }
+  if(velocity_requested != NULL) {
+    config.axis[axis].velocity_requested = *velocity_requested;
   }
   if(velocity_acheived != NULL) {
     config.axis[axis].velocity_acheived = *velocity_acheived;
@@ -224,6 +198,7 @@ uint32_t get_axis_config(
     uint32_t* abs_pos_acheived,
     uint32_t* min_step_len_ticks,
     uint32_t* max_accel_ticks,
+    int32_t* velocity_requested,
     int32_t* velocity_acheived,
     float* kp,
     float* ki,
@@ -254,6 +229,7 @@ uint32_t get_axis_config(
   *abs_pos_acheived = config.axis[axis].abs_pos_acheived;
   *min_step_len_ticks = config.axis[axis].min_step_len_ticks;
   *max_accel_ticks = config.axis[axis].max_accel_ticks;
+  *velocity_requested = config.axis[axis].velocity_requested;
   *velocity_acheived = config.axis[axis].velocity_acheived;
   *kp = config.axis[axis].kp;
   *ki = config.axis[axis].ki;
@@ -264,74 +240,91 @@ uint32_t get_axis_config(
   return updated_by_other_core;
 }
 
+/* Serialise metrics stored in global config in a format for sending over UDP. */
+size_t serialise_metrics(uint8_t* tx_buf, size_t* tx_buf_len, int32_t update_id, int32_t time_diff) {
+	size_t max_buf_len = DATA_BUF_SIZE - sizeof(uint32_t);
+
+  if(*tx_buf_len + sizeof(struct Reply_metrics) <= max_buf_len) {
+    struct Reply_metrics reply = Reply_metrics_default;
+    reply.update_id = update_id;
+    reply.time_diff = time_diff;
+    reply.rp_update_len = get_period();
+
+    memcpy(tx_buf + *tx_buf_len, &reply, sizeof(struct Reply_metrics));
+    *tx_buf_len += sizeof(struct Reply_metrics);
+
+    return 1;
+  }
+  return 0;
+}
+
+
 /* Serialise data stored in global config in a format for sending over UDP. */
 size_t serialise_axis_config(
     const uint32_t axis,
-    uint8_t* msg_machine,
-    size_t* msg_machine_len,
-    size_t msg_machine_len_max,
-    uint8_t always)
+    uint8_t* tx_buf,
+    size_t* tx_buf_len,
+    uint8_t wait_for_data)
 {
   if(axis >= MAX_AXIS) {
     return 0;
   }
 
   static uint32_t failcount = 0;
-  static uint32_t count = 0;
+  //static uint32_t count = 0;
+
+	size_t max_buf_len = DATA_BUF_SIZE - sizeof(uint32_t);
 
   uint32_t abs_pos_acheived;
   uint32_t abs_pos_requested;
   uint32_t min_step_len_ticks;
   uint32_t max_accel_ticks;
+  int32_t velocity_requested;
   int32_t velocity_acheived;
   float kp;
   float ki;
   float kd;
-  uint32_t updated;
+  uint32_t updated = 0;
 
-  updated = get_axis_config(
-      axis,
-      CORE0,
-      &abs_pos_requested,
-      &abs_pos_acheived,
-      &min_step_len_ticks,
-      &max_accel_ticks,
-      &velocity_acheived,
-      &kp,
-      &ki,
-      &kd
-      );
+  do {
+    updated = get_axis_config(
+        axis,
+        CORE0,
+        &abs_pos_requested,
+        &abs_pos_acheived,
+        &min_step_len_ticks,
+        &max_accel_ticks,
+        &velocity_requested,
+        &velocity_acheived,
+        &kp,
+        &ki,
+        &kd
+        );
+  } while(updated == 0 && wait_for_data);
 
-  if(updated == 0) {
-    //printf("No new data to send since last call. Axis: %u\n", axis);
-    if(always == false) {
-      return 0;
-    }
-  }
-  count++;
+  //count++;
   if(updated > 1) {
     failcount++;
-    printf("WARN: C0, multiple updates: %u \t%lu \t%f\n",
-        axis, updated, (double)failcount / (double)count);
+    //printf("WC0, mult ud: %u \t%lu \t%f\n",
+    //    axis, updated, (double)failcount / (double)count);
+    printf("WC0, mult ud: %u \t%lu\n", axis, updated);
   }
 
-  if(axis == 0) {
-    //printf("\tC0\t%f\n", (double)failcount / (double)count);
-  }
-
-  if(*msg_machine_len + sizeof(struct Reply_axis_config) <= msg_machine_len_max) {
+  if(*tx_buf_len + sizeof(struct Reply_axis_config) <= max_buf_len) {
     struct Reply_axis_config reply = Reply_axis_config_default;
     reply.axis = axis;
     reply.abs_pos_acheived = abs_pos_acheived;
     reply.min_step_len_ticks = min_step_len_ticks;
     reply.max_accel_ticks = max_accel_ticks;
+    reply.velocity_requested = velocity_requested;
     reply.velocity_acheived = velocity_acheived;
 
-    memcpy(msg_machine + *msg_machine_len, &reply, sizeof(struct Reply_axis_config));
-    *msg_machine_len += sizeof(struct Reply_axis_config);
+    memcpy(tx_buf + *tx_buf_len, &reply, sizeof(struct Reply_axis_config));
+    *tx_buf_len += sizeof(struct Reply_axis_config);
 
     return 1;
   }
+  return 0;
 }
 
 
