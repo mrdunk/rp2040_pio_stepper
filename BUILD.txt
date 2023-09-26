@@ -1,3 +1,5 @@
+** For the RP2040. **
+
 Modify CMakeLists.txt in the root directory and modify the section:
   # Set ethernet chip
   set(WIZNET_CHIP W5500)
@@ -15,3 +17,9 @@ $ ls -l src/rp2040/stepper_control.uf2
 
 $ sudo blkid -o list | grep RPI-RP2
 
+
+
+** For the LinuxCNC driver. **
+
+$ cd src/driver
+$ sudo halcompile --compile --install ./hal_rp2040_eth.c
