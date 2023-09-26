@@ -78,29 +78,15 @@ uint8_t send_data(int device, char* packet, size_t packet_size) {
 /* Get data via UDP. */
 uint8_t get_reply_non_block(int device, char* receive_buffer) {
   int addr_len;
-  //char buf[BUFSIZE];
-  //memset(buf, '\0', BUFSIZE);
   int flags = MSG_DONTWAIT;
   int receive_count = recvfrom(
       sockfd[device], receive_buffer, BUFSIZE, flags, &remote_addr[device], (socklen_t *)&addr_len);
   if (receive_count < 0 && errno != EAGAIN) {
     rtapi_print_msg(RTAPI_MSG_ERR, "ERROR receiving on network port %i\n ", sockfd[device]);
-    //printf("rx error: %i\n", n);
     return 0;
   }
   return receive_count;
 }
-
-/*
-size_t serialize_data(void* values, void** packet, size_t* packet_space) {
-  uint32_t value = ((uint32_t*)values)[0];
-  test_message message = {.type=0xdeadbeef, .count=value};
-  size_t message_size = sizeof(test_message);
-  memcpy(*packet, &message, message_size);
-
-  return message_size;
-}
-*/
 
 size_t serialize_data(void* values, void** packet, size_t* packet_space) {
   struct Message message;
@@ -112,6 +98,7 @@ size_t serialize_data(void* values, void** packet, size_t* packet_space) {
   size_t message_size = 0;
   uint32_t msg_type = ((uint32_t*)values)[0];
   uint32_t uint_value;
+  int32_t int_value;
   float float_value;
   uint32_t axis, update_id, time;
 
@@ -140,9 +127,9 @@ size_t serialize_data(void* values, void** packet, size_t* packet_space) {
       break;
     case MSG_SET_AXIS_REL_POS:
       axis = ((uint32_t*)values)[1];
-      uint_value = ((uint32_t*)values)[2];
+      int_value = ((int32_t*)values)[2];
       message_uint_int = 
-        (struct Message_uint_int){.type=msg_type, .axis=axis, .value=uint_value};
+        (struct Message_uint_int){.type=msg_type, .axis=axis, .value=int_value};
       message_size = sizeof(struct Message_uint_int);
       memcpy(*packet, &message_uint_int, message_size);
       break;
@@ -150,13 +137,9 @@ size_t serialize_data(void* values, void** packet, size_t* packet_space) {
       // TODO.
     case MSG_SET_AXIS_MAX_ACCEL:
       // TODO.
-    case MSG_SET_AXIS_ABS_POS_AT_TIME:
-      // TODO.
-    case MSG_SET_PID_KP:
-    case MSG_SET_PID_KI:
-    case MSG_SET_PID_KD:
+    case MSG_SET_AXIS_PID_KP:
       axis = ((uint32_t*)values)[1];
-      memcpy(&float_value, &((uint32_t*)values)[2], 4);
+      float_value = (float)(((uint32_t*)values)[2]) / 1000;
       message_uint_float = 
         (struct Message_uint_float){.type=msg_type, .axis=axis, .value=float_value};
       message_size = sizeof(struct Message_uint_float);
@@ -166,18 +149,6 @@ size_t serialize_data(void* values, void** packet, size_t* packet_space) {
       message = (struct Message){.type=msg_type};
       message_size = sizeof(struct Message);
       memcpy(*packet, &message, message_size);
-      break;
-    case MSG_GET_AXIS_CONFIG:
-      uint_value = ((uint32_t*)values)[1];
-      message_uint = (struct Message_uint){.type=msg_type, .value=uint_value};
-      message_size = sizeof(struct Message_uint);
-      memcpy(*packet, &message_uint, message_size);
-      break;
-    case MSG_GET_AXIS_POS:
-      uint_value = ((uint32_t*)values)[1];
-      message_uint = (struct Message_uint){.type=msg_type, .value=uint_value};
-      message_size = sizeof(struct Message_uint);
-      memcpy(*packet, &message_uint, message_size);
       break;
     default:
       printf("Invalid message type: %u\n", msg_type);
@@ -245,11 +216,12 @@ void process_data(char* buf, skeleton_t* data, int debug) {
               reply_axis_config.max_accel_ticks,
               reply_axis_config.velocity_acheived);
         }
-        *data->received_pos[reply_axis_config.axis] =
-          ((float)reply_axis_config.abs_pos_acheived - (UINT_MAX / 2)) / 1000;
-        *data->requested_velocity[reply_axis_config.axis] = 
+        *data->feedback[reply_axis_config.axis] =
+          ((double)reply_axis_config.abs_pos_acheived - (UINT_MAX / 2))
+          / *data->scale[reply_axis_config.axis];
+        *data->calculated_velocity[reply_axis_config.axis] = 
           (float)reply_axis_config.velocity_requested;
-        *data->received_velocity[reply_axis_config.axis] = 
+        *data->fb_velocity[reply_axis_config.axis] = 
           (float)reply_axis_config.velocity_acheived;
         itterator += size;
 

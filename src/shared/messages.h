@@ -8,38 +8,18 @@
  * uint32_t of zero value. */
 
 
-static const char* human_help =
-"Description              | id | params\r\n"
-"-------------------------+----+------------------------\r\n"
-"TIMING                   | 1  | count: uint32_t, time: uint32_t\r\n"
-"SET_GLOAL_UPDATE_RATE    | 2  | value: uint32_t\r\n"
-"SET_AXIS_ABS_POS         | 3  | axis: uint32_t, value: uint32_t\r\n"
-"SET_AXIS_REL_POS         | 4  | axis: uint32_t, value: int32_t\r\n"
-"SET_AXIS_MAX_SPEED       | 5  | Not yet implemented\r\n"
-"SET_AXIS_MAX_ACCEL       | 6  | Not yet implemented\r\n"
-"SET_AXIS_ABS_POS_AT_TIME | 7  | Not yet implemented\r\n"
-"SET_PID_KP               | 8  | PID control values\r\n"
-"SET_PID_KD               | 9  | PID control values\r\n"
-"SET_PID_KD               | 10  | PID control values\r\n"
-"GET_GLOBAL_CONFIG        | 11 | no params\r\n"
-"GET_AXIS_CONFIG          | 12 | axis: uint32_t\r\n"
-"GET_AXIS_POS             | 13 | axis: uint32_t\r\n";
-
 #define MSG_NONE                     0
-#define MSG_TIMING                   1
-#define MSG_SET_GLOAL_UPDATE_RATE    2
-#define MSG_SET_AXIS_ABS_POS         3
-#define MSG_SET_AXIS_REL_POS         4
-#define MSG_SET_AXIS_MAX_SPEED       5
-#define MSG_SET_AXIS_MAX_ACCEL       6
-#define MSG_SET_AXIS_ABS_POS_AT_TIME 7
-#define MSG_SET_PID_KP               8  // These will likely get removed.
-#define MSG_SET_PID_KI               9  // These will likely get removed.
-#define MSG_SET_PID_KD               10  // These will likely get removed.
-
-#define MSG_GET_GLOBAL_CONFIG        11
-#define MSG_GET_AXIS_CONFIG          12
-#define MSG_GET_AXIS_POS             13
+#define MSG_TIMING                   1  // Contains packet count and time sent.
+#define MSG_SET_GLOAL_UPDATE_RATE    2  // Not yet implemented.
+#define MSG_SET_AXIS_ABS_POS         3  // Set absolute axis position.
+#define MSG_SET_AXIS_REL_POS         4  // Set relative axis position. (Velocity)
+#define MSG_SET_AXIS_RESET_POS       5  // Not yet implemented.
+#define MSG_SET_AXIS_MAX_SPEED       6  // Not yet implemented.
+#define MSG_SET_AXIS_MAX_ACCEL       7  // Not yet implemented.
+#define MSG_SET_AXIS_PID_KP          8  // Multiplier for position updates.
+#define MSG_SET_AXIS_STEP_IO         9  // Not yet implemented.
+#define MSG_SET_AXIS_DIR_IO         10  // Not yet implemented.
+#define MSG_GET_GLOBAL_CONFIG       11  // Not yet implemented.
 
 struct Message {
   uint32_t type;

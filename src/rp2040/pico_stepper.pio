@@ -51,7 +51,7 @@ direction_done:
 
     pull
     out x, 32                 ; Store step length in X.
-    
+
     jmp data_acquired
 
 
@@ -91,7 +91,7 @@ static inline void step_gen_program_init(
   // Sets STATUS according to FIFO level.
   sm_config_set_mov_status(&config, STATUS_TX_LESSTHAN, 1);
 
-  
+
   pio_sm_init(pio, sm, offset, &config);
 }
 
