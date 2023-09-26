@@ -10,8 +10,6 @@
 
 #define STEP_LEN_OVERHEAD 14
 
-uint32_t last_pos[MAX_AXIS] = {0};
-
 /* Initialize a pair of PIO programmes.
  * One for step generation on pio0 and one for counting said steps on pio1.
  */
@@ -53,52 +51,24 @@ void init_pio(
   }
 
   // Initial value for counter.
+  // Puts the start position in the middle of the possible range.
   pio_sm_put(pio1, axis, UINT_MAX / 2);
 }
 
-/* A PID function for experimental tuning of step lengths. */
-int32_t pid(
-    const uint8_t axis,
-    const uint32_t curent_pos,
-    const uint32_t desired_pos,
-    const float kp,
-    const float ki,
-    const float kd)
-{
-  static int32_t integral[MAX_AXIS] = {0};
-  static int32_t last_error[MAX_AXIS] = {0};
-  const int32_t max_velocity = 100;
-  //printf("%f\t%f\t%f\n", kp, ki, kd);
-
-  int32_t error = desired_pos - curent_pos;
-  integral[axis] += error;
-  int32_t derivative = error - last_error[axis];
-  int32_t velocity = 
-    (kp * (float)error) + (ki * (float)integral[axis]) + (kd * (float)derivative);
-  if(velocity > max_velocity) {
-    velocity = max_velocity;
-  } else if(velocity < -max_velocity) {
-    velocity = -max_velocity;
-  }
-
-  last_error[axis] = error;
-
-  return velocity;
-}
-
+/* Convert step command from LinuxCNC and Feedback from PIO into a desired velocity. */
 uint32_t get_velocity(
     const uint8_t axis,
     uint32_t abs_pos_acheived,
     uint32_t abs_pos_requested,
-    float kp, float ki, float kd)
+    float kp)
 {
-  //int32_t velocity = 
-  //  pid(axis, abs_pos_acheived, abs_pos_requested, kp, ki, kd); 
-  
-  int32_t velocity = 
-    abs_pos_requested - abs_pos_acheived;
 
-  //velocity = pid(axis, velocity_acheived, velocity, kp, ki, kd);
+  static int32_t last_error[MAX_AXIS] = {0};
+  int32_t error = abs_pos_requested - abs_pos_acheived;
+  //int32_t velocity = kp * (float)error;
+  last_error[axis] /= 2;
+  last_error[axis] += error / 2;
+  int32_t velocity = kp * (float)last_error[axis];
 
   return velocity;
 }
@@ -107,7 +77,8 @@ uint32_t get_velocity(
 uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   static uint32_t failcount = 0;
   static uint32_t count = 0;
-  static int32_t last_velocity[MAX_AXIS] = {0};
+  static uint32_t last_pos[MAX_AXIS] = {0};
+
 
   //uint32_t clock_multiplier = clock_get_hz(clk_sys) / 1000000;
   static const uint32_t clock_multiplier = 133;
@@ -118,8 +89,6 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   int32_t velocity_requested;
   int32_t velocity_acheived;
   float kp;
-  float ki;
-  float kd;
   uint32_t updated;
 
   updated = get_axis_config(
@@ -131,9 +100,7 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
       &max_accel_ticks,
       &velocity_requested,
       &velocity_acheived,
-      &kp,
-      &ki,
-      &kd
+      &kp
       );
 
   if(updated <= 0) {
@@ -154,7 +121,12 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
     max_retries--;
   }
   
-  int32_t velocity = get_velocity(axis, abs_pos_acheived, abs_pos_requested, kp, ki, kd);
+  int32_t velocity;
+  if(abs_pos_requested != 0) {
+    velocity = get_velocity(axis, abs_pos_acheived, abs_pos_requested, kp);
+  } else {
+    velocity = velocity_requested;
+  }
 
   uint8_t direction = (velocity > 0);
   uint32_t requested_step_count = abs(velocity);
@@ -188,8 +160,6 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
       NULL,
       &velocity,
       &velocity_acheived,
-      NULL,
-      NULL,
       NULL);
 
   return 1;

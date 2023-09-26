@@ -89,8 +89,8 @@ struct Message_timing* process_msg_timing(char** rx_buf) {
 struct Message_uint_int* process_msg_uint_int(char** rx_buf) {
   struct Message_uint_int* message = (struct Message_uint_int*)(*rx_buf);
 
-  // printf("NW UPD message on port %u:\n\ttype: %lu\n\tvalue0: %lu\n\tvalue1: %li\r\n",
-  //    NW_PORT, message->type, message->value0, message->value1);
+  // printf("NW UPD message on port %u:\n\ttype: %u\n\tvalue0: %i\n\tvalue1: %li\r\n",
+  //    NW_PORT, message->type, message->axis, message->value);
 
   *rx_buf += sizeof(struct Message_uint_int);
 
@@ -121,7 +121,9 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
   struct Message_uint_float* msg_uint_float;
 
   uint32_t axis, update_id, tx_time;
-  uint32_t abs_pos_requested;
+  uint32_t abs_pos_requested = 0;
+  uint32_t abs_pos_acheived;
+  int32_t velocity_requested = 0;
 
   while(msg_type = *(uint32_t*)(rx_itterator)) {  // msg_type of 0 indicates end of data.
     switch(msg_type) {
@@ -148,64 +150,33 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
         axis = msg_uint_uint->axis;
         abs_pos_requested = msg_uint_uint->value;
         update_axis_config(
-            axis, CORE0, &abs_pos_requested, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+            axis, CORE0,
+            &abs_pos_requested, NULL, NULL, NULL, &velocity_requested, NULL, NULL);
         (*return_data)++;
         break;
       case MSG_SET_AXIS_REL_POS:
         msg_uint_int = process_msg_uint_int(&rx_itterator);
-        //set_relative_position(msg_uint_int->axis, msg_uint_int->value);
-        //(*return_data)++;
+        axis = msg_uint_int->axis;
+        velocity_requested = msg_uint_int->value;
+        update_axis_config(
+            axis, CORE0,
+            &abs_pos_requested, NULL, NULL, NULL, &velocity_requested, NULL, NULL);
+        (*return_data)++;
         break;
       case MSG_SET_AXIS_MAX_SPEED:
         // TODO.
       case MSG_SET_AXIS_MAX_ACCEL:
         // TODO.
-      case MSG_SET_AXIS_ABS_POS_AT_TIME:
-        // TODO.
-        msg_uint_uint = process_msg_uint_uint(&rx_itterator);
-        break;
-      case MSG_SET_PID_KP:
+      case MSG_SET_AXIS_PID_KP:
         msg_uint_float = process_msg_uint_float(&rx_itterator);
         axis = msg_uint_float->axis;
+        printf("Setting axis: %u kp: %f\n", axis, msg_uint_float->value);
         update_axis_config(
-            axis, CORE0, NULL, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value, NULL, NULL);
-        break;
-      case MSG_SET_PID_KI:
-        msg_uint_float = process_msg_uint_float(&rx_itterator);
-        axis = msg_uint_float->axis;
-        update_axis_config(
-            axis, CORE0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value, NULL);
-        break;
-      case MSG_SET_PID_KD:
-        msg_uint_float = process_msg_uint_float(&rx_itterator);
-        axis = msg_uint_float->axis;
-        update_axis_config(
-            axis, CORE0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value);
+            axis, CORE0, NULL, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value);
         break;
       case MSG_GET_GLOBAL_CONFIG:
         msg = process_msg(&rx_itterator);
         //get_global_config(
-        //    tx_buf,
-        //    &tx_buf_len,
-        //    tx_buf_mach_len_max
-        //    );
-        break;
-      case MSG_GET_AXIS_CONFIG:
-        msg_uint = process_msg_uint(&rx_itterator);
-        axis = msg_uint->value;
-        // TODO: Test this works.
-        serialise_axis_config(axis, tx_buf, &tx_buf_len, false);
-        //get_axis_config(
-        //    msg_uint->value,
-        //    tx_buf,
-        //    &tx_buf_len,
-        //    tx_buf_mach_len_max
-        //    );
-        break;
-      case MSG_GET_AXIS_POS:
-        msg_uint = process_msg_uint(&rx_itterator);
-        //get_axis_pos(
-        //    msg_uint->value,
         //    tx_buf,
         //    &tx_buf_len,
         //    tx_buf_mach_len_max

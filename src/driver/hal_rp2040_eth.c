@@ -27,11 +27,15 @@ typedef struct {
   hal_u32_t* metric_update_id;
   hal_s32_t* metric_time_diff;
   hal_u32_t* metric_rp_update_len;
+  hal_u32_t* metric_missed_packets;
 	hal_bit_t* joint_enable[JOINTS];
-  hal_float_t* requested_pos[JOINTS];
-  hal_float_t* received_pos[JOINTS];
-  hal_float_t* requested_velocity[JOINTS];
-  hal_float_t* received_velocity[JOINTS];
+	hal_bit_t* joint_velocity[JOINTS];
+  hal_float_t* kp[JOINTS];
+  hal_float_t* scale[JOINTS];
+  hal_float_t* command[JOINTS];
+  hal_float_t* feedback[JOINTS];
+  hal_float_t* calculated_velocity[JOINTS];
+  hal_float_t* fb_velocity[JOINTS];
   hal_bit_t* pin_out[IO];
   hal_bit_t* pin_in[IO];
 } skeleton_t;
@@ -89,7 +93,7 @@ int rtapi_app_main(void)
 	for(int num_io = 0; num_io < IO; num_io++) {
 		/* Export the IO pin(s) */
 		retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->pin_in[num_io]),
-				comp_id, "rp2040_eth.%d.pin-%02d-in", num_device, num_io);
+				comp_id, "rp2040_eth.%d.pin-%d-in", num_device, num_io);
 		if (retval < 0) {
 			rtapi_print_msg(RTAPI_MSG_ERR,
 					"SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -99,7 +103,7 @@ int rtapi_app_main(void)
 		}
 
 		retval = hal_pin_bit_newf(HAL_OUT, &(port_data_array->pin_out[num_io]),
-				comp_id, "rp2040_eth.%d.pin-%02d-out", num_device, num_io);
+				comp_id, "rp2040_eth.%d.pin-%d-out", num_device, num_io);
 		if (retval < 0) {
 			rtapi_print_msg(RTAPI_MSG_ERR,
 					"SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -112,7 +116,7 @@ int rtapi_app_main(void)
 	for(int num_joint = 0; num_joint < JOINTS; num_joint++) {
 		/* Export the joint position pin(s) */
 		retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->joint_enable[num_joint]),
-				comp_id, "rp2040_eth.%d.joint-enable-%02d", num_device, num_joint);
+				comp_id, "rp2040_eth.%d.joint-enable-%d", num_device, num_joint);
 		if (retval < 0) {
 			rtapi_print_msg(RTAPI_MSG_ERR,
 					"SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -121,8 +125,8 @@ int rtapi_app_main(void)
 			return -1;
 		}
 
-		retval = hal_pin_float_newf(HAL_IN, &(port_data_array->requested_pos[num_joint]),
-				comp_id, "rp2040_eth.%d.pos-cmd-%02d", num_device, num_joint);
+		retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->joint_velocity[num_joint]),
+				comp_id, "rp2040_eth.%d.joint-velocity-mode-%d", num_device, num_joint);
 		if (retval < 0) {
 			rtapi_print_msg(RTAPI_MSG_ERR,
 					"SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -131,8 +135,8 @@ int rtapi_app_main(void)
 			return -1;
 		}
 
-		retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->received_pos[num_joint]),
-				comp_id, "rp2040_eth.%d.pos-fb-%02d", num_device, num_joint);
+		retval = hal_pin_float_newf(HAL_IN, &(port_data_array->kp[num_joint]),
+				comp_id, "rp2040_eth.%d.joint-kp-%d", num_device, num_joint);
 		if (retval < 0) {
 			rtapi_print_msg(RTAPI_MSG_ERR,
 					"SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -141,8 +145,8 @@ int rtapi_app_main(void)
 			return -1;
 		}
 
-		retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->requested_velocity[num_joint]),
-				comp_id, "rp2040_eth.%d.velocity-calc-%02d", num_device, num_joint);
+		retval = hal_pin_float_newf(HAL_IN, &(port_data_array->scale[num_joint]),
+				comp_id, "rp2040_eth.%d.joint-scale-%d", num_device, num_joint);
 		if (retval < 0) {
 			rtapi_print_msg(RTAPI_MSG_ERR,
 					"SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -151,8 +155,38 @@ int rtapi_app_main(void)
 			return -1;
 		}
 
-		retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->received_velocity[num_joint]),
-				comp_id, "rp2040_eth.%d.velocity-fb-%02d", num_device, num_joint);
+		retval = hal_pin_float_newf(HAL_IN, &(port_data_array->command[num_joint]),
+				comp_id, "rp2040_eth.%d.pos-cmd-%d", num_device, num_joint);
+		if (retval < 0) {
+			rtapi_print_msg(RTAPI_MSG_ERR,
+					"SKELETON: ERROR: port %d var export failed with err=%i\n",
+          num_device, retval);
+			hal_exit(comp_id);
+			return -1;
+		}
+
+		retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->feedback[num_joint]),
+				comp_id, "rp2040_eth.%d.pos-fb-%d", num_device, num_joint);
+		if (retval < 0) {
+			rtapi_print_msg(RTAPI_MSG_ERR,
+					"SKELETON: ERROR: port %d var export failed with err=%i\n",
+          num_device, retval);
+			hal_exit(comp_id);
+			return -1;
+		}
+
+		retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->calculated_velocity[num_joint]),
+				comp_id, "rp2040_eth.%d.velocity-calc-%d", num_device, num_joint);
+		if (retval < 0) {
+			rtapi_print_msg(RTAPI_MSG_ERR,
+					"SKELETON: ERROR: port %d var export failed with err=%i\n",
+          num_device, retval);
+			hal_exit(comp_id);
+			return -1;
+		}
+
+		retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->fb_velocity[num_joint]),
+				comp_id, "rp2040_eth.%d.velocity-fb-%d", num_device, num_joint);
 		if (retval < 0) {
 			rtapi_print_msg(RTAPI_MSG_ERR,
 					"SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -185,6 +219,16 @@ int rtapi_app_main(void)
 
   retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->metric_rp_update_len),
       comp_id, "rp2040_eth.%d.metrics-rp-update-len", num_device);
+  if (retval < 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR,
+        "SKELETON: ERROR: port %d var export failed with err=%i\n",
+        num_device, retval);
+    hal_exit(comp_id);
+    return -1;
+  }
+
+  retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->metric_missed_packets),
+      comp_id, "rp2040_eth.%d.metrics-missed-packets", num_device);
   if (retval < 0) {
     rtapi_print_msg(RTAPI_MSG_ERR,
         "SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -237,13 +281,17 @@ static void write_port(void *arg, long period)
 
 
 	static uint count = 0;
+  static uint missed_packets = 0;
+  static double last_kp[JOINTS] = {0};
+  static double last_command[JOINTS];
   static uint32_t last_update_id = 0;
   skeleton_t *data = arg;
-
 
   char buffer[BUFSIZE];
   memset(buffer, '\0', BUFSIZE);
   void* buffer_iterator = &buffer[0];
+
+  // Put metrics packet in buffer.
   uint32_t values[4] = {0};
   values[0] = MSG_TIMING;
   values[1] = count;
@@ -251,31 +299,54 @@ static void write_port(void *arg, long period)
   size_t buffer_space = BUFSIZE - sizeof(struct Message);
   size_t buffer_size = serialize_data(values, &buffer_iterator, &buffer_space);
 
+  // Put GPIO values in buffer.
+  // TODO: Not yet implemented.
 	for(int num_io = 0; num_io < IO; num_io++) {
     *data->pin_in[num_io] = ((count / 1000) % 2 == 0);
   }
-	for(int num_joint = 0; num_joint < JOINTS; num_joint++) {
-		//*data->received_pos[num_joint] = *data->requested_pos[num_joint];
 
-    values[0] = MSG_SET_AXIS_ABS_POS;
-    values[1] = num_joint;
-    values[2] = 1000 * (*data->requested_pos[num_joint]) + (UINT_MAX / 2);
-    buffer_space = BUFSIZE - sizeof(struct Message_uint_uint);
+  // Iterate through joints.
+	for(int num_joint = 0; num_joint < JOINTS; num_joint++) {
+    // Put joint positions packet in buffer.
+    if(*data->joint_velocity[num_joint] == 1) {
+      // Velocity mode.
+      // TODO: Not tested.
+      double error = (last_command[num_joint] + ((*data->command)[num_joint])) / 2.0
+        - (*data->feedback[num_joint]);
+      values[0] = MSG_SET_AXIS_REL_POS;
+      values[1] = num_joint;
+      values[2] = *data->scale[num_joint] * error;
+      buffer_space = BUFSIZE - sizeof(struct Message_uint_int);
+      last_command[num_joint] = (*data->command[num_joint]);
+    } else {
+      // Absolute position mode.
+      values[0] = MSG_SET_AXIS_ABS_POS;
+      values[1] = num_joint;
+      values[2] = (*data->scale[num_joint] * *data->command[num_joint]) + (UINT_MAX / 2);
+      buffer_space = BUFSIZE - sizeof(struct Message_uint_uint);
+    }
     buffer_size += serialize_data(values, &buffer_iterator, &buffer_space);
+
+    // Look for parameter changes.
+    if(last_kp[num_joint] != *data->kp[num_joint]) {
+      last_kp[num_joint] = *data->kp[num_joint];
+      values[0] = MSG_SET_AXIS_PID_KP;
+      values[1] = num_joint;
+      values[2] = (uint32_t)(*data->kp[num_joint] * 1000.0);
+      buffer_size += serialize_data(values, &buffer_iterator, &buffer_space);
+    }
 	}
 
   send_data(num_device, buffer, buffer_size);
 
+  // Check packets all completed round trip.
   int receive_count;
   receive_count = get_reply_non_block(num_device, buffer);
   if(receive_count > 0) {
     //process_data(buffer, data, (count % 10000 == 0));
     process_data(buffer, data, 0);
   } else {
-    printf("!");
-    if (count % 200 == 0) {
-      printf("\n");
-    }
+    *data->metric_missed_packets++;
   }
 
   if(last_update_id +1 != *data->metric_update_id && last_update_id != 0) {
@@ -283,6 +354,6 @@ static void write_port(void *arg, long period)
   }
   last_update_id = *data->metric_update_id;
        
-
 	count++;
 }
+
