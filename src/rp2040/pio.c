@@ -10,6 +10,11 @@
 
 #define STEP_LEN_OVERHEAD 14
 
+uint32_t divRoundClosest(const uint32_t n, const uint32_t d)
+{
+  return (n + d / 2) / d;
+}
+
 /* Initialize a pair of PIO programmes.
  * One for step generation on pio0 and one for counting said steps on pio1.
  */
@@ -62,13 +67,13 @@ uint32_t get_velocity(
     uint32_t abs_pos_requested,
     float kp)
 {
-
-  static int32_t last_error[MAX_AXIS] = {0};
+  //static float last_error[MAX_AXIS] = {0};
   int32_t error = abs_pos_requested - abs_pos_acheived;
-  //int32_t velocity = kp * (float)error;
-  last_error[axis] /= 2;
-  last_error[axis] += error / 2;
-  int32_t velocity = kp * (float)last_error[axis];
+  int32_t velocity = kp * (float)error;
+  //last_error[axis] *= (7.0 / 8.0);
+  //last_error[axis] += (float)error * (1.0 / 8.0);
+
+  //int32_t velocity = kp * (float)last_error[axis];
 
   return velocity;
 }
@@ -79,9 +84,9 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   static uint32_t count = 0;
   static uint32_t last_pos[MAX_AXIS] = {0};
 
-
   //uint32_t clock_multiplier = clock_get_hz(clk_sys) / 1000000;
   static const uint32_t clock_multiplier = 133;
+  //static uint32_t time_sent[MAX_AXIS] = {0};
   uint32_t abs_pos_acheived;
   uint32_t abs_pos_requested;
   uint32_t min_step_len_ticks;
@@ -120,6 +125,13 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
     abs_pos_acheived = pio_sm_get_blocking(pio1, axis);
     max_retries--;
   }
+  //uint32_t time_received = time_us_64();
+  //uint32_t abs_pos_acheived_normalized;
+  //if(time_sent[axis] > 0) {
+  //  uint32_t period_us = (time_received - time_sent[axis]);
+  //  abs_pos_acheived_normalized = abs_pos_acheived * update_time_us / period_us;
+  //}
+  //time_sent[axis] = time_received;
   
   int32_t velocity;
   if(abs_pos_requested != 0) {
@@ -134,19 +146,18 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   int32_t step_len_ticks = 0;
   
   if(requested_step_count > 0) {
-    //requested = (actual - 14) / 2
+    uint32_t utt = update_time_us * clock_multiplier;
     step_len_ticks = 
-      (((update_time_us * clock_multiplier) / (requested_step_count * 2))) - STEP_LEN_OVERHEAD;
+      divRoundClosest(utt, (requested_step_count * 2)) - STEP_LEN_OVERHEAD;
     if(step_len_ticks < 1) {
       // TODO: use min_step_len_ticks for this.
       step_len_ticks = 1;
     }
   }
 
-  // Request steps.
+  // Request steps from PIO.
   pio_sm_put(pio0, axis, direction);
   pio_sm_put(pio0, axis, step_len_ticks);
-  //printf("pio0 axis: %u\ttx: %u\n", axis, pio_sm_get_tx_fifo_level(pio0, axis));
 
   velocity_acheived = abs_pos_acheived - last_pos[axis];
   last_pos[axis] = abs_pos_acheived; 

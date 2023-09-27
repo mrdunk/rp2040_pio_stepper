@@ -15,7 +15,6 @@ void update_all_axis() {
       tight_loop_contents();
     }
   }
-  //printf("%u\n", update_time_us);
 
   for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
     updated_count += do_steps(axis, update_time_us);
@@ -33,6 +32,7 @@ void core1_main() {
   while (1) {
     update_all_axis();
 
+    /*
     if(count % 200 == 0) {
       printf(".");
       if(count % 20000 == 0) {
@@ -40,6 +40,7 @@ void core1_main() {
       }
     };
     count++;
+    */
   }
 }
 
