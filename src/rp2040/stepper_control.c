@@ -124,6 +124,8 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
   uint32_t abs_pos_requested = 0;
   uint32_t abs_pos_acheived;
   int32_t velocity_requested = 0;
+  int32_t enabled = 0;
+  int8_t io_pos_value = -1;
 
   while(msg_type = *(uint32_t*)(rx_itterator)) {  // msg_type of 0 indicates end of data.
     switch(msg_type) {
@@ -145,13 +147,22 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
         //    tx_buf_mach_len_max
         //    );
         break;
+      case MSG_SET_AXIS_ENABLED:
+        msg_uint_uint = process_msg_uint_uint(&rx_itterator);
+        axis = msg_uint_uint->axis;
+        enabled = msg_uint_uint->value;
+        update_axis_config(
+            axis, CORE0,
+            &msg_uint_uint->value, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        (*return_data)++;
+        break;
       case MSG_SET_AXIS_ABS_POS:
         msg_uint_uint = process_msg_uint_uint(&rx_itterator);
         axis = msg_uint_uint->axis;
         abs_pos_requested = msg_uint_uint->value;
         update_axis_config(
             axis, CORE0,
-            &abs_pos_requested, NULL, NULL, NULL, &velocity_requested, NULL, NULL);
+            NULL, NULL, NULL, &abs_pos_requested, NULL, NULL, NULL, &velocity_requested, NULL, NULL);
         (*return_data)++;
         break;
       case MSG_SET_AXIS_REL_POS:
@@ -160,7 +171,7 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
         velocity_requested = msg_uint_int->value;
         update_axis_config(
             axis, CORE0,
-            &abs_pos_requested, NULL, NULL, NULL, &velocity_requested, NULL, NULL);
+            NULL, NULL, NULL, &abs_pos_requested, NULL, NULL, NULL, &velocity_requested, NULL, NULL);
         (*return_data)++;
         break;
       case MSG_SET_AXIS_MAX_SPEED:
@@ -170,9 +181,29 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
       case MSG_SET_AXIS_PID_KP:
         msg_uint_float = process_msg_uint_float(&rx_itterator);
         axis = msg_uint_float->axis;
-        printf("Setting axis: %u kp: %f\n", axis, msg_uint_float->value);
+        printf("Setting axis: %u\tkp:      %f\n", axis, msg_uint_float->value);
         update_axis_config(
-            axis, CORE0, NULL, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value);
+            axis, CORE0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value);
+        break;
+      case MSG_SET_AXIS_IO_STEP:
+        msg_uint_int = process_msg_uint_int(&rx_itterator);
+        axis = msg_uint_int->axis;
+        io_pos_value = msg_uint_int->value;
+        printf("Setting axis: %u\tstep-io: %i\n", axis, io_pos_value);
+        update_axis_config(
+            axis, CORE0,
+            NULL, &io_pos_value, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        (*return_data)++;
+        break;
+      case MSG_SET_AXIS_IO_DIR:
+        msg_uint_int = process_msg_uint_int(&rx_itterator);
+        axis = msg_uint_int->axis;
+        io_pos_value = msg_uint_int->value;
+        printf("Setting axis: %u\tdir-io:  %i\n", axis, io_pos_value);
+        update_axis_config(
+            axis, CORE0,
+            NULL, NULL, &io_pos_value, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        (*return_data)++;
         break;
       case MSG_GET_GLOBAL_CONFIG:
         msg = process_msg(&rx_itterator);
@@ -184,6 +215,9 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
         break;
       default:
         printf("Invalid message type: %lu\r\n", msg_type);
+        *(uint32_t*)(rx_itterator) = 0;  // 0 msg_type stops execution.
+        tx_buf_len = 0;
+        break;
     }
   }
   memset(rx_buf, '\0', DATA_BUF_SIZE);
@@ -232,7 +266,6 @@ int32_t get_UDP(
        if((ret = socket(socket_num, Sn_MR_UDP, port, 0x00)) != socket_num) {
          return ret;
        }
-       printf("%d:Closed, UDP connection, port [%d]\r\n", socket_num, port);
        break;
      default :
        break;
@@ -359,9 +392,6 @@ int main() {
       // Get data from config and put in TX buffer.
       axis_count += serialise_axis_config(axis, tx_buf, &tx_buf_len, true);
     }
-#if DEBUG_OUTPUT
-    printf("Sending: %lu\n", axis_count);
-#endif
 
     retval = put_UDP(
         SOCKET_NUMBER,
@@ -382,9 +412,6 @@ int main() {
         update_period(ave_period_us);
         last_ave_period_us = ave_period_us;
       }
-#if DEBUG_OUTPUT
-      printf("Received: %u \t%lu\n", received_msg_count, ave_period_us);
-#endif
       received_msg_count = 0;
 
       gpio_put(LED_PIN, (time_now / 1000000) % 2);

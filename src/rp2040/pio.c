@@ -18,41 +18,76 @@ uint32_t divRoundClosest(const uint32_t n, const uint32_t d)
 /* Initialize a pair of PIO programmes.
  * One for step generation on pio0 and one for counting said steps on pio1.
  */
-void init_pio(
-    const uint32_t axis,
-    const uint32_t pin_step,
-    const uint32_t pin_direction
-    )
+void init_pio(const uint32_t axis)
 {
   static uint32_t offset_pio0 = 0;
   static uint32_t offset_pio1 = 0;
-  static uint8_t init_done = 0;
+  static uint32_t sm0[MAX_AXIS];
+  static uint32_t sm1[MAX_AXIS];
+  static uint8_t programs_loaded = 0;
 
-  if(init_done == 0)
+  int8_t io_pos_step;
+  int8_t io_pos_dir;
+  get_axis_config(
+      axis,
+      CORE1,
+      NULL,
+      &io_pos_step,
+      &io_pos_dir,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL
+      );
+
+  if(io_pos_step < 0 || io_pos_step >= 32) {
+    printf("WARN: Axis %u step io pin is out of range: %i\n", axis, io_pos_step);
+    return;
+  }
+  if(io_pos_dir < 0 || io_pos_dir >= 32) {
+    printf("WARN: Axis %u dir io pin is out of range: %i\n", axis, io_pos_dir);
+    return;
+  }
+  // TODO: Warn about duplicate pin assignments.
+
+  printf("\tio-step: %i\tio-dir: %i\n", axis, io_pos_step, io_pos_dir);
+
+  if(programs_loaded == 0)
   {
     offset_pio0 = pio_add_program(pio0, &step_gen_program);
     offset_pio1 = pio_add_program(pio1, &step_count_program);
-    init_done = 1;
+
+    for(int8_t a = 0; a < MAX_AXIS; a++) {
+      sm0[a] = pio_claim_unused_sm(pio0, true);
+      sm1[a] = pio_claim_unused_sm(pio1, true);
+    }
+
+    programs_loaded = 1;
   }
 
-  uint32_t sm;
-
-  sm = pio_claim_unused_sm(pio0, true);
+  // The stepping PIO program.
+  pio_sm_set_enabled(pio0, sm0[axis], false);
   // From pico_axs.pio
-  step_gen_program_init(pio0, sm, offset_pio0, pin_step, pin_direction);
-  pio_sm_set_enabled(pio0, sm, true);
+  step_gen_program_init(pio0, sm0[axis], offset_pio0, io_pos_step, io_pos_dir);
+  pio_sm_set_enabled(pio0, sm0[axis], true);
 
-  if(sm != axis) {
-    printf("ERROR: Incorrect PIO initialization order for pio0. axis: %u  sm: %u", axis, sm);
+  if(sm0[axis] != axis) {
+    printf("ERROR: Incorrect PIO initialization order for pio0. axis: %u  sm0[axis]: %u",
+        axis, sm0[axis]);
   }
 
-  sm = pio_claim_unused_sm(pio1, true);
+  // The counting PIO program.
+  pio_sm_set_enabled(pio1, sm1[axis], false);
   // From pico_axs.pio
-  step_count_program_init(pio1, sm, offset_pio1, pin_step, pin_direction);
-  pio_sm_set_enabled(pio1, sm, true);
+  step_count_program_init(pio1, sm1[axis], offset_pio1, io_pos_step, io_pos_dir);
+  pio_sm_set_enabled(pio1, sm1[axis], true);
 
-  if(sm != axis) {
-    printf("ERROR: Incorrect PIO initialization order for pio1. axis: %u  sm: %u", axis, sm);
+  if(sm1[axis] != axis) {
+    printf("ERROR: Incorrect PIO initialization order for pio1. axis: %u  sm1[axis]: %u",
+        axis, sm1[axis]);
   }
 
   // Initial value for counter.
@@ -67,13 +102,8 @@ uint32_t get_velocity(
     uint32_t abs_pos_requested,
     float kp)
 {
-  //static float last_error[MAX_AXIS] = {0};
   int32_t error = abs_pos_requested - abs_pos_acheived;
   int32_t velocity = kp * (float)error;
-  //last_error[axis] *= (7.0 / 8.0);
-  //last_error[axis] += (float)error * (1.0 / 8.0);
-
-  //int32_t velocity = kp * (float)last_error[axis];
 
   return velocity;
 }
@@ -82,11 +112,12 @@ uint32_t get_velocity(
 uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   static uint32_t failcount = 0;
   static uint32_t count = 0;
-  static uint32_t last_pos[MAX_AXIS] = {0};
+  static uint32_t last_pos[MAX_AXIS] = {0, 0, 0, 0};
+  static uint32_t last_enabled[MAX_AXIS] = {0, 0, 0, 0};
 
   //uint32_t clock_multiplier = clock_get_hz(clk_sys) / 1000000;
   static const uint32_t clock_multiplier = 133;
-  //static uint32_t time_sent[MAX_AXIS] = {0};
+  uint8_t enabled;
   uint32_t abs_pos_acheived;
   uint32_t abs_pos_requested;
   uint32_t min_step_len_ticks;
@@ -99,6 +130,9 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   updated = get_axis_config(
       axis,
       CORE1,
+      &enabled,
+      NULL,
+      NULL,
       &abs_pos_requested,
       &abs_pos_acheived,
       &min_step_len_ticks,
@@ -111,11 +145,24 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   if(updated <= 0) {
     return 0;
   }
+
   count++;
   if(updated > 1) {
-    failcount++;
-    printf("WARN: C1, multiple updates: %u \t%lu \t%f\n\n",
-        axis, updated, (double)failcount / (double)count);
+    if(enabled && last_enabled[axis]) {
+      failcount++;
+      printf("WARN: C1, multiple updates: %u \t%lu \t%f\n",
+          axis, updated, (double)failcount / (double)count);
+    }
+  }
+
+  if(enabled != last_enabled[axis]) {
+    if(enabled) {
+      printf("Axis %u was enabled.\n", axis);
+      init_pio(axis);
+    } else {
+      printf("Axis %u was disabled.\n", axis);
+    }
+    last_enabled[axis] = enabled;
   }
 
   // Stop from getting stuck continually reading FIFO when steps are short.
@@ -125,13 +172,6 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
     abs_pos_acheived = pio_sm_get_blocking(pio1, axis);
     max_retries--;
   }
-  //uint32_t time_received = time_us_64();
-  //uint32_t abs_pos_acheived_normalized;
-  //if(time_sent[axis] > 0) {
-  //  uint32_t period_us = (time_received - time_sent[axis]);
-  //  abs_pos_acheived_normalized = abs_pos_acheived * update_time_us / period_us;
-  //}
-  //time_sent[axis] = time_received;
   
   int32_t velocity;
   if(abs_pos_requested != 0) {
@@ -144,8 +184,8 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   uint32_t requested_step_count = abs(velocity);
 
   int32_t step_len_ticks = 0;
-  
-  if(requested_step_count > 0) {
+
+  if(enabled > 0 && requested_step_count > 0) {
     uint32_t utt = update_time_us * clock_multiplier;
     step_len_ticks = 
       divRoundClosest(utt, (requested_step_count * 2)) - STEP_LEN_OVERHEAD;
@@ -153,7 +193,7 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
       // TODO: use min_step_len_ticks for this.
       step_len_ticks = 1;
     }
-  }
+  } 
 
   // Request steps from PIO.
   pio_sm_put(pio0, axis, direction);
@@ -165,6 +205,9 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   update_axis_config(
       axis,
       CORE1,
+      NULL,
+      NULL, 
+      NULL,
       NULL,
       &abs_pos_acheived,
       NULL,

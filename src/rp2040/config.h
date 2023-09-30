@@ -15,6 +15,9 @@
 struct ConfigAxis {
   uint8_t updated_from_c0;      // Data was updated on core 0.
   uint8_t updated_from_c1;      // Data was updated on core 1.
+  uint8_t enabled;
+  int8_t io_pos_step;           // Physical step IO pin. 
+  int8_t io_pos_dir;            // Physical direction IO pin.
   uint32_t abs_pos_requested;   // In steps. Default value is UINT_MAX / 2.
   uint32_t abs_pos_acheived;    // In steps. Default value is UINT_MAX / 2.
   uint32_t min_step_len_ticks;
@@ -54,6 +57,9 @@ uint8_t has_new_c0_data(const uint8_t axis);
 void update_axis_config(
     const uint8_t axis,
     const uint8_t core,
+    const uint8_t* enabled,
+    const int8_t* io_pos_step,
+    const int8_t* io_pos_dir,
     const uint32_t* abs_pos_requested,
     const uint32_t* abs_pos_acheived,
     const uint32_t* min_step_len_ticks,
@@ -66,6 +72,9 @@ void update_axis_config(
 uint32_t get_axis_config(
     const uint8_t axis,
     const uint8_t core,
+    uint8_t* enabled,
+    int8_t* io_pos_step,
+    int8_t* io_pos_dir,
     uint32_t* abs_pos_requested,
     uint32_t* abs_pos_acheived,
     uint32_t* min_step_len_ticks,

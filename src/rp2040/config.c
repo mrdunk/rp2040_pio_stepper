@@ -19,6 +19,9 @@ volatile struct ConfigGlobal config = {
       // Axis 0.
       .updated_from_c0 = 0,
       .updated_from_c1 = 0,
+      .enabled = 0,
+      .io_pos_step = -1,
+      .io_pos_dir = -1,
       .abs_pos_requested = UINT_MAX / 2,
       .abs_pos_acheived = UINT_MAX / 2,
       .min_step_len_ticks = 50,
@@ -31,6 +34,9 @@ volatile struct ConfigGlobal config = {
       // Axis 1.
       .updated_from_c0 = 0,
       .updated_from_c1 = 0,
+      .enabled = 0,
+      .io_pos_step = -1,
+      .io_pos_dir = -1,
       .abs_pos_requested = UINT_MAX / 2,
       .abs_pos_acheived = UINT_MAX / 2,
       .min_step_len_ticks = 50,
@@ -43,6 +49,9 @@ volatile struct ConfigGlobal config = {
       // Axis 2.
       .updated_from_c0 = 0,
       .updated_from_c1 = 0,
+      .enabled = 0,
+      .io_pos_step = -1,
+      .io_pos_dir = -1,
       .abs_pos_requested = UINT_MAX / 2,
       .abs_pos_acheived = UINT_MAX / 2,
       .min_step_len_ticks = 50,
@@ -55,6 +64,9 @@ volatile struct ConfigGlobal config = {
       // Axis 3.
       .updated_from_c0 = 0,
       .updated_from_c1 = 0,
+      .enabled = 0,
+      .io_pos_step = -1,
+      .io_pos_dir = -1,
       .abs_pos_requested = UINT_MAX / 2,
       .abs_pos_acheived = UINT_MAX / 2,
       .min_step_len_ticks = 50,
@@ -106,9 +118,17 @@ uint32_t update_packet_metrics(
   *id_diff = update_id - config.last_update_id;
   *time_diff = time - config.last_update_time;
 
-  if(*id_diff != 1) {
+
+  if(*id_diff == 0) {
+      printf("LinuxCNC started.\n");
+  } else if(*id_diff != 1) {
     printf("WARNING: Updates out of sequence. %i %i %i\n",
         config.last_update_id, update_id, *id_diff);
+    if(update_id == 0) {
+      printf("Reason: LinuxCNC restarted.\n");
+    } else if(config.last_update_id == 0) {
+      printf("Reason: RP restarted.\n");
+    }
   }
 
   config.last_update_id = update_id;
@@ -128,6 +148,9 @@ uint8_t has_new_c0_data(const uint8_t axis) {
 void update_axis_config(
     const uint8_t axis,
     const uint8_t core,
+    const uint8_t* enabled,
+    const int8_t* io_pos_step,
+    const int8_t* io_pos_dir,
     const uint32_t* abs_pos_requested,
     const uint32_t* abs_pos_acheived,
     const uint32_t* min_step_len_ticks,
@@ -144,6 +167,15 @@ void update_axis_config(
   // printf("Setting CORE%i:%i\n", core, axis);
   mutex_enter_blocking(&mtx_axis[axis]);
 
+  if(enabled != NULL) {
+    config.axis[axis].enabled = *enabled;
+  }
+  if(io_pos_step != NULL) {
+    config.axis[axis].io_pos_step = *io_pos_step;
+  }
+  if(io_pos_dir != NULL) {
+    config.axis[axis].io_pos_dir = *io_pos_dir;
+  }
   if(abs_pos_requested != NULL) {
     config.axis[axis].abs_pos_requested = *abs_pos_requested;
   }
@@ -182,6 +214,9 @@ void update_axis_config(
 uint32_t get_axis_config(
     const uint8_t axis,
     const uint8_t core,
+    uint8_t* enabled,
+    int8_t* io_pos_step,
+    int8_t* io_pos_dir,
     uint32_t* abs_pos_requested,
     uint32_t* abs_pos_acheived,
     uint32_t* min_step_len_ticks,
@@ -211,13 +246,36 @@ uint32_t get_axis_config(
       break;
   }
 
-  *abs_pos_requested = config.axis[axis].abs_pos_requested;
-  *abs_pos_acheived = config.axis[axis].abs_pos_acheived;
-  *min_step_len_ticks = config.axis[axis].min_step_len_ticks;
-  *max_accel_ticks = config.axis[axis].max_accel_ticks;
-  *velocity_requested = config.axis[axis].velocity_requested;
-  *velocity_acheived = config.axis[axis].velocity_acheived;
-  *kp = config.axis[axis].kp;
+  if(enabled != NULL) {
+    *enabled = config.axis[axis].enabled;
+  }
+  if(io_pos_step != NULL) {
+    *io_pos_step = config.axis[axis].io_pos_step;
+  }
+  if(io_pos_dir != NULL) {
+    *io_pos_dir = config.axis[axis].io_pos_dir;
+  }
+  if(abs_pos_requested != NULL) {
+    *abs_pos_requested = config.axis[axis].abs_pos_requested;
+  }
+  if(abs_pos_acheived != NULL) {
+    *abs_pos_acheived = config.axis[axis].abs_pos_acheived;
+  }
+  if(min_step_len_ticks != NULL) {
+    *min_step_len_ticks = config.axis[axis].min_step_len_ticks;
+  }
+  if(max_accel_ticks != NULL) {
+    *max_accel_ticks = config.axis[axis].max_accel_ticks;
+  }
+  if(velocity_requested != NULL) {
+    *velocity_requested = config.axis[axis].velocity_requested;
+  }
+  if(velocity_acheived != NULL) {
+    *velocity_acheived = config.axis[axis].velocity_acheived;
+  }
+  if(kp != NULL) {
+    *kp = config.axis[axis].kp;
+  }
 
   mutex_exit(&mtx_axis[axis]);
 
@@ -251,6 +309,7 @@ size_t serialise_axis_config(
     uint8_t wait_for_data)
 {
   if(axis >= MAX_AXIS) {
+    printf("ERROR: Invalid axis: %u\n", axis);
     return 0;
   }
 
@@ -259,6 +318,9 @@ size_t serialise_axis_config(
 
 	size_t max_buf_len = DATA_BUF_SIZE - sizeof(uint32_t);
 
+  //uint8_t enabled;
+  //int8_t io_pos_step;
+  //int8_t io_pos_dir;
   uint32_t abs_pos_acheived;
   uint32_t abs_pos_requested;
   uint32_t min_step_len_ticks;
@@ -272,6 +334,12 @@ size_t serialise_axis_config(
     updated = get_axis_config(
         axis,
         CORE0,
+        //&enabled,
+        //&io_pos_step,
+        //&io_pos_dir,
+        NULL,
+        NULL,
+        NULL,
         &abs_pos_requested,
         &abs_pos_acheived,
         &min_step_len_ticks,

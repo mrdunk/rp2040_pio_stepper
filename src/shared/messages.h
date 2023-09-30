@@ -11,15 +11,18 @@
 #define MSG_NONE                     0
 #define MSG_TIMING                   1  // Contains packet count and time sent.
 #define MSG_SET_GLOAL_UPDATE_RATE    2  // Not yet implemented.
-#define MSG_SET_AXIS_ABS_POS         3  // Set absolute axis position.
-#define MSG_SET_AXIS_REL_POS         4  // Set relative axis position. (Velocity)
-#define MSG_SET_AXIS_RESET_POS       5  // Not yet implemented.
-#define MSG_SET_AXIS_MAX_SPEED       6  // Not yet implemented.
-#define MSG_SET_AXIS_MAX_ACCEL       7  // Not yet implemented.
-#define MSG_SET_AXIS_PID_KP          8  // Multiplier for position updates.
-#define MSG_SET_AXIS_STEP_IO         9  // Not yet implemented.
-#define MSG_SET_AXIS_DIR_IO         10  // Not yet implemented.
-#define MSG_GET_GLOBAL_CONFIG       11  // Not yet implemented.
+#define MSG_SET_AXIS_ENABLED         3  // Set absolute axis position.
+#define MSG_SET_AXIS_ABS_POS         4  // Set absolute axis position.
+#define MSG_SET_AXIS_REL_POS         5  // Set relative axis position. (Velocity)
+#define MSG_SET_AXIS_RESET_POS       6  // Not yet implemented.
+#define MSG_SET_AXIS_MAX_SPEED       7  // Not yet implemented.
+#define MSG_SET_AXIS_MAX_ACCEL       8  // Not yet implemented.
+#define MSG_SET_AXIS_PID_KP          9  // Multiplier for position updates.
+#define MSG_SET_AXIS_IO_STEP        10  // Multiplier for position updates.
+#define MSG_SET_AXIS_IO_DIR         11  // Multiplier for position updates.
+#define MSG_SET_AXIS_STEP_IO        12  // Not yet implemented.
+#define MSG_SET_AXIS_DIR_IO         13  // Not yet implemented.
+#define MSG_GET_GLOBAL_CONFIG       14  // Not yet implemented.
 
 struct Message {
   uint32_t type;
