@@ -6,11 +6,7 @@
 /* Initialize a pair of PIO programmes.
  * One for step generation on pio0 and one for counting said steps on pio1.
  */
-void init_pio(
-    const uint32_t axis,
-    const uint32_t pin_step,
-    const uint32_t pin_direction
-    );
+void init_pio(const uint32_t axis);
 
 /* Generate step counts and send to PIOs. */
 uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us);

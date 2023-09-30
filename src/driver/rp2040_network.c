@@ -76,10 +76,10 @@ uint8_t send_data(int device, char* packet, size_t packet_size) {
 }
 
 /* Get data via UDP. */
-uint8_t get_reply_non_block(int device, char* receive_buffer) {
+size_t get_reply_non_block(int device, char* receive_buffer) {
   int addr_len;
   int flags = MSG_DONTWAIT;
-  int receive_count = recvfrom(
+  ssize_t receive_count = recvfrom(
       sockfd[device], receive_buffer, BUFSIZE, flags, &remote_addr[device], (socklen_t *)&addr_len);
   if (receive_count < 0 && errno != EAGAIN) {
     rtapi_print_msg(RTAPI_MSG_ERR, "ERROR receiving on network port %i\n ", sockfd[device]);
@@ -117,6 +117,14 @@ size_t serialize_data(void* values, void** packet, size_t* packet_space) {
       message_size = sizeof(struct Message_uint);
       memcpy(*packet, &message_uint, message_size);
       break;
+    case MSG_SET_AXIS_ENABLED:
+      axis = ((uint32_t*)values)[1];
+      uint_value = ((uint32_t*)values)[2];
+      message_uint_uint = 
+        (struct Message_uint_uint){.type=msg_type, .axis=axis, .value=uint_value};
+      message_size = sizeof(struct Message_uint_uint);
+      memcpy(*packet, &message_uint_uint, message_size);
+      break;
     case MSG_SET_AXIS_ABS_POS:
       axis = ((uint32_t*)values)[1];
       uint_value = ((uint32_t*)values)[2];
@@ -144,6 +152,15 @@ size_t serialize_data(void* values, void** packet, size_t* packet_space) {
         (struct Message_uint_float){.type=msg_type, .axis=axis, .value=float_value};
       message_size = sizeof(struct Message_uint_float);
       memcpy(*packet, &message_uint_float, message_size);
+      break;
+    case MSG_SET_AXIS_IO_STEP:
+    case MSG_SET_AXIS_IO_DIR:
+      axis = ((uint32_t*)values)[1];
+      int_value = ((int32_t*)values)[2];
+      message_uint_int = 
+        (struct Message_uint_int){.type=msg_type, .axis=axis, .value=int_value};
+      message_size = sizeof(struct Message_uint_int);
+      memcpy(*packet, &message_uint_int, message_size);
       break;
     case MSG_GET_GLOBAL_CONFIG:
       message = (struct Message){.type=msg_type};

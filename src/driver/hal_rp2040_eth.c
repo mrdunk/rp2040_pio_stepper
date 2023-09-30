@@ -28,8 +28,11 @@ typedef struct {
   hal_s32_t* metric_time_diff;
   hal_u32_t* metric_rp_update_len;
   hal_u32_t* metric_missed_packets;
+  hal_bit_t* metric_eth_state;
 	hal_bit_t* joint_enable[JOINTS];
 	hal_bit_t* joint_velocity[JOINTS];
+  hal_s32_t* io_pos_step[JOINTS];
+  hal_s32_t* io_pos_dir[JOINTS];
   hal_float_t* kp[JOINTS];
   hal_float_t* scale[JOINTS];
   hal_float_t* command[JOINTS];
@@ -58,7 +61,7 @@ static int num_devices;    /* number of devices configured */
    everything else is just init code
    */
 static void write_port(void *arg, long period);
-
+void on_eth_up(skeleton_t *data);
 
 /***********************************************************************
  *                       INIT AND EXIT CODE                             *
@@ -91,7 +94,7 @@ int rtapi_app_main(void)
   }
 
 	for(int num_io = 0; num_io < IO; num_io++) {
-		/* Export the IO pin(s) */
+		/* Export the IO(s) */
 		retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->pin_in[num_io]),
 				comp_id, "rp2040_eth.%d.pin-%d-in", num_device, num_io);
 		if (retval < 0) {
@@ -127,6 +130,26 @@ int rtapi_app_main(void)
 
 		retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->joint_velocity[num_joint]),
 				comp_id, "rp2040_eth.%d.joint-velocity-mode-%d", num_device, num_joint);
+		if (retval < 0) {
+			rtapi_print_msg(RTAPI_MSG_ERR,
+					"SKELETON: ERROR: port %d var export failed with err=%i\n",
+          num_device, retval);
+			hal_exit(comp_id);
+			return -1;
+		}
+
+		retval = hal_pin_s32_newf(HAL_IN, &(port_data_array->io_pos_step[num_joint]),
+				comp_id, "rp2040_eth.%d.joint-io-pos-step-%d", num_device, num_joint);
+		if (retval < 0) {
+			rtapi_print_msg(RTAPI_MSG_ERR,
+					"SKELETON: ERROR: port %d var export failed with err=%i\n",
+          num_device, retval);
+			hal_exit(comp_id);
+			return -1;
+		}
+
+		retval = hal_pin_s32_newf(HAL_IN, &(port_data_array->io_pos_dir[num_joint]),
+				comp_id, "rp2040_eth.%d.joint-io-pos-dir-%d", num_device, num_joint);
 		if (retval < 0) {
 			rtapi_print_msg(RTAPI_MSG_ERR,
 					"SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -237,6 +260,15 @@ int rtapi_app_main(void)
     return -1;
   }
 
+  retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->metric_eth_state),
+      comp_id, "rp2040_eth.%d.metrics-eth-state", num_device);
+  if (retval < 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR,
+        "SKELETON: ERROR: port %d var export failed with err=%i\n",
+        num_device, retval);
+    hal_exit(comp_id);
+    return -1;
+  }
 
   /* STEP 4: export write function */
   rtapi_snprintf(name, sizeof(name), "rp2040_eth.%d.write", num_device);
@@ -279,10 +311,12 @@ static void write_port(void *arg, long period)
 {
   int num_device = 0;
 
-
 	static uint count = 0;
   static uint missed_packets = 0;
-  static double last_kp[JOINTS] = {0};
+  static double last_kp[JOINTS] = {0, 0, 0, 0};
+  static int last_io_pos_step[JOINTS] = {-2, -2, -2, -2};
+  static int last_io_pos_dir[JOINTS] = {-2, -2, -2, -2};
+  static bool last_enabled[JOINTS] = {0, 0, 0, 0};
   static double last_command[JOINTS];
   static uint32_t last_update_id = 0;
   skeleton_t *data = arg;
@@ -332,28 +366,76 @@ static void write_port(void *arg, long period)
       last_kp[num_joint] = *data->kp[num_joint];
       values[0] = MSG_SET_AXIS_PID_KP;
       values[1] = num_joint;
-      values[2] = (uint32_t)(*data->kp[num_joint] * 1000.0);
+      values[2] = (uint32_t)(*data->kp[num_joint] * 1000.0);  // TODO: Cast this properly.
+      buffer_size += serialize_data(values, &buffer_iterator, &buffer_space);
+    }
+
+    if(last_io_pos_step[num_joint] != *data->io_pos_step[num_joint]) {
+      last_io_pos_step[num_joint] = *data->io_pos_step[num_joint];
+      struct Message_uint_int v;
+      v.type = MSG_SET_AXIS_IO_STEP;
+      v.axis = num_joint;
+      v.value = *data->io_pos_step[num_joint];
+      buffer_size += serialize_data(&v, &buffer_iterator, &buffer_space);
+    }
+
+    if(last_io_pos_dir[num_joint] != *data->io_pos_dir[num_joint]) {
+      last_io_pos_dir[num_joint] = *data->io_pos_dir[num_joint];
+      values[0] = MSG_SET_AXIS_IO_DIR;
+      values[1] = num_joint;
+      values[2] = (uint32_t)(*data->io_pos_dir[num_joint]);
+      buffer_size += serialize_data(values, &buffer_iterator, &buffer_space);
+    }
+
+    if(last_enabled[num_joint] != *data->joint_enable[num_joint]) {
+      last_enabled[num_joint] = *data->joint_enable[num_joint];
+      values[0] = MSG_SET_AXIS_ENABLED;
+      values[1] = num_joint;
+      values[2] = (uint32_t)(*data->joint_enable[num_joint]);
       buffer_size += serialize_data(values, &buffer_iterator, &buffer_space);
     }
 	}
 
   send_data(num_device, buffer, buffer_size);
 
-  // Check packets all completed round trip.
+  // Receive data and check packets all completed round trip.
   int receive_count;
   receive_count = get_reply_non_block(num_device, buffer);
   if(receive_count > 0) {
-    //process_data(buffer, data, (count % 10000 == 0));
     process_data(buffer, data, 0);
+
+    if(! *data->metric_eth_state) {
+      // Network connection just came up after being down.
+      printf("Ethernet up. Packet count: %u\n", count);
+      *data->metric_eth_state = true;
+
+      on_eth_up(data);
+    }
+
+    if(last_update_id +1 != *data->metric_update_id && last_update_id != 0) {
+      printf("WARN: %i missing updates.\n", *data->metric_update_id - last_update_id - 1);
+    }
+  last_update_id = *data->metric_update_id;
   } else {
     *data->metric_missed_packets++;
+    if(*data->metric_eth_state) {
+      printf("WARN: Ethernet down. Packet count: %u\n", count);
+      *data->metric_eth_state = false;
+    }
   }
 
-  if(last_update_id +1 != *data->metric_update_id && last_update_id != 0) {
-    printf("WARN: %i missing updates.\n", *data->metric_update_id - last_update_id - 1);
-  }
-  last_update_id = *data->metric_update_id;
-       
 	count++;
+}
+
+/* Put things in a sensible condition when if communication between LinuxCNC and
+ * the RP has been lost then re-established. */
+void on_eth_up(skeleton_t *data) {
+  // Iterate through joints.
+	for(int num_joint = 0; num_joint < JOINTS; num_joint++) {
+    // TODO: Work out a plan to reset RP position when it comes back online.
+
+    //printf("%f\t%f\n", *data->command[num_joint], *data->feedback[num_joint]);
+    //*data->command[num_joint] = *data->feedback[num_joint];
+  }
 }
 

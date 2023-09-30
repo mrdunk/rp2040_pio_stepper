@@ -6,12 +6,19 @@ addf motion-command-handler servo-thread
 addf motion-controller servo-thread
 addf rp2040_eth.0.write servo-thread
 
+# Machine enable
+net estop-out <= iocontrol.0.user-enable-out
+net estop-out => iocontrol.0.emc-enable-in
+
 # Joint 0
 setp rp2040_eth.0.joint-kp-0             [JOINT_0]KP
+setp rp2040_eth.0.joint-io-pos-step-0    0
+setp rp2040_eth.0.joint-io-pos-dir-0     1
 setp rp2040_eth.0.joint-scale-0          [JOINT_0]SCALE
 net xpos-cmd joint.0.motor-pos-cmd => rp2040_eth.0.pos-cmd-0
 net xpos-fb rp2040_eth.0.pos-fb-0 => joint.0.motor-pos-fb
-net xenable joint.0.amp-enable-out => rp2040_eth.0.joint-enable-0
+#net xenable joint.0.amp-enable-out => rp2040_eth.0.joint-enable-0
+net estop-out => rp2040_eth.0.joint-enable-0
 # For debugging.
 net xvelocity-calc rp2040_eth.0.velocity-calc-0
 net xvelocity-fb rp2040_eth.0.velocity-fb-0
@@ -19,10 +26,13 @@ net xvelocity-fb rp2040_eth.0.velocity-fb-0
 # Joint 1
 setp rp2040_eth.0.joint-kp-1             [JOINT_1]KP
 setp rp2040_eth.0.joint-scale-1          [JOINT_1]SCALE
+setp rp2040_eth.0.joint-io-pos-step-1    2
+setp rp2040_eth.0.joint-io-pos-dir-1     3
 setp rp2040_eth.0.joint-velocity-mode-1 0
 net ypos-cmd joint.1.motor-pos-cmd => rp2040_eth.0.pos-cmd-1
 net ypos-fb rp2040_eth.0.pos-fb-1 => joint.1.motor-pos-fb
-net yenable joint.1.amp-enable-out => rp2040_eth.0.joint-enable-1
+#net yenable joint.1.amp-enable-out => rp2040_eth.0.joint-enable-1
+net estop-out => rp2040_eth.0.joint-enable-1
 # For debugging.
 net yvelocity-calc rp2040_eth.0.velocity-calc-1
 net yvelocity-fb rp2040_eth.0.velocity-fb-1
@@ -30,21 +40,26 @@ net yvelocity-fb rp2040_eth.0.velocity-fb-1
 # Joint 2
 setp rp2040_eth.0.joint-kp-2             [JOINT_2]KP
 setp rp2040_eth.0.joint-scale-2          [JOINT_2]SCALE
+setp rp2040_eth.0.joint-io-pos-step-2    4
+setp rp2040_eth.0.joint-io-pos-dir-2     5
 setp rp2040_eth.0.joint-velocity-mode-2 0
 net zpos-cmd joint.2.motor-pos-cmd => rp2040_eth.0.pos-cmd-2
 net zpos-fb rp2040_eth.0.pos-fb-2 => joint.2.motor-pos-fb
-net zenable joint.2.amp-enable-out => rp2040_eth.0.joint-enable-2
+#net zenable joint.2.amp-enable-out => rp2040_eth.0.joint-enable-2
+net estop-out => rp2040_eth.0.joint-enable-2
 # For debugging.
 net zvelocity-calc rp2040_eth.0.velocity-calc-2
 net zvelocity-fb rp2040_eth.0.velocity-fb-2
 
+# Joint 3
+# TODO: Work out a way to set default values.
+setp rp2040_eth.0.joint-io-pos-step-3    -1
+setp rp2040_eth.0.joint-io-pos-dir-3     -1
 
-# Other.
-net estop-out <= iocontrol.0.user-enable-out
-net estop-out => iocontrol.0.emc-enable-in
-
+# Metrics.
 net metrics-time-diff       rp2040_eth.0.metrics-time-diff
 net metrics-update-id       rp2040_eth.0.metrics-update-id
 net metrics-rp-update-len   rp2040_eth.0.metrics-rp-update-len
 net metrics-missed-packets  rp2040_eth.0.metrics-missed-packets
+net metrics-eth-state       rp2040_eth.0.metrics-eth-state
 
