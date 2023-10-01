@@ -30,7 +30,7 @@
 #include "../shared/messages.h"
 
 #define BUFSIZE 1024
-#define MAX_AXIS 6
+#define MAX_AXIS 4
 #define MAX_ACCELERATION 200
 #define LOOP_LEN 1000
 
@@ -223,7 +223,7 @@ void log_data_read(struct sockaddr_in* serveraddr, int sockfd) {
     memcpy(&data_type, buffer, 4);
     memcpy(&value, buffer + 4, 4);
 
-    values[0] = data_type + MSG_SET_PID_KP;
+    values[0] = data_type + MSG_SET_AXIS_PID_KP;
     values[1] = axis;
     memcpy(&((uint32_t*)values)[2], &value, 4);
 
@@ -252,8 +252,6 @@ size_t populate_data(void* packet) {
 
   memset(packet, 0, BUFSIZE);
 
-  printf("%s", human_help);
-
   while((msg_type = get_property_uint("\nPacket message type. (Leave empty to finish.): "))) {
     switch(msg_type) {
       case MSG_SET_GLOAL_UPDATE_RATE:
@@ -272,18 +270,8 @@ size_t populate_data(void* packet) {
         // TODO.
       case MSG_SET_AXIS_MAX_ACCEL:
         // TODO.
-      case MSG_SET_AXIS_ABS_POS_AT_TIME:
-        // TODO.
       case MSG_GET_GLOBAL_CONFIG:
         message_size = populate_message(msg_type, &packet, &packet_space);
-        break;
-      case MSG_GET_AXIS_CONFIG:
-        message_size = populate_message_uint(
-            "Get configuration for axis:", msg_type, &packet, &packet_space);
-        break;
-      case MSG_GET_AXIS_POS:
-        message_size = populate_message_uint(
-            "Get absolute position of axis:", msg_type, &packet, &packet_space);
         break;
       default:
         printf("Invalid message type: %u\n", msg_type);
@@ -303,6 +291,7 @@ size_t serialize_data(void* values, void** packet, size_t* packet_space) {
   //    ((uint32_t*)values)[0], ((uint32_t*)values)[1],
   //      ((uint32_t*)values)[2], ((uint32_t*)values)[3]);
   struct Message message;
+  struct Message_timing message_timing;
   struct Message_uint message_uint;
   struct Message_uint_uint message_uint_uint;
   struct Message_uint_int message_uint_int;
@@ -310,15 +299,34 @@ size_t serialize_data(void* values, void** packet, size_t* packet_space) {
   size_t message_size = 0;
   uint32_t msg_type = ((uint32_t*)values)[0];
   uint32_t uint_value;
+  uint32_t update_id;
   float float_value;
   uint32_t axis;
+  uint32_t time;
+  int32_t int_value;
 
   switch(msg_type) {
+    case MSG_TIMING:
+      update_id = ((uint32_t*)values)[1];
+      time = ((uint32_t*)values)[2];
+      uint_value = ((uint32_t*)values)[1];
+      message_timing = (struct Message_timing){.type=msg_type, .update_id=update_id, .time=time};
+      message_size = sizeof(struct Message_timing);
+      memcpy(*packet, &message_timing, message_size);
+      break;
     case MSG_SET_GLOAL_UPDATE_RATE:
       uint_value = ((uint32_t*)values)[1];
       message_uint = (struct Message_uint){.type=msg_type, .value=uint_value};
       message_size = sizeof(struct Message_uint);
       memcpy(*packet, &message_uint, message_size);
+      break;
+    case MSG_SET_AXIS_ENABLED:
+      axis = ((uint32_t*)values)[1];
+      uint_value = ((uint32_t*)values)[2];
+      message_uint_uint = 
+        (struct Message_uint_uint){.type=msg_type, .axis=axis, .value=uint_value};
+      message_size = sizeof(struct Message_uint_uint);
+      memcpy(*packet, &message_uint_uint, message_size);
       break;
     case MSG_SET_AXIS_ABS_POS:
       axis = ((uint32_t*)values)[1];
@@ -341,11 +349,7 @@ size_t serialize_data(void* values, void** packet, size_t* packet_space) {
       // TODO.
     case MSG_SET_AXIS_MAX_ACCEL:
       // TODO.
-    case MSG_SET_AXIS_ABS_POS_AT_TIME:
-      // TODO.
-    case MSG_SET_PID_KP:
-    case MSG_SET_PID_KI:
-    case MSG_SET_PID_KD:
+    case MSG_SET_AXIS_PID_KP:
       axis = ((uint32_t*)values)[1];
       memcpy(&float_value, &((uint32_t*)values)[2], 4);
       message_uint_float = 
@@ -353,22 +357,19 @@ size_t serialize_data(void* values, void** packet, size_t* packet_space) {
       message_size = sizeof(struct Message_uint_float);
       memcpy(*packet, &message_uint_float, message_size);
       break;
+    case MSG_SET_AXIS_IO_STEP:
+    case MSG_SET_AXIS_IO_DIR:
+      axis = ((uint32_t*)values)[1];
+      int_value = ((int32_t*)values)[2];
+      message_uint_int = 
+        (struct Message_uint_int){.type=msg_type, .axis=axis, .value=int_value};
+      message_size = sizeof(struct Message_uint_int);
+      memcpy(*packet, &message_uint_int, message_size);
+      break;
     case MSG_GET_GLOBAL_CONFIG:
       message = (struct Message){.type=msg_type};
       message_size = sizeof(struct Message);
       memcpy(*packet, &message, message_size);
-      break;
-    case MSG_GET_AXIS_CONFIG:
-      uint_value = ((uint32_t*)values)[1];
-      message_uint = (struct Message_uint){.type=msg_type, .value=uint_value};
-      message_size = sizeof(struct Message_uint);
-      memcpy(*packet, &message_uint, message_size);
-      break;
-    case MSG_GET_AXIS_POS:
-      uint_value = ((uint32_t*)values)[1];
-      message_uint = (struct Message_uint){.type=msg_type, .value=uint_value};
-      message_size = sizeof(struct Message_uint);
-      memcpy(*packet, &message_uint, message_size);
       break;
     default:
       printf("Invalid message type: %u\n", msg_type);
@@ -398,7 +399,6 @@ size_t populate_data_oneshot(void* packet) {
 
   char buf[BUFSIZE] = "";
   bzero(buf, BUFSIZE);
-  printf("%s", human_help);
   printf("Use \":\" to separate values.\n"
       "Use \",\" to seperate messages\n"
       "eg: > 3:0:10, 3:1:-10, 8:0, 8:1\n");
@@ -457,6 +457,44 @@ double sampleNormal() {
     return u * c;
 }
 
+/* Set IO pins and set enable flag on the RP. */
+size_t initialize_rp(void* packet, int sockfd) {
+  size_t packet_space = BUFSIZE - sizeof(struct Message);
+  memset(packet, 0, BUFSIZE);
+  //size_t packet_size = 2;  // The first uint16_t will contain the data length.
+  size_t packet_size = 0;
+  void* packet_itterator = packet + packet_size;
+
+  uint32_t io_pos_step[MAX_AXIS] = {0, 2, 4, 6};
+  uint32_t io_pos_dir[MAX_AXIS] = {1, 3, 5, 7};
+
+  for(uint32_t axis = 0; axis < MAX_AXIS; axis++) {
+    struct Message_uint_int v;
+    v.type = MSG_SET_AXIS_IO_STEP;
+    v.axis = axis;
+    v.value = io_pos_step[axis];
+    packet_size += serialize_data(&v, &packet_itterator, &packet_space);
+  }
+
+  for(uint32_t axis = 0; axis < MAX_AXIS; axis++) {
+    struct Message_uint_int v;
+    v.type = MSG_SET_AXIS_IO_DIR;
+    v.axis = axis;
+    v.value = io_pos_dir[axis];
+    packet_size += serialize_data(&v, &packet_itterator, &packet_space);
+  }
+
+  for(uint32_t axis = 0; axis < MAX_AXIS; axis++) {
+    struct Message_uint_uint v;
+    v.type = MSG_SET_AXIS_ENABLED;
+    v.axis = axis;
+    v.value = 1;
+    packet_size += serialize_data(&v, &packet_itterator, &packet_space);
+  }
+
+  return packet_size;
+}
+
 /* Oscillate requested position using different step sizes for each axis. */
 size_t populate_data_loop(void* packet, struct sockaddr_in* clientaddr, int sockfd) {
   static uint32_t axis_pos[MAX_AXIS];
@@ -467,6 +505,7 @@ size_t populate_data_loop(void* packet, struct sockaddr_in* clientaddr, int sock
   static uint32_t axis_start = UINT_MAX / 2;
   static uint64_t last_time_us;
   static uint32_t run_count = 0;
+  struct timespec now;
 
   if(run_count == 0) {
     printf("Init\n");
@@ -499,6 +538,18 @@ size_t populate_data_loop(void* packet, struct sockaddr_in* clientaddr, int sock
   size_t packet_size = 0;
   void* packet_itterator = packet + packet_size;
 
+  // Put metrics message in packet.
+  clock_gettime(CLOCK_REALTIME, &now);
+  uint64_t now_time_ns = 1000000000 * now.tv_sec + now.tv_nsec;
+  uint32_t values[4] = {
+    MSG_TIMING,
+    run_count,
+    now_time_ns,
+    0
+  };
+  packet_size += serialize_data(values, &packet_itterator, &packet_space);
+
+  // Put axis position messages in packet.
   for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
     if((run_count % axis_period[axis]) == 0) {
       // flip direction.
@@ -534,7 +585,6 @@ size_t populate_data_loop(void* packet, struct sockaddr_in* clientaddr, int sock
   get_reply_non_block(clientaddr, sockfd);
   get_reply_non_block(clientaddr, sockfd);
 
-  struct timespec now;
   clock_gettime(CLOCK_REALTIME, &now);
   uint64_t now_time_us = 1000000 * now.tv_sec + now.tv_nsec / 1000;
 
@@ -554,6 +604,7 @@ size_t populate_data_loop(void* packet, struct sockaddr_in* clientaddr, int sock
 void display_data(void* packet, size_t packet_size) {
   size_t packet_parsed = 0;
   size_t message_size;
+  struct Message_timing message_timing;
   struct Message_uint message;
   struct Message_uint message_uint;
   //struct Message_uint_uint message_uint_uint;
@@ -573,6 +624,12 @@ void display_data(void* packet, size_t packet_size) {
   while(packet_parsed < packet_size) {
     uint32_t msg_type = *(uint32_t*)packet;
     switch(msg_type) {
+      case MSG_TIMING:
+        message_size = sizeof(struct Message_timing);
+        memcpy(&message_timing, packet, message_size);
+        printf("  msg type: %u\tupdate_id: %u\ttime: %u\n",
+            message_timing.type, message_timing.update_id, message_timing.time);
+        break;
       case MSG_SET_GLOAL_UPDATE_RATE:
         message_size = sizeof(struct Message_uint);
         memcpy(&message_uint, packet, message_size);
@@ -593,12 +650,9 @@ void display_data(void* packet, size_t packet_size) {
         break;
       case MSG_SET_AXIS_MAX_SPEED:
       case MSG_SET_AXIS_MAX_ACCEL:
-      case MSG_SET_AXIS_ABS_POS_AT_TIME:
         printf("  Invalid message type: %u\n", msg_type);
         exit(0);
-      case MSG_SET_PID_KP:
-      case MSG_SET_PID_KI:
-      case MSG_SET_PID_KD:
+      case MSG_SET_AXIS_PID_KP:
         message_size = sizeof(struct Message_uint_float);
         memcpy(&message_uint_float, packet, message_size);
         printf("  msg type: %u\taxis: %u\tvalue: %f\n",
@@ -608,13 +662,6 @@ void display_data(void* packet, size_t packet_size) {
         message_size = sizeof(struct Message);
         memcpy(&message, packet, message_size);
         printf("  msg type: %u\n", message.type);
-        break;
-      case MSG_GET_AXIS_CONFIG:
-      case MSG_GET_AXIS_POS:
-        message_size = sizeof(struct Message_uint);
-        memcpy(&message_uint, packet, message_size);
-        printf("  msg type: %u\tvalue0: %u\n",
-            message_uint.type, message_uint.value);
         break;
       default:
         printf("  Invalid message type: %u\n", msg_type);
@@ -627,6 +674,7 @@ void display_data(void* packet, size_t packet_size) {
 }
 
 void display_reply(char* buf) {
+  struct Reply_metrics reply_metrics;
   struct Reply_global_config reply_global_config;
   struct Reply_axis_config reply_axis_config;
   struct Reply_axis_pos reply_axis_pos;
@@ -635,6 +683,14 @@ void display_reply(char* buf) {
   uint32_t msg_type;
   while((msg_type = *(uint32_t*)itterator)) {
     switch(msg_type) {
+      case REPLY_METRICS:
+        size = sizeof(struct Reply_metrics);
+        memcpy(&reply_metrics, itterator, size);
+        /*
+        printf("Reply_metrics: %i\t%i\n", reply_metrics.update_id, reply_metrics.time_diff);
+        */
+        itterator += size;
+        break;
       case REPLY_GLOBAL_CONFIG:
         size = sizeof(struct Reply_global_config);
         memcpy(&reply_global_config, itterator, size);
@@ -659,7 +715,7 @@ void display_reply(char* buf) {
             reply_axis_config.min_step_len_ticks,
             reply_axis_config.max_accel_ticks,
             reply_axis_config.velocity_acheived);
-            */
+        */
         itterator += size;
 
         log_data_write(reply_axis_config.axis, 0, reply_axis_config.abs_pos_acheived);
@@ -820,6 +876,9 @@ int main(int argc, char **argv) {
   serveraddr.sin_family = AF_INET;  // IPv4
   memmove((char *)&serveraddr.sin_addr.s_addr, (char *)server->h_addr, server->h_length);
   serveraddr.sin_port = htons(portno);
+
+  packet_size = initialize_rp(packet, sockfd);
+  send_data(&serveraddr, sockfd, packet, packet_size);
 
   if(oneshot) {
     packet_size = populate_data_oneshot(packet);

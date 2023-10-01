@@ -53,7 +53,7 @@ void init_pio(const uint32_t axis)
   }
   // TODO: Warn about duplicate pin assignments.
 
-  printf("\tio-step: %i\tio-dir: %i\n", axis, io_pos_step, io_pos_dir);
+  printf("\tio-step: %i\tio-dir: %i\n", io_pos_step, io_pos_dir);
 
   if(programs_loaded == 0)
   {

@@ -10,6 +10,8 @@ void update_all_axis() {
   uint32_t update_time_us = get_period();
   uint8_t updated_count = 0;
 
+  // Block waiting for new data.
+  // This is governed by data arriving vial Ethernet on core0.
   for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
     while(has_new_c0_data(axis) == 0) {
       tight_loop_contents();
