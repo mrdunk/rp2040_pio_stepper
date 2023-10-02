@@ -50,12 +50,9 @@ void display_tx_data(void* packet, size_t packet_size) {
         break;
       case MSG_SET_AXIS_MAX_SPEED:
       case MSG_SET_AXIS_MAX_ACCEL:
-      case MSG_SET_AXIS_ABS_POS_AT_TIME:
         printf("  Invalid message type: %u\n", msg_type);
         exit(0);
-      case MSG_SET_PID_KP:
-      case MSG_SET_PID_KI:
-      case MSG_SET_PID_KD:
+      case MSG_SET_AXIS_PID_KP:
         message_size = sizeof(struct Message_uint_float);
         memcpy(&message_uint_float, packet, message_size);
         printf("  msg type: %u\taxis: %u\tvalue: %f\n",
@@ -65,13 +62,6 @@ void display_tx_data(void* packet, size_t packet_size) {
         message_size = sizeof(struct Message);
         memcpy(&message, packet, message_size);
         printf("  msg type: %u\n", message.type);
-        break;
-      case MSG_GET_AXIS_CONFIG:
-      case MSG_GET_AXIS_POS:
-        message_size = sizeof(struct Message_uint);
-        memcpy(&message_uint, packet, message_size);
-        printf("  msg type: %u\tvalue0: %u\n",
-            message_uint.type, message_uint.value);
         break;
       default:
         printf("  Invalid message type: %u\n", msg_type);

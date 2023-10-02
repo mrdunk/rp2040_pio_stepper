@@ -183,7 +183,8 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
         axis = msg_uint_float->axis;
         printf("Setting axis: %u\tkp:      %f\n", axis, msg_uint_float->value);
         update_axis_config(
-            axis, CORE0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value);
+            axis, CORE0,
+            NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value);
         break;
       case MSG_SET_AXIS_IO_STEP:
         msg_uint_int = process_msg_uint_int(&rx_itterator);
@@ -373,7 +374,7 @@ int main() {
   while (1) {
     tx_buf_len = 0;
     data_received = 0;
-		memset(tx_buf, '\0', DATA_BUF_SIZE);
+    memset(tx_buf, '\0', DATA_BUF_SIZE);
 
     while(data_received == 0 || retval <= 0) {
       retval = get_UDP(
@@ -384,6 +385,10 @@ int main() {
           destip_machine,
           &destport_machine);
     }
+
+    // How much of the available time is actually being used?
+    //time_now = time_us_64();
+    //printf("%u\n", time_now - time_last);
 
     tx_buf_len = process_received_buffer(rx_buf, tx_buf, &received_msg_count);
 
@@ -400,7 +405,6 @@ int main() {
         tx_buf_len,
         destip_machine,
         &destport_machine);
-
 
     if(received_msg_count > 0) {
       // Have received axis updates.
