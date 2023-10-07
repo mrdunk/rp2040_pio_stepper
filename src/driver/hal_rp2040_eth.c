@@ -36,6 +36,7 @@ typedef struct {
   hal_float_t* kp[JOINTS];
   hal_float_t* scale[JOINTS];
   hal_float_t* command[JOINTS];
+  hal_float_t* remainder[JOINTS];
   hal_float_t* feedback[JOINTS];
   hal_float_t* calculated_velocity[JOINTS];
   hal_float_t* fb_velocity[JOINTS];
@@ -188,6 +189,16 @@ int rtapi_app_main(void)
 			return -1;
 		}
 
+		retval = hal_pin_float_newf(HAL_IN, &(port_data_array->remainder[num_joint]),
+				comp_id, "rp2040_eth.%d.pos-remainder-%d", num_device, num_joint);
+		if (retval < 0) {
+			rtapi_print_msg(RTAPI_MSG_ERR,
+					"SKELETON: ERROR: port %d var export failed with err=%i\n",
+          num_device, retval);
+			hal_exit(comp_id);
+			return -1;
+		}
+
 		retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->feedback[num_joint]),
 				comp_id, "rp2040_eth.%d.pos-fb-%d", num_device, num_joint);
 		if (retval < 0) {
@@ -262,6 +273,7 @@ int rtapi_app_main(void)
 
   retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->metric_eth_state),
       comp_id, "rp2040_eth.%d.metrics-eth-state", num_device);
+  port_data_array->metric_eth_state = false;
   if (retval < 0) {
     rtapi_print_msg(RTAPI_MSG_ERR,
         "SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -354,9 +366,13 @@ static void write_port(void *arg, long period)
       last_command[num_joint] = (*data->command[num_joint]);
     } else {
       // Absolute position mode.
+      double d = (*data->scale[num_joint] * *data->command[num_joint]) + (UINT_MAX / 2);
       values[0] = MSG_SET_AXIS_ABS_POS;
       values[1] = num_joint;
-      values[2] = (*data->scale[num_joint] * *data->command[num_joint]) + (UINT_MAX / 2);
+      values[2] = (*data->scale[num_joint] * *data->command[num_joint] + 0.5) + (UINT_MAX / 2);
+
+      *data->remainder[num_joint] = d - (double)values[2];
+
       buffer_space = BUFSIZE - sizeof(struct Message_uint_uint);
     }
     buffer_size += serialize_data(values, &buffer_iterator, &buffer_space);
@@ -420,7 +436,7 @@ static void write_port(void *arg, long period)
     *data->metric_missed_packets++;
     if(*data->metric_eth_state) {
       printf("WARN: Ethernet down. Packet count: %u\n", count);
-      *data->metric_eth_state = false;
+      //*data->metric_eth_state = false;
     }
   }
 

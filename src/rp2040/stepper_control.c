@@ -153,7 +153,7 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
         enabled = msg_uint_uint->value;
         update_axis_config(
             axis, CORE0,
-            &msg_uint_uint->value, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+            (uint8_t*)&msg_uint_uint->value, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
         (*return_data)++;
         break;
       case MSG_SET_AXIS_ABS_POS:
@@ -321,7 +321,9 @@ int32_t put_UDP(
 
 int main() {
   static struct Ring_buf_ave period_average_data;
+  static struct Ring_buf_ave time_average_data;
   uint32_t ave_period_us = 0;
+  uint32_t ave_time_offset_us = 0;
   uint32_t last_ave_period_us = 0;
 
   int retval = 0;
@@ -371,6 +373,8 @@ int main() {
 
   size_t time_last = time_us_64();
   size_t time_now;
+  int32_t time_diff = 0;
+  uint32_t restart_at = 0;
   while (1) {
     tx_buf_len = 0;
     data_received = 0;
@@ -390,12 +394,64 @@ int main() {
     //time_now = time_us_64();
     //printf("%u\n", time_now - time_last);
 
+
+    //if(received_msg_count > 0) {
+      // Have received axis updates.
+      // Save the update period to config if appropriate.
+      time_now = time_us_64();
+      ave_period_us = ring_buf_ave(&period_average_data, time_now - time_last);
+      time_last = time_now;
+     
+      uint32_t time_offset = time_now % 1000;
+      ave_time_offset_us = ring_buf_ave(&time_average_data, time_offset);
+
+      int32_t time_diff = time_offset - ave_time_offset_us;
+      if(time_diff < -500) {
+        time_diff += 1000;
+      } else if(time_diff >= 500) {
+        time_diff -= 1000;
+      }
+
+      //printf("%u\t%u\t%i\n", (time_now % 1000), ave_time_offset_us, time_diff);
+      if(time_diff < 0) {
+        time_diff = 0;
+      }
+      restart_at = time_now + 100 - time_diff;
+      while(restart_at > time_now) {
+        time_now = time_us_64();
+        tight_loop_contents();
+      }
+      tick++;
+
+      static uint32_t count = 0;
+      static uint32_t borked = 0;
+      if(time_diff > 200 || time_diff < -200) {
+        borked++;
+      } else {
+        borked = 0;
+      }
+      if(count++ % 1000 == 0 || borked) {
+        printf("%u\t%u\t%u\t%i\n", (time_now % 1000), time_offset, ave_time_offset_us, time_diff);
+      }
+      //while(borked > 200) {
+      //}
+
+      if(last_ave_period_us != ave_period_us) {
+        update_period(ave_period_us);
+        last_ave_period_us = ave_period_us;
+      }
+      received_msg_count = 0;
+
+      gpio_put(LED_PIN, (time_now / 1000000) % 2);
+    //}
+
     tx_buf_len = process_received_buffer(rx_buf, tx_buf, &received_msg_count);
 
     size_t axis_count = 0;
     for(size_t axis = 0; axis < MAX_AXIS; axis++) {
       // Get data from config and put in TX buffer.
-      axis_count += serialise_axis_config(axis, tx_buf, &tx_buf_len, true);
+      //axis_count += serialise_axis_config(axis, tx_buf, &tx_buf_len, true);
+      axis_count += serialise_axis_config(axis, tx_buf, &tx_buf_len, false);
     }
 
     retval = put_UDP(
@@ -406,20 +462,6 @@ int main() {
         destip_machine,
         &destport_machine);
 
-    if(received_msg_count > 0) {
-      // Have received axis updates.
-      // Save the update period to config if appropriate.
-      time_now = time_us_64();
-      ave_period_us = ring_buf_ave(&period_average_data, time_now - time_last);
-      time_last = time_now;
-      if(last_ave_period_us != ave_period_us) {
-        update_period(ave_period_us);
-        last_ave_period_us = ave_period_us;
-      }
-      received_msg_count = 0;
-
-      gpio_put(LED_PIN, (time_now / 1000000) % 2);
-    }
   }
   return 0;
 }

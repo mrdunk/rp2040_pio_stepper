@@ -96,7 +96,7 @@ void init_pio(const uint32_t axis)
 }
 
 /* Convert step command from LinuxCNC and Feedback from PIO into a desired velocity. */
-uint32_t get_velocity(
+int32_t get_velocity(
     const uint8_t axis,
     uint32_t abs_pos_acheived,
     uint32_t abs_pos_requested,
@@ -104,7 +104,6 @@ uint32_t get_velocity(
 {
   int32_t error = abs_pos_requested - abs_pos_acheived;
   int32_t velocity = kp * (float)error;
-
   return velocity;
 }
 
@@ -143,15 +142,15 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
       );
 
   if(updated <= 0) {
-    return 0;
+    //return 0;
   }
 
   count++;
   if(updated > 1) {
     if(enabled && last_enabled[axis]) {
       failcount++;
-      printf("WARN: C1, multiple updates: %u \t%lu \t%f\n",
-          axis, updated, (double)failcount / (double)count);
+      //printf("WC1: multi update: %u \t%lu \t%f\n",
+      //    axis, updated, (double)failcount / (double)count);
     }
   }
 
@@ -165,14 +164,12 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
     last_enabled[axis] = enabled;
   }
 
-  // Stop from getting stuck continually reading FIFO when steps are short.
-  uint32_t max_retries = 4; 
-
-  while(pio_sm_get_rx_fifo_level(pio1, axis) > 0 && max_retries > 0) {
+  uint8_t fifo_len = pio_sm_get_rx_fifo_level(pio1, axis);
+  while(fifo_len) {
     abs_pos_acheived = pio_sm_get_blocking(pio1, axis);
-    max_retries--;
+    fifo_len--;
   }
-  
+
   int32_t velocity;
   if(abs_pos_requested != 0) {
     velocity = get_velocity(axis, abs_pos_acheived, abs_pos_requested, kp);
@@ -187,26 +184,26 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
 
   if(enabled > 0 && requested_step_count > 0) {
     uint32_t utt = update_time_us * clock_multiplier;
-    step_len_ticks = 
+    step_len_ticks =
       divRoundClosest(utt, (requested_step_count * 2)) - STEP_LEN_OVERHEAD;
     if(step_len_ticks < 1) {
       // TODO: use min_step_len_ticks for this.
       step_len_ticks = 1;
     }
-  } 
+  }
 
   // Request steps from PIO.
   pio_sm_put(pio0, axis, direction);
   pio_sm_put(pio0, axis, step_len_ticks);
 
   velocity_acheived = abs_pos_acheived - last_pos[axis];
-  last_pos[axis] = abs_pos_acheived; 
+  last_pos[axis] = abs_pos_acheived;
 
   update_axis_config(
       axis,
       CORE1,
       NULL,
-      NULL, 
+      NULL,
       NULL,
       NULL,
       &abs_pos_acheived,
@@ -216,7 +213,20 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
       &velocity_acheived,
       NULL);
 
-  return 1;
+  /*
+  if(axis == 1) {
+    static uint32_t count = 0;
+    static uint32_t then;
+    uint32_t now = time_us_64();
+    if(velocity > 4 || velocity < 0) {
+      uint32_t buf_len = has_new_c1_data(0);
+      printf("%i\t%u\t%u\n", velocity, now - then, buf_len);
+    }
+    then = now;
+  }
+  */
+  
+  return updated;
 }
 
 

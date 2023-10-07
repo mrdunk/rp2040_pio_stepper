@@ -7,26 +7,54 @@
 
 
 void update_all_axis() {
+  static size_t last_time = 0;
+  static float time_offset = 0;
+  static uint32_t metric = 0;
+  static uint32_t last_tick = 0;
   uint32_t update_time_us = get_period();
   uint8_t updated_count = 0;
 
+  size_t time_now = time_us_64();
+  //while(time_now < last_time + update_time_us + (time_offset)) {
+  //  time_now = time_us_64();
+  //}
+  //last_time = time_now;
+
   // Block waiting for new data.
-  // This is governed by data arriving vial Ethernet on core0.
+  // This is governed by data arriving via Ethernet on core0.
   for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
-    while(has_new_c0_data(axis) == 0) {
-      tight_loop_contents();
-    }
+    //while(has_new_c0_data(axis) == 0) {
+    //  tight_loop_contents();
+    //}
   }
+  while(tick == last_tick) {
+    tight_loop_contents();
+  }
+  last_tick = tick;
+
+  static uint32_t count = 0;
+  static uint32_t max_dt = 0;
+  static uint32_t min_dt = 10000;
+  uint32_t metric_now = time_us_64();
+  uint32_t dt = metric_now - metric;
+  if(dt > max_dt) {
+    max_dt = dt;
+  }
+  if(dt < min_dt) {
+    min_dt = dt;
+  }
+  if(count++ % 1000 == 0) {
+    //if(max_dt > 2000) {
+      printf("\t\t\t %i\t%i\t%u\n", min_dt - 1000, max_dt - 1000, (time_now % 1000));
+    //}
+    max_dt = 0;
+    min_dt = 10000;
+  }
+  metric = metric_now;
 
   for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
     updated_count += do_steps(axis, update_time_us);
   }
-
-#if DEBUG_OUTPUT
-  if(updated_count > 0) {
-    printf("Updated: %u \t%lu\n", updated_count, get_period());
-  }
-#endif
 }
 
 void core1_main() {
