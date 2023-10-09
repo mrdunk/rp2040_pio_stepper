@@ -22,11 +22,13 @@ void update_all_axis() {
 
   // Block waiting for new data.
   // This is governed by data arriving via Ethernet on core0.
-  for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
+  //for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
     //while(has_new_c0_data(axis) == 0) {
     //  tight_loop_contents();
     //}
-  }
+  //}
+  
+  // Wait for semaphore from core0 to indicate time start.
   while(tick == last_tick) {
     tight_loop_contents();
   }

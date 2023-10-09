@@ -375,6 +375,8 @@ int main() {
   size_t time_now;
   int32_t time_diff = 0;
   uint32_t restart_at = 0;
+  uint32_t time_sync_offset_us = time_us_64() + 10000;
+
   while (1) {
     tx_buf_len = 0;
     data_received = 0;
@@ -401,16 +403,18 @@ int main() {
       time_now = time_us_64();
       ave_period_us = ring_buf_ave(&period_average_data, time_now - time_last);
       time_last = time_now;
-     
-      uint32_t time_offset = time_now % 1000;
+
+      //uint32_t time_offset = time_now % 1000;
+      time_sync_offset_us += ave_period_us;
+      uint32_t time_offset = time_sync_offset_us - time_now;
       ave_time_offset_us = ring_buf_ave(&time_average_data, time_offset);
 
       int32_t time_diff = time_offset - ave_time_offset_us;
-      if(time_diff < -500) {
-        time_diff += 1000;
-      } else if(time_diff >= 500) {
-        time_diff -= 1000;
-      }
+      //if(time_diff < -500) {
+      //  time_diff += 1000;
+      //} else if(time_diff >= 500) {
+      //  time_diff -= 1000;
+      //}
 
       //printf("%u\t%u\t%i\n", (time_now % 1000), ave_time_offset_us, time_diff);
       if(time_diff < 0) {

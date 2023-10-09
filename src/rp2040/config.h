@@ -34,7 +34,7 @@ void ring_buf_push(volatile struct Ring_buf* data, uint32_t new_val);
 uint32_t ring_buf_pop(volatile struct Ring_buf* data);
 
 
-volatile uint32_t tick;
+extern volatile uint32_t tick;
 
 /* Configuration object for an axis.
  * This is the format for the global config that is shared between cores. */
