@@ -236,9 +236,9 @@ void process_data(char* buf, skeleton_t* data, int debug) {
         *data->feedback[reply_axis_config.axis] =
           ((double)reply_axis_config.abs_pos_acheived - (UINT_MAX / 2))
           / *data->scale[reply_axis_config.axis];
-        *data->calculated_velocity[reply_axis_config.axis] = 
+        *data->calculated_velocity[reply_axis_config.axis] =
           (float)reply_axis_config.velocity_requested;
-        *data->fb_velocity[reply_axis_config.axis] = 
+        *data->fb_velocity[reply_axis_config.axis] =
           (float)reply_axis_config.velocity_acheived;
         itterator += size;
 

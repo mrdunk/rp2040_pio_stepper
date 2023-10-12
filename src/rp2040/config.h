@@ -13,26 +13,22 @@
 /* A ring buffer that returns the average value of it's contents.
  * Used for calculating average period between incoming network updates. */
 #define RING_BUF_AVE_LEN 1000
-struct Ring_buf_ave {
+struct Ring_buf_uint_ave {
   uint32_t buf[RING_BUF_AVE_LEN];
   size_t head;
   uint32_t total;
   size_t count;
 };
 
-size_t ring_buf_ave(struct Ring_buf_ave* data, const uint32_t new_val);
-
-
-#define RING_BUF_LEN 100
-struct Ring_buf {
-  uint32_t buf[RING_BUF_LEN];
-  uint32_t len;
-  uint32_t head;
-  uint32_t tail;
+struct Ring_buf_int_ave {
+  int32_t buf[RING_BUF_AVE_LEN];
+  size_t head;
+  int32_t total;
+  size_t count;
 };
-void ring_buf_push(volatile struct Ring_buf* data, uint32_t new_val);
-uint32_t ring_buf_pop(volatile struct Ring_buf* data);
 
+uint32_t ring_buf_uint_ave(struct Ring_buf_uint_ave* data, const uint32_t new_val);
+int32_t ring_buf_int_ave(struct Ring_buf_int_ave* data, const int32_t new_val);
 
 extern volatile uint32_t tick;
 
@@ -44,7 +40,6 @@ struct ConfigAxis {
   uint8_t enabled;
   int8_t io_pos_step;           // Physical step IO pin. 
   int8_t io_pos_dir;            // Physical direction IO pin.
-  struct Ring_buf abs_pos_requested_buf;
   uint32_t abs_pos_requested;   // In steps. Default value is UINT_MAX / 2.
   uint32_t abs_pos_acheived;    // In steps. Default value is UINT_MAX / 2.
   uint32_t min_step_len_ticks;

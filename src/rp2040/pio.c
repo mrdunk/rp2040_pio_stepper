@@ -98,12 +98,12 @@ void init_pio(const uint32_t axis)
 /* Convert step command from LinuxCNC and Feedback from PIO into a desired velocity. */
 int32_t get_velocity(
     const uint8_t axis,
-    uint32_t abs_pos_acheived,
-    uint32_t abs_pos_requested,
-    float kp)
+    const uint32_t abs_pos_acheived,
+    const uint32_t abs_pos_requested,
+    const float kp)
 {
-  int32_t error = abs_pos_requested - abs_pos_acheived;
-  int32_t velocity = kp * (float)error;
+  int32_t error = (int32_t)abs_pos_requested - (int32_t)abs_pos_acheived;
+  int32_t velocity = (float)error * kp;
   return velocity;
 }
 
@@ -111,18 +111,18 @@ int32_t get_velocity(
 uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   static uint32_t failcount = 0;
   static uint32_t count = 0;
-  static uint32_t last_pos[MAX_AXIS] = {0, 0, 0, 0};
+  static uint32_t last_pos[MAX_AXIS] = {UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2};
   static uint32_t last_enabled[MAX_AXIS] = {0, 0, 0, 0};
 
   //uint32_t clock_multiplier = clock_get_hz(clk_sys) / 1000000;
   static const uint32_t clock_multiplier = 133;
   uint8_t enabled;
-  uint32_t abs_pos_acheived;
+  uint32_t abs_pos_acheived = 0;
   uint32_t abs_pos_requested;
   uint32_t min_step_len_ticks;
   uint32_t max_accel_ticks;
-  int32_t velocity_requested;
-  int32_t velocity_acheived;
+  int32_t velocity_requested = 0;
+  int32_t velocity_acheived = 0;
   float kp;
   uint32_t updated;
 
@@ -136,8 +136,8 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
       &abs_pos_acheived,
       &min_step_len_ticks,
       &max_accel_ticks,
-      &velocity_requested,
-      &velocity_acheived,
+      NULL, // &velocity_requested,
+      NULL, // &velocity_acheived,
       &kp
       );
 
@@ -146,11 +146,12 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   }
 
   count++;
+
   if(updated > 1) {
     if(enabled && last_enabled[axis]) {
       failcount++;
-      //printf("WC1: multi update: %u \t%lu \t%f\n",
-      //    axis, updated, (double)failcount / (double)count);
+      printf("WC1: multi update: %u \t%lu \t%f\n",
+          axis, updated, (double)failcount / (double)count);
     }
   }
 
@@ -164,8 +165,9 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
     last_enabled[axis] = enabled;
   }
 
+  // Flush rx_fifo and get last data.
   uint8_t fifo_len = pio_sm_get_rx_fifo_level(pio1, axis);
-  while(fifo_len) {
+  while(fifo_len > 0) {
     abs_pos_acheived = pio_sm_get_blocking(pio1, axis);
     fifo_len--;
   }
@@ -212,19 +214,6 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
       &velocity,
       &velocity_acheived,
       NULL);
-
-  /*
-  if(axis == 1) {
-    static uint32_t count = 0;
-    static uint32_t then;
-    uint32_t now = time_us_64();
-    if(velocity > 4 || velocity < 0) {
-      uint32_t buf_len = has_new_c1_data(0);
-      printf("%i\t%u\t%u\n", velocity, now - then, buf_len);
-    }
-    then = now;
-  }
-  */
   
   return updated;
 }

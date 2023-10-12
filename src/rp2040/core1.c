@@ -14,20 +14,6 @@ void update_all_axis() {
   uint32_t update_time_us = get_period();
   uint8_t updated_count = 0;
 
-  size_t time_now = time_us_64();
-  //while(time_now < last_time + update_time_us + (time_offset)) {
-  //  time_now = time_us_64();
-  //}
-  //last_time = time_now;
-
-  // Block waiting for new data.
-  // This is governed by data arriving via Ethernet on core0.
-  //for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
-    //while(has_new_c0_data(axis) == 0) {
-    //  tight_loop_contents();
-    //}
-  //}
-  
   // Wait for semaphore from core0 to indicate time start.
   while(tick == last_tick) {
     tight_loop_contents();
@@ -47,7 +33,7 @@ void update_all_axis() {
   }
   if(count++ % 1000 == 0) {
     //if(max_dt > 2000) {
-      printf("\t\t\t %i\t%i\t%u\n", min_dt - 1000, max_dt - 1000, (time_now % 1000));
+      printf("\t\t\t %i\t%i\n", min_dt - 1000, max_dt - 1000);
     //}
     max_dt = 0;
     min_dt = 10000;

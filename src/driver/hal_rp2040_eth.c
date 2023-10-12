@@ -388,7 +388,9 @@ static void write_port(void *arg, long period)
 
     if(last_io_pos_step[num_joint] != *data->io_pos_step[num_joint]) {
       last_io_pos_step[num_joint] = *data->io_pos_step[num_joint];
-      struct Message_uint_int v;
+      rtapi_print_msg(RTAPI_MSG_INFO, "Configure joint: %u  step io: %u\n", num_joint, *data->io_pos_step[num_joint]);
+      printf("Configure joint: %u  step io: %u\n", num_joint, *data->io_pos_step[num_joint]);
+      struct Message_uint_uint v;
       v.type = MSG_SET_AXIS_IO_STEP;
       v.axis = num_joint;
       v.value = *data->io_pos_step[num_joint];
@@ -397,10 +399,13 @@ static void write_port(void *arg, long period)
 
     if(last_io_pos_dir[num_joint] != *data->io_pos_dir[num_joint]) {
       last_io_pos_dir[num_joint] = *data->io_pos_dir[num_joint];
-      values[0] = MSG_SET_AXIS_IO_DIR;
-      values[1] = num_joint;
-      values[2] = (uint32_t)(*data->io_pos_dir[num_joint]);
-      buffer_size += serialize_data(values, &buffer_iterator, &buffer_space);
+      rtapi_print_msg(RTAPI_MSG_INFO, "Configure joint: %u  dir io: %u\n", num_joint, *data->io_pos_dir[num_joint]);
+      printf("Configure joint: %u  dir io: %u\n", num_joint, *data->io_pos_dir[num_joint]);
+      struct Message_uint_uint v;
+      v.type = MSG_SET_AXIS_IO_DIR;
+      v.axis = num_joint;
+      v.value = *data->io_pos_dir[num_joint];
+      buffer_size += serialize_data(&v, &buffer_iterator, &buffer_space);
     }
 
     if(last_enabled[num_joint] != *data->joint_enable[num_joint]) {
@@ -436,7 +441,7 @@ static void write_port(void *arg, long period)
     *data->metric_missed_packets++;
     if(*data->metric_eth_state) {
       printf("WARN: Ethernet down. Packet count: %u\n", count);
-      //*data->metric_eth_state = false;
+      *data->metric_eth_state = false;
     }
   }
 

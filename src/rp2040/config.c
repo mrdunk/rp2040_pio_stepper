@@ -144,15 +144,6 @@ uint8_t has_new_c0_data(const uint8_t axis) {
   mutex_enter_blocking(&mtx_axis[axis]);
   uint8_t updated = config.axis[axis].updated_from_c0;
 
-  /*
-  if(updated == 0) {
-    volatile struct Ring_buf* abs_pos_requested_buf = &config.axis[axis].abs_pos_requested_buf;
-    updated = abs_pos_requested_buf->len;
-    if(count++ % 10000 == 0) {
-      printf("%u\n", updated);
-    }
-  }
-  */
   mutex_exit(&mtx_axis[axis]);
   return updated;
 }
@@ -190,8 +181,6 @@ void update_axis_config(
   }
   if(abs_pos_requested != NULL) {
     config.axis[axis].abs_pos_requested = *abs_pos_requested;
-    //volatile struct Ring_buf* abs_pos_requested_buf = &config.axis[axis].abs_pos_requested_buf;
-    //ring_buf_push(abs_pos_requested_buf, *abs_pos_requested);
   }
   if(abs_pos_acheived != NULL) {
     config.axis[axis].abs_pos_acheived = *abs_pos_acheived;
@@ -271,8 +260,6 @@ uint32_t get_axis_config(
   }
   if(abs_pos_requested != NULL) {
     *abs_pos_requested = config.axis[axis].abs_pos_requested;
-    //volatile struct Ring_buf* abs_pos_requested_buf = &config.axis[axis].abs_pos_requested_buf;
-    //*abs_pos_requested = ring_buf_pop(abs_pos_requested_buf);
   }
   if(abs_pos_acheived != NULL) {
     *abs_pos_acheived = config.axis[axis].abs_pos_acheived;
@@ -368,7 +355,7 @@ size_t serialise_axis_config(
     failcount++;
     //printf("WC0, mult ud: %u \t%lu \t%f\n",
     //    axis, updated, (double)failcount / (double)count);
-    //printf("WC0, mult ud: %u \t%lu\n", axis, updated);
+    printf("WC0, mult ud: %u \t%lu\n", axis, updated);
   }
 
   if(*tx_buf_len + sizeof(struct Reply_axis_config) <= max_buf_len) {
@@ -391,8 +378,8 @@ size_t serialise_axis_config(
 
 /* A ring buffer that returns the average value of it's contents.
  * Used for calculating average period between incoming network updates. */
-size_t ring_buf_ave(struct Ring_buf_ave* data, const uint32_t new_val) {
-  size_t tail_val = data->buf[data->head];
+uint32_t ring_buf_uint_ave(struct Ring_buf_uint_ave* data, const uint32_t new_val) {
+  uint32_t tail_val = data->buf[data->head];
   data->buf[data->head] = new_val;
   data->head++;
   if(data->head >= RING_BUF_AVE_LEN) {
@@ -408,45 +395,23 @@ size_t ring_buf_ave(struct Ring_buf_ave* data, const uint32_t new_val) {
   return data->total / data->count;
 }
 
-void ring_buf_push(volatile struct Ring_buf* data, uint32_t new_val) {
+
+/* A ring buffer that returns the average value of it's contents.
+ * Used for calculating average period between incoming network updates. */
+int32_t ring_buf_int_ave(struct Ring_buf_int_ave* data, const int32_t new_val) {
+  int32_t tail_val = data->buf[data->head];
   data->buf[data->head] = new_val;
-
-  if(data->len == RING_BUF_LEN) {
-    // We are overwriting tail.
-    printf("WARN: Buffer full.\n");
-    data->tail++;
-    if(data->tail >= RING_BUF_LEN) {
-      data->tail = 0;
-    }
-  } else {
-    data->len++;
-  }
-
   data->head++;
-  if(data->head >= RING_BUF_LEN) {
+  if(data->head >= RING_BUF_AVE_LEN) {
     data->head = 0;
   }
-  //static uint32_t count = 0;
-  //if(count++ % 1000 == 0) {
-  //  printf("pu %u\t%u\t%u\t%u\n", data, data->head, data->tail, data->len);
-  //}
-}
-
-uint32_t ring_buf_pop(volatile struct Ring_buf* data) {
-  if(data->len == 0) {
-    // No data in buffer.
-    // Return the last known value.
-    printf("WARN: Buffer under run.\n");
-    return data->buf[data->tail];
+  data->total += new_val;
+  if(data->count < RING_BUF_AVE_LEN) {
+    data->count++;
+  } else {
+    data->total -= tail_val;
   }
-  uint32_t val = data->buf[data->tail];
-  data->tail++;
-  data->len--;
-  if(data->tail >= RING_BUF_LEN) {
-    data->tail = 0;
-  }
-  //printf("po %u\t%u\t%u\n", data->head, data->tail, data->len);
-  return val;
-}
 
+  return data->total / (int32_t)data->count;
+}
 
