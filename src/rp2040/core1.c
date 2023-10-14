@@ -31,10 +31,8 @@ void update_all_axis() {
   if(dt < min_dt) {
     min_dt = dt;
   }
-  if(count++ % 1000 == 0) {
-    //if(max_dt > 2000) {
-      printf("\t\t\t %i\t%i\n", min_dt - 1000, max_dt - 1000);
-    //}
+  if(count++ % 10000 == 0) {
+    printf("%i\t%i\n", min_dt - 1000, max_dt - 1000);
     max_dt = 0;
     min_dt = 10000;
   }
@@ -49,16 +47,6 @@ void core1_main() {
   uint32_t count = 0;
   while (1) {
     update_all_axis();
-
-    /*
-    if(count % 200 == 0) {
-      printf(".");
-      if(count % 20000 == 0) {
-        printf("\n");
-      }
-    };
-    count++;
-    */
   }
 }
 
