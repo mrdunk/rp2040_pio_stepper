@@ -355,7 +355,7 @@ void recover_clock() {
   }
 
 
-  int32_t time_diff = time_offset - ave_time_offset_us;
+  int32_t time_diff = (int32_t)time_offset - (int32_t)ave_time_offset_us;
 
   // Do the busy-wait to synchronise timing.
   restart_at = time_now + 100 - time_diff;
