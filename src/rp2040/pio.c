@@ -8,12 +8,8 @@
 #include "pio.h"
 #include "config.h"
 
-#define STEP_LEN_OVERHEAD 14
-
-uint32_t divRoundClosest(const uint32_t n, const uint32_t d)
-{
-  return (n + d / 2) / d;
-}
+#define STEP_PIO_LEN_OVERHEAD 14
+#define STEP_PIO_MULTIPLIER 2
 
 /* Initialize a pair of PIO programmes.
  * One for step generation on pio0 and one for counting said steps on pio1.
@@ -54,6 +50,13 @@ void init_pio(const uint32_t axis)
   // TODO: Warn about duplicate pin assignments.
 
   printf("\tio-step: %i\tio-dir: %i\n", io_pos_step, io_pos_dir);
+  gpio_init(io_pos_step);
+  gpio_init(io_pos_dir);
+  gpio_set_dir(io_pos_step, GPIO_OUT);
+  gpio_set_dir(io_pos_dir, GPIO_OUT);
+  gpio_put(io_pos_step, 0);
+  gpio_put(io_pos_dir, 0);
+
 
   if(programs_loaded == 0)
   {
@@ -187,7 +190,7 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   if(enabled > 0 && requested_step_count > 0) {
     uint32_t utt = update_time_us * clock_multiplier;
     step_len_ticks =
-      divRoundClosest(utt, (requested_step_count * 2)) - STEP_LEN_OVERHEAD;
+      (utt / (requested_step_count * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
     if(step_len_ticks < 1) {
       // TODO: use min_step_len_ticks for this.
       step_len_ticks = 1;

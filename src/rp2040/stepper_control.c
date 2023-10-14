@@ -356,25 +356,16 @@ void recover_clock() {
 
 
   int32_t time_diff = time_offset - ave_time_offset_us;
-  // TODO: This doesn't achieve anything useful; the limits are never reached
-  // but it improves timing for some reason.
-  if(time_diff < -500) {
-    //time_diff += 1000;
-    printf("+\n");
-  } else if(time_diff >= 500) {
-    //time_diff -= 1000;
-    printf("-\n");
-  }
 
   // Do the busy-wait to synchronise timing.
-  restart_at = time_now + 120 - time_diff;
+  restart_at = time_now + 100 - time_diff;
   while(restart_at > time_now) {
     time_now = time_us_64();
     tight_loop_contents();
   }
 
   // Semaphore to send core1 as the synchronization event.
-  // Should happen soon after the busy-wait.
+  // Note that this happens soon after the busy-wait.
   tick++;
 
   if(last_ave_period_us != ave_period_us) {
