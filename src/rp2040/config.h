@@ -41,6 +41,7 @@ struct ConfigAxis {
   int8_t io_pos_step;           // Physical step IO pin. 
   int8_t io_pos_dir;            // Physical direction IO pin.
   uint32_t abs_pos_requested;   // In steps. Default value is UINT_MAX / 2.
+  double abs_pos_requested_float;   // In steps. Default value is UINT_MAX / 2.
   uint32_t abs_pos_acheived;    // In steps. Default value is UINT_MAX / 2.
   uint32_t min_step_len_ticks;
   uint32_t max_accel_ticks;     // ticks / update_time_ticks ^ 2
@@ -83,6 +84,7 @@ void update_axis_config(
     const int8_t* io_pos_step,
     const int8_t* io_pos_dir,
     const uint32_t* abs_pos_requested,
+    const double* abs_pos_requested_float,
     const uint32_t* abs_pos_acheived,
     const uint32_t* min_step_len_ticks,
     const uint32_t* max_accel_ticks,
@@ -98,6 +100,7 @@ uint32_t get_axis_config(
     int8_t* io_pos_step,
     int8_t* io_pos_dir,
     uint32_t* abs_pos_requested,
+    double* abs_pos_requested_float,
     uint32_t* abs_pos_acheived,
     uint32_t* min_step_len_ticks,
     uint32_t* max_accel_ticks,

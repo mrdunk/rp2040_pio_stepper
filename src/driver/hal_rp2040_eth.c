@@ -341,6 +341,7 @@ static void write_port(void *arg, long period)
   values[0] = MSG_TIMING;
   values[1] = count;
   values[2] = rtapi_get_time();
+  union MessageAny message = {0};
   size_t buffer_space = BUFSIZE - sizeof(struct Message);
   size_t buffer_size = serialize_data(values, &buffer_iterator, &buffer_space);
 
@@ -361,16 +362,20 @@ static void write_port(void *arg, long period)
       values[0] = MSG_SET_AXIS_REL_POS;
       values[1] = num_joint;
       values[2] = *data->scale[num_joint] * error;
-      buffer_space = BUFSIZE - sizeof(struct Message_uint_int);
       last_command[num_joint] = (*data->command[num_joint]);
+      buffer_size += serialize_data(values, &buffer_iterator, &buffer_space);
     } else {
       // Absolute position mode.
-      values[0] = MSG_SET_AXIS_ABS_POS;
-      values[1] = num_joint;
-      values[2] = (*data->scale[num_joint] * *data->command[num_joint]) + (UINT_MAX / 2);
-      buffer_space = BUFSIZE - sizeof(struct Message_uint_uint);
+      //values[0] = MSG_SET_AXIS_ABS_POS;
+      //values[1] = num_joint;
+      //values[2] = (*data->scale[num_joint] * *data->command[num_joint]) + (UINT_MAX / 2);
+      //buffer_size += serialize_data(values, &buffer_iterator, &buffer_space);
+
+      message.mess_set_abs_pos.type = MSG_SET_AXIS_ABS_POS_FLOAT;
+      message.mess_set_abs_pos.axis = num_joint;
+      message.mess_set_abs_pos.value = *data->scale[num_joint] * *data->command[num_joint];
+      buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
     }
-    buffer_size += serialize_data(values, &buffer_iterator, &buffer_space);
 
     // Look for parameter changes.
     if(last_kp[num_joint] != *data->kp[num_joint]) {

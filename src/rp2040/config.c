@@ -155,6 +155,7 @@ void update_axis_config(
     const int8_t* io_pos_step,
     const int8_t* io_pos_dir,
     const uint32_t* abs_pos_requested,
+    const double* abs_pos_requested_float,
     const uint32_t* abs_pos_acheived,
     const uint32_t* min_step_len_ticks,
     const uint32_t* max_accel_ticks,
@@ -181,6 +182,9 @@ void update_axis_config(
   }
   if(abs_pos_requested != NULL) {
     config.axis[axis].abs_pos_requested = *abs_pos_requested;
+  }
+  if(abs_pos_requested_float != NULL) {
+    config.axis[axis].abs_pos_requested_float = *abs_pos_requested_float;
   }
   if(abs_pos_acheived != NULL) {
     config.axis[axis].abs_pos_acheived = *abs_pos_acheived;
@@ -221,6 +225,7 @@ uint32_t get_axis_config(
     int8_t* io_pos_step,
     int8_t* io_pos_dir,
     uint32_t* abs_pos_requested,
+    double* abs_pos_requested_float,
     uint32_t* abs_pos_acheived,
     uint32_t* min_step_len_ticks,
     uint32_t* max_accel_ticks,
@@ -260,6 +265,9 @@ uint32_t get_axis_config(
   }
   if(abs_pos_requested != NULL) {
     *abs_pos_requested = config.axis[axis].abs_pos_requested;
+  }
+  if(abs_pos_requested_float != NULL) {
+    *abs_pos_requested_float = config.axis[axis].abs_pos_requested_float;
   }
   if(abs_pos_acheived != NULL) {
     *abs_pos_acheived = config.axis[axis].abs_pos_acheived;
@@ -341,6 +349,7 @@ size_t serialise_axis_config(
         NULL, //&io_pos_step,
         NULL, //&io_pos_dir,
         NULL, //&abs_pos_requested,
+        NULL, //&abs_pos_requested_float,
         &abs_pos_acheived,
         &min_step_len_ticks,
         &max_accel_ticks,

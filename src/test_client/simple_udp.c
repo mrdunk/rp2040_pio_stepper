@@ -38,7 +38,7 @@ size_t serialize_data(void* values, void** packet, size_t* packet_space) {
   struct Message_uint message_uint;
   struct Message_uint_uint message_uint_uint;
   struct Message_uint_int message_uint_int;
-  struct Message_uint_float message_uint_float;
+  struct Message_set_kp message_set_kp;
   size_t message_size = 0;
   uint32_t msg_type = ((uint32_t*)values)[0];
   uint32_t uint_value;
@@ -72,17 +72,15 @@ size_t serialize_data(void* values, void** packet, size_t* packet_space) {
       // TODO.
     case MSG_SET_AXIS_MAX_ACCEL:
       // TODO.
-    case MSG_SET_AXIS_ABS_POS_AT_TIME:
-      // TODO.
     case MSG_SET_PID_KP:
     case MSG_SET_PID_KI:
     case MSG_SET_PID_KD:
       axis = ((uint32_t*)values)[1];
       memcpy(&float_value, &((uint32_t*)values)[2], 4);
-      message_uint_float = 
-        (struct Message_uint_float){.type=msg_type, .axis=axis, .value=float_value};
-      message_size = sizeof(struct Message_uint_float);
-      memcpy(*packet, &message_uint_float, message_size);
+      message_set_kp = 
+        (struct Message_set_kp){.type=msg_type, .axis=axis, .value=float_value};
+      message_size = sizeof(struct Message_set_kp);
+      memcpy(*packet, &message_set_kp, message_size);
       break;
     case MSG_GET_GLOBAL_CONFIG:
       message = (struct Message){.type=msg_type};

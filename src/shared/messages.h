@@ -14,7 +14,7 @@
 #define MSG_SET_AXIS_ENABLED         3  // Set absolute axis position.
 #define MSG_SET_AXIS_ABS_POS         4  // Set absolute axis position.
 #define MSG_SET_AXIS_REL_POS         5  // Set relative axis position. (Velocity)
-#define MSG_SET_AXIS_RESET_POS       6  // Not yet implemented.
+#define MSG_SET_AXIS_ABS_POS_FLOAT   6  // Not yet implemented.
 #define MSG_SET_AXIS_MAX_SPEED       7  // Not yet implemented.
 #define MSG_SET_AXIS_MAX_ACCEL       8  // Not yet implemented.
 #define MSG_SET_AXIS_PID_KP          9  // Multiplier for position updates.
@@ -51,10 +51,25 @@ struct Message_uint_int {
   int32_t value;
 };
 
-struct Message_uint_float {
+struct Message_set_kp {
   uint32_t type;
   uint32_t axis;
   float value;
+};
+
+struct Message_set_abs_pos {
+  uint32_t type;
+  uint32_t axis;
+  double value;
+};
+
+union MessageAny {
+  struct Message_timing mess_timing;
+  struct Message_uint mess_uint;
+  struct Message_uint_uint mess_uint_uint;
+  struct Message_uint_int mess_uint_int;
+  struct Message_set_kp mess_set_kp;
+  struct Message_set_abs_pos mess_set_abs_pos;
 };
 
 
