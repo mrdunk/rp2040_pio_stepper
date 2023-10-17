@@ -118,6 +118,9 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   static uint32_t count = 0;
   static uint32_t last_pos[MAX_AXIS] = {UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2};
   static uint32_t last_enabled[MAX_AXIS] = {0, 0, 0, 0};
+  static uint8_t last_direction[MAX_AXIS] = {0, 0, 0, 0};
+  static uint8_t direction_change[MAX_AXIS] = {0, 0, 0, 0};
+  static bool stopped[MAX_AXIS] = {false, false, false, false};
 
   //uint32_t clock_multiplier = clock_get_hz(clk_sys) / 1000000;
   static const uint32_t clock_multiplier = 133;
@@ -190,13 +193,34 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   uint8_t direction = (velocity > 0);
   double requested_step_count = fabs(velocity);
 
+  if(last_direction[axis] != direction || velocity == 0.0) {
+    if(direction_change[axis] < 3) {
+      direction_change[axis]++;
+    }
+  } else {
+    if(direction_change[axis] > 0) {
+      direction_change[axis]--;
+    }
+  }
+
+  if(direction_change[axis] > 0) {
+    requested_step_count = 0.0;
+    stopped[axis] = true;
+  } else if(requested_step_count > 0.5) {
+    stopped[axis] = false;
+  } else if(stopped[axis]) {
+    requested_step_count = 0.0;
+  }
+
+  last_direction[axis] = direction;
+
   //if(((count / 3) % 1000 == 0) && (axis == 1)) {
   //  printf("%u\t%f\t%f\n", axis, velocity, requested_step_count);
   //}
 
   int32_t step_len_ticks = 0;
 
-  if(enabled > 0 && requested_step_count > kp) {
+  if(enabled > 0 && requested_step_count > 0) {
     double utt = update_time_us * clock_multiplier;
     step_len_ticks =
       (utt / (requested_step_count * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
