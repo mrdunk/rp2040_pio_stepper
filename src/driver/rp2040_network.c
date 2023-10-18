@@ -161,9 +161,11 @@ size_t serialize_data(void* values, void** packet, size_t* packet_space) {
       memcpy(*packet, &message_uint_int, message_size);
       break;
     case MSG_SET_AXIS_MAX_SPEED:
-      // TODO.
+      message_size = sizeof(struct Message_set_max_velocity);
+      memcpy(*packet, values, message_size);
     case MSG_SET_AXIS_MAX_ACCEL:
-      // TODO.
+      message_size = sizeof(struct Message_set_max_accel);
+      memcpy(*packet, values, message_size);
     case MSG_SET_AXIS_PID_KP:
       axis = ((uint32_t*)values)[1];
       float_value = (float)(((uint32_t*)values)[2]) / 1000;

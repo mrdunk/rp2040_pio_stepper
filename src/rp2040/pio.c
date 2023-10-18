@@ -128,8 +128,8 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   uint32_t abs_pos_acheived = 0;
   uint32_t abs_pos_requested;
   double abs_pos_requested_float;
-  uint32_t min_step_len_ticks;
-  uint32_t max_accel_ticks;
+  double max_velocity;
+  double max_accel_ticks;
   int32_t velocity_requested = 0;
   int32_t velocity_acheived = 0;
   float kp;
@@ -144,7 +144,7 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
       &abs_pos_requested,
       &abs_pos_requested_float,
       &abs_pos_acheived,
-      &min_step_len_ticks,
+      &max_velocity,
       &max_accel_ticks,
       NULL, // &velocity_requested,
       NULL, // &velocity_acheived,

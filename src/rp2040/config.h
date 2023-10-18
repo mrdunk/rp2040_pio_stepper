@@ -43,8 +43,8 @@ struct ConfigAxis {
   uint32_t abs_pos_requested;   // In steps. Default value is UINT_MAX / 2.
   double abs_pos_requested_float;   // In steps. Default value is UINT_MAX / 2.
   uint32_t abs_pos_acheived;    // In steps. Default value is UINT_MAX / 2.
-  uint32_t min_step_len_ticks;
-  uint32_t max_accel_ticks;     // ticks / update_time_ticks ^ 2
+  double max_velocity;
+  double max_accel_ticks;       // ticks / update_time_ticks ^ 2
   int32_t velocity_requested;   // Calculated steps per update_time_us.
   int32_t velocity_acheived;    // Steps per update_time_us.
   float kp;                     // Proportional position tuning. <= 1.0
@@ -86,8 +86,8 @@ void update_axis_config(
     const uint32_t* abs_pos_requested,
     const double* abs_pos_requested_float,
     const uint32_t* abs_pos_acheived,
-    const uint32_t* min_step_len_ticks,
-    const uint32_t* max_accel_ticks,
+    const double* max_velocity,
+    const double* max_accel_ticks,
     const int32_t* velocity_requested,
     const int32_t* velocity_acheived,
     const float* kp
@@ -102,8 +102,8 @@ uint32_t get_axis_config(
     uint32_t* abs_pos_requested,
     double* abs_pos_requested_float,
     uint32_t* abs_pos_acheived,
-    uint32_t* min_step_len_ticks,
-    uint32_t* max_accel_ticks,
+    double* max_velocity,
+    double* max_accel_ticks,
     int32_t* velocity_requested,
     int32_t* velocity_acheived,
     float* kp

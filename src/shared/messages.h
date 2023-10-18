@@ -20,9 +20,7 @@
 #define MSG_SET_AXIS_PID_KP          9  // Multiplier for position updates.
 #define MSG_SET_AXIS_IO_STEP        10  // Multiplier for position updates.
 #define MSG_SET_AXIS_IO_DIR         11  // Multiplier for position updates.
-#define MSG_SET_AXIS_STEP_IO        12  // Not yet implemented.
-#define MSG_SET_AXIS_DIR_IO         13  // Not yet implemented.
-#define MSG_GET_GLOBAL_CONFIG       14  // Not yet implemented.
+#define MSG_GET_GLOBAL_CONFIG       12  // Not yet implemented.
 
 struct Message {
   uint32_t type;
@@ -57,6 +55,18 @@ struct Message_set_kp {
   float value;
 };
 
+struct Message_set_max_velocity {
+  uint32_t type;
+  uint32_t axis;
+  double value;
+};
+
+struct Message_set_max_accel {
+  uint32_t type;
+  uint32_t axis;
+  double value;
+};
+
 struct Message_set_abs_pos {
   uint32_t type;
   uint32_t axis;
@@ -69,6 +79,8 @@ union MessageAny {
   struct Message_uint_uint mess_uint_uint;
   struct Message_uint_int mess_uint_int;
   struct Message_set_kp mess_set_kp;
+  struct Message_set_max_velocity mess_set_max_velocity;
+  struct Message_set_max_accel mess_set_max_accel;
   struct Message_set_abs_pos mess_set_abs_pos;
 };
 
@@ -97,7 +109,7 @@ struct Reply_axis_config {
   uint32_t type;
   uint32_t axis;
   uint32_t abs_pos_acheived;
-  uint32_t min_step_len_ticks;
+  uint32_t max_velocity;
   uint32_t max_accel_ticks;
   int32_t velocity_requested;  // TODO: Remove me once done debugging.
   int32_t velocity_acheived;
