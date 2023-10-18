@@ -104,10 +104,10 @@ void init_pio(const uint32_t axis)
 double get_velocity(
     const uint8_t axis,
     const uint32_t abs_pos_acheived,
-    const double abs_pos_requested,
+    const double rel_pos_requested,
     const float kp)
 {
-  double error = abs_pos_requested - (double)abs_pos_acheived;
+  double error = rel_pos_requested - (double)abs_pos_acheived;
   double velocity = error * kp;
   return velocity;
 }
@@ -126,11 +126,10 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   static const uint32_t clock_multiplier = 133;
   uint8_t enabled;
   uint32_t abs_pos_acheived = 0;
-  uint32_t abs_pos_requested;
-  double abs_pos_requested_float;
+  double rel_pos_requested;
+  double abs_pos_requested;
   double max_velocity;
   double max_accel_ticks;
-  int32_t velocity_requested = 0;
   int32_t velocity_acheived = 0;
   float kp;
   uint32_t updated;
@@ -141,8 +140,8 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
       &enabled,
       NULL,
       NULL,
+      &rel_pos_requested,
       &abs_pos_requested,
-      &abs_pos_requested_float,
       &abs_pos_acheived,
       &max_velocity,
       &max_accel_ticks,
@@ -183,11 +182,11 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   }
 
   double velocity;
-  if(abs_pos_requested != 0) {
+  if(rel_pos_requested != 0) {
     velocity = get_velocity(
-        axis, abs_pos_acheived, abs_pos_requested_float + (double)(UINT_MAX / 2), kp);
+        axis, abs_pos_acheived, abs_pos_requested + (double)(UINT_MAX / 2), kp);
   } else {
-    velocity = velocity_requested;
+    velocity = rel_pos_requested;
   }
 
   uint8_t direction = (velocity > 0);
@@ -254,7 +253,7 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
       &velocity_int,
       &velocity_acheived,
       NULL);
-  
+
   return updated;
 }
 
