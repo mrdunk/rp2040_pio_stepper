@@ -250,7 +250,7 @@ void process_data(char* buf, skeleton_t* data, int debug) {
               msg_type,
               reply_axis_config.axis,
               reply_axis_config.abs_pos_acheived,
-              reply_axis_config.min_step_len_ticks,
+              reply_axis_config.max_velocity,
               reply_axis_config.max_accel_ticks,
               reply_axis_config.velocity_acheived);
         }

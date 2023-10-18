@@ -203,11 +203,12 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
     }
   }
 
-  if(direction_change[axis] > 0) {
+  if(requested_step_count > kp * 3.0) {
+    stopped[axis] = false;
+    direction_change[axis] = 0.0;
+  } else if(direction_change[axis] > 0) {
     requested_step_count = 0.0;
     stopped[axis] = true;
-  } else if(requested_step_count > 0.5) {
-    stopped[axis] = false;
   } else if(stopped[axis]) {
     requested_step_count = 0.0;
   }
