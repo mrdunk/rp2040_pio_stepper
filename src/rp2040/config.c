@@ -168,7 +168,7 @@ void update_axis_config(
     return;
   }
 
-  // printf("Setting CORE%i:%i\n", core, axis);
+  //printf("Setting CORE%i:%i\n", core, axis);
   mutex_enter_blocking(&mtx_axis[axis]);
 
   if(enabled != NULL) {

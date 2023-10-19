@@ -351,13 +351,14 @@ static void write_port(void *arg, long period)
   // Put metrics packet in buffer.
   union MessageAny message = {0};
   size_t buffer_space = BUFSIZE - sizeof(struct Message);
+  size_t buffer_size = 0;
 
-  message.set_abs_pos =
-    (struct Message_timing){.type=MSG_TIMING, .update=count, .time=rtapi_get_time()};
-  //message.set_abs_pos.type = MSG_TIMING;
-  //message.set_abs_pos.update_id = count;
-  //message.set_abs_pos.time = rtapi_get_time();
-  size_t buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
+  //message.timing =
+  //  (struct Message_timing){.type=MSG_TIMING, .update_id=count, .time=rtapi_get_time()};
+  message.timing.type = MSG_TIMING;
+  message.timing.update_id = count;
+  message.timing.time = rtapi_get_time();
+  buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
 
   // Put GPIO values in buffer.
   // TODO: Not yet implemented.
@@ -371,6 +372,7 @@ static void write_port(void *arg, long period)
     if(*data->joint_velocity_mode[num_joint] == 1) {
       // Velocity mode.
       // TODO: Not tested.
+      printf("WARN: Untested velocity mode. joint: %u\n", num_joint);
       double error = (last_command[num_joint] + ((*data->command)[num_joint])) / 2.0
         - (*data->feedback[num_joint]);
 
@@ -480,9 +482,8 @@ void enable_io(
 
   if(last_io_pos_step[num_joint] != *data->io_pos_step[num_joint] ||
       data->reset_joint[num_joint]
-    ) {
-    struct Message_uint_uint v;
-  union MessageAny message = {0};
+  ) {
+    union MessageAny message = {0};
 
     last_io_pos_step[num_joint] = *data->io_pos_step[num_joint];
     rtapi_print_msg(RTAPI_MSG_INFO, "Configure joint: %u  step io: %u\n",
@@ -491,7 +492,7 @@ void enable_io(
     message.joint_enable.type = MSG_SET_AXIS_IO_STEP;
     message.joint_enable.axis = num_joint;
     message.joint_enable.value = *data->io_pos_step[num_joint];
-    buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
+    *buffer_size += serialize_data(&message, buffer_iterator, buffer_space);
 
     last_io_pos_dir[num_joint] = *data->io_pos_dir[num_joint];
     rtapi_print_msg(RTAPI_MSG_INFO, "Configure joint: %u  dir io: %u\n",
@@ -500,7 +501,7 @@ void enable_io(
     message.joint_enable.type = MSG_SET_AXIS_IO_DIR;
     message.joint_enable.axis = num_joint;
     message.joint_enable.value = *data->io_pos_dir[num_joint];
-    buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
+    *buffer_size += serialize_data(&message, buffer_iterator, buffer_space);
 
     data->reset_joint[num_joint] = false;
   }
@@ -526,8 +527,8 @@ void enable_joint(
 
     message.joint_enable.type = MSG_SET_AXIS_ENABLED;
     message.joint_enable.axis = num_joint;
-    message.joint_enable.value = (uint32_t)(*data->joint_enable[num_joint]);
-    buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
+    message.joint_enable.value = (int32_t)(*data->joint_enable[num_joint]);
+    *buffer_size += serialize_data(&message, buffer_iterator, buffer_space);
   }
 }
 

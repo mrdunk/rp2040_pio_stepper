@@ -89,12 +89,6 @@ size_t get_reply_non_block(int device, char* receive_buffer) {
 }
 
 size_t serialize_data(void* values, void** packet, size_t* packet_space) {
-  struct Message message;
-  struct Message_timing message_timing;
-  struct Message_uint message_uint;
-  struct Message_uint_uint message_uint_uint;
-  struct Message_uint_int message_uint_int;
-  struct Message_set_kp message_uint_float;
   size_t message_size = 0;
   uint32_t msg_type = ((uint32_t*)values)[0];
   uint32_t uint_value;
@@ -105,7 +99,7 @@ size_t serialize_data(void* values, void** packet, size_t* packet_space) {
 
   switch(msg_type) {
     case MSG_TIMING:
-      message_size = sizeof(struct Message_set_max_velocity);
+      message_size = sizeof(struct Message_timing);
       break;
     case MSG_SET_AXIS_ENABLED:
       message_size = sizeof(struct Message_joint_enable);

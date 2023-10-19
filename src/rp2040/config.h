@@ -37,7 +37,7 @@ extern volatile uint32_t tick;
 struct ConfigAxis {
   uint8_t updated_from_c0;      // Data was updated on core 0.
   uint8_t updated_from_c1;      // Data was updated on core 1.
-  uint8_t enabled;
+  int8_t enabled;
   int8_t io_pos_step;           // Physical step IO pin. 
   int8_t io_pos_dir;            // Physical direction IO pin.
   double rel_pos_requested;   // In steps. Default value is UINT_MAX / 2.

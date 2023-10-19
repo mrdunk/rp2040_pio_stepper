@@ -62,7 +62,7 @@ struct Message_set_rel_pos {
 struct Message_joint_enable {
   uint32_t type;
   uint32_t axis;
-  uint32_t value;
+  int32_t value;
 };
 
 struct Message_joint_gpio {
