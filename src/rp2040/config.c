@@ -30,7 +30,7 @@ volatile struct ConfigGlobal config = {
       .max_accel_ticks = 2.0,
       .velocity_requested = 0,
       .velocity_acheived = 0,
-      .kp = 0.5f,
+      .kp = 0.2f,
     },
     {
       // Axis 1.
@@ -45,7 +45,7 @@ volatile struct ConfigGlobal config = {
       .max_accel_ticks = 10.0,
       .velocity_requested = 0,
       .velocity_acheived = 0,
-      .kp = 0.5f,
+      .kp = 0.2f,
     },
     {
       // Axis 2.
@@ -60,7 +60,7 @@ volatile struct ConfigGlobal config = {
       .max_accel_ticks = 200.0,
       .velocity_requested = 0,
       .velocity_acheived = 0,
-      .kp = 0.5f,
+      .kp = 0.2f,
     },
     {
       // Axis 3.
@@ -75,7 +75,7 @@ volatile struct ConfigGlobal config = {
       .max_accel_ticks = 200.0,
       .velocity_requested = 0,
       .velocity_acheived = 0,
-      .kp = 0.5f,
+      .kp = 0.2f,
     },
   }
 };
