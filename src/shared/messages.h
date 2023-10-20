@@ -109,8 +109,9 @@ struct Reply_axis_config {
   uint32_t abs_pos_acheived;
   uint32_t max_velocity;
   uint32_t max_accel_ticks;
-  int32_t velocity_requested;  // TODO: Remove me once done debugging.
+  int32_t velocity_requested;
   int32_t velocity_acheived;
+  int32_t pos_error;
 } static Reply_axis_config_default = { REPLY_AXIS_CONFIG };
 
 struct Reply_axis_pos {

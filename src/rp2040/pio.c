@@ -38,6 +38,7 @@ void init_pio(const uint32_t axis)
       NULL,
       NULL,
       NULL,
+      NULL,
       NULL
       );
 
@@ -104,19 +105,20 @@ void init_pio(const uint32_t axis)
 double get_velocity(
     const uint8_t axis,
     const uint32_t abs_pos_acheived,
-    const double rel_pos_requested,
+    const double abs_pos_requested,
     const float kp)
 {
-  double error = rel_pos_requested - (double)abs_pos_acheived;
+  double error = abs_pos_requested - (double)abs_pos_acheived;
   double velocity = error * kp;
   return velocity;
 }
 
 /* Generate step counts and send to PIOs. */
-uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
+uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
   static uint32_t failcount = 0;
   static uint32_t count = 0;
   static uint32_t last_pos[MAX_AXIS] = {UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2};
+  static uint32_t last_request[MAX_AXIS] = {UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2};
   static uint32_t last_enabled[MAX_AXIS] = {0, 0, 0, 0};
   static uint8_t last_direction[MAX_AXIS] = {0, 0, 0, 0};
   static uint8_t direction_change[MAX_AXIS] = {0, 0, 0, 0};
@@ -147,6 +149,7 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
       &max_accel_ticks,
       NULL, // &velocity_requested,
       NULL, // &velocity_acheived,
+      NULL, // &pos_error,,
       &kp
       );
 
@@ -228,9 +231,9 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   int32_t step_len_ticks = 0;
 
   if(enabled > 0 && requested_step_count > 0) {
-    double utt = update_time_us * clock_multiplier;
+    double update_period_ticks = update_period_us * clock_multiplier;
     step_len_ticks =
-      (utt / (requested_step_count * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
+      (update_period_ticks / (requested_step_count * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
     if(step_len_ticks < 1) {
       // TODO: use min_step_len_ticks for this.
       step_len_ticks = 1;
@@ -242,9 +245,8 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   pio_sm_put(pio0, axis, step_len_ticks);
 
   velocity_acheived = abs_pos_acheived - last_pos[axis];
-  last_pos[axis] = abs_pos_acheived;
-
-  int32_t velocity_int = velocity;
+  int32_t velocity_requested = velocity;
+  int32_t pos_error = (last_request[axis] + (UINT_MAX / 2)) - abs_pos_acheived;
 
   update_axis_config(
       axis,
@@ -257,9 +259,13 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
       &abs_pos_acheived,
       NULL,
       NULL,
-      &velocity_int,
+      &velocity_requested,
       &velocity_acheived,
+      &pos_error,
       NULL);
+
+  last_pos[axis] = abs_pos_acheived;
+  last_request[axis] = abs_pos_requested;
 
   return updated;
 }

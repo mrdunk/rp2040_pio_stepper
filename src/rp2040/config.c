@@ -161,6 +161,7 @@ void update_axis_config(
     const double* max_accel_ticks,
     const int32_t* velocity_requested,
     const int32_t* velocity_acheived,
+    const int32_t* pos_error,
     const float* kp
 )
 {
@@ -201,6 +202,9 @@ void update_axis_config(
   if(velocity_acheived != NULL) {
     config.axis[axis].velocity_acheived = *velocity_acheived;
   }
+  if(pos_error != NULL) {
+    config.axis[axis].pos_error = *pos_error;
+  }
   if(kp != NULL) {
     config.axis[axis].kp = *kp;
   }
@@ -231,6 +235,7 @@ uint32_t get_axis_config(
     double* max_accel_ticks,
     int32_t* velocity_requested,
     int32_t* velocity_acheived,
+    int32_t* pos_error,
     float* kp)
 {
   if(axis >= MAX_AXIS) {
@@ -283,6 +288,9 @@ uint32_t get_axis_config(
   }
   if(velocity_acheived != NULL) {
     *velocity_acheived = config.axis[axis].velocity_acheived;
+  }
+  if(pos_error != NULL) {
+    *pos_error = config.axis[axis].pos_error;
   }
   if(kp != NULL) {
     *kp = config.axis[axis].kp;
@@ -338,6 +346,7 @@ size_t serialise_axis_config(
   double max_accel_ticks;
   int32_t velocity_requested;
   int32_t velocity_acheived;
+  int32_t pos_error;
   //float kp;
   uint32_t updated = 0;
 
@@ -355,6 +364,7 @@ size_t serialise_axis_config(
         &max_accel_ticks,
         &velocity_requested,
         &velocity_acheived,
+        &pos_error,
         NULL //&kp
         );
   } while(updated == 0 && wait_for_data);
@@ -375,6 +385,7 @@ size_t serialise_axis_config(
     reply.max_accel_ticks = max_accel_ticks;
     reply.velocity_requested = velocity_requested;
     reply.velocity_acheived = velocity_acheived;
+    reply.pos_error = pos_error;
 
     memcpy(tx_buf + *tx_buf_len, &reply, sizeof(struct Reply_axis_config));
     *tx_buf_len += sizeof(struct Reply_axis_config);

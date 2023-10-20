@@ -190,13 +190,19 @@ void process_data(char* buf, skeleton_t* data, int debug) {
               reply_axis_config.max_accel_ticks,
               reply_axis_config.velocity_acheived);
         }
-        *data->feedback[reply_axis_config.axis] =
+        *data->joint_pos_feedback[reply_axis_config.axis] =
           ((double)reply_axis_config.abs_pos_acheived - (UINT_MAX / 2))
-          / *data->scale[reply_axis_config.axis];
-        *data->calculated_velocity[reply_axis_config.axis] =
+          / *data->joint_scale[reply_axis_config.axis];
+
+        *data->joint_pos_error[reply_axis_config.axis] =
+          reply_axis_config.pos_error;
+
+        *data->joint_velocity_cmd[reply_axis_config.axis] =
           (float)reply_axis_config.velocity_requested;
-        *data->fb_velocity[reply_axis_config.axis] =
+
+        *data->joint_velocity_feedback[reply_axis_config.axis] =
           (float)reply_axis_config.velocity_acheived;
+
         itterator += size;
 
         break;
