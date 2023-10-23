@@ -16,6 +16,7 @@ Technically valid ranges are from 1.0 - 0.0 but at 1.0 osilations are too large 
 `KP = 0.2` is a good balance between smoothing with very little added latency.
 
 # Wishlist
+  * Configurable step pulse polartiy.
   * GPIO native
   * GPIO i2c
   * RS-485 support.
