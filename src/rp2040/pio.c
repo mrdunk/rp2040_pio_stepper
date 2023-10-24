@@ -17,11 +17,16 @@
  */
 void init_pio(const uint32_t axis)
 {
+  static bool init_done[MAX_AXIS] = {false, false, false, false};
   static uint32_t offset_pio0 = 0;
   static uint32_t offset_pio1 = 0;
   static uint32_t sm0[MAX_AXIS];
   static uint32_t sm1[MAX_AXIS];
   static uint8_t programs_loaded = 0;
+
+  if(init_done[axis]) {
+    return;
+  }
 
   int8_t io_pos_step;
   int8_t io_pos_dir;
@@ -99,6 +104,8 @@ void init_pio(const uint32_t axis)
   // Initial value for counter.
   // Puts the start position in the middle of the possible range.
   pio_sm_put(pio1, axis, UINT_MAX / 2);
+
+  init_done[axis] = true;
 }
 
 /* Convert step command from LinuxCNC and Feedback from PIO into a desired velocity. */
