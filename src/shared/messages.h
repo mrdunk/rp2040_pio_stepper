@@ -14,15 +14,13 @@
 #define MSG_SET_AXIS_ENABLED         3  // Set absolute axis position.
 #define MSG_SET_AXIS_ABS_POS         4  // Set absolute axis position.
 #define MSG_SET_AXIS_REL_POS         5  // Set relative axis position. (Velocity)
-#define MSG_SET_AXIS_RESET_POS       6  // Not yet implemented.
+#define MSG_SET_AXIS_ABS_POS_FLOAT   6  // Not yet implemented.
 #define MSG_SET_AXIS_MAX_SPEED       7  // Not yet implemented.
 #define MSG_SET_AXIS_MAX_ACCEL       8  // Not yet implemented.
 #define MSG_SET_AXIS_PID_KP          9  // Multiplier for position updates.
 #define MSG_SET_AXIS_IO_STEP        10  // Multiplier for position updates.
 #define MSG_SET_AXIS_IO_DIR         11  // Multiplier for position updates.
-#define MSG_SET_AXIS_STEP_IO        12  // Not yet implemented.
-#define MSG_SET_AXIS_DIR_IO         13  // Not yet implemented.
-#define MSG_GET_GLOBAL_CONFIG       14  // Not yet implemented.
+#define MSG_GET_GLOBAL_CONFIG       12  // Not yet implemented.
 
 struct Message {
   uint32_t type;
@@ -51,10 +49,39 @@ struct Message_uint_int {
   int32_t value;
 };
 
-struct Message_uint_float {
+struct Message_set_kp {
   uint32_t type;
   uint32_t axis;
   float value;
+};
+
+struct Message_set_max_velocity {
+  uint32_t type;
+  uint32_t axis;
+  double value;
+};
+
+struct Message_set_max_accel {
+  uint32_t type;
+  uint32_t axis;
+  double value;
+};
+
+struct Message_set_abs_pos {
+  uint32_t type;
+  uint32_t axis;
+  double value;
+};
+
+union MessageAny {
+  struct Message_timing mess_timing;
+  struct Message_uint mess_uint;
+  struct Message_uint_uint mess_uint_uint;
+  struct Message_uint_int mess_uint_int;
+  struct Message_set_kp mess_set_kp;
+  struct Message_set_max_velocity mess_set_max_velocity;
+  struct Message_set_max_accel mess_set_max_accel;
+  struct Message_set_abs_pos mess_set_abs_pos;
 };
 
 
@@ -82,7 +109,7 @@ struct Reply_axis_config {
   uint32_t type;
   uint32_t axis;
   uint32_t abs_pos_acheived;
-  uint32_t min_step_len_ticks;
+  uint32_t max_velocity;
   uint32_t max_accel_ticks;
   int32_t velocity_requested;  // TODO: Remove me once done debugging.
   int32_t velocity_acheived;

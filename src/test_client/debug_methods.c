@@ -15,7 +15,7 @@ void display_tx_data(void* packet, size_t packet_size) {
   struct Message_uint message_uint;
   //struct Message_uint_uint message_uint_uint;
   struct Message_uint_int message_uint_int;
-  struct Message_uint_float message_uint_float;
+  struct Message_set_kp message_set_kp;
 
   printf("\nSending messages:\n");
   printf("Raw:\n");
@@ -53,10 +53,10 @@ void display_tx_data(void* packet, size_t packet_size) {
         printf("  Invalid message type: %u\n", msg_type);
         exit(0);
       case MSG_SET_AXIS_PID_KP:
-        message_size = sizeof(struct Message_uint_float);
-        memcpy(&message_uint_float, packet, message_size);
+        message_size = sizeof(struct Message_set_kp);
+        memcpy(&message_set_kp, packet, message_size);
         printf("  msg type: %u\taxis: %u\tvalue: %f\n",
-            message_uint_float.type, message_uint_float.axis, message_uint_float.value);
+            message_set_kp.type, message_set_kp.axis, message_set_kp.value);
         break;
       case MSG_GET_GLOBAL_CONFIG:
         message_size = sizeof(struct Message);

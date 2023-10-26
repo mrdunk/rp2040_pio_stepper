@@ -26,8 +26,8 @@ volatile struct ConfigGlobal config = {
       .io_pos_dir = -1,
       .abs_pos_requested = UINT_MAX / 2,
       .abs_pos_acheived = UINT_MAX / 2,
-      .min_step_len_ticks = 50,
-      .max_accel_ticks = 2,
+      .max_velocity = 50,
+      .max_accel_ticks = 2.0,
       .velocity_requested = 0,
       .velocity_acheived = 0,
       .kp = 0.5f,
@@ -41,8 +41,8 @@ volatile struct ConfigGlobal config = {
       .io_pos_dir = -1,
       .abs_pos_requested = UINT_MAX / 2,
       .abs_pos_acheived = UINT_MAX / 2,
-      .min_step_len_ticks = 50,
-      .max_accel_ticks = 10,
+      .max_velocity = 50,
+      .max_accel_ticks = 10.0,
       .velocity_requested = 0,
       .velocity_acheived = 0,
       .kp = 0.5f,
@@ -56,8 +56,8 @@ volatile struct ConfigGlobal config = {
       .io_pos_dir = -1,
       .abs_pos_requested = UINT_MAX / 2,
       .abs_pos_acheived = UINT_MAX / 2,
-      .min_step_len_ticks = 50,
-      .max_accel_ticks = 200,
+      .max_velocity = 50,
+      .max_accel_ticks = 200.0,
       .velocity_requested = 0,
       .velocity_acheived = 0,
       .kp = 0.5f,
@@ -71,8 +71,8 @@ volatile struct ConfigGlobal config = {
       .io_pos_dir = -1,
       .abs_pos_requested = UINT_MAX / 2,
       .abs_pos_acheived = UINT_MAX / 2,
-      .min_step_len_ticks = 50,
-      .max_accel_ticks = 200,
+      .max_velocity = 50,
+      .max_accel_ticks = 200.0,
       .velocity_requested = 0,
       .velocity_acheived = 0,
       .kp = 0.5f,
@@ -155,9 +155,10 @@ void update_axis_config(
     const int8_t* io_pos_step,
     const int8_t* io_pos_dir,
     const uint32_t* abs_pos_requested,
+    const double* abs_pos_requested_float,
     const uint32_t* abs_pos_acheived,
-    const uint32_t* min_step_len_ticks,
-    const uint32_t* max_accel_ticks,
+    const double* max_velocity,
+    const double* max_accel_ticks,
     const int32_t* velocity_requested,
     const int32_t* velocity_acheived,
     const float* kp
@@ -182,11 +183,14 @@ void update_axis_config(
   if(abs_pos_requested != NULL) {
     config.axis[axis].abs_pos_requested = *abs_pos_requested;
   }
+  if(abs_pos_requested_float != NULL) {
+    config.axis[axis].abs_pos_requested_float = *abs_pos_requested_float;
+  }
   if(abs_pos_acheived != NULL) {
     config.axis[axis].abs_pos_acheived = *abs_pos_acheived;
   }
-  if(min_step_len_ticks != NULL) {
-    config.axis[axis].min_step_len_ticks = *min_step_len_ticks;
+  if(max_velocity != NULL) {
+    config.axis[axis].max_velocity = *max_velocity;
   }
   if(max_accel_ticks != NULL) {
     config.axis[axis].max_accel_ticks = *max_accel_ticks;
@@ -221,9 +225,10 @@ uint32_t get_axis_config(
     int8_t* io_pos_step,
     int8_t* io_pos_dir,
     uint32_t* abs_pos_requested,
+    double* abs_pos_requested_float,
     uint32_t* abs_pos_acheived,
-    uint32_t* min_step_len_ticks,
-    uint32_t* max_accel_ticks,
+    double* max_velocity,
+    double* max_accel_ticks,
     int32_t* velocity_requested,
     int32_t* velocity_acheived,
     float* kp)
@@ -261,11 +266,14 @@ uint32_t get_axis_config(
   if(abs_pos_requested != NULL) {
     *abs_pos_requested = config.axis[axis].abs_pos_requested;
   }
+  if(abs_pos_requested_float != NULL) {
+    *abs_pos_requested_float = config.axis[axis].abs_pos_requested_float;
+  }
   if(abs_pos_acheived != NULL) {
     *abs_pos_acheived = config.axis[axis].abs_pos_acheived;
   }
-  if(min_step_len_ticks != NULL) {
-    *min_step_len_ticks = config.axis[axis].min_step_len_ticks;
+  if(max_velocity != NULL) {
+    *max_velocity = config.axis[axis].max_velocity;
   }
   if(max_accel_ticks != NULL) {
     *max_accel_ticks = config.axis[axis].max_accel_ticks;
@@ -326,8 +334,8 @@ size_t serialise_axis_config(
   //int8_t io_pos_dir;
   uint32_t abs_pos_acheived;
   //uint32_t abs_pos_requested;
-  uint32_t min_step_len_ticks;
-  uint32_t max_accel_ticks;
+  double max_velocity;
+  double max_accel_ticks;
   int32_t velocity_requested;
   int32_t velocity_acheived;
   //float kp;
@@ -341,8 +349,9 @@ size_t serialise_axis_config(
         NULL, //&io_pos_step,
         NULL, //&io_pos_dir,
         NULL, //&abs_pos_requested,
+        NULL, //&abs_pos_requested_float,
         &abs_pos_acheived,
-        &min_step_len_ticks,
+        &max_velocity,
         &max_accel_ticks,
         &velocity_requested,
         &velocity_acheived,
@@ -362,7 +371,7 @@ size_t serialise_axis_config(
     struct Reply_axis_config reply = Reply_axis_config_default;
     reply.axis = axis;
     reply.abs_pos_acheived = abs_pos_acheived;
-    reply.min_step_len_ticks = min_step_len_ticks;
+    reply.max_velocity = max_velocity;
     reply.max_accel_ticks = max_accel_ticks;
     reply.velocity_requested = velocity_requested;
     reply.velocity_acheived = velocity_acheived;

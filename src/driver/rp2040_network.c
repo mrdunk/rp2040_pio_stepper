@@ -94,12 +94,13 @@ size_t serialize_data(void* values, void** packet, size_t* packet_space) {
   struct Message_uint message_uint;
   struct Message_uint_uint message_uint_uint;
   struct Message_uint_int message_uint_int;
-  struct Message_uint_float message_uint_float;
+  struct Message_set_kp message_uint_float;
   size_t message_size = 0;
   uint32_t msg_type = ((uint32_t*)values)[0];
   uint32_t uint_value;
   int32_t int_value;
   float float_value;
+  union MessageAny message_any;
   uint32_t axis, update_id, time;
 
   switch(msg_type) {
@@ -120,7 +121,7 @@ size_t serialize_data(void* values, void** packet, size_t* packet_space) {
     case MSG_SET_AXIS_ENABLED:
       axis = ((uint32_t*)values)[1];
       uint_value = ((uint32_t*)values)[2];
-      message_uint_uint = 
+      message_uint_uint =
         (struct Message_uint_uint){.type=msg_type, .axis=axis, .value=uint_value};
       message_size = sizeof(struct Message_uint_uint);
       memcpy(*packet, &message_uint_uint, message_size);
@@ -128,29 +129,49 @@ size_t serialize_data(void* values, void** packet, size_t* packet_space) {
     case MSG_SET_AXIS_ABS_POS:
       axis = ((uint32_t*)values)[1];
       uint_value = ((uint32_t*)values)[2];
-      message_uint_uint = 
+      message_uint_uint =
         (struct Message_uint_uint){.type=msg_type, .axis=axis, .value=uint_value};
       message_size = sizeof(struct Message_uint_uint);
       memcpy(*packet, &message_uint_uint, message_size);
       break;
+    case MSG_SET_AXIS_ABS_POS_FLOAT:
+      //message_any.mess_set_abs_pos.type = MSG_SET_AXIS_ABS_POS_FLOAT;
+      //message_any.mess_set_abs_pos.axis = ((uint32_t*)values)[1];
+      //message_any.mess_set_abs_pos.value = ((uint32_t*)values)[2];
+      //message_uint_uint =
+      //  (struct Message_uint_uint){.type=msg_type, .axis=axis, .value=uint_value};
+      //message_size = sizeof(struct Message_uint_uint);
+      //memcpy(*packet, &message_uint_uint, message_size);
+
+      //printf("%u\t%f\n",
+      //    ((struct Message_set_abs_pos*)values)->axis,
+      //    ((struct Message_set_abs_pos*)values)->value);
+      message_size = sizeof(struct Message_set_abs_pos);
+      memcpy(*packet, values, message_size);
+      //printf("%u\t%f\n",
+      //    ((struct Message_set_abs_pos*)*packet)->axis,
+      //    ((struct Message_set_abs_pos*)*packet)->value);
+      break;
     case MSG_SET_AXIS_REL_POS:
       axis = ((uint32_t*)values)[1];
       int_value = ((int32_t*)values)[2];
-      message_uint_int = 
+      message_uint_int =
         (struct Message_uint_int){.type=msg_type, .axis=axis, .value=int_value};
       message_size = sizeof(struct Message_uint_int);
       memcpy(*packet, &message_uint_int, message_size);
       break;
     case MSG_SET_AXIS_MAX_SPEED:
-      // TODO.
+      message_size = sizeof(struct Message_set_max_velocity);
+      memcpy(*packet, values, message_size);
     case MSG_SET_AXIS_MAX_ACCEL:
-      // TODO.
+      message_size = sizeof(struct Message_set_max_accel);
+      memcpy(*packet, values, message_size);
     case MSG_SET_AXIS_PID_KP:
       axis = ((uint32_t*)values)[1];
       float_value = (float)(((uint32_t*)values)[2]) / 1000;
       message_uint_float = 
-        (struct Message_uint_float){.type=msg_type, .axis=axis, .value=float_value};
-      message_size = sizeof(struct Message_uint_float);
+        (struct Message_set_kp){.type=msg_type, .axis=axis, .value=float_value};
+      message_size = sizeof(struct Message_set_kp);
       memcpy(*packet, &message_uint_float, message_size);
       break;
     case MSG_SET_AXIS_IO_STEP:
@@ -229,7 +250,7 @@ void process_data(char* buf, skeleton_t* data, int debug) {
               msg_type,
               reply_axis_config.axis,
               reply_axis_config.abs_pos_acheived,
-              reply_axis_config.min_step_len_ticks,
+              reply_axis_config.max_velocity,
               reply_axis_config.max_accel_ticks,
               reply_axis_config.velocity_acheived);
         }

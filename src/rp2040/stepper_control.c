@@ -97,13 +97,13 @@ struct Message_uint_int* process_msg_uint_int(char** rx_buf) {
   return message;
 }
 
-struct Message_uint_float* process_msg_uint_float(char** rx_buf) {
-  struct Message_uint_float* message = (struct Message_uint_float*)(*rx_buf);
+struct Message_set_kp* process_msg_uint_float(char** rx_buf) {
+  struct Message_set_kp* message = (struct Message_set_kp*)(*rx_buf);
 
   //printf("NW UPD message on port %u:\n\ttype: %u\n\taxis: %u\n\tvalue: %f\r\n",
   //    NW_PORT, message->type, message->axis, message->value);
 
-  *rx_buf += sizeof(struct Message_uint_float);
+  *rx_buf += sizeof(struct Message_set_kp);
 
   return message;
 }
@@ -118,10 +118,12 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
   struct Message_uint* msg_uint;
   struct Message_uint_uint* msg_uint_uint;
   struct Message_uint_int* msg_uint_int;
-  struct Message_uint_float* msg_uint_float;
+  struct Message_set_kp* msg_set_kp;
+  union MessageAny* message_any;
 
   uint32_t axis, update_id, tx_time;
   uint32_t abs_pos_requested = 0;
+  double abs_pos_requested_float = 0.0;
   uint32_t abs_pos_acheived;
   int32_t velocity_requested = 0;
   int32_t enabled = 0;
@@ -153,7 +155,7 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
         enabled = msg_uint_uint->value;
         update_axis_config(
             axis, CORE0,
-            (uint8_t*)&enabled, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+            (uint8_t*)&enabled, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
         (*return_data)++;
         break;
       case MSG_SET_AXIS_ABS_POS:
@@ -162,7 +164,18 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
         abs_pos_requested = msg_uint_uint->value;
         update_axis_config(
             axis, CORE0,
-            NULL, NULL, NULL, &abs_pos_requested, NULL, NULL, NULL, &velocity_requested, NULL, NULL);
+            NULL, NULL, NULL, &abs_pos_requested, NULL, NULL, NULL, NULL, &velocity_requested, NULL, NULL);
+        (*return_data)++;
+        break;
+      case MSG_SET_AXIS_ABS_POS_FLOAT:
+        axis = ((struct Message_set_abs_pos*)(rx_itterator))->axis;
+        abs_pos_requested_float = ((struct Message_set_abs_pos*)(rx_itterator))->value;
+        
+        rx_itterator += sizeof(struct Message_set_abs_pos);
+
+        update_axis_config(
+            axis, CORE0,
+            NULL, NULL, NULL, NULL, &abs_pos_requested_float, NULL, NULL, NULL, NULL, NULL, NULL);
         (*return_data)++;
         break;
       case MSG_SET_AXIS_REL_POS:
@@ -171,20 +184,39 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
         velocity_requested = msg_uint_int->value;
         update_axis_config(
             axis, CORE0,
-            NULL, NULL, NULL, &abs_pos_requested, NULL, NULL, NULL, &velocity_requested, NULL, NULL);
+            NULL, NULL, NULL, &abs_pos_requested, NULL, NULL, NULL, NULL, &velocity_requested, NULL, NULL);
         (*return_data)++;
         break;
       case MSG_SET_AXIS_MAX_SPEED:
-        // TODO.
-      case MSG_SET_AXIS_MAX_ACCEL:
-        // TODO.
-      case MSG_SET_AXIS_PID_KP:
-        msg_uint_float = process_msg_uint_float(&rx_itterator);
-        axis = msg_uint_float->axis;
-        printf("Setting axis: %u\tkp:      %f\n", axis, msg_uint_float->value);
+        axis = ((struct Message_set_max_velocity*)(rx_itterator))->axis;
+        double max_velocity = 
+          ((struct Message_set_max_velocity*)(rx_itterator))->value;
+
+        rx_itterator += sizeof(struct Message_set_max_accel);
+
         update_axis_config(
             axis, CORE0,
-            NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &msg_uint_float->value);
+            NULL, NULL, NULL, NULL, NULL, NULL, &max_velocity, NULL, NULL, NULL, NULL);
+        (*return_data)++;
+        break;
+      case MSG_SET_AXIS_MAX_ACCEL:
+        axis = ((struct Message_set_max_accel*)(rx_itterator))->axis;
+        double max_accel = ((struct Message_set_max_accel*)(rx_itterator))->value;
+
+        rx_itterator += sizeof(struct Message_set_max_accel);
+
+        update_axis_config(
+            axis, CORE0,
+            NULL, NULL, NULL, NULL, NULL, NULL, NULL, &max_accel, NULL, NULL, NULL);
+        (*return_data)++;
+        break;
+      case MSG_SET_AXIS_PID_KP:
+        msg_set_kp = process_msg_uint_float(&rx_itterator);
+        axis = msg_set_kp->axis;
+        printf("Setting axis: %u\tkp:      %f\n", axis, msg_set_kp->value);
+        update_axis_config(
+            axis, CORE0,
+            NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &msg_set_kp->value);
         break;
       case MSG_SET_AXIS_IO_STEP:
         msg_uint_int = process_msg_uint_int(&rx_itterator);
@@ -193,7 +225,7 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
         printf("Setting axis: %u\tstep-io: %i\n", axis, io_pos_value);
         update_axis_config(
             axis, CORE0,
-            NULL, &io_pos_value, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+            NULL, &io_pos_value, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
         (*return_data)++;
         break;
       case MSG_SET_AXIS_IO_DIR:
@@ -203,7 +235,7 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
         printf("Setting axis: %u\tdir-io:  %i\n", axis, io_pos_value);
         update_axis_config(
             axis, CORE0,
-            NULL, NULL, &io_pos_value, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+            NULL, NULL, &io_pos_value, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
         (*return_data)++;
         break;
       case MSG_GET_GLOBAL_CONFIG:
