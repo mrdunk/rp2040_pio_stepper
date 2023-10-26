@@ -22,6 +22,7 @@ net estop-out => rp2040_eth.0.joint-enable-0
 
 # For debugging.
 net xpos-fb rp2040_eth.0.pos-fb-0
+net xpos-error rp2040_eth.0.pos-error-0
 net xvelocity-calc rp2040_eth.0.velocity-calc-0
 net xvelocity-fb rp2040_eth.0.velocity-fb-0
 
@@ -38,6 +39,7 @@ net estop-out => rp2040_eth.0.joint-enable-1
 
 # For debugging.
 net ypos-fb rp2040_eth.0.pos-fb-1
+net ypos-error rp2040_eth.0.pos-error-1
 net yvelocity-calc rp2040_eth.0.velocity-calc-1
 net yvelocity-fb rp2040_eth.0.velocity-fb-1
 
@@ -54,6 +56,7 @@ net estop-out => rp2040_eth.0.joint-enable-2
 
 # For debugging.
 net zpos-fb rp2040_eth.0.pos-fb-2
+net zpos-error rp2040_eth.0.pos-error-2
 net zvelocity-calc rp2040_eth.0.velocity-calc-2
 net zvelocity-fb rp2040_eth.0.velocity-fb-2
 

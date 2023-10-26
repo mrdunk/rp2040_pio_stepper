@@ -89,12 +89,6 @@ size_t get_reply_non_block(int device, char* receive_buffer) {
 }
 
 size_t serialize_data(void* values, void** packet, size_t* packet_space) {
-  struct Message message;
-  struct Message_timing message_timing;
-  struct Message_uint message_uint;
-  struct Message_uint_uint message_uint_uint;
-  struct Message_uint_int message_uint_int;
-  struct Message_set_kp message_uint_float;
   size_t message_size = 0;
   uint32_t msg_type = ((uint32_t*)values)[0];
   uint32_t uint_value;
@@ -105,88 +99,29 @@ size_t serialize_data(void* values, void** packet, size_t* packet_space) {
 
   switch(msg_type) {
     case MSG_TIMING:
-      update_id = ((uint32_t*)values)[1];
-      time = ((uint32_t*)values)[2];
-      uint_value = ((uint32_t*)values)[1];
-      message_timing = (struct Message_timing){.type=msg_type, .update_id=update_id, .time=time};
       message_size = sizeof(struct Message_timing);
-      memcpy(*packet, &message_timing, message_size);
-      break;
-    case MSG_SET_GLOAL_UPDATE_RATE:
-      uint_value = ((uint32_t*)values)[1];
-      message_uint = (struct Message_uint){.type=msg_type, .value=uint_value};
-      message_size = sizeof(struct Message_uint);
-      memcpy(*packet, &message_uint, message_size);
       break;
     case MSG_SET_AXIS_ENABLED:
-      axis = ((uint32_t*)values)[1];
-      uint_value = ((uint32_t*)values)[2];
-      message_uint_uint =
-        (struct Message_uint_uint){.type=msg_type, .axis=axis, .value=uint_value};
-      message_size = sizeof(struct Message_uint_uint);
-      memcpy(*packet, &message_uint_uint, message_size);
+      message_size = sizeof(struct Message_joint_enable);
       break;
     case MSG_SET_AXIS_ABS_POS:
-      axis = ((uint32_t*)values)[1];
-      uint_value = ((uint32_t*)values)[2];
-      message_uint_uint =
-        (struct Message_uint_uint){.type=msg_type, .axis=axis, .value=uint_value};
-      message_size = sizeof(struct Message_uint_uint);
-      memcpy(*packet, &message_uint_uint, message_size);
-      break;
-    case MSG_SET_AXIS_ABS_POS_FLOAT:
-      //message_any.mess_set_abs_pos.type = MSG_SET_AXIS_ABS_POS_FLOAT;
-      //message_any.mess_set_abs_pos.axis = ((uint32_t*)values)[1];
-      //message_any.mess_set_abs_pos.value = ((uint32_t*)values)[2];
-      //message_uint_uint =
-      //  (struct Message_uint_uint){.type=msg_type, .axis=axis, .value=uint_value};
-      //message_size = sizeof(struct Message_uint_uint);
-      //memcpy(*packet, &message_uint_uint, message_size);
-
-      //printf("%u\t%f\n",
-      //    ((struct Message_set_abs_pos*)values)->axis,
-      //    ((struct Message_set_abs_pos*)values)->value);
       message_size = sizeof(struct Message_set_abs_pos);
-      memcpy(*packet, values, message_size);
-      //printf("%u\t%f\n",
-      //    ((struct Message_set_abs_pos*)*packet)->axis,
-      //    ((struct Message_set_abs_pos*)*packet)->value);
       break;
     case MSG_SET_AXIS_REL_POS:
-      axis = ((uint32_t*)values)[1];
-      int_value = ((int32_t*)values)[2];
-      message_uint_int =
-        (struct Message_uint_int){.type=msg_type, .axis=axis, .value=int_value};
-      message_size = sizeof(struct Message_uint_int);
-      memcpy(*packet, &message_uint_int, message_size);
+      message_size = sizeof(struct Message_set_rel_pos);
       break;
     case MSG_SET_AXIS_MAX_SPEED:
       message_size = sizeof(struct Message_set_max_velocity);
-      memcpy(*packet, values, message_size);
+      break;
     case MSG_SET_AXIS_MAX_ACCEL:
       message_size = sizeof(struct Message_set_max_accel);
-      memcpy(*packet, values, message_size);
+      break;
     case MSG_SET_AXIS_PID_KP:
-      axis = ((uint32_t*)values)[1];
-      float_value = (float)(((uint32_t*)values)[2]) / 1000;
-      message_uint_float = 
-        (struct Message_set_kp){.type=msg_type, .axis=axis, .value=float_value};
       message_size = sizeof(struct Message_set_kp);
-      memcpy(*packet, &message_uint_float, message_size);
       break;
     case MSG_SET_AXIS_IO_STEP:
     case MSG_SET_AXIS_IO_DIR:
-      axis = ((uint32_t*)values)[1];
-      int_value = ((int32_t*)values)[2];
-      message_uint_int = 
-        (struct Message_uint_int){.type=msg_type, .axis=axis, .value=int_value};
-      message_size = sizeof(struct Message_uint_int);
-      memcpy(*packet, &message_uint_int, message_size);
-      break;
-    case MSG_GET_GLOBAL_CONFIG:
-      message = (struct Message){.type=msg_type};
-      message_size = sizeof(struct Message);
-      memcpy(*packet, &message, message_size);
+      message_size = sizeof(struct Message_joint_gpio);
       break;
     default:
       printf("Invalid message type: %u\n", msg_type);
@@ -194,10 +129,11 @@ size_t serialize_data(void* values, void** packet, size_t* packet_space) {
   }
 
   if(*packet_space < message_size) {
-    // TODO: This check should happen before the memcpy(...).
     printf("ERROR: No space left in packet\n");
     return 0;
   }
+
+  memcpy(*packet, values, message_size);
 
   packet_space -= message_size;
   *packet += message_size;
@@ -254,13 +190,19 @@ void process_data(char* buf, skeleton_t* data, int debug) {
               reply_axis_config.max_accel_ticks,
               reply_axis_config.velocity_acheived);
         }
-        *data->feedback[reply_axis_config.axis] =
+        *data->joint_pos_feedback[reply_axis_config.axis] =
           ((double)reply_axis_config.abs_pos_acheived - (UINT_MAX / 2))
-          / *data->scale[reply_axis_config.axis];
-        *data->calculated_velocity[reply_axis_config.axis] =
+          / *data->joint_scale[reply_axis_config.axis];
+
+        *data->joint_pos_error[reply_axis_config.axis] =
+          reply_axis_config.pos_error;
+
+        *data->joint_velocity_cmd[reply_axis_config.axis] =
           (float)reply_axis_config.velocity_requested;
-        *data->fb_velocity[reply_axis_config.axis] =
+
+        *data->joint_velocity_feedback[reply_axis_config.axis] =
           (float)reply_axis_config.velocity_acheived;
+
         itterator += size;
 
         break;

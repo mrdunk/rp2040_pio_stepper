@@ -38,6 +38,7 @@ void init_pio(const uint32_t axis)
       NULL,
       NULL,
       NULL,
+      NULL,
       NULL
       );
 
@@ -113,10 +114,11 @@ double get_velocity(
 }
 
 /* Generate step counts and send to PIOs. */
-uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
+uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
   static uint32_t failcount = 0;
   static uint32_t count = 0;
   static uint32_t last_pos[MAX_AXIS] = {UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2};
+  static uint32_t last_request[MAX_AXIS] = {UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2};
   static uint32_t last_enabled[MAX_AXIS] = {0, 0, 0, 0};
   static uint8_t last_direction[MAX_AXIS] = {0, 0, 0, 0};
   static uint8_t direction_change[MAX_AXIS] = {0, 0, 0, 0};
@@ -126,11 +128,10 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   static const uint32_t clock_multiplier = 133;
   uint8_t enabled;
   uint32_t abs_pos_acheived = 0;
-  uint32_t abs_pos_requested;
-  double abs_pos_requested_float;
+  double rel_pos_requested;
+  double abs_pos_requested;
   double max_velocity;
   double max_accel_ticks;
-  int32_t velocity_requested = 0;
   int32_t velocity_acheived = 0;
   float kp;
   uint32_t updated;
@@ -141,13 +142,14 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
       &enabled,
       NULL,
       NULL,
+      &rel_pos_requested,
       &abs_pos_requested,
-      &abs_pos_requested_float,
       &abs_pos_acheived,
       &max_velocity,
       &max_accel_ticks,
       NULL, // &velocity_requested,
       NULL, // &velocity_acheived,
+      NULL, // &pos_error,,
       &kp
       );
 
@@ -183,11 +185,11 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   }
 
   double velocity;
-  if(abs_pos_requested != 0) {
+  if(rel_pos_requested != 0) {
     velocity = get_velocity(
-        axis, abs_pos_acheived, abs_pos_requested_float + (double)(UINT_MAX / 2), kp);
+        axis, abs_pos_acheived, abs_pos_requested + (double)(UINT_MAX / 2), kp);
   } else {
-    velocity = velocity_requested;
+    velocity = rel_pos_requested;
   }
 
   uint8_t direction = (velocity > 0);
@@ -203,9 +205,20 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
     }
   }
 
+  // If step count gets too low,
+  // the step length gets so high that the PIO doesn't check for new input often
+  // enough and bad latency ensues.
+  if(requested_step_count <= 0.25) {
+    requested_step_count = 0.25;
+  }
+
+  // If direction is constantly changing, the motor speed is effectively zero.
+  // It's just jittering between points caused by the difference between integer
+  // position and floating point.
+  // Switch the motor off in this case.
   if(requested_step_count > kp * 3.0) {
     stopped[axis] = false;
-    direction_change[axis] = 0.0;
+    direction_change[axis] = 0;
   } else if(direction_change[axis] > 0) {
     requested_step_count = 0.0;
     stopped[axis] = true;
@@ -215,16 +228,12 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
 
   last_direction[axis] = direction;
 
-  //if(((count / 3) % 1000 == 0) && (axis == 1)) {
-  //  printf("%u\t%f\t%f\n", axis, velocity, requested_step_count);
-  //}
-
   int32_t step_len_ticks = 0;
 
   if(enabled > 0 && requested_step_count > 0) {
-    double utt = update_time_us * clock_multiplier;
+    double update_period_ticks = update_period_us * clock_multiplier;
     step_len_ticks =
-      (utt / (requested_step_count * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
+      (update_period_ticks / (requested_step_count * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
     if(step_len_ticks < 1) {
       // TODO: use min_step_len_ticks for this.
       step_len_ticks = 1;
@@ -236,9 +245,8 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
   pio_sm_put(pio0, axis, step_len_ticks);
 
   velocity_acheived = abs_pos_acheived - last_pos[axis];
-  last_pos[axis] = abs_pos_acheived;
-
-  int32_t velocity_int = velocity;
+  int32_t velocity_requested = velocity;
+  int32_t pos_error = (last_request[axis] + (UINT_MAX / 2)) - abs_pos_acheived;
 
   update_axis_config(
       axis,
@@ -251,10 +259,14 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_time_us) {
       &abs_pos_acheived,
       NULL,
       NULL,
-      &velocity_int,
+      &velocity_requested,
       &velocity_acheived,
+      &pos_error,
       NULL);
-  
+
+  last_pos[axis] = abs_pos_acheived;
+  last_request[axis] = abs_pos_requested;
+
   return updated;
 }
 

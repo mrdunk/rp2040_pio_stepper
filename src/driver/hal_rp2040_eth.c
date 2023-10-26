@@ -31,16 +31,17 @@ typedef struct {
   hal_bit_t* metric_eth_state;
   hal_bit_t* joint_enable[JOINTS];
   hal_bit_t* joint_velocity_mode[JOINTS];
-  hal_s32_t* io_pos_step[JOINTS];
-  hal_s32_t* io_pos_dir[JOINTS];
-  hal_float_t* kp[JOINTS];
-  hal_float_t* max_velocity[JOINTS];
-  hal_float_t* max_accel[JOINTS];
-  hal_float_t* scale[JOINTS];
-  hal_float_t* command[JOINTS];
-  hal_float_t* feedback[JOINTS];
-  hal_float_t* calculated_velocity[JOINTS];
-  hal_float_t* fb_velocity[JOINTS];
+  hal_s32_t* joint_gpio_step[JOINTS];
+  hal_s32_t* joint_gpio_dir[JOINTS];
+  hal_float_t* joint_kp[JOINTS];
+  hal_float_t* joint_max_velocity[JOINTS];
+  hal_float_t* joint_max_accel[JOINTS];
+  hal_float_t* joint_scale[JOINTS];
+  hal_float_t* joint_pos_cmd[JOINTS];
+  hal_float_t* joint_pos_feedback[JOINTS];
+  hal_s32_t* joint_pos_error[JOINTS];
+  hal_float_t* joint_velocity_cmd[JOINTS];
+  hal_float_t* joint_velocity_feedback[JOINTS];
   hal_bit_t* pin_out[IO];
   hal_bit_t* pin_in[IO];
   bool reset_joint[JOINTS];
@@ -152,7 +153,7 @@ int rtapi_app_main(void)
       return -1;
     }
 
-    retval = hal_pin_s32_newf(HAL_IN, &(port_data_array->io_pos_step[num_joint]), comp_id,
+    retval = hal_pin_s32_newf(HAL_IN, &(port_data_array->joint_gpio_step[num_joint]), comp_id,
                               "rp2040_eth.%d.joint-io-pos-step-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
@@ -161,7 +162,7 @@ int rtapi_app_main(void)
       return -1;
     }
 
-    retval = hal_pin_s32_newf(HAL_IN, &(port_data_array->io_pos_dir[num_joint]),
+    retval = hal_pin_s32_newf(HAL_IN, &(port_data_array->joint_gpio_dir[num_joint]),
                               comp_id, "rp2040_eth.%d.joint-io-pos-dir-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
@@ -170,7 +171,7 @@ int rtapi_app_main(void)
       return -1;
     }
 
-    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->kp[num_joint]), comp_id,
+    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->joint_kp[num_joint]), comp_id,
                                 "rp2040_eth.%d.joint-kp-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
@@ -179,7 +180,7 @@ int rtapi_app_main(void)
       return -1;
     }
 
-    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->max_velocity[num_joint]), comp_id,
+    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->joint_max_velocity[num_joint]), comp_id,
                                 "rp2040_eth.%d.joint-max-velocity-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
@@ -188,7 +189,7 @@ int rtapi_app_main(void)
       return -1;
     }
 
-    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->max_accel[num_joint]), comp_id,
+    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->joint_max_accel[num_joint]), comp_id,
                                 "rp2040_eth.%d.joint-max-accel-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
@@ -197,7 +198,7 @@ int rtapi_app_main(void)
       return -1;
     }
 
-    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->scale[num_joint]),
+    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->joint_scale[num_joint]),
                                 comp_id, "rp2040_eth.%d.joint-scale-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
@@ -206,7 +207,7 @@ int rtapi_app_main(void)
       return -1;
     }
 
-    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->command[num_joint]),
+    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->joint_pos_cmd[num_joint]),
                                 comp_id, "rp2040_eth.%d.pos-cmd-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
@@ -215,7 +216,7 @@ int rtapi_app_main(void)
       return -1;
     }
 
-    retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->feedback[num_joint]),
+    retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->joint_pos_feedback[num_joint]),
                                 comp_id, "rp2040_eth.%d.pos-fb-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
@@ -224,7 +225,16 @@ int rtapi_app_main(void)
       return -1;
     }
 
-    retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->calculated_velocity[num_joint]),
+    retval = hal_pin_s32_newf(HAL_OUT, &(port_data_array->joint_pos_error[num_joint]),
+                                comp_id, "rp2040_eth.%d.pos-error-%d", num_device, num_joint);
+    if (retval < 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR,
+                      "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
+      hal_exit(comp_id);
+      return -1;
+    }
+
+    retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->joint_velocity_cmd[num_joint]),
                                 comp_id, "rp2040_eth.%d.velocity-calc-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
@@ -233,7 +243,7 @@ int rtapi_app_main(void)
       return -1;
     }
 
-    retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->fb_velocity[num_joint]),
+    retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->joint_velocity_feedback[num_joint]),
                                 comp_id, "rp2040_eth.%d.velocity-fb-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
@@ -337,7 +347,6 @@ static void write_port(void *arg, long period)
   int num_device = 0;
 
   static uint count = 0;
-  static uint missed_packets = 0;
   static double last_kp[JOINTS] = {0, 0, 0, 0};
   static double last_max_velocity[JOINTS] = {0, 0, 0, 0};
   static double last_max_accel[JOINTS] = {0, 0, 0, 0};
@@ -350,13 +359,16 @@ static void write_port(void *arg, long period)
   void* buffer_iterator = &buffer[0];
 
   // Put metrics packet in buffer.
-  uint32_t values[4] = {0};
-  values[0] = MSG_TIMING;
-  values[1] = count;
-  values[2] = rtapi_get_time();
   union MessageAny message = {0};
   size_t buffer_space = BUFSIZE - sizeof(struct Message);
-  size_t buffer_size = serialize_data(values, &buffer_iterator, &buffer_space);
+  size_t buffer_size = 0;
+
+  //message.timing =
+  //  (struct Message_timing){.type=MSG_TIMING, .update_id=count, .time=rtapi_get_time()};
+  message.timing.type = MSG_TIMING;
+  message.timing.update_id = count;
+  message.timing.time = rtapi_get_time();
+  buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
 
   // Put GPIO values in buffer.
   // TODO: Not yet implemented.
@@ -370,46 +382,45 @@ static void write_port(void *arg, long period)
     if(*data->joint_velocity_mode[num_joint] == 1) {
       // Velocity mode.
       // TODO: Not tested.
-      double error = (last_command[num_joint] + ((*data->command)[num_joint])) / 2.0
-        - (*data->feedback[num_joint]);
-      values[0] = MSG_SET_AXIS_REL_POS;
-      values[1] = num_joint;
-      values[2] = *data->scale[num_joint] * error;
-      last_command[num_joint] = (*data->command[num_joint]);
-      buffer_size += serialize_data(values, &buffer_iterator, &buffer_space);
+      printf("WARN: Untested velocity mode. joint: %u\n", num_joint);
+      double error = (last_command[num_joint] + ((*data->joint_pos_cmd)[num_joint])) / 2.0
+        - (*data->joint_pos_feedback[num_joint]);
+
+      message.set_rel_pos.type = MSG_SET_AXIS_REL_POS;
+      message.set_rel_pos.axis = num_joint;
+      message.set_rel_pos.value = *data->joint_scale[num_joint] * error;
+      buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
+      last_command[num_joint] = *data->joint_pos_cmd[num_joint];
     } else {
       // Absolute position mode.
-      //values[0] = MSG_SET_AXIS_ABS_POS;
-      //values[1] = num_joint;
-      //values[2] = (*data->scale[num_joint] * *data->command[num_joint]) + (UINT_MAX / 2);
-      //buffer_size += serialize_data(values, &buffer_iterator, &buffer_space);
-
-      message.mess_set_abs_pos.type = MSG_SET_AXIS_ABS_POS_FLOAT;
-      message.mess_set_abs_pos.axis = num_joint;
-      message.mess_set_abs_pos.value = *data->scale[num_joint] * *data->command[num_joint];
+      message.set_abs_pos.type = MSG_SET_AXIS_ABS_POS;
+      message.set_abs_pos.axis = num_joint;
+      message.set_abs_pos.value = *data->joint_scale[num_joint] * *data->joint_pos_cmd[num_joint];
       buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
     }
 
     // Look for parameter changes.
-    if(last_kp[num_joint] != *data->kp[num_joint]) {
-      last_kp[num_joint] = *data->kp[num_joint];
-      values[0] = MSG_SET_AXIS_PID_KP;
-      values[1] = num_joint;
-      values[2] = (uint32_t)(*data->kp[num_joint] * 1000.0);  // TODO: Cast this properly.
-      buffer_size += serialize_data(values, &buffer_iterator, &buffer_space);
-    }
-
-    if(last_max_velocity[num_joint] != *data->max_velocity[num_joint]) {
-      message.mess_set_max_velocity.type = MSG_SET_AXIS_MAX_SPEED;
-      message.mess_set_abs_pos.axis = num_joint;
-      message.mess_set_abs_pos.value = *data->max_velocity[num_joint];
+    if(last_kp[num_joint] != *data->joint_kp[num_joint]) {
+      last_kp[num_joint] = *data->joint_kp[num_joint];
+      message.set_kp.type = MSG_SET_AXIS_PID_KP;
+      message.set_kp.axis = num_joint;
+      message.set_kp.value = *data->joint_kp[num_joint];
       buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
     }
 
-    if(last_max_accel[num_joint] != *data->max_accel[num_joint]) {
-      message.mess_set_max_velocity.type = MSG_SET_AXIS_MAX_ACCEL;
-      message.mess_set_abs_pos.axis = num_joint;
-      message.mess_set_abs_pos.value = *data->max_accel[num_joint];
+    if(last_max_velocity[num_joint] != *data->joint_max_velocity[num_joint]) {
+      last_max_velocity[num_joint] = *data->joint_max_velocity[num_joint];
+      message.set_max_velocity.type = MSG_SET_AXIS_MAX_SPEED;
+      message.set_abs_pos.axis = num_joint;
+      message.set_abs_pos.value = *data->joint_max_velocity[num_joint];
+      buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
+    }
+
+    if(last_max_accel[num_joint] != *data->joint_max_accel[num_joint]) {
+      last_max_accel[num_joint] = *data->joint_max_accel[num_joint];;
+      message.set_max_velocity.type = MSG_SET_AXIS_MAX_ACCEL;
+      message.set_abs_pos.axis = num_joint;
+      message.set_abs_pos.value = *data->joint_max_accel[num_joint];
       buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
     }
 
@@ -479,28 +490,28 @@ void enable_io(
   static int last_io_pos_step[JOINTS] = {-2, -2, -2, -2};
   static int last_io_pos_dir[JOINTS] = {-2, -2, -2, -2};
 
-  if(last_io_pos_step[num_joint] != *data->io_pos_step[num_joint] ||
+  if(last_io_pos_step[num_joint] != *data->joint_gpio_step[num_joint] ||
       data->reset_joint[num_joint]
-    ) {
-    struct Message_uint_uint v;
+  ) {
+    union MessageAny message = {0};
 
-    last_io_pos_step[num_joint] = *data->io_pos_step[num_joint];
+    last_io_pos_step[num_joint] = *data->joint_gpio_step[num_joint];
     rtapi_print_msg(RTAPI_MSG_INFO, "Configure joint: %u  step io: %u\n",
-        num_joint, *data->io_pos_step[num_joint]);
-    printf("Configure joint: %u  step io: %u\n", num_joint, *data->io_pos_step[num_joint]);
-    v.type = MSG_SET_AXIS_IO_STEP;
-    v.axis = num_joint;
-    v.value = *data->io_pos_step[num_joint];
-    *buffer_size += serialize_data(&v, buffer_iterator, buffer_space);
+        num_joint, *data->joint_gpio_step[num_joint]);
+    printf("Configure joint: %u  step io: %u\n", num_joint, *data->joint_gpio_step[num_joint]);
+    message.joint_enable.type = MSG_SET_AXIS_IO_STEP;
+    message.joint_enable.axis = num_joint;
+    message.joint_enable.value = *data->joint_gpio_step[num_joint];
+    *buffer_size += serialize_data(&message, buffer_iterator, buffer_space);
 
-    last_io_pos_dir[num_joint] = *data->io_pos_dir[num_joint];
+    last_io_pos_dir[num_joint] = *data->joint_gpio_dir[num_joint];
     rtapi_print_msg(RTAPI_MSG_INFO, "Configure joint: %u  dir io: %u\n",
-        num_joint, *data->io_pos_dir[num_joint]);
-    printf("Configure joint: %u  dir io: %u\n", num_joint, *data->io_pos_dir[num_joint]);
-    v.type = MSG_SET_AXIS_IO_DIR;
-    v.axis = num_joint;
-    v.value = *data->io_pos_dir[num_joint];
-    *buffer_size += serialize_data(&v, buffer_iterator, buffer_space);
+        num_joint, *data->joint_gpio_dir[num_joint]);
+    printf("Configure joint: %u  dir io: %u\n", num_joint, *data->joint_gpio_dir[num_joint]);
+    message.joint_enable.type = MSG_SET_AXIS_IO_DIR;
+    message.joint_enable.axis = num_joint;
+    message.joint_enable.value = *data->joint_gpio_dir[num_joint];
+    *buffer_size += serialize_data(&message, buffer_iterator, buffer_space);
 
     data->reset_joint[num_joint] = false;
   }
@@ -511,7 +522,7 @@ void enable_joint(
     void** buffer_iterator, skeleton_t *data
 ) {
   static int last_enabled[JOINTS] = {-1, -1, -1, -1};
-  uint32_t values[4] = {0};
+  union MessageAny message = {0};
 
   if(last_enabled[num_joint] != *data->joint_enable[num_joint]) {
     if(*data->joint_enable[num_joint]) {
@@ -523,10 +534,11 @@ void enable_joint(
     enable_io(num_joint, buffer_space, buffer_size, buffer_iterator, data);
 
     last_enabled[num_joint] = *data->joint_enable[num_joint];
-    values[0] = MSG_SET_AXIS_ENABLED;
-    values[1] = num_joint;
-    values[2] = (uint32_t)(*data->joint_enable[num_joint]);
-    *buffer_size += serialize_data(values, buffer_iterator, buffer_space);
+
+    message.joint_enable.type = MSG_SET_AXIS_ENABLED;
+    message.joint_enable.axis = num_joint;
+    message.joint_enable.value = (int32_t)(*data->joint_enable[num_joint]);
+    *buffer_size += serialize_data(&message, buffer_iterator, buffer_space);
   }
 }
 

@@ -37,16 +37,17 @@ extern volatile uint32_t tick;
 struct ConfigAxis {
   uint8_t updated_from_c0;      // Data was updated on core 0.
   uint8_t updated_from_c1;      // Data was updated on core 1.
-  uint8_t enabled;
+  int8_t enabled;
   int8_t io_pos_step;           // Physical step IO pin. 
   int8_t io_pos_dir;            // Physical direction IO pin.
-  uint32_t abs_pos_requested;   // In steps. Default value is UINT_MAX / 2.
-  double abs_pos_requested_float;   // In steps. Default value is UINT_MAX / 2.
+  double rel_pos_requested;   // In steps. Default value is UINT_MAX / 2.
+  double abs_pos_requested;   // In steps. Default value is UINT_MAX / 2.
   uint32_t abs_pos_acheived;    // In steps. Default value is UINT_MAX / 2.
   double max_velocity;
   double max_accel_ticks;       // ticks / update_time_ticks ^ 2
   int32_t velocity_requested;   // Calculated steps per update_time_us.
   int32_t velocity_acheived;    // Steps per update_time_us.
+  int32_t pos_error;            // Difference between requested position and that reported by PIO.
   float kp;                     // Proportional position tuning. <= 1.0
 };
 
@@ -83,13 +84,14 @@ void update_axis_config(
     const uint8_t* enabled,
     const int8_t* io_pos_step,
     const int8_t* io_pos_dir,
-    const uint32_t* abs_pos_requested,
-    const double* abs_pos_requested_float,
+    const double* rel_pos_requested,
+    const double* abs_pos_requested,
     const uint32_t* abs_pos_acheived,
     const double* max_velocity,
     const double* max_accel_ticks,
     const int32_t* velocity_requested,
     const int32_t* velocity_acheived,
+    const int32_t* pos_error,
     const float* kp
 );
 
@@ -99,13 +101,14 @@ uint32_t get_axis_config(
     uint8_t* enabled,
     int8_t* io_pos_step,
     int8_t* io_pos_dir,
-    uint32_t* abs_pos_requested,
-    double* abs_pos_requested_float,
+    double* rel_pos_requested,
+    double* abs_pos_requested,
     uint32_t* abs_pos_acheived,
     double* max_velocity,
     double* max_accel_ticks,
     int32_t* velocity_requested,
     int32_t* velocity_acheived,
+    int32_t* pos_error,
     float* kp
     );
 

@@ -10,17 +10,14 @@
 
 #define MSG_NONE                     0
 #define MSG_TIMING                   1  // Contains packet count and time sent.
-#define MSG_SET_GLOAL_UPDATE_RATE    2  // Not yet implemented.
 #define MSG_SET_AXIS_ENABLED         3  // Set absolute axis position.
 #define MSG_SET_AXIS_ABS_POS         4  // Set absolute axis position.
 #define MSG_SET_AXIS_REL_POS         5  // Set relative axis position. (Velocity)
-#define MSG_SET_AXIS_ABS_POS_FLOAT   6  // Not yet implemented.
-#define MSG_SET_AXIS_MAX_SPEED       7  // Not yet implemented.
-#define MSG_SET_AXIS_MAX_ACCEL       8  // Not yet implemented.
-#define MSG_SET_AXIS_PID_KP          9  // Multiplier for position updates.
-#define MSG_SET_AXIS_IO_STEP        10  // Multiplier for position updates.
-#define MSG_SET_AXIS_IO_DIR         11  // Multiplier for position updates.
-#define MSG_GET_GLOBAL_CONFIG       12  // Not yet implemented.
+#define MSG_SET_AXIS_MAX_SPEED       6  // Not yet implemented.
+#define MSG_SET_AXIS_MAX_ACCEL       7  // Not yet implemented.
+#define MSG_SET_AXIS_PID_KP          8  // Multiplier for position updates.
+#define MSG_SET_AXIS_IO_STEP         9  // Set GPIO step pin.
+#define MSG_SET_AXIS_IO_DIR         10  // Set GPIO direction pin.
 
 struct Message {
   uint32_t type;
@@ -30,23 +27,6 @@ struct Message_timing {
   uint32_t type;
   uint32_t update_id;
   uint32_t time;
-};
-
-struct Message_uint {
-  uint32_t type;
-  uint32_t value;
-};
-
-struct Message_uint_uint {
-  uint32_t type;
-  uint32_t axis;
-  uint32_t value;
-};
-
-struct Message_uint_int {
-  uint32_t type;
-  uint32_t axis;
-  int32_t value;
 };
 
 struct Message_set_kp {
@@ -73,15 +53,33 @@ struct Message_set_abs_pos {
   double value;
 };
 
+struct Message_set_rel_pos {
+  uint32_t type;
+  uint32_t axis;
+  double value;
+};
+
+struct Message_joint_enable {
+  uint32_t type;
+  uint32_t axis;
+  int32_t value;
+};
+
+struct Message_joint_gpio {
+  uint32_t type;
+  uint32_t axis;
+  uint8_t value;
+};
+
 union MessageAny {
-  struct Message_timing mess_timing;
-  struct Message_uint mess_uint;
-  struct Message_uint_uint mess_uint_uint;
-  struct Message_uint_int mess_uint_int;
-  struct Message_set_kp mess_set_kp;
-  struct Message_set_max_velocity mess_set_max_velocity;
-  struct Message_set_max_accel mess_set_max_accel;
-  struct Message_set_abs_pos mess_set_abs_pos;
+  struct Message_timing timing;
+  struct Message_set_kp set_kp;
+  struct Message_set_max_velocity set_max_velocity;
+  struct Message_set_max_accel set_max_accel;
+  struct Message_set_abs_pos set_abs_pos;
+  struct Message_set_abs_pos set_rel_pos;
+  struct Message_joint_enable joint_enable;
+  struct Message_joint_gpio joint_gpio;
 };
 
 
@@ -111,8 +109,9 @@ struct Reply_axis_config {
   uint32_t abs_pos_acheived;
   uint32_t max_velocity;
   uint32_t max_accel_ticks;
-  int32_t velocity_requested;  // TODO: Remove me once done debugging.
+  int32_t velocity_requested;
   int32_t velocity_acheived;
+  int32_t pos_error;
 } static Reply_axis_config_default = { REPLY_AXIS_CONFIG };
 
 struct Reply_axis_pos {

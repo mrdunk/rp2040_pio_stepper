@@ -9,9 +9,6 @@
 /* Clock */
 #define PLL_SYS_KHZ (133 * 1000)
 
-/* Buffer */
-#define ETHERNET_BUF_MAX_SIZE (1024 * 4)
-
 /* Socket */
 #define SOCKET_NUMBER 0
 

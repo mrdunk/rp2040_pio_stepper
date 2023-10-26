@@ -24,13 +24,13 @@ volatile struct ConfigGlobal config = {
       .enabled = 0,
       .io_pos_step = -1,
       .io_pos_dir = -1,
-      .abs_pos_requested = UINT_MAX / 2,
+      .rel_pos_requested = UINT_MAX / 2,
       .abs_pos_acheived = UINT_MAX / 2,
       .max_velocity = 50,
       .max_accel_ticks = 2.0,
       .velocity_requested = 0,
       .velocity_acheived = 0,
-      .kp = 0.5f,
+      .kp = 0.2f,
     },
     {
       // Axis 1.
@@ -39,13 +39,13 @@ volatile struct ConfigGlobal config = {
       .enabled = 0,
       .io_pos_step = -1,
       .io_pos_dir = -1,
-      .abs_pos_requested = UINT_MAX / 2,
+      .rel_pos_requested = UINT_MAX / 2,
       .abs_pos_acheived = UINT_MAX / 2,
       .max_velocity = 50,
       .max_accel_ticks = 10.0,
       .velocity_requested = 0,
       .velocity_acheived = 0,
-      .kp = 0.5f,
+      .kp = 0.2f,
     },
     {
       // Axis 2.
@@ -54,13 +54,13 @@ volatile struct ConfigGlobal config = {
       .enabled = 0,
       .io_pos_step = -1,
       .io_pos_dir = -1,
-      .abs_pos_requested = UINT_MAX / 2,
+      .rel_pos_requested = UINT_MAX / 2,
       .abs_pos_acheived = UINT_MAX / 2,
       .max_velocity = 50,
       .max_accel_ticks = 200.0,
       .velocity_requested = 0,
       .velocity_acheived = 0,
-      .kp = 0.5f,
+      .kp = 0.2f,
     },
     {
       // Axis 3.
@@ -69,13 +69,13 @@ volatile struct ConfigGlobal config = {
       .enabled = 0,
       .io_pos_step = -1,
       .io_pos_dir = -1,
-      .abs_pos_requested = UINT_MAX / 2,
+      .rel_pos_requested = UINT_MAX / 2,
       .abs_pos_acheived = UINT_MAX / 2,
       .max_velocity = 50,
       .max_accel_ticks = 200.0,
       .velocity_requested = 0,
       .velocity_acheived = 0,
-      .kp = 0.5f,
+      .kp = 0.2f,
     },
   }
 };
@@ -154,13 +154,14 @@ void update_axis_config(
     const uint8_t* enabled,
     const int8_t* io_pos_step,
     const int8_t* io_pos_dir,
-    const uint32_t* abs_pos_requested,
-    const double* abs_pos_requested_float,
+    const double* rel_pos_requested,
+    const double* abs_pos_requested,
     const uint32_t* abs_pos_acheived,
     const double* max_velocity,
     const double* max_accel_ticks,
     const int32_t* velocity_requested,
     const int32_t* velocity_acheived,
+    const int32_t* pos_error,
     const float* kp
 )
 {
@@ -168,7 +169,7 @@ void update_axis_config(
     return;
   }
 
-  // printf("Setting CORE%i:%i\n", core, axis);
+  //printf("Setting CORE%i:%i\n", core, axis);
   mutex_enter_blocking(&mtx_axis[axis]);
 
   if(enabled != NULL) {
@@ -180,11 +181,11 @@ void update_axis_config(
   if(io_pos_dir != NULL) {
     config.axis[axis].io_pos_dir = *io_pos_dir;
   }
+  if(rel_pos_requested != NULL) {
+    config.axis[axis].rel_pos_requested = *rel_pos_requested;
+  }
   if(abs_pos_requested != NULL) {
     config.axis[axis].abs_pos_requested = *abs_pos_requested;
-  }
-  if(abs_pos_requested_float != NULL) {
-    config.axis[axis].abs_pos_requested_float = *abs_pos_requested_float;
   }
   if(abs_pos_acheived != NULL) {
     config.axis[axis].abs_pos_acheived = *abs_pos_acheived;
@@ -200,6 +201,9 @@ void update_axis_config(
   }
   if(velocity_acheived != NULL) {
     config.axis[axis].velocity_acheived = *velocity_acheived;
+  }
+  if(pos_error != NULL) {
+    config.axis[axis].pos_error = *pos_error;
   }
   if(kp != NULL) {
     config.axis[axis].kp = *kp;
@@ -224,13 +228,14 @@ uint32_t get_axis_config(
     uint8_t* enabled,
     int8_t* io_pos_step,
     int8_t* io_pos_dir,
-    uint32_t* abs_pos_requested,
-    double* abs_pos_requested_float,
+    double* rel_pos_requested,
+    double* abs_pos_requested,
     uint32_t* abs_pos_acheived,
     double* max_velocity,
     double* max_accel_ticks,
     int32_t* velocity_requested,
     int32_t* velocity_acheived,
+    int32_t* pos_error,
     float* kp)
 {
   if(axis >= MAX_AXIS) {
@@ -263,11 +268,11 @@ uint32_t get_axis_config(
   if(io_pos_dir != NULL) {
     *io_pos_dir = config.axis[axis].io_pos_dir;
   }
+  if(rel_pos_requested != NULL) {
+    *rel_pos_requested = config.axis[axis].rel_pos_requested;
+  }
   if(abs_pos_requested != NULL) {
     *abs_pos_requested = config.axis[axis].abs_pos_requested;
-  }
-  if(abs_pos_requested_float != NULL) {
-    *abs_pos_requested_float = config.axis[axis].abs_pos_requested_float;
   }
   if(abs_pos_acheived != NULL) {
     *abs_pos_acheived = config.axis[axis].abs_pos_acheived;
@@ -283,6 +288,9 @@ uint32_t get_axis_config(
   }
   if(velocity_acheived != NULL) {
     *velocity_acheived = config.axis[axis].velocity_acheived;
+  }
+  if(pos_error != NULL) {
+    *pos_error = config.axis[axis].pos_error;
   }
   if(kp != NULL) {
     *kp = config.axis[axis].kp;
@@ -333,11 +341,12 @@ size_t serialise_axis_config(
   //int8_t io_pos_step;
   //int8_t io_pos_dir;
   uint32_t abs_pos_acheived;
-  //uint32_t abs_pos_requested;
+  //double rel_pos_requested;
   double max_velocity;
   double max_accel_ticks;
   int32_t velocity_requested;
   int32_t velocity_acheived;
+  int32_t pos_error;
   //float kp;
   uint32_t updated = 0;
 
@@ -348,13 +357,14 @@ size_t serialise_axis_config(
         NULL, //&enabled,
         NULL, //&io_pos_step,
         NULL, //&io_pos_dir,
+        NULL, //&rel_pos_requested,
         NULL, //&abs_pos_requested,
-        NULL, //&abs_pos_requested_float,
         &abs_pos_acheived,
         &max_velocity,
         &max_accel_ticks,
         &velocity_requested,
         &velocity_acheived,
+        &pos_error,
         NULL //&kp
         );
   } while(updated == 0 && wait_for_data);
@@ -375,6 +385,7 @@ size_t serialise_axis_config(
     reply.max_accel_ticks = max_accel_ticks;
     reply.velocity_requested = velocity_requested;
     reply.velocity_acheived = velocity_acheived;
+    reply.pos_error = pos_error;
 
     memcpy(tx_buf + *tx_buf_len, &reply, sizeof(struct Reply_axis_config));
     *tx_buf_len += sizeof(struct Reply_axis_config);

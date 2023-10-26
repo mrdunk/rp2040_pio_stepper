@@ -43,161 +43,85 @@ static void set_clock_khz(void)
     );
 }
 
-struct Message* process_msg(char** rx_buf) {
-  struct Message* message = (struct Message*)(*rx_buf);
+size_t process_received_buffer( uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* received_count) {
 
-  // printf("NW UPD message on port %u:\n\ttype: %lu\r\n", NW_PORT, message->type);
-
-  *rx_buf += sizeof(struct Message);
-
-  return message;
-}
-
-struct Message_uint* process_msg_uint(char** rx_buf) {
-  struct Message_uint* message = (struct Message_uint*)(*rx_buf);
-
-  // printf("NW UPD message on port %u:\n\ttype: %lu\n\tvalue0: %lu\r\n",
-  //    NW_PORT, message->type, message->value0);
-
-  *rx_buf += sizeof(struct Message_uint);
-
-  return message;
-}
-
-struct Message_uint_uint* process_msg_uint_uint(char** rx_buf) {
-  struct Message_uint_uint* message = (struct Message_uint_uint*)(*rx_buf);
-
-  // printf("NW UPD message on port %u:\n\ttype: %lu\n\tvalue0: %lu\n\tvalue1: %lu\r\n",
-  //    NW_PORT, message->type, message->value0, message->value1);
-
-  *rx_buf += sizeof(struct Message_uint_uint);
-
-  return message;
-}
-
-struct Message_timing* process_msg_timing(char** rx_buf) {
-  struct Message_timing* message = (struct Message_timing*)(*rx_buf);
-
-  // printf("NW UPD message on port %u:\n\ttype: %lu\n\tvalue0: %lu\n\tvalue1: %lu\r\n",
-  //    NW_PORT, message->type, message->value0, message->value1);
-
-  *rx_buf += sizeof(struct Message_timing);
-
-  return message;
-}
-
-struct Message_uint_int* process_msg_uint_int(char** rx_buf) {
-  struct Message_uint_int* message = (struct Message_uint_int*)(*rx_buf);
-
-  // printf("NW UPD message on port %u:\n\ttype: %u\n\tvalue0: %i\n\tvalue1: %li\r\n",
-  //    NW_PORT, message->type, message->axis, message->value);
-
-  *rx_buf += sizeof(struct Message_uint_int);
-
-  return message;
-}
-
-struct Message_set_kp* process_msg_uint_float(char** rx_buf) {
-  struct Message_set_kp* message = (struct Message_set_kp*)(*rx_buf);
-
-  //printf("NW UPD message on port %u:\n\ttype: %u\n\taxis: %u\n\tvalue: %f\r\n",
-  //    NW_PORT, message->type, message->axis, message->value);
-
-  *rx_buf += sizeof(struct Message_set_kp);
-
-  return message;
-}
-
-size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return_data) {
   char* rx_itterator = rx_buf;
   size_t tx_buf_len = 0;
   uint32_t msg_type;
   size_t tx_buf_mach_len_max = DATA_BUF_SIZE - sizeof(uint32_t);
   struct Message* msg;
-  struct Message_timing* msg_timing;
   struct Message_uint* msg_uint;
   struct Message_uint_uint* msg_uint_uint;
   struct Message_uint_int* msg_uint_int;
-  struct Message_set_kp* msg_set_kp;
   union MessageAny* message_any;
 
-  uint32_t axis, update_id, tx_time;
+  uint32_t axis;
   uint32_t abs_pos_requested = 0;
-  double abs_pos_requested_float = 0.0;
   uint32_t abs_pos_acheived;
-  int32_t velocity_requested = 0;
-  int32_t enabled = 0;
   int8_t io_pos_value = -1;
 
   while(msg_type = *(uint32_t*)(rx_itterator)) {  // msg_type of 0 indicates end of data.
     switch(msg_type) {
       case MSG_TIMING:
-        msg_timing = process_msg_timing(&rx_itterator);
-        update_id = msg_timing->update_id;
-        tx_time = msg_timing->time;
-        //printf("%u\t%u\n", count, tx_time);
+        ;
+        uint32_t update_id = ((struct Message_timing*)(rx_itterator))->update_id;
+        uint32_t tx_time = ((struct Message_timing*)(rx_itterator))->time;
+
+        rx_itterator += sizeof(struct Message_timing);
+
         int32_t id_diff;
         int32_t time_diff;
         update_packet_metrics(update_id, tx_time, &id_diff, &time_diff);
         serialise_metrics(tx_buf, &tx_buf_len, update_id, time_diff);
-      case MSG_SET_GLOAL_UPDATE_RATE:
-        //msg_uint = process_msg_uint(&rx_itterator);
-        //set_global_update_rate(msg_uint->value);
-        //get_global_config(
-        //    tx_buf,
-        //    &tx_buf_len,
-        //    tx_buf_mach_len_max
-        //    );
+        (*received_count)++;
         break;
       case MSG_SET_AXIS_ENABLED:
-        msg_uint_uint = process_msg_uint_uint(&rx_itterator);
-        axis = msg_uint_uint->axis;
-        enabled = msg_uint_uint->value;
+        axis = ((struct Message_joint_enable*)(rx_itterator))->axis;
+        int32_t enabled = ((struct Message_joint_enable*)(rx_itterator))->value;
+        
+        rx_itterator += sizeof(struct Message_joint_enable);
+
+        printf("%u Enabling axis: %u\t%i\n", *received_count, axis, enabled);
         update_axis_config(
             axis, CORE0,
-            (uint8_t*)&enabled, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-        (*return_data)++;
+            (int8_t*)&enabled, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        (*received_count)++;
         break;
       case MSG_SET_AXIS_ABS_POS:
-        msg_uint_uint = process_msg_uint_uint(&rx_itterator);
-        axis = msg_uint_uint->axis;
-        abs_pos_requested = msg_uint_uint->value;
-        update_axis_config(
-            axis, CORE0,
-            NULL, NULL, NULL, &abs_pos_requested, NULL, NULL, NULL, NULL, &velocity_requested, NULL, NULL);
-        (*return_data)++;
-        break;
-      case MSG_SET_AXIS_ABS_POS_FLOAT:
         axis = ((struct Message_set_abs_pos*)(rx_itterator))->axis;
-        abs_pos_requested_float = ((struct Message_set_abs_pos*)(rx_itterator))->value;
+        double abs_pos_requested =
+          ((struct Message_set_abs_pos*)(rx_itterator))->value;
         
         rx_itterator += sizeof(struct Message_set_abs_pos);
 
         update_axis_config(
             axis, CORE0,
-            NULL, NULL, NULL, NULL, &abs_pos_requested_float, NULL, NULL, NULL, NULL, NULL, NULL);
-        (*return_data)++;
+            NULL, NULL, NULL, NULL, &abs_pos_requested, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        (*received_count)++;
         break;
       case MSG_SET_AXIS_REL_POS:
-        msg_uint_int = process_msg_uint_int(&rx_itterator);
-        axis = msg_uint_int->axis;
-        velocity_requested = msg_uint_int->value;
+        axis = ((struct Message_set_rel_pos*)(rx_itterator))->axis;
+        double velocity_requested =
+          ((struct Message_set_rel_pos*)(rx_itterator))->value;
+        
+        rx_itterator += sizeof(struct Message_set_rel_pos);
+
         update_axis_config(
             axis, CORE0,
-            NULL, NULL, NULL, &abs_pos_requested, NULL, NULL, NULL, NULL, &velocity_requested, NULL, NULL);
-        (*return_data)++;
+            NULL, NULL, NULL, &velocity_requested, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        (*received_count)++;
         break;
       case MSG_SET_AXIS_MAX_SPEED:
         axis = ((struct Message_set_max_velocity*)(rx_itterator))->axis;
         double max_velocity = 
           ((struct Message_set_max_velocity*)(rx_itterator))->value;
 
-        rx_itterator += sizeof(struct Message_set_max_accel);
+        rx_itterator += sizeof(struct Message_set_max_velocity);
 
         update_axis_config(
             axis, CORE0,
-            NULL, NULL, NULL, NULL, NULL, NULL, &max_velocity, NULL, NULL, NULL, NULL);
-        (*return_data)++;
+            NULL, NULL, NULL, NULL, NULL, NULL, &max_velocity, NULL, NULL, NULL, NULL, NULL);
+        (*received_count)++;
         break;
       case MSG_SET_AXIS_MAX_ACCEL:
         axis = ((struct Message_set_max_accel*)(rx_itterator))->axis;
@@ -207,47 +131,47 @@ size_t process_received_buffer(uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* return
 
         update_axis_config(
             axis, CORE0,
-            NULL, NULL, NULL, NULL, NULL, NULL, NULL, &max_accel, NULL, NULL, NULL);
-        (*return_data)++;
+            NULL, NULL, NULL, NULL, NULL, NULL, NULL, &max_accel, NULL, NULL, NULL, NULL);
+        (*received_count)++;
         break;
       case MSG_SET_AXIS_PID_KP:
-        msg_set_kp = process_msg_uint_float(&rx_itterator);
-        axis = msg_set_kp->axis;
-        printf("Setting axis: %u\tkp:      %f\n", axis, msg_set_kp->value);
+        axis = ((struct Message_set_kp*)(rx_itterator))->axis;
+        float kp = ((struct Message_set_kp*)(rx_itterator))->value;
+
+        rx_itterator += sizeof(struct Message_set_kp);
+
+        printf("%u Setting axis: %u\tkp:      %f\n", *received_count, axis, kp);
         update_axis_config(
             axis, CORE0,
-            NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &msg_set_kp->value);
+            NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &kp);
+        (*received_count)++;
         break;
       case MSG_SET_AXIS_IO_STEP:
-        msg_uint_int = process_msg_uint_int(&rx_itterator);
-        axis = msg_uint_int->axis;
-        io_pos_value = msg_uint_int->value;
-        printf("Setting axis: %u\tstep-io: %i\n", axis, io_pos_value);
+        axis = ((struct Message_joint_gpio*)(rx_itterator))->axis;
+        io_pos_value = ((struct Message_joint_gpio*)(rx_itterator))->value;
+
+        rx_itterator += sizeof(struct Message_joint_gpio);
+
+        printf("%u Setting axis: %u\tstep-io: %i\n", *received_count, axis, io_pos_value);
         update_axis_config(
             axis, CORE0,
-            NULL, &io_pos_value, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-        (*return_data)++;
+            NULL, &io_pos_value, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        (*received_count)++;
         break;
       case MSG_SET_AXIS_IO_DIR:
-        msg_uint_int = process_msg_uint_int(&rx_itterator);
-        axis = msg_uint_int->axis;
-        io_pos_value = msg_uint_int->value;
-        printf("Setting axis: %u\tdir-io:  %i\n", axis, io_pos_value);
+        axis = ((struct Message_joint_gpio*)(rx_itterator))->axis;
+        io_pos_value = ((struct Message_joint_gpio*)(rx_itterator))->value;
+
+        rx_itterator += sizeof(struct Message_joint_gpio);
+
+        printf("%u Setting axis: %u\tdir-io:  %i\n", *received_count, axis, io_pos_value);
         update_axis_config(
             axis, CORE0,
-            NULL, NULL, &io_pos_value, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-        (*return_data)++;
-        break;
-      case MSG_GET_GLOBAL_CONFIG:
-        msg = process_msg(&rx_itterator);
-        //get_global_config(
-        //    tx_buf,
-        //    &tx_buf_len,
-        //    tx_buf_mach_len_max
-        //    );
+            NULL, NULL, &io_pos_value, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        (*received_count)++;
         break;
       default:
-        printf("Invalid message type: %lu\r\n", msg_type);
+        printf("%u Invalid message type: %lu\r\n", *received_count, msg_type);
         *(uint32_t*)(rx_itterator) = 0;  // 0 msg_type stops execution.
         tx_buf_len = 0;
         break;
@@ -272,7 +196,6 @@ int32_t get_UDP(
 {
    int32_t  ret;
    uint16_t size;
-   uint16_t val1;
 
    //printf("NW: %u %u.%u.%u.%u : %u\r\n",
    //    socket_num, destip[0], destip[1], destip[2], destip[3], *destport);
@@ -292,7 +215,7 @@ int32_t get_UDP(
            printf("%d: recvfrom error. %ld\r\n", socket_num,ret);
            return ret;
          }
-         (*data_received)++;
+         (*data_received) += size;
        }
        break;
      case SOCK_CLOSED:
@@ -304,7 +227,7 @@ int32_t get_UDP(
        break;
    }
 
-   return 1;
+   return ret;
 }
 
 /* Send data over UDP. */
@@ -408,7 +331,7 @@ void recover_clock() {
 
 int main() {
   int retval = 0;
-  char rx_buf[DATA_BUF_SIZE] = "";
+  char rx_buf[DATA_BUF_SIZE] = {0};
   char tx_buf[DATA_BUF_SIZE] = {0};
   size_t tx_buf_len = 0;
   uint8_t received_msg_count;
@@ -470,6 +393,9 @@ int main() {
     }
 
     tx_buf_len = process_received_buffer(rx_buf, tx_buf, &received_msg_count);
+    if(received_msg_count != 5) {
+      printf("%u\t%u\t%i\n", received_msg_count, data_received, retval);
+    }
 
     if(received_msg_count > 0) {
       recover_clock();
@@ -483,6 +409,7 @@ int main() {
     for(size_t axis = 0; axis < MAX_AXIS; axis++) {
       // Get data from config and put in TX buffer.
       axis_count += serialise_axis_config(axis, tx_buf, &tx_buf_len, true);
+      //axis_count += serialise_axis_config(axis, tx_buf, &tx_buf_len, false);
     }
 
     retval = put_UDP(

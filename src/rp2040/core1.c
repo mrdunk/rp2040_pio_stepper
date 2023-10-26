@@ -11,7 +11,7 @@ void update_all_axis() {
   static float time_offset = 0;
   static uint32_t metric = 0;
   static uint32_t last_tick = 0;
-  uint32_t update_time_us = get_period();
+  uint32_t update_period_us = get_period();
   uint8_t updated_count = 0;
 
   // Wait for semaphore from core0 to indicate time start.
@@ -39,7 +39,7 @@ void update_all_axis() {
   metric = metric_now;
 
   for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
-    updated_count += do_steps(axis, update_time_us);
+    updated_count += do_steps(axis, update_period_us);
   }
 }
 
