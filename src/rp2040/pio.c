@@ -202,8 +202,8 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
   uint8_t direction = (velocity > 0);
   double requested_step_count = fabs(velocity);
 
-  if(last_direction[axis] != direction || velocity == 0.0) {
-    if(direction_change[axis] < 3) {
+  if(last_direction[axis] != direction) {
+    if(direction_change[axis] < 2) {
       direction_change[axis]++;
     }
   } else {
@@ -215,15 +215,15 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
   // If step count gets too low,
   // the step length gets so high that the PIO doesn't check for new input often
   // enough and bad latency ensues.
-  if(requested_step_count <= 0.25) {
-    requested_step_count = 0.25;
+  if(requested_step_count <= 0.1) {
+    requested_step_count = 0.1;
   }
 
   // If direction is constantly changing, the motor speed is effectively zero.
   // It's just jittering between points caused by the difference between integer
   // position and floating point.
   // Switch the motor off in this case.
-  if(requested_step_count > kp * 3.0) {
+  if(requested_step_count > 0.5) {
     stopped[axis] = false;
     direction_change[axis] = 0;
   } else if(direction_change[axis] > 0) {
