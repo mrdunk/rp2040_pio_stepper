@@ -38,6 +38,7 @@ typedef struct {
   hal_float_t* joint_max_accel[JOINTS];
   hal_float_t* joint_scale[JOINTS];
   hal_float_t* joint_pos_cmd[JOINTS];
+  hal_float_t* joint_vel_cmd[JOINTS];
   hal_float_t* joint_pos_feedback[JOINTS];
   hal_s32_t* joint_pos_error[JOINTS];
   hal_float_t* joint_velocity_cmd[JOINTS];
@@ -209,6 +210,15 @@ int rtapi_app_main(void)
 
     retval = hal_pin_float_newf(HAL_IN, &(port_data_array->joint_pos_cmd[num_joint]),
                                 comp_id, "rp2040_eth.%d.pos-cmd-%d", num_device, num_joint);
+    if (retval < 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR,
+                      "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
+      hal_exit(comp_id);
+      return -1;
+    }
+
+    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->joint_vel_cmd[num_joint]),
+                                comp_id, "rp2040_eth.%d.vel-cmd-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
@@ -396,6 +406,11 @@ static void write_port(void *arg, long period)
       message.set_abs_pos.type = MSG_SET_AXIS_ABS_POS;
       message.set_abs_pos.axis = num_joint;
       message.set_abs_pos.value = *data->joint_scale[num_joint] * *data->joint_pos_cmd[num_joint];
+      buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
+
+      message.set_rel_pos.type = MSG_SET_AXIS_REL_POS;
+      message.set_rel_pos.axis = num_joint;
+      message.set_rel_pos.value = *data->joint_scale[num_joint] * *data->joint_vel_cmd[num_joint];
       buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
     }
 

@@ -313,7 +313,7 @@ void recover_clock() {
   int32_t time_diff = (int32_t)time_offset - (int32_t)ave_time_offset_us;
 
   // Do the busy-wait to synchronise timing.
-  restart_at = time_now + 100 - time_diff;
+  restart_at = time_now + 200 - time_diff;
   while(restart_at > time_now) {
     time_now = time_us_64();
     tight_loop_contents();
@@ -393,8 +393,8 @@ int main() {
     }
 
     tx_buf_len = process_received_buffer(rx_buf, tx_buf, &received_msg_count);
-    if(received_msg_count != 5) {
-      printf("%u\t%u\t%i\n", received_msg_count, data_received, retval);
+    if(received_msg_count != 9) {
+      printf("Received msgs: %u\t%u\t%i\n", received_msg_count, data_received, retval);
     }
 
     if(received_msg_count > 0) {

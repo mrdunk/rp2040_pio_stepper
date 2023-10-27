@@ -127,9 +127,7 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
   static uint32_t last_pos[MAX_AXIS] = {UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2};
   static uint32_t last_request[MAX_AXIS] = {UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2};
   static uint32_t last_enabled[MAX_AXIS] = {0, 0, 0, 0};
-  static uint8_t last_direction[MAX_AXIS] = {0, 0, 0, 0};
-  static uint8_t direction_change[MAX_AXIS] = {0, 0, 0, 0};
-  static bool stopped[MAX_AXIS] = {false, false, false, false};
+  static double step_count[MAX_AXIS] = {0.0, 0.0, 0.0, 0.0};
 
   //uint32_t clock_multiplier = clock_get_hz(clk_sys) / 1000000;
   static const uint32_t clock_multiplier = 133;
@@ -166,7 +164,7 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
 
   count++;
 
-  if(updated > 1) {
+  if(updated > 2) {
     if(enabled && last_enabled[axis]) {
       failcount++;
       printf("WC1: multi update: %u \t%lu \t%f\n",
@@ -192,59 +190,37 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
   }
 
   double velocity;
-  if(rel_pos_requested != 0) {
+  if(fabs(rel_pos_requested) / update_period_us > 2.0) {
+    // High speed method compares requested position to PIO feedback value.
     velocity = get_velocity(
         axis, abs_pos_acheived, abs_pos_requested + (double)(UINT_MAX / 2), kp);
+    step_count[axis] = fabs(velocity);
   } else {
-    velocity = rel_pos_requested;
-  }
+    // Low speed method uses requested velocity.
+    velocity = (rel_pos_requested / update_period_us);
 
+    if(abs_pos_requested + (double)(UINT_MAX / 2) > abs_pos_acheived + 2.0) {
+      velocity += fabs(velocity);
+    } else if(abs_pos_requested + (double)(UINT_MAX / 2) < abs_pos_acheived - 2.0) {
+      velocity -= fabs(velocity);
+    }
+
+    step_count[axis] += fabs(velocity);
+  }
+  
   uint8_t direction = (velocity > 0);
-  double requested_step_count = fabs(velocity);
-
-  if(last_direction[axis] != direction) {
-    if(direction_change[axis] < 2) {
-      direction_change[axis]++;
-    }
-  } else {
-    if(direction_change[axis] > 0) {
-      direction_change[axis]--;
-    }
-  }
-
-  // If step count gets too low,
-  // the step length gets so high that the PIO doesn't check for new input often
-  // enough and bad latency ensues.
-  if(requested_step_count <= 0.1) {
-    requested_step_count = 0.1;
-  }
-
-  // If direction is constantly changing, the motor speed is effectively zero.
-  // It's just jittering between points caused by the difference between integer
-  // position and floating point.
-  // Switch the motor off in this case.
-  if(requested_step_count > 0.5) {
-    stopped[axis] = false;
-    direction_change[axis] = 0;
-  } else if(direction_change[axis] > 0) {
-    requested_step_count = 0.0;
-    stopped[axis] = true;
-  } else if(stopped[axis]) {
-    requested_step_count = 0.0;
-  }
-
-  last_direction[axis] = direction;
 
   int32_t step_len_ticks = 0;
 
-  if(enabled > 0 && requested_step_count > 0) {
+  if(enabled > 0 && step_count[axis] > 0.2) {
     double update_period_ticks = update_period_us * clock_multiplier;
     step_len_ticks =
-      (update_period_ticks / (requested_step_count * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
+      (update_period_ticks / (step_count[axis] * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
     if(step_len_ticks < 1) {
       // TODO: use min_step_len_ticks for this.
       step_len_ticks = 1;
     }
+    step_count[axis] = 0.0;
   }
 
   // Request steps from PIO.
@@ -253,7 +229,9 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
 
   velocity_acheived = abs_pos_acheived - last_pos[axis];
   int32_t velocity_requested = velocity;
-  int32_t pos_error = (last_request[axis] + (UINT_MAX / 2)) - abs_pos_acheived;
+
+  //int32_t pos_error = (last_request[axis] + (UINT_MAX / 2)) - abs_pos_acheived;
+  int32_t pos_error = (abs_pos_requested + (UINT_MAX / 2)) - abs_pos_acheived;
 
   update_axis_config(
       axis,
