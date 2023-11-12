@@ -9,7 +9,7 @@
 #include "pio.h"
 #include "config.h"
 
-#define STEP_PIO_LEN_OVERHEAD 14
+#define STEP_PIO_LEN_OVERHEAD 14.0
 #define STEP_PIO_MULTIPLIER 2.0
 
 /* Initialize a pair of PIO programmes.
@@ -36,6 +36,7 @@ void init_pio(const uint32_t axis)
       NULL,
       &io_pos_step,
       &io_pos_dir,
+      NULL,
       NULL,
       NULL,
       NULL,
@@ -113,7 +114,7 @@ double get_velocity(
     const uint8_t axis,
     const uint32_t abs_pos_acheived,
     const double abs_pos_requested,
-    const float kp)
+    const double kp)
 {
   double error = abs_pos_requested - (double)abs_pos_acheived;
   double velocity = error * kp;
@@ -154,7 +155,8 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
       &max_accel_ticks,
       NULL, // &velocity_requested,
       NULL, // &velocity_acheived,
-      NULL, // &pos_error,,
+      NULL, // &step_len_ticks,
+      NULL, // &pos_error,
       &kp
       );
 
@@ -207,7 +209,7 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
 
     step_count[axis] += fabs(velocity);
   }
-  
+
   uint8_t direction = (velocity > 0);
 
   int32_t step_len_ticks = 0;
@@ -215,11 +217,17 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
   if(enabled > 0 && step_count[axis] > 0.2) {
     double update_period_ticks = update_period_us * clock_multiplier;
     step_len_ticks =
-      (update_period_ticks / (step_count[axis] * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
+      //nearbyint
+      ((update_period_ticks / (step_count[axis] * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD);
     if(step_len_ticks < 1) {
       // TODO: use min_step_len_ticks for this.
       step_len_ticks = 1;
     }
+
+    //if(count % 1000 == 1) {
+    //  printf("%u\t%f\t%i\n", axis, step_count[axis], step_len_ticks);
+    //}
+
     step_count[axis] = 0.0;
   }
 
@@ -247,6 +255,7 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
       &velocity_requested,
       &velocity_acheived,
       &pos_error,
+      &step_len_ticks,
       NULL);
 
   last_pos[axis] = abs_pos_acheived;

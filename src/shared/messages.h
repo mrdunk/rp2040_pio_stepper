@@ -111,7 +111,8 @@ struct Reply_axis_config {
   uint32_t max_accel_ticks;
   int32_t velocity_requested;
   int32_t velocity_acheived;
-  int32_t pos_error;
+  //int32_t pos_error;
+  int32_t step_len_ticks;
 } static Reply_axis_config_default = { REPLY_AXIS_CONFIG };
 
 struct Reply_axis_pos {

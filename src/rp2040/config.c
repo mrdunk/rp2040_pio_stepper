@@ -10,12 +10,14 @@
 mutex_t mtx_top;
 mutex_t mtx_axis[MAX_AXIS];
 
+// Semaphore for synchronizing cores.
 volatile uint32_t tick = 0;
 
 volatile struct ConfigGlobal config = {
   .last_update_id = 0,
   .last_update_time = 0,
   .update_time_us = 1000,    // 1000us.
+  .pio_io_configured = false,
   .axis = {
     {
       // Axis 0.
@@ -92,6 +94,8 @@ void init_config()
 /* Update the period of the main timing loop.
  * This should closely match the rate at which we receive axis position data. */
 void update_period(uint32_t update_time_us) {
+  // TODO: The mutex probably isn't needed here.
+  // Remove and test.
   mutex_enter_blocking(&mtx_top);
 
   config.update_time_us = update_time_us;
@@ -102,6 +106,8 @@ void update_period(uint32_t update_time_us) {
 /* Get the period of the main timing loop.
  * This should closely match the rate at which we receive axis position data. */
 uint32_t get_period() {
+  // TODO: The mutex probably isn't needed here.
+  // Remove and test.
   mutex_enter_blocking(&mtx_top);
 
   uint32_t retval = config.update_time_us;
@@ -113,25 +119,37 @@ uint32_t get_period() {
 
 /* Set metrics for tracking successful update transmission and jitter. */
 uint32_t update_packet_metrics(
-    uint32_t update_id, uint32_t time, int32_t* id_diff, int32_t* time_diff
+    uint32_t update_id,
+    uint32_t time,
+    int32_t* id_diff,
+    int32_t* time_diff
 ) {
+  //static bool out_of_sequence = false;
+
   mutex_enter_blocking(&mtx_top);
 
   *id_diff = update_id - config.last_update_id;
   *time_diff = time - config.last_update_time;
 
-
+  /*
   if(*id_diff == 0) {
       printf("LinuxCNC started.\n");
   } else if(*id_diff != 1) {
-    printf("WARNING: Updates out of sequence. %i %i %i\n",
-        config.last_update_id, update_id, *id_diff);
-    if(update_id == 0) {
-      printf("Reason: LinuxCNC restarted.\n");
-    } else if(config.last_update_id == 0) {
-      printf("Reason: RP restarted.\n");
+    if(! out_of_sequence) {
+      printf("WARNING: Updates out of sequence. %i %i %i\n",
+          config.last_update_id, update_id, *id_diff);
+      if(update_id == 0) {
+        printf("Reason: LinuxCNC restarted.\n");
+      } else if(config.last_update_id == 0) {
+        printf("Reason: RP restarted.\n");
+      }
+      out_of_sequence = true;
     }
+  } else if(out_of_sequence) {
+    printf("       Recovered. %i\n", update_id);
+    out_of_sequence = false;
   }
+  */
 
   config.last_update_id = update_id;
   config.last_update_time = time;
@@ -162,6 +180,7 @@ void update_axis_config(
     const int32_t* velocity_requested,
     const int32_t* velocity_acheived,
     const int32_t* pos_error,
+    const int32_t* step_len_ticks,
     const float* kp
 )
 {
@@ -205,6 +224,9 @@ void update_axis_config(
   if(pos_error != NULL) {
     config.axis[axis].pos_error = *pos_error;
   }
+  if(step_len_ticks != NULL) {
+    config.axis[axis].step_len_ticks = *step_len_ticks;
+  }
   if(kp != NULL) {
     config.axis[axis].kp = *kp;
   }
@@ -236,6 +258,7 @@ uint32_t get_axis_config(
     int32_t* velocity_requested,
     int32_t* velocity_acheived,
     int32_t* pos_error,
+    int32_t* step_len_ticks,
     float* kp)
 {
   if(axis >= MAX_AXIS) {
@@ -292,6 +315,9 @@ uint32_t get_axis_config(
   if(pos_error != NULL) {
     *pos_error = config.axis[axis].pos_error;
   }
+  if(step_len_ticks != NULL) {
+    *step_len_ticks = config.axis[axis].step_len_ticks;
+  }
   if(kp != NULL) {
     *kp = config.axis[axis].kp;
   }
@@ -307,15 +333,18 @@ size_t serialise_metrics(uint8_t* tx_buf, size_t* tx_buf_len, int32_t update_id,
 
   if(*tx_buf_len + sizeof(struct Reply_metrics) <= max_buf_len) {
     struct Reply_metrics reply = Reply_metrics_default;
-    reply.update_id = update_id;
     reply.time_diff = time_diff;
     reply.rp_update_len = get_period();
+
+    reply.update_id = update_id;
 
     memcpy(tx_buf + *tx_buf_len, &reply, sizeof(struct Reply_metrics));
     *tx_buf_len += sizeof(struct Reply_metrics);
 
     return 1;
   }
+  printf("ERROR: Buffer overrun: %u > %u\n",
+      *tx_buf_len + sizeof(struct Reply_axis_config), max_buf_len);
   return 0;
 }
 
@@ -347,6 +376,7 @@ size_t serialise_axis_config(
   int32_t velocity_requested;
   int32_t velocity_acheived;
   int32_t pos_error;
+  int32_t step_len_ticks;
   //float kp;
   uint32_t updated = 0;
 
@@ -365,6 +395,7 @@ size_t serialise_axis_config(
         &velocity_requested,
         &velocity_acheived,
         &pos_error,
+        &step_len_ticks,
         NULL //&kp
         );
   } while(updated == 0 && wait_for_data);
@@ -385,13 +416,16 @@ size_t serialise_axis_config(
     reply.max_accel_ticks = max_accel_ticks;
     reply.velocity_requested = velocity_requested;
     reply.velocity_acheived = velocity_acheived;
-    reply.pos_error = pos_error;
+    //reply.pos_error = pos_error;
+    reply.step_len_ticks = step_len_ticks;
 
     memcpy(tx_buf + *tx_buf_len, &reply, sizeof(struct Reply_axis_config));
     *tx_buf_len += sizeof(struct Reply_axis_config);
 
     return 1;
   }
+  printf("ERROR: Buffer overrun: %u > %u\n",
+      *tx_buf_len + sizeof(struct Reply_axis_config), max_buf_len);
   return 0;
 }
 

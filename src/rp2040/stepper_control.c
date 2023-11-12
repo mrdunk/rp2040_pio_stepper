@@ -84,7 +84,7 @@ size_t process_received_buffer( uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* recei
         printf("%u Enabling axis: %u\t%i\n", *received_count, axis, enabled);
         update_axis_config(
             axis, CORE0,
-            (int8_t*)&enabled, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+            (int8_t*)&enabled, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
         (*received_count)++;
         break;
       case MSG_SET_AXIS_ABS_POS:
@@ -96,7 +96,7 @@ size_t process_received_buffer( uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* recei
 
         update_axis_config(
             axis, CORE0,
-            NULL, NULL, NULL, NULL, &abs_pos_requested, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+            NULL, NULL, NULL, NULL, &abs_pos_requested, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
         (*received_count)++;
         break;
       case MSG_SET_AXIS_REL_POS:
@@ -108,7 +108,7 @@ size_t process_received_buffer( uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* recei
 
         update_axis_config(
             axis, CORE0,
-            NULL, NULL, NULL, &velocity_requested, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+            NULL, NULL, NULL, &velocity_requested, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
         (*received_count)++;
         break;
       case MSG_SET_AXIS_MAX_SPEED:
@@ -120,7 +120,7 @@ size_t process_received_buffer( uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* recei
 
         update_axis_config(
             axis, CORE0,
-            NULL, NULL, NULL, NULL, NULL, NULL, &max_velocity, NULL, NULL, NULL, NULL, NULL);
+            NULL, NULL, NULL, NULL, NULL, NULL, &max_velocity, NULL, NULL, NULL, NULL, NULL, NULL);
         (*received_count)++;
         break;
       case MSG_SET_AXIS_MAX_ACCEL:
@@ -131,7 +131,7 @@ size_t process_received_buffer( uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* recei
 
         update_axis_config(
             axis, CORE0,
-            NULL, NULL, NULL, NULL, NULL, NULL, NULL, &max_accel, NULL, NULL, NULL, NULL);
+            NULL, NULL, NULL, NULL, NULL, NULL, NULL, &max_accel, NULL, NULL, NULL, NULL, NULL);
         (*received_count)++;
         break;
       case MSG_SET_AXIS_PID_KP:
@@ -143,7 +143,7 @@ size_t process_received_buffer( uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* recei
         printf("%u Setting axis: %u\tkp:      %f\n", *received_count, axis, kp);
         update_axis_config(
             axis, CORE0,
-            NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &kp);
+            NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &kp);
         (*received_count)++;
         break;
       case MSG_SET_AXIS_IO_STEP:
@@ -155,7 +155,7 @@ size_t process_received_buffer( uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* recei
         printf("%u Setting axis: %u\tstep-io: %i\n", *received_count, axis, io_pos_value);
         update_axis_config(
             axis, CORE0,
-            NULL, &io_pos_value, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+            NULL, &io_pos_value, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
         (*received_count)++;
         break;
       case MSG_SET_AXIS_IO_DIR:
@@ -167,7 +167,7 @@ size_t process_received_buffer( uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* recei
         printf("%u Setting axis: %u\tdir-io:  %i\n", *received_count, axis, io_pos_value);
         update_axis_config(
             axis, CORE0,
-            NULL, NULL, &io_pos_value, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+            NULL, NULL, &io_pos_value, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
         (*received_count)++;
         break;
       default:
@@ -394,6 +394,8 @@ int main() {
 
     tx_buf_len = process_received_buffer(rx_buf, tx_buf, &received_msg_count);
     if(received_msg_count != 9) {
+      // Not the standard number of received packets.
+      // This likely was a config update.
       printf("Received msgs: %u\t%u\t%i\n", received_msg_count, data_received, retval);
     }
 

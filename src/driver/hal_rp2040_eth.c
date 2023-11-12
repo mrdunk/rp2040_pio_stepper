@@ -40,12 +40,14 @@ typedef struct {
   hal_float_t* joint_pos_cmd[JOINTS];
   hal_float_t* joint_vel_cmd[JOINTS];
   hal_float_t* joint_pos_feedback[JOINTS];
-  hal_s32_t* joint_pos_error[JOINTS];
+  //hal_s32_t* joint_pos_error[JOINTS];
+  hal_s32_t* joint_step_len_ticks[JOINTS];
   hal_float_t* joint_velocity_cmd[JOINTS];
   hal_float_t* joint_velocity_feedback[JOINTS];
   hal_bit_t* pin_out[IO];
   hal_bit_t* pin_in[IO];
   bool reset_joint[JOINTS];
+  uint8_t joints_enabled_this_cycle;
 } skeleton_t;
 
 
@@ -235,8 +237,19 @@ int rtapi_app_main(void)
       return -1;
     }
 
+    /*
     retval = hal_pin_s32_newf(HAL_OUT, &(port_data_array->joint_pos_error[num_joint]),
                                 comp_id, "rp2040_eth.%d.pos-error-%d", num_device, num_joint);
+    if (retval < 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR,
+                      "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
+      hal_exit(comp_id);
+      return -1;
+    }
+    */
+
+    retval = hal_pin_s32_newf(HAL_OUT, &(port_data_array->joint_step_len_ticks[num_joint]),
+                                comp_id, "rp2040_eth.%d.step-len-ticks-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
@@ -362,7 +375,9 @@ static void write_port(void *arg, long period)
   static double last_max_accel[JOINTS] = {0, 0, 0, 0};
   static double last_command[JOINTS];
   static uint32_t last_update_id = 0;
+
   skeleton_t *data = arg;
+  data->joints_enabled_this_cycle = 0;
 
   char buffer[BUFSIZE];
   memset(buffer, '\0', BUFSIZE);
@@ -439,7 +454,6 @@ static void write_port(void *arg, long period)
       buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
     }
 
-    enable_io(num_joint, &buffer_space, &buffer_size, &buffer_iterator, data);
     enable_joint(num_joint, &buffer_space, &buffer_size, &buffer_iterator, data);
   }
 
@@ -457,12 +471,13 @@ static void write_port(void *arg, long period)
     }
 
     if(last_update_id +1 != *data->metric_update_id && last_update_id != 0) {
-      printf("WARN: %i missing updates.\n", *data->metric_update_id - last_update_id - 1);
+      printf("WARN: %i missing updates. %u %u\n",
+          *data->metric_update_id - last_update_id - 1, last_update_id, *data->metric_update_id);
     }
     last_update_id = *data->metric_update_id;
   } else {
     if(*data->metric_eth_state) {
-      // Network connection just want down after being up.
+      // Network connection just went down after being up.
       on_eth_down(data, count);
     }
     (*data->metric_missed_packets)++;
@@ -477,10 +492,6 @@ void on_eth_up(skeleton_t *data, uint count) {
   printf("Ethernet up. Packet count: %u\n", count);
   *data->metric_eth_state = true;
 
-  if(*data->metric_missed_packets < MAX_SKIPPED_PACKETS) {
-    return;
-  }
-
   // Iterate through joints.
   for(int num_joint = 0; num_joint < JOINTS; num_joint++) {
     data->reset_joint[num_joint] = true;
@@ -489,6 +500,10 @@ void on_eth_up(skeleton_t *data, uint count) {
 }
 
 void on_eth_down(skeleton_t *data, uint count) {
+  if(*data->metric_missed_packets < MAX_SKIPPED_PACKETS) {
+    return;
+  }
+
   printf("WARN: Ethernet down. Packet count: %u\n", count);
   *data->metric_eth_state = false;
 
@@ -540,6 +555,12 @@ void enable_joint(
   union MessageAny message = {0};
 
   if(last_enabled[num_joint] != *data->joint_enable[num_joint]) {
+    if(data->joints_enabled_this_cycle > 0) {
+      return;
+    }
+
+    data->joints_enabled_this_cycle++;
+
     if(*data->joint_enable[num_joint]) {
       printf("enable joint: %u\n", num_joint);
     } else {

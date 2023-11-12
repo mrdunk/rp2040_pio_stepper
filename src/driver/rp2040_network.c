@@ -194,8 +194,11 @@ void process_data(char* buf, skeleton_t* data, int debug) {
           ((double)reply_axis_config.abs_pos_acheived - (UINT_MAX / 2))
           / *data->joint_scale[reply_axis_config.axis];
 
-        *data->joint_pos_error[reply_axis_config.axis] =
-          reply_axis_config.pos_error;
+        //*data->joint_pos_error[reply_axis_config.axis] =
+        //  reply_axis_config.pos_error;
+
+        *data->joint_step_len_ticks[reply_axis_config.axis] =
+          reply_axis_config.step_len_ticks;
 
         *data->joint_velocity_cmd[reply_axis_config.axis] =
           (float)reply_axis_config.velocity_requested;

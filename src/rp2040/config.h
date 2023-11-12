@@ -30,6 +30,7 @@ struct Ring_buf_int_ave {
 uint32_t ring_buf_uint_ave(struct Ring_buf_uint_ave* data, const uint32_t new_val);
 int32_t ring_buf_int_ave(struct Ring_buf_int_ave* data, const int32_t new_val);
 
+// Semaphore for synchronizing cores.
 extern volatile uint32_t tick;
 
 /* Configuration object for an axis.
@@ -40,14 +41,15 @@ struct ConfigAxis {
   int8_t enabled;
   int8_t io_pos_step;           // Physical step IO pin. 
   int8_t io_pos_dir;            // Physical direction IO pin.
-  double rel_pos_requested;   // In steps. Default value is UINT_MAX / 2.
-  double abs_pos_requested;   // In steps. Default value is UINT_MAX / 2.
+  double rel_pos_requested;     // In steps. Default value is UINT_MAX / 2.
+  double abs_pos_requested;     // In steps. Default value is UINT_MAX / 2.
   uint32_t abs_pos_acheived;    // In steps. Default value is UINT_MAX / 2.
   double max_velocity;
   double max_accel_ticks;       // ticks / update_time_ticks ^ 2
   int32_t velocity_requested;   // Calculated steps per update_time_us.
   int32_t velocity_acheived;    // Steps per update_time_us.
   int32_t pos_error;            // Difference between requested position and that reported by PIO.
+  int32_t step_len_ticks;       // Length of steps requested from the PIO.
   float kp;                     // Proportional position tuning. <= 1.0
 };
 
@@ -57,6 +59,7 @@ struct ConfigGlobal {
   uint32_t last_update_id;    // Sequence number of last packet received.
   int32_t last_update_time;   // Sequence number of last packet received.
   uint32_t update_time_us;    // Driven by how often we get axis updates from controlling host.
+  bool pio_io_configured;     // PIO IO pins set.
 
   struct ConfigAxis axis[MAX_AXIS];
 };
@@ -92,6 +95,7 @@ void update_axis_config(
     const int32_t* velocity_requested,
     const int32_t* velocity_acheived,
     const int32_t* pos_error,
+    const int32_t* step_len_ticks,
     const float* kp
 );
 
@@ -109,6 +113,7 @@ uint32_t get_axis_config(
     int32_t* velocity_requested,
     int32_t* velocity_acheived,
     int32_t* pos_error,
+    int32_t* step_len_ticks,
     float* kp
     );
 

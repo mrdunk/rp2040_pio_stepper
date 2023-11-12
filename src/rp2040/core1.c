@@ -41,6 +41,7 @@ void update_all_axis() {
   for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
     updated_count += do_steps(axis, update_period_us);
   }
+  //update_pio_io_configured();
 }
 
 void core1_main() {
