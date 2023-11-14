@@ -111,14 +111,17 @@ void init_pio(const uint32_t axis)
 
 /* Convert step command from LinuxCNC and Feedback from PIO into a desired velocity. */
 double get_velocity(
+    const uint32_t update_period_us,
     const uint8_t axis,
     const uint32_t abs_pos_acheived,
     const double abs_pos_requested,
+    const double expected_velocity,
     const double kp)
 {
-  double error = abs_pos_requested - (double)abs_pos_acheived;
-  double velocity = error * kp;
-  return velocity;
+  //double error = (abs_pos_requested - (double)abs_pos_acheived);
+  //double calculated_velocity = error * kp;
+
+  return expected_velocity / update_period_us;
 }
 
 /* Generate step counts and send to PIOs. */
@@ -195,8 +198,13 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
   if(fabs(rel_pos_requested) / update_period_us > 2.0) {
     // High speed method compares requested position to PIO feedback value.
     velocity = get_velocity(
-        axis, abs_pos_acheived, abs_pos_requested + (double)(UINT_MAX / 2), kp);
-    step_count[axis] = fabs(velocity);
+        update_period_us,
+        axis,
+        abs_pos_acheived,
+        abs_pos_requested + (double)(UINT_MAX / 2),
+        rel_pos_requested,
+        kp);
+    step_count[axis] += fabs(velocity);
   } else {
     // Low speed method uses requested velocity.
     velocity = (rel_pos_requested / update_period_us);
@@ -214,7 +222,8 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
 
   int32_t step_len_ticks = 0;
 
-  if(enabled > 0 && step_count[axis] > 0.2) {
+  if(enabled > 0 && step_count[axis] > 0.1) {
+  //if(enabled > 0 && step_count[axis] > 0.0) {
     double update_period_ticks = update_period_us * clock_multiplier;
     step_len_ticks =
       //nearbyint
@@ -223,11 +232,6 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
       // TODO: use min_step_len_ticks for this.
       step_len_ticks = 1;
     }
-
-    //if(count % 1000 == 1) {
-    //  printf("%u\t%f\t%i\n", axis, step_count[axis], step_len_ticks);
-    //}
-
     step_count[axis] = 0.0;
   }
 
@@ -238,8 +242,7 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
   velocity_acheived = abs_pos_acheived - last_pos[axis];
   int32_t velocity_requested = velocity;
 
-  //int32_t pos_error = (last_request[axis] + (UINT_MAX / 2)) - abs_pos_acheived;
-  int32_t pos_error = (abs_pos_requested + (UINT_MAX / 2)) - abs_pos_acheived;
+  //int32_t pos_error = (abs_pos_requested + (UINT_MAX / 2)) - abs_pos_acheived;
 
   update_axis_config(
       axis,
@@ -254,7 +257,7 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
       NULL,
       &velocity_requested,
       &velocity_acheived,
-      &pos_error,
+      NULL,  // &pos_error,
       &step_len_ticks,
       NULL);
 

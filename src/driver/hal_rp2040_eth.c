@@ -563,11 +563,10 @@ void enable_joint(
 
     if(*data->joint_enable[num_joint]) {
       printf("enable joint: %u\n", num_joint);
+      enable_io(num_joint, buffer_space, buffer_size, buffer_iterator, data);
     } else {
       printf("disable joint: %u\n", num_joint);
     }
-
-    enable_io(num_joint, buffer_space, buffer_size, buffer_iterator, data);
 
     last_enabled[num_joint] = *data->joint_enable[num_joint];
 
