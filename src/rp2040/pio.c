@@ -115,8 +115,7 @@ double get_velocity(
     const uint8_t axis,
     const uint32_t abs_pos_acheived,
     const double abs_pos_requested,
-    const double expected_velocity,
-    const double kp)
+    const double expected_velocity)
 {
   double error = (abs_pos_requested - (double)abs_pos_acheived);
   if(abs(error) <= 1) {
@@ -129,7 +128,6 @@ double get_velocity(
     }
     return velocity;
   }
-  //double calculated_velocity = error * kp;
 
   double velocity = error * 0.1 + (expected_velocity / update_period_us) * 0.9;
   return velocity;
@@ -140,7 +138,6 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
   static uint32_t failcount = 0;
   static uint32_t count = 0;
   static uint32_t last_pos[MAX_AXIS] = {UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2};
-  static uint32_t last_request[MAX_AXIS] = {UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2};
   static uint32_t last_enabled[MAX_AXIS] = {0, 0, 0, 0};
   static double step_count[MAX_AXIS] = {0.0, 0.0, 0.0, 0.0};
   static uint8_t last_direction[MAX_AXIS] = {0, 0, 0, 0};
@@ -154,7 +151,6 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
   double max_velocity;
   double max_accel_ticks;
   int32_t velocity_acheived = 0;
-  float kp;
   uint32_t updated;
 
   updated = get_axis_config(
@@ -172,11 +168,11 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
       NULL, // &velocity_acheived,
       NULL, // &step_len_ticks,
       NULL, // &pos_error,
-      &kp
+      NULL  // &kp
       );
 
   if(updated <= 0) {
-    //return 0;
+    return 0;
   }
 
   count++;
@@ -199,7 +195,7 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
     last_enabled[axis] = enabled;
   }
 
-  // Flush rx_fifo and get last data.
+  // Drain rx_fifo of PIO feedback data and keep the last value received.
   uint8_t fifo_len = pio_sm_get_rx_fifo_level(pio1, axis);
   while(fifo_len > 0) {
     abs_pos_acheived = pio_sm_get_blocking(pio1, axis);
@@ -211,11 +207,11 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
       axis,
       abs_pos_acheived,
       abs_pos_requested + (double)(UINT_MAX / 2),
-      rel_pos_requested,
-      kp);
+      rel_pos_requested);
 
   uint8_t direction = (velocity > 0);
   if(direction != last_direction[axis]) {
+    // Direction has changed.
     step_count[axis] = 0;
     last_direction[axis] = direction;
   }
@@ -223,7 +219,12 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
   step_count[axis] += fabs(velocity);
   int32_t step_len_ticks = 0;
 
-  if(enabled > 0 && step_count[axis] > 0.1) {
+  // The PIO only process new instructions between steps. If a step length gets too long,
+  // it will block updates.
+  // If too small a step_count is allowed here, the steps can get very long and block further updates.
+  // If the limit is set too high, low speed resolution is lost and steps will become unevenly spaced.
+  // 0.05 equates to a minimum speed of approximately 1 step every 20ms.
+  if(enabled > 0 && step_count[axis] > 0.05) {
     double update_period_ticks = update_period_us * clock_multiplier;
     step_len_ticks =
       (update_period_ticks / (step_count[axis] * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
@@ -263,7 +264,6 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
       NULL);
 
   last_pos[axis] = abs_pos_acheived;
-  last_request[axis] = abs_pos_requested;
 
   return updated;
 }
