@@ -118,10 +118,21 @@ double get_velocity(
     const double expected_velocity,
     const double kp)
 {
-  //double error = (abs_pos_requested - (double)abs_pos_acheived);
+  double error = (abs_pos_requested - (double)abs_pos_acheived);
+  if(abs(error) <= 1) {
+    // Deadzone. Minimize movement to prevent oscillating around zero.
+    double velocity = (expected_velocity / (double)update_period_us);
+    if(error > 0.0 && velocity < 0.0 || error < 0.0 && velocity > 0.0) {
+      // Position and velocity disagree.
+      // Do not do steps.
+      velocity = 0;
+    }
+    return velocity;
+  }
   //double calculated_velocity = error * kp;
 
-  return expected_velocity / update_period_us;
+  double velocity = error * 0.1 + (expected_velocity / update_period_us) * 0.9;
+  return velocity;
 }
 
 /* Generate step counts and send to PIOs. */
@@ -132,6 +143,7 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
   static uint32_t last_request[MAX_AXIS] = {UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2};
   static uint32_t last_enabled[MAX_AXIS] = {0, 0, 0, 0};
   static double step_count[MAX_AXIS] = {0.0, 0.0, 0.0, 0.0};
+  static uint8_t last_direction[MAX_AXIS] = {0, 0, 0, 0};
 
   //uint32_t clock_multiplier = clock_get_hz(clk_sys) / 1000000;
   static const uint32_t clock_multiplier = 133;
@@ -194,40 +206,27 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
     fifo_len--;
   }
 
-  double velocity;
-  if(fabs(rel_pos_requested) / update_period_us > 2.0) {
-    // High speed method compares requested position to PIO feedback value.
-    velocity = get_velocity(
-        update_period_us,
-        axis,
-        abs_pos_acheived,
-        abs_pos_requested + (double)(UINT_MAX / 2),
-        rel_pos_requested,
-        kp);
-    step_count[axis] += fabs(velocity);
-  } else {
-    // Low speed method uses requested velocity.
-    velocity = (rel_pos_requested / update_period_us);
-
-    if(abs_pos_requested + (double)(UINT_MAX / 2) > abs_pos_acheived + 2.0) {
-      velocity += fabs(velocity);
-    } else if(abs_pos_requested + (double)(UINT_MAX / 2) < abs_pos_acheived - 2.0) {
-      velocity -= fabs(velocity);
-    }
-
-    step_count[axis] += fabs(velocity);
-  }
+  double velocity = get_velocity(
+      update_period_us,
+      axis,
+      abs_pos_acheived,
+      abs_pos_requested + (double)(UINT_MAX / 2),
+      rel_pos_requested,
+      kp);
 
   uint8_t direction = (velocity > 0);
+  if(direction != last_direction[axis]) {
+    step_count[axis] = 0;
+    last_direction[axis] = direction;
+  }
 
+  step_count[axis] += fabs(velocity);
   int32_t step_len_ticks = 0;
 
   if(enabled > 0 && step_count[axis] > 0.1) {
-  //if(enabled > 0 && step_count[axis] > 0.0) {
     double update_period_ticks = update_period_us * clock_multiplier;
     step_len_ticks =
-      //nearbyint
-      ((update_period_ticks / (step_count[axis] * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD);
+      (update_period_ticks / (step_count[axis] * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
     if(step_len_ticks < 1) {
       // TODO: use min_step_len_ticks for this.
       step_len_ticks = 1;
@@ -236,8 +235,10 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
   }
 
   // Request steps from PIO.
-  pio_sm_put(pio0, axis, direction);
-  pio_sm_put(pio0, axis, step_len_ticks);
+  if(pio_sm_is_tx_fifo_empty(pio1, axis)) {
+    pio_sm_put(pio0, axis, direction);
+    pio_sm_put(pio0, axis, step_len_ticks);
+  }
 
   velocity_acheived = abs_pos_acheived - last_pos[axis];
   int32_t velocity_requested = velocity;
