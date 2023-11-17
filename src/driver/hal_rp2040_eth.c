@@ -475,6 +475,7 @@ static void write_port(void *arg, long period)
           *data->metric_update_id - last_update_id - 1, last_update_id, *data->metric_update_id);
     }
     last_update_id = *data->metric_update_id;
+    *data->metric_missed_packets = 0;
   } else {
     if(*data->metric_eth_state) {
       // Network connection just went down after being up.
@@ -496,7 +497,6 @@ void on_eth_up(skeleton_t *data, uint count) {
   for(int num_joint = 0; num_joint < JOINTS; num_joint++) {
     data->reset_joint[num_joint] = true;
   }
-  *data->metric_missed_packets = 0;
 }
 
 void on_eth_down(skeleton_t *data, uint count) {

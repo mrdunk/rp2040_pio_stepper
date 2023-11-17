@@ -118,13 +118,13 @@ double get_velocity(
     const double expected_velocity)
 {
   double error = (abs_pos_requested - (double)abs_pos_acheived);
-  if(abs(error) <= 1) {
+  if(abs(error) == 0) {
     // Deadzone. Minimize movement to prevent oscillating around zero.
     double velocity = (expected_velocity / (double)update_period_us);
     if(error > 0.0 && velocity < 0.0 || error < 0.0 && velocity > 0.0) {
       // Position and velocity disagree.
       // Do not do steps.
-      velocity = 0;
+      return 0;
     }
     return velocity;
   }
