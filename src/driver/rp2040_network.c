@@ -60,6 +60,12 @@ int init_eth(int device) {
 
 /* Send data via UDP.*/
 uint8_t send_data(int device, char* packet, size_t packet_size) {
+  //static size_t count = 0;
+  //count++;
+  //if(count > 10000 && count % 10 > 5) {
+  //  return 0;
+  //}
+
   int addr_len = sizeof(remote_addr[device]);
   int n = sendto(
       sockfd[device],
