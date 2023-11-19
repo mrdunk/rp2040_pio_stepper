@@ -11,7 +11,7 @@
 
 #define STEP_PIO_LEN_OVERHEAD 14.0
 #define STEP_PIO_MULTIPLIER 2.0
-#define DEAD_ZONE_THRESHOLD 1
+#define DEAD_ZONE_THRESHOLD 1  // steps / ms
 
 /* Initialize a pair of PIO programmes.
  * One for step generation on pio0 and one for counting said steps on pio1.
@@ -125,7 +125,7 @@ double get_velocity(
   // This performs like the Proportional stage of a PID controller.
   double combined_velocity = position_error * 0.1 + velocity * 0.8;
   
-  if(abs(velocity) <= DEAD_ZONE_THRESHOLD) {
+  if(abs(velocity) <= DEAD_ZONE_THRESHOLD) {  // steps / ms
     // Deadzone. Minimize movement to prevent oscillating around zero.
     if(position_error > 0.0 && velocity < 0.0 || position_error < 0.0 && velocity > 0.0) {
       // Position and velocity disagree.
