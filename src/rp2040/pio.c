@@ -11,6 +11,7 @@
 
 #define STEP_PIO_LEN_OVERHEAD 14.0
 #define STEP_PIO_MULTIPLIER 2.0
+#define DEAD_ZONE_THRESHOLD 1
 
 /* Initialize a pair of PIO programmes.
  * One for step generation on pio0 and one for counting said steps on pio1.
@@ -117,11 +118,16 @@ double get_velocity(
     const double abs_pos_requested,
     const double expected_velocity)
 {
-  double error = (abs_pos_requested - (double)abs_pos_acheived);
-  if(abs(error) == 0) {
+  double position_error = (abs_pos_requested - (double)abs_pos_acheived);
+  double velocity = (expected_velocity / (double)update_period_us);
+
+  // Note that the total of these 2 velocities add up to lass than 1.
+  // This performs like the Proportional stage of a PID controller.
+  double combined_velocity = position_error * 0.1 + velocity * 0.8;
+  
+  if(abs(velocity) <= DEAD_ZONE_THRESHOLD) {
     // Deadzone. Minimize movement to prevent oscillating around zero.
-    double velocity = (expected_velocity / (double)update_period_us);
-    if(error > 0.0 && velocity < 0.0 || error < 0.0 && velocity > 0.0) {
+    if(position_error > 0.0 && velocity < 0.0 || position_error < 0.0 && velocity > 0.0) {
       // Position and velocity disagree.
       // Do not do steps.
       return 0;
@@ -129,8 +135,7 @@ double get_velocity(
     return velocity;
   }
 
-  double velocity = error * 0.1 + (expected_velocity / update_period_us) * 0.9;
-  return velocity;
+  return combined_velocity;
 }
 
 /* Generate step counts and send to PIOs. */
