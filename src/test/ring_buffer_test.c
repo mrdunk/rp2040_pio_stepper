@@ -8,7 +8,6 @@
 
 #include "../rp2040/config.h"
 #include "../rp2040/ring_buffer.h"
-#include "../rp2040/timing.h"
 
 volatile uint32_t tick = 0;
 
@@ -35,7 +34,6 @@ static void test_ring_buffer_uint_ave__basic(void **state) {
 
     assert_int_equal(data.count, 0);
     assert_int_equal(data.total, 0);
-    assert_int_equal(return_val, 0);
 
     return_val = ring_buf_uint_ave(&data, 123);
     assert_int_equal(data.count, 1);

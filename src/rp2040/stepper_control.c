@@ -45,22 +45,13 @@ static void set_clock_khz(void)
 
 size_t process_received_buffer( uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* received_count) {
 
-  char* rx_itterator = rx_buf;
+  uint8_t* rx_itterator = rx_buf;
   size_t tx_buf_len = 0;
   uint32_t msg_type;
-  size_t tx_buf_mach_len_max = DATA_BUF_SIZE - sizeof(uint32_t);
-  struct Message* msg;
-  struct Message_uint* msg_uint;
-  struct Message_uint_uint* msg_uint_uint;
-  struct Message_uint_int* msg_uint_int;
-  union MessageAny* message_any;
-
   uint32_t axis;
-  uint32_t abs_pos_requested = 0;
-  uint32_t abs_pos_acheived;
   int8_t io_pos_value = -1;
 
-  while(msg_type = *(uint32_t*)(rx_itterator)) {  // msg_type of 0 indicates end of data.
+  while((msg_type = *(uint32_t*)(rx_itterator))) {  // msg_type of 0 indicates end of data.
     switch(msg_type) {
       case MSG_TIMING:
         ;
@@ -77,14 +68,14 @@ size_t process_received_buffer( uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* recei
         break;
       case MSG_SET_AXIS_ENABLED:
         axis = ((struct Message_joint_enable*)(rx_itterator))->axis;
-        int32_t enabled = ((struct Message_joint_enable*)(rx_itterator))->value;
+        uint8_t enabled = ((struct Message_joint_enable*)(rx_itterator))->value;
         
         rx_itterator += sizeof(struct Message_joint_enable);
 
         printf("%u Enabling axis: %u\t%i\n", *received_count, axis, enabled);
         update_axis_config(
             axis, CORE0,
-            (int8_t*)&enabled, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+            &enabled, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
         (*received_count)++;
         break;
       case MSG_SET_AXIS_ABS_POS:
@@ -331,8 +322,8 @@ void recover_clock() {
 
 int main() {
   int retval = 0;
-  char rx_buf[DATA_BUF_SIZE] = {0};
-  char tx_buf[DATA_BUF_SIZE] = {0};
+  uint8_t rx_buf[DATA_BUF_SIZE] = {0};
+  uint8_t tx_buf[DATA_BUF_SIZE] = {0};
   size_t tx_buf_len = 0;
   uint8_t received_msg_count;
   uint8_t data_received = 0;
@@ -380,7 +371,7 @@ int main() {
   while (1) {
     tx_buf_len = 0;
     data_received = 0;
-    memset(tx_buf, '\0', DATA_BUF_SIZE);
+    memset(tx_buf, 0, DATA_BUF_SIZE);
 
     while(data_received == 0 || retval <= 0) {
       retval = get_UDP(

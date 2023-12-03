@@ -15,4 +15,7 @@ set(WITH_EXAMPLES OFF CACHE BOOL "CMocka: Build examples" FORCE)
 set(UNIT_TESTING OFF CACHE BOOL "CMocka: Build with unit testing" FORCE)
 set(PICKY_DEVELOPER OFF CACHE BOOL "CMocka: Build with picky developer flags" FORCE)
 
-FetchContent_MakeAvailable(cmocka)
+FetchContent_GetProperties(cmocka)
+FetchContent_Populate(cmocka)
+add_subdirectory(${cmocka_SOURCE_DIR} ${cmocka_BINARY_DIR})
+#FetchContent_MakeAvailable(cmocka)

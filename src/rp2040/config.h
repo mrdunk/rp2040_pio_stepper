@@ -4,31 +4,13 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <limits.h>
+#include <stdbool.h>
 
 #include "stepper_control.h"
+#include "ring_buffer.h"
 
 #define CORE0 0
 #define CORE1 1
-
-/* A ring buffer that returns the average value of it's contents.
- * Used for calculating average period between incoming network updates. */
-#define RING_BUF_AVE_LEN 1000
-struct Ring_buf_uint_ave {
-  uint32_t buf[RING_BUF_AVE_LEN];
-  size_t head;
-  uint32_t total;
-  size_t count;
-};
-
-struct Ring_buf_int_ave {
-  int32_t buf[RING_BUF_AVE_LEN];
-  size_t head;
-  int32_t total;
-  size_t count;
-};
-
-uint32_t ring_buf_uint_ave(struct Ring_buf_uint_ave* data, const uint32_t new_val);
-int32_t ring_buf_int_ave(struct Ring_buf_int_ave* data, const int32_t new_val);
 
 // Semaphore for synchronizing cores.
 extern volatile uint32_t tick;
@@ -76,7 +58,7 @@ void update_period(uint32_t update_time_us);
 uint32_t get_period();
 
 /* Set metrics for tracking successful update transmission and jitter. */
-uint32_t update_packet_metrics(
+void update_packet_metrics(
     uint32_t update_id, uint32_t time, int32_t* id_dif, int32_t* time_dif);
 
 uint8_t has_new_c0_data(const uint8_t axis);

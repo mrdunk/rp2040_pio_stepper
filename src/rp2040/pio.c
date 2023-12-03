@@ -127,7 +127,7 @@ double get_velocity(
   
   if(abs(velocity) <= DEAD_ZONE_THRESHOLD) {  // steps / ms
     // Deadzone. Minimize movement to prevent oscillating around zero.
-    if(position_error > 0.0 && velocity < 0.0 || position_error < 0.0 && velocity > 0.0) {
+    if((position_error > 0.0 && velocity < 0.0) || (position_error < 0.0 && velocity > 0.0)) {
       // Position and velocity disagree.
       // Do not do steps.
       return 0;

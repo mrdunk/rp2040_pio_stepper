@@ -7,8 +7,6 @@
 
 
 void update_all_axis() {
-  static size_t last_time = 0;
-  static float time_offset = 0;
   static uint32_t metric = 0;
   static uint32_t last_tick = 0;
   uint32_t update_period_us = get_period();
@@ -45,7 +43,6 @@ void update_all_axis() {
 }
 
 void core1_main() {
-  uint32_t count = 0;
   while (1) {
     update_all_axis();
   }

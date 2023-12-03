@@ -34,7 +34,7 @@ else()
     core1.c
     pio.c
     #timing.c
-    #ring_buffer.c
+    ring_buffer.c
   )
 
   target_link_libraries(

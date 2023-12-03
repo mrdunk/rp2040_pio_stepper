@@ -118,7 +118,7 @@ uint32_t get_period() {
 }
 
 /* Set metrics for tracking successful update transmission and jitter. */
-uint32_t update_packet_metrics(
+void update_packet_metrics(
     uint32_t update_id,
     uint32_t time,
     int32_t* id_diff,
@@ -158,7 +158,6 @@ uint32_t update_packet_metrics(
 }
 
 uint8_t has_new_c0_data(const uint8_t axis) {
-  static uint32_t count = 0;
   mutex_enter_blocking(&mtx_axis[axis]);
   uint8_t updated = config.axis[axis].updated_from_c0;
 
@@ -428,44 +427,3 @@ size_t serialise_axis_config(
       *tx_buf_len + sizeof(struct Reply_axis_config), max_buf_len);
   return 0;
 }
-
-
-/* A ring buffer that returns the average value of it's contents.
- * Used for calculating average period between incoming network updates. */
-uint32_t ring_buf_uint_ave(struct Ring_buf_uint_ave* data, const uint32_t new_val) {
-  uint32_t tail_val = data->buf[data->head];
-  data->buf[data->head] = new_val;
-  data->head++;
-  if(data->head >= RING_BUF_AVE_LEN) {
-    data->head = 0;
-  }
-  data->total += new_val;
-  if(data->count < RING_BUF_AVE_LEN) {
-    data->count++;
-  } else {
-    data->total -= tail_val;
-  }
-
-  return data->total / data->count;
-}
-
-
-/* A ring buffer that returns the average value of it's contents.
- * Used for calculating average period between incoming network updates. */
-int32_t ring_buf_int_ave(struct Ring_buf_int_ave* data, const int32_t new_val) {
-  int32_t tail_val = data->buf[data->head];
-  data->buf[data->head] = new_val;
-  data->head++;
-  if(data->head >= RING_BUF_AVE_LEN) {
-    data->head = 0;
-  }
-  data->total += new_val;
-  if(data->count < RING_BUF_AVE_LEN) {
-    data->count++;
-  } else {
-    data->total -= tail_val;
-  }
-
-  return data->total / (int32_t)data->count;
-}
-
