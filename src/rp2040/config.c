@@ -1,7 +1,17 @@
 #include <stdio.h>
 #include <string.h>
+
+
+#ifndef BUILD_TESTS
+
 #include "pico/mutex.h"
 #include "port_common.h"
+
+#else  // BUILD_TESTS
+
+#include "../test/mocks/rp_mocks.h"
+
+#endif  // BUILD_TESTS
 
 #include "config.h"
 #include "messages.h"

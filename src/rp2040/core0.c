@@ -10,6 +10,7 @@
 
 #include "pico/stdlib.h"
 #include "stepper_control.h"
+#include "network.h"
 
 #endif  // BUILD_TESTS
 
@@ -68,8 +69,10 @@ void recover_clock() {
   }
 }
 
+/* Process data received over the network.
+ * This consists of serialised structs as defined in src/shared/massages.h
+ */
 size_t process_received_buffer( uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* received_count) {
-
   uint8_t* rx_itterator = rx_buf;
   size_t tx_buf_len = 0;
   uint32_t msg_type;
@@ -203,7 +206,7 @@ void core0_main() {
   uint8_t rx_buf[DATA_BUF_SIZE] = {0};
   uint8_t tx_buf[DATA_BUF_SIZE] = {0};
   size_t tx_buf_len = 0;
-  uint8_t received_msg_count;
+  uint8_t received_msg_count = 0;
   uint8_t data_received = 0;
   size_t time_now;
 
@@ -251,7 +254,7 @@ void core0_main() {
       //axis_count += serialise_axis_config(axis, tx_buf, &tx_buf_len, false);
     }
 
-    retval = put_UDP(
+    put_UDP(
         SOCKET_NUMBER,
         NW_PORT,
         tx_buf,

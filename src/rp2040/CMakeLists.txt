@@ -7,51 +7,42 @@ add_compile_options(
   -Wno-maybe-uninitialized
   )
 
-if(BUILD_TESTS)
-  # pass -D BUILD_TESTS when compiling
-  target_compile_definitions(
-    stepper_control PUBLIC
-    -D BUILD_TESTS
-    )
-else()
-  # normal build.
 
-  add_executable(
-    stepper_control
-    stepper_control.c
+add_executable(
+  stepper_control
+  stepper_control.c
+)
+
+# Compile .pio file.
+# by default the header is generated into the build dir
+pico_generate_pio_header(stepper_control ${CMAKE_CURRENT_LIST_DIR}/pico_stepper.pio)
+# however, alternatively you can choose to generate it somewhere else (in this case in the source tree for check in)
+#pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/${TARGET_NAME}.pio OUTPUT_DIR ${CMAKE_CURRENT_LIST_DIR})
+
+target_sources(
+  stepper_control PRIVATE
+  stepper_control.c
+  config.c
+  network.c
+  core0.c
+  core1.c
+  pio.c
+  ring_buffer.c
+)
+
+target_link_libraries(
+  stepper_control PRIVATE
+  pico_stdlib
+  pico_multicore
+  hardware_spi
+  hardware_dma
+  hardware_pio
+  ETHERNET_FILES
+  IOLIBRARY_FILES
+  LOOPBACK_FILES
   )
 
-  # Compile .pio file.
-  # by default the header is generated into the build dir
-  pico_generate_pio_header(stepper_control ${CMAKE_CURRENT_LIST_DIR}/pico_stepper.pio)
-  # however, alternatively you can choose to generate it somewhere else (in this case in the source tree for check in)
-  #pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/${TARGET_NAME}.pio OUTPUT_DIR ${CMAKE_CURRENT_LIST_DIR})
+pico_enable_stdio_usb(stepper_control 1)
+pico_enable_stdio_uart(stepper_control 0)
+pico_add_extra_outputs(stepper_control)
 
-  target_sources(
-    stepper_control PRIVATE
-    stepper_control.c
-    config.c
-    core0.c
-    core1.c
-    pio.c
-    #timing.c
-    ring_buffer.c
-  )
-
-  target_link_libraries(
-    stepper_control PRIVATE
-    pico_stdlib
-    pico_multicore
-    hardware_spi
-    hardware_dma
-    hardware_pio
-    ETHERNET_FILES
-    IOLIBRARY_FILES
-    LOOPBACK_FILES
-    )
-
-  pico_enable_stdio_usb(stepper_control 1)
-  pico_enable_stdio_uart(stepper_control 0)
-  pico_add_extra_outputs(stepper_control)
-
-endif(BUILD_TESTS)
