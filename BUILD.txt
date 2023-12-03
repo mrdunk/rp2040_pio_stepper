@@ -6,17 +6,27 @@ Modify CMakeLists.txt in the root directory and modify the section:
 to reflect your Ethernet chip version.
 Either W5100S or W5500.
 
-$ mkdir build
-$ cd build
-$ export PICO_SDK_PATH=../../pico-sdk
-$ cmake ..
-$ make
 
-Generated image:
+Build RP2040 firmware:
+$ mkdir build_rp
+$ cmake -B ./build_rp -S . -D BUILD_RP=ON
+$ cd build_rp
+$ make
+$ # Generated image:
 $ ls -l src/rp2040/stepper_control.uf2
 
+
+Debugging copy to RP:
 $ sudo blkid -o list | grep RPI-RP2
 
+
+** UnitTests **
+
+Build tests:
+$ mkdir build_tests
+$ cmake -B ./build_tests -S . -D BUILD_TESTS=ON
+$ cd build_tests
+$ make
 
 
 ** For the LinuxCNC driver. **
