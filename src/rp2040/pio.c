@@ -241,7 +241,7 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
   }
 
   // Request steps from PIO.
-  if(pio_sm_is_tx_fifo_empty(pio1, axis)) {
+  if(pio_sm_is_tx_fifo_empty(pio0, axis)) {
     pio_sm_put(pio0, axis, direction);
     pio_sm_put(pio0, axis, step_len_ticks);
   }

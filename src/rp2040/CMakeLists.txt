@@ -7,11 +7,11 @@ add_compile_options(
   -Wno-maybe-uninitialized
   )
 
-if(TEST_BUILD)
-  # pass -D TEST_BUILD when compiling
+if(BUILD_TESTS)
+  # pass -D BUILD_TESTS when compiling
   target_compile_definitions(
     stepper_control PUBLIC
-    -D TEST_BUILD
+    -D BUILD_TESTS
     )
 else()
   # normal build.
@@ -31,6 +31,7 @@ else()
     stepper_control PRIVATE
     stepper_control.c
     config.c
+    core0.c
     core1.c
     pio.c
     #timing.c
@@ -53,4 +54,4 @@ else()
   pico_enable_stdio_uart(stepper_control 0)
   pico_add_extra_outputs(stepper_control)
 
-endif(TEST_BUILD)
+endif(BUILD_TESTS)
