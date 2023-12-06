@@ -5,6 +5,13 @@
 #include "rp2040_defines.h"
 #include "../shared/messages.h"
 
+#ifdef BUILD_TESTS
+
+#include "../test/mocks/driver_mocks.h"
+
+#endif  // BUILD_TESTS
+
+
 /* Network globals. */
 struct sockaddr_in remote_addr[MAX_DEVICES];
 int sockfd[MAX_DEVICES] = {-1};
@@ -80,7 +87,12 @@ size_t get_reply_non_block(int device, char* receive_buffer) {
   int addr_len;
   int flags = MSG_DONTWAIT;
   ssize_t receive_count = recvfrom(
-      sockfd[device], receive_buffer, BUFSIZE, flags, &remote_addr[device], (socklen_t *)&addr_len);
+      sockfd[device],
+      receive_buffer,
+      BUFSIZE,
+      flags,
+      (struct sockaddr *)&remote_addr[device],
+      (socklen_t *)&addr_len);
   if (receive_count < 0 && errno != EAGAIN) {
     rtapi_print_msg(RTAPI_MSG_ERR, "ERROR receiving on network port %i\n ", sockfd[device]);
     return 0;
@@ -88,14 +100,10 @@ size_t get_reply_non_block(int device, char* receive_buffer) {
   return receive_count;
 }
 
-size_t serialize_data(void* values, void** packet, size_t* packet_space) {
+size_t serialize_data(void* message, void** packet, size_t* packet_space) {
   size_t message_size = 0;
-  uint32_t msg_type = ((uint32_t*)values)[0];
-  uint32_t uint_value;
-  int32_t int_value;
-  float float_value;
-  union MessageAny message_any;
-  uint32_t axis, update_id, time;
+  //uint32_t msg_type = ((uint32_t*)message)[0];
+  uint32_t msg_type = ((struct Message_timing*)message)->type;
 
   switch(msg_type) {
     case MSG_TIMING:
@@ -133,9 +141,9 @@ size_t serialize_data(void* values, void** packet, size_t* packet_space) {
     return 0;
   }
 
-  memcpy(*packet, values, message_size);
+  memcpy(*packet, message, message_size);
 
-  packet_space -= message_size;
+  *packet_space -= message_size;
   *packet += message_size;
 
   return message_size;

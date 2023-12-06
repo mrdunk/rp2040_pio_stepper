@@ -384,12 +384,10 @@ static void write_port(void *arg, long period)
   void* buffer_iterator = &buffer[0];
 
   // Put metrics packet in buffer.
-  union MessageAny message = {0};
-  size_t buffer_space = BUFSIZE - sizeof(struct Message);
+  union MessageAny message;
+  size_t buffer_space = BUFSIZE;
   size_t buffer_size = 0;
 
-  //message.timing =
-  //  (struct Message_timing){.type=MSG_TIMING, .update_id=count, .time=rtapi_get_time()};
   message.timing.type = MSG_TIMING;
   message.timing.update_id = count;
   message.timing.time = rtapi_get_time();

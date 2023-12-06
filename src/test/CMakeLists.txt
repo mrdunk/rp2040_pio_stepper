@@ -15,6 +15,8 @@ add_compile_options(
   -Wno-maybe-uninitialized
   )
 
+add_definitions(-DBUILD_TESTS)
+
 add_executable(
     ringBufferTest
     ${CMAKE_CURRENT_SOURCE_DIR}/ring_buffer_test.c
@@ -50,7 +52,6 @@ target_link_libraries(
 #    networkTest PUBLIC
 #    -D BUILD_TESTS
 #    )
-add_definitions(-DBUILD_TESTS)
 add_executable(
     networkTest
     ${CMAKE_CURRENT_SOURCE_DIR}/network_test.c
@@ -63,8 +64,18 @@ add_executable(
     )
 target_link_libraries(
     networkTest
-    cmocka #-static
+    cmocka
     )
 
 
+add_executable(
+    driverNetworkTest
+    ${CMAKE_CURRENT_SOURCE_DIR}/driver_network_test.c
+    #${CMAKE_SOURCE_DIR}/src/driver/rp2040_network.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/driver_mocks.c
+    )
+target_link_libraries(
+    driverNetworkTest
+    cmocka
+    )
 
