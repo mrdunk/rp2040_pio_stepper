@@ -118,19 +118,19 @@ size_t process_received_buffer( uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* recei
             NULL, NULL, NULL, NULL, &abs_pos_requested, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
         (*received_count)++;
         break;
-      case MSG_SET_AXIS_REL_POS:
-        axis = ((struct Message_set_rel_pos*)(rx_itterator))->axis;
+      case MSG_SET_AXIS_VELOCITY:
+        axis = ((struct Message_set_velocity*)(rx_itterator))->axis;
         double velocity_requested =
-          ((struct Message_set_rel_pos*)(rx_itterator))->value;
+          ((struct Message_set_velocity*)(rx_itterator))->value;
         
-        rx_itterator += sizeof(struct Message_set_rel_pos);
+        rx_itterator += sizeof(struct Message_set_velocity);
 
         update_axis_config(
             axis, CORE0,
             NULL, NULL, NULL, &velocity_requested, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
         (*received_count)++;
         break;
-      case MSG_SET_AXIS_MAX_SPEED:
+      case MSG_SET_AXIS_MAX_VELOCITY:
         axis = ((struct Message_set_max_velocity*)(rx_itterator))->axis;
         double max_velocity = 
           ((struct Message_set_max_velocity*)(rx_itterator))->value;

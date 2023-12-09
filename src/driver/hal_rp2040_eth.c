@@ -388,10 +388,12 @@ static void write_port(void *arg, long period)
   size_t buffer_space = BUFSIZE;
   size_t buffer_size = 0;
 
-  message.timing.type = MSG_TIMING;
-  message.timing.update_id = count;
-  message.timing.time = rtapi_get_time();
-  buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
+  //message.timing.type = MSG_TIMING;
+  //message.timing.update_id = count;
+  //message.timing.time = rtapi_get_time();
+  //buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
+  buffer_size += serailize_timing(
+      &message, count, rtapi_get_time(), &buffer_iterator, &buffer_space);
 
   // Put GPIO values in buffer.
   // TODO: Not yet implemented.
@@ -405,51 +407,55 @@ static void write_port(void *arg, long period)
     if(*data->joint_velocity_mode[num_joint] == 1) {
       // Velocity mode.
       // TODO: Not tested.
-      printf("WARN: Untested velocity mode. joint: %u\n", num_joint);
-      double error = (last_command[num_joint] + ((*data->joint_pos_cmd)[num_joint])) / 2.0
-        - (*data->joint_pos_feedback[num_joint]);
-
-      message.set_rel_pos.type = MSG_SET_AXIS_REL_POS;
-      message.set_rel_pos.axis = num_joint;
-      message.set_rel_pos.value = *data->joint_scale[num_joint] * error;
-      buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
-      last_command[num_joint] = *data->joint_pos_cmd[num_joint];
+      printf("ERROR: Not implemented velocity mode. joint: %u\n", num_joint);
     } else {
       // Absolute position mode.
-      message.set_abs_pos.type = MSG_SET_AXIS_ABS_POS;
-      message.set_abs_pos.axis = num_joint;
-      message.set_abs_pos.value = *data->joint_scale[num_joint] * *data->joint_pos_cmd[num_joint];
-      buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
+      //message.set_abs_pos.type = MSG_SET_AXIS_ABS_POS;
+      //message.set_abs_pos.axis = num_joint;
+      //message.set_abs_pos.value = *data->joint_scale[num_joint] * *data->joint_pos_cmd[num_joint];
+      //buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
 
-      message.set_rel_pos.type = MSG_SET_AXIS_REL_POS;
-      message.set_rel_pos.axis = num_joint;
-      message.set_rel_pos.value = *data->joint_scale[num_joint] * *data->joint_vel_cmd[num_joint];
-      buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
+      //message.set_rel_pos.type = MSG_SET_AXIS_VELOCITY;
+      //message.set_rel_pos.axis = num_joint;
+      //message.set_rel_pos.value = *data->joint_scale[num_joint] * *data->joint_vel_cmd[num_joint];
+      //buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
+      
+      double position = *data->joint_scale[num_joint] * *data->joint_pos_cmd[num_joint];
+      double velocity = *data->joint_scale[num_joint] * *data->joint_vel_cmd[num_joint];
+      buffer_size += serialize_joint_pos(
+          &message, num_joint, position, &buffer_iterator, &buffer_space);
+      buffer_size += serialize_joint_velocity(
+          &message, num_joint, velocity, &buffer_iterator, &buffer_space);
+
     }
 
     // Look for parameter changes.
-    if(last_kp[num_joint] != *data->joint_kp[num_joint]) {
-      last_kp[num_joint] = *data->joint_kp[num_joint];
-      message.set_kp.type = MSG_SET_AXIS_PID_KP;
-      message.set_kp.axis = num_joint;
-      message.set_kp.value = *data->joint_kp[num_joint];
-      buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
-    }
+    //if(last_kp[num_joint] != *data->joint_kp[num_joint]) {
+      //last_kp[num_joint] = *data->joint_kp[num_joint];
+      //message.set_kp.type = MSG_SET_AXIS_PID_KP;
+      //message.set_kp.axis = num_joint;
+      //message.set_kp.value = *data->joint_kp[num_joint];
+      //buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
+    //}
 
     if(last_max_velocity[num_joint] != *data->joint_max_velocity[num_joint]) {
       last_max_velocity[num_joint] = *data->joint_max_velocity[num_joint];
-      message.set_max_velocity.type = MSG_SET_AXIS_MAX_SPEED;
-      message.set_abs_pos.axis = num_joint;
-      message.set_abs_pos.value = *data->joint_max_velocity[num_joint];
-      buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
+      //message.set_max_velocity.type = MSG_SET_AXIS_MAX_SPEED;
+      //message.set_abs_pos.axis = num_joint;
+      //message.set_abs_pos.value = *data->joint_max_velocity[num_joint];
+      //buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
+      buffer_size += serailize_joint_max_velocity(
+          &message, num_joint, last_max_velocity[num_joint], &buffer_iterator, &buffer_space);
     }
 
     if(last_max_accel[num_joint] != *data->joint_max_accel[num_joint]) {
       last_max_accel[num_joint] = *data->joint_max_accel[num_joint];;
-      message.set_max_velocity.type = MSG_SET_AXIS_MAX_ACCEL;
-      message.set_abs_pos.axis = num_joint;
-      message.set_abs_pos.value = *data->joint_max_accel[num_joint];
-      buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
+      //message.set_max_velocity.type = MSG_SET_AXIS_MAX_ACCEL;
+      //message.set_abs_pos.axis = num_joint;
+      //message.set_abs_pos.value = *data->joint_max_accel[num_joint];
+      //buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
+      buffer_size += serailize_joint_max_accel(
+          &message, num_joint, last_max_accel[num_joint], &buffer_iterator, &buffer_space);
     }
 
     enable_joint(num_joint, &buffer_space, &buffer_size, &buffer_iterator, data);
@@ -527,19 +533,23 @@ void enable_io(
     rtapi_print_msg(RTAPI_MSG_INFO, "Configure joint: %u  step io: %u\n",
         num_joint, *data->joint_gpio_step[num_joint]);
     printf("Configure joint: %u  step io: %u\n", num_joint, *data->joint_gpio_step[num_joint]);
-    message.joint_enable.type = MSG_SET_AXIS_IO_STEP;
-    message.joint_enable.axis = num_joint;
-    message.joint_enable.value = *data->joint_gpio_step[num_joint];
-    *buffer_size += serialize_data(&message, buffer_iterator, buffer_space);
+    //message.joint_enable.type = MSG_SET_AXIS_IO_STEP;
+    //message.joint_enable.axis = num_joint;
+    //message.joint_enable.value = *data->joint_gpio_step[num_joint];
+    //*buffer_size += serialize_data(&message, buffer_iterator, buffer_space);
+    *buffer_size += serialize_joint_io_step(
+        &message, num_joint, *data->joint_gpio_step[num_joint], buffer_iterator, buffer_space);
 
     last_io_pos_dir[num_joint] = *data->joint_gpio_dir[num_joint];
     rtapi_print_msg(RTAPI_MSG_INFO, "Configure joint: %u  dir io: %u\n",
         num_joint, *data->joint_gpio_dir[num_joint]);
     printf("Configure joint: %u  dir io: %u\n", num_joint, *data->joint_gpio_dir[num_joint]);
-    message.joint_enable.type = MSG_SET_AXIS_IO_DIR;
-    message.joint_enable.axis = num_joint;
-    message.joint_enable.value = *data->joint_gpio_dir[num_joint];
-    *buffer_size += serialize_data(&message, buffer_iterator, buffer_space);
+    //message.joint_enable.type = MSG_SET_AXIS_IO_DIR;
+    //message.joint_enable.axis = num_joint;
+    //message.joint_enable.value = *data->joint_gpio_dir[num_joint];
+    //*buffer_size += serialize_data(&message, buffer_iterator, buffer_space);
+    *buffer_size += serialize_joint_io_dir(
+        &message, num_joint, *data->joint_gpio_dir[num_joint], buffer_iterator, buffer_space);
 
     data->reset_joint[num_joint] = false;
   }
@@ -568,10 +578,12 @@ void enable_joint(
 
     last_enabled[num_joint] = *data->joint_enable[num_joint];
 
-    message.joint_enable.type = MSG_SET_AXIS_ENABLED;
-    message.joint_enable.axis = num_joint;
-    message.joint_enable.value = (int32_t)(*data->joint_enable[num_joint]);
-    *buffer_size += serialize_data(&message, buffer_iterator, buffer_space);
+    //message.joint_enable.type = MSG_SET_AXIS_ENABLED;
+    //message.joint_enable.axis = num_joint;
+    //message.joint_enable.value = (int32_t)(*data->joint_enable[num_joint]);
+    //*buffer_size += serialize_data(&message, buffer_iterator, buffer_space);
+    *buffer_size += serialize_joint_enable(
+        &message, num_joint, *data->joint_enable[num_joint], buffer_iterator, buffer_space);
   }
 }
 

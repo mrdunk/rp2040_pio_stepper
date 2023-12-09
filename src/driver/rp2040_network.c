@@ -100,42 +100,7 @@ size_t get_reply_non_block(int device, char* receive_buffer) {
   return receive_count;
 }
 
-size_t serialize_data(void* message, void** packet, size_t* packet_space) {
-  size_t message_size = 0;
-  //uint32_t msg_type = ((uint32_t*)message)[0];
-  uint32_t msg_type = ((struct Message_timing*)message)->type;
-
-  switch(msg_type) {
-    case MSG_TIMING:
-      message_size = sizeof(struct Message_timing);
-      break;
-    case MSG_SET_AXIS_ENABLED:
-      message_size = sizeof(struct Message_joint_enable);
-      break;
-    case MSG_SET_AXIS_ABS_POS:
-      message_size = sizeof(struct Message_set_abs_pos);
-      break;
-    case MSG_SET_AXIS_REL_POS:
-      message_size = sizeof(struct Message_set_rel_pos);
-      break;
-    case MSG_SET_AXIS_MAX_SPEED:
-      message_size = sizeof(struct Message_set_max_velocity);
-      break;
-    case MSG_SET_AXIS_MAX_ACCEL:
-      message_size = sizeof(struct Message_set_max_accel);
-      break;
-    case MSG_SET_AXIS_PID_KP:
-      message_size = sizeof(struct Message_set_kp);
-      break;
-    case MSG_SET_AXIS_IO_STEP:
-    case MSG_SET_AXIS_IO_DIR:
-      message_size = sizeof(struct Message_joint_gpio);
-      break;
-    default:
-      printf("Invalid message type: %u\n", msg_type);
-      return 0;
-  }
-
+size_t serialize_data(void* message, size_t message_size, void** packet, size_t* packet_space) {
   if(*packet_space < message_size) {
     printf("ERROR: No space left in packet\n");
     return 0;
@@ -147,6 +112,118 @@ size_t serialize_data(void* message, void** packet, size_t* packet_space) {
   *packet += message_size;
 
   return message_size;
+}
+
+size_t serailize_timing(
+    union MessageAny* message,
+    uint32_t update_id,
+    uint32_t time,
+    void** packet,
+    size_t* packet_space
+) {
+  message->timing.type = MSG_TIMING;
+  message->timing.update_id = update_id;
+  message->timing.time = time;
+
+  return serialize_data(message, sizeof(struct Message_timing), packet, packet_space);
+}
+
+size_t serailize_joint_pos(
+    union MessageAny* message,
+    uint32_t axis,
+    double position,
+    void** packet,
+    size_t* packet_space
+) {
+  message->set_abs_pos.type = MSG_SET_AXIS_ABS_POS;
+  message->set_abs_pos.axis = axis;
+  message->set_abs_pos.value = position;
+
+  return serialize_data(message, sizeof(struct Message_set_abs_pos), packet, packet_space);
+}
+
+size_t serailize_joint_velocity(
+    union MessageAny* message,
+    uint32_t axis,
+    double velocity,
+    void** packet,
+    size_t* packet_space
+) {
+  message->set_velocity.type = MSG_SET_AXIS_VELOCITY;
+  message->set_velocity.axis = axis;
+  message->set_velocity.value = velocity;
+
+  return serialize_data(message, sizeof(struct Message_set_velocity), packet, packet_space);
+}
+
+size_t serailize_joint_max_velocity(
+    union MessageAny* message,
+    uint32_t axis,
+    double velocity,
+    void** packet,
+    size_t* packet_space
+) {
+  message->set_velocity.type = MSG_SET_AXIS_MAX_VELOCITY;
+  message->set_velocity.axis = axis;
+  message->set_velocity.value = velocity;
+
+  return serialize_data(message, sizeof(struct Message_set_max_velocity), packet, packet_space);
+}
+
+size_t serailize_joint_max_accel(
+    union MessageAny* message,
+    uint32_t axis,
+    double accel,
+    void** packet,
+    size_t* packet_space
+) {
+  message->set_velocity.type = MSG_SET_AXIS_MAX_VELOCITY;
+  message->set_velocity.axis = axis;
+  message->set_velocity.value = accel;
+
+  return serialize_data(message, sizeof(struct Message_set_max_accel), packet, packet_space);
+}
+
+size_t serailize_joint_io_step(
+    union MessageAny* message,
+    uint32_t axis,
+    uint8_t value,
+    void** packet,
+    size_t* packet_space
+) {
+  message->joint_gpio.type = MSG_SET_AXIS_IO_STEP;
+  message->joint_gpio.axis = axis;
+  message->joint_gpio.value = value;
+
+  return serialize_data(message, sizeof(struct Message_joint_gpio), packet, packet_space);
+}
+
+size_t serailize_joint_io_dir(
+    union MessageAny* message,
+    uint32_t axis,
+    uint8_t value,
+    void** packet,
+    size_t* packet_space
+) {
+  message->joint_gpio.type = MSG_SET_AXIS_IO_DIR;
+  message->joint_gpio.axis = axis;
+  message->joint_gpio.value = value;
+
+  return serialize_data(message, sizeof(struct Message_joint_gpio), packet, packet_space);
+}
+
+size_t serailize_joint_enable(
+    union MessageAny* message,
+    uint32_t axis,
+    uint8_t value,
+    void** packet,
+    size_t* packet_space
+) {
+  message->joint_gpio.type = MSG_SET_AXIS_ENABLED;
+  message->joint_gpio.axis = axis;
+  message->joint_gpio.value = value;
+
+  return serialize_data(message, sizeof(struct Message_joint_enable), packet, packet_space);
 }
 
 void process_data(char* buf, skeleton_t* data, int debug) {

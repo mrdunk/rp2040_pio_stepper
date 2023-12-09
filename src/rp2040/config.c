@@ -341,7 +341,8 @@ size_t serialise_metrics(uint8_t* tx_buf, size_t* tx_buf_len, int32_t update_id,
 	size_t max_buf_len = DATA_BUF_SIZE - sizeof(uint32_t);
 
   if(*tx_buf_len + sizeof(struct Reply_metrics) <= max_buf_len) {
-    struct Reply_metrics reply = Reply_metrics_default;
+    struct Reply_metrics reply;
+    reply.type = REPLY_METRICS;
     reply.time_diff = time_diff;
     reply.rp_update_len = get_period();
 
@@ -418,7 +419,8 @@ size_t serialise_axis_config(
   }
 
   if(*tx_buf_len + sizeof(struct Reply_axis_config) <= max_buf_len) {
-    struct Reply_axis_config reply = Reply_axis_config_default;
+    struct Reply_axis_config reply;
+    reply.type = REPLY_AXIS_CONFIG;
     reply.axis = axis;
     reply.abs_pos_acheived = abs_pos_acheived;
     reply.max_velocity = max_velocity;
