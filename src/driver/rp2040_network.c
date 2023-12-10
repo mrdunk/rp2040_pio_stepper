@@ -114,7 +114,7 @@ size_t serialize_data(void* message, size_t message_size, void** packet, size_t*
   return message_size;
 }
 
-size_t serailize_timing(
+size_t serialize_timing(
     union MessageAny* message,
     uint32_t update_id,
     uint32_t time,
@@ -128,7 +128,7 @@ size_t serailize_timing(
   return serialize_data(message, sizeof(struct Message_timing), packet, packet_space);
 }
 
-size_t serailize_joint_pos(
+size_t serialize_joint_pos(
     union MessageAny* message,
     uint32_t axis,
     double position,
@@ -142,7 +142,7 @@ size_t serailize_joint_pos(
   return serialize_data(message, sizeof(struct Message_set_abs_pos), packet, packet_space);
 }
 
-size_t serailize_joint_velocity(
+size_t serialize_joint_velocity(
     union MessageAny* message,
     uint32_t axis,
     double velocity,
@@ -156,7 +156,7 @@ size_t serailize_joint_velocity(
   return serialize_data(message, sizeof(struct Message_set_velocity), packet, packet_space);
 }
 
-size_t serailize_joint_max_velocity(
+size_t serialize_joint_max_velocity(
     union MessageAny* message,
     uint32_t axis,
     double velocity,
@@ -170,7 +170,7 @@ size_t serailize_joint_max_velocity(
   return serialize_data(message, sizeof(struct Message_set_max_velocity), packet, packet_space);
 }
 
-size_t serailize_joint_max_accel(
+size_t serialize_joint_max_accel(
     union MessageAny* message,
     uint32_t axis,
     double accel,
@@ -184,7 +184,7 @@ size_t serailize_joint_max_accel(
   return serialize_data(message, sizeof(struct Message_set_max_accel), packet, packet_space);
 }
 
-size_t serailize_joint_io_step(
+size_t serialize_joint_io_step(
     union MessageAny* message,
     uint32_t axis,
     uint8_t value,
@@ -198,7 +198,7 @@ size_t serailize_joint_io_step(
   return serialize_data(message, sizeof(struct Message_joint_gpio), packet, packet_space);
 }
 
-size_t serailize_joint_io_dir(
+size_t serialize_joint_io_dir(
     union MessageAny* message,
     uint32_t axis,
     uint8_t value,
@@ -212,7 +212,7 @@ size_t serailize_joint_io_dir(
   return serialize_data(message, sizeof(struct Message_joint_gpio), packet, packet_space);
 }
 
-size_t serailize_joint_enable(
+size_t serialize_joint_enable(
     union MessageAny* message,
     uint32_t axis,
     uint8_t value,
@@ -228,9 +228,7 @@ size_t serailize_joint_enable(
 
 void process_data(char* buf, skeleton_t* data, int debug) {
   struct Reply_metrics reply_metrics;
-  struct Reply_global_config reply_global_config;
   struct Reply_axis_config reply_axis_config;
-  struct Reply_axis_pos reply_axis_pos;
   char* itterator = buf;
   size_t size;
   uint32_t msg_type;
@@ -246,19 +244,6 @@ void process_data(char* buf, skeleton_t* data, int debug) {
         *data->metric_update_id = reply_metrics.update_id;
         *data->metric_time_diff = reply_metrics.time_diff;
         *data->metric_rp_update_len = reply_metrics.rp_update_len;
-        itterator += size;
-        break;
-      case REPLY_GLOBAL_CONFIG:
-        size = sizeof(struct Reply_global_config);
-        memcpy(&reply_global_config, itterator, size);
-        if(debug) {
-          printf("Reply_global_config\n  "
-              "type: %u\n  update_rate: %u\n  update_time_us: %u  update_time_ticks: %u\n",
-              msg_type,
-              reply_global_config.update_rate,
-              reply_global_config.update_time_us,
-              reply_global_config.update_rate);
-        }
         itterator += size;
         break;
       case REPLY_AXIS_CONFIG:
@@ -291,18 +276,6 @@ void process_data(char* buf, skeleton_t* data, int debug) {
         *data->joint_velocity_feedback[reply_axis_config.axis] =
           (float)reply_axis_config.velocity_acheived;
 
-        itterator += size;
-
-        break;
-      case REPLY_AXIS_POS:
-        size = sizeof(struct Reply_axis_pos);
-        memcpy(&reply_axis_pos, itterator, size);
-        if(debug) {
-          printf("Reply_axis_pos\n  type: %u\n  axis: %u\n abs_pos_acheived: %u\n",
-              msg_type,
-              reply_axis_pos.axis,
-              reply_axis_pos.abs_pos_acheived);
-        }
         itterator += size;
 
         break;

@@ -85,22 +85,13 @@ union MessageAny {
 
 #define REPLY_NONE                   0
 #define REPLY_METRICS                1
-#define REPLY_GLOBAL_CONFIG          2
-#define REPLY_AXIS_CONFIG            3
-#define REPLY_AXIS_POS               4
+#define REPLY_AXIS_CONFIG            2
 
 struct Reply_metrics {
   uint32_t type;
   uint32_t update_id;
   int32_t time_diff;
   uint32_t rp_update_len;
-};
-
-struct Reply_global_config {
-  uint32_t type;
-  uint32_t update_rate;
-  uint32_t update_time_us;  // (1,000,000) / update_rate
-  uint32_t update_time_ticks;
 };
 
 struct Reply_axis_config {
@@ -113,12 +104,6 @@ struct Reply_axis_config {
   int32_t velocity_acheived;
   //int32_t pos_error;
   int32_t step_len_ticks;
-};
-
-struct Reply_axis_pos {
-  uint32_t type;
-  uint32_t axis;
-  uint32_t abs_pos_acheived;
 };
 
 #endif  // UPDATE_TYPES__H

@@ -156,7 +156,7 @@ static void test_serialize_timing(void **state) {
     size_t buffer_size;
     union MessageAny message;
 
-    buffer_size = serailize_timing(&message, 1234, 5678, &buffer_iterator, &buffer_space);
+    buffer_size = serialize_timing(&message, 1234, 5678, &buffer_iterator, &buffer_space);
 
     assert_int_equal(buffer_size, sizeof(struct Message_timing));
     assert_int_equal(buffer_space, BUFSIZE - buffer_size);
@@ -173,7 +173,7 @@ static void test_serialize_jont_pos(void **state) {
     size_t buffer_size;
     union MessageAny message;
 
-    buffer_size = serailize_joint_pos(&message, 1234, 56.78, &buffer_iterator, &buffer_space);
+    buffer_size = serialize_joint_pos(&message, 1234, 56.78, &buffer_iterator, &buffer_space);
 
     assert_int_equal(buffer_size, sizeof(struct Message_set_abs_pos));
     assert_int_equal(buffer_space, BUFSIZE - buffer_size);
@@ -190,7 +190,7 @@ static void test_serialize_joint_velocity(void **state) {
     size_t buffer_size;
     union MessageAny message;
 
-    buffer_size = serailize_joint_velocity(
+    buffer_size = serialize_joint_velocity(
             &message, 1234, 56.78, &buffer_iterator, &buffer_space);
 
     assert_int_equal(buffer_size, sizeof(struct Message_set_velocity));
@@ -208,7 +208,7 @@ static void test_serialize_joint_max_velocity(void **state) {
     size_t buffer_size;
     union MessageAny message;
 
-    buffer_size = serailize_joint_max_velocity(
+    buffer_size = serialize_joint_max_velocity(
             &message, 1234, 56.78, &buffer_iterator, &buffer_space);
 
     assert_int_equal(buffer_size, sizeof(struct Message_set_max_velocity));
@@ -226,7 +226,7 @@ static void test_serialize_joint_max_accel(void **state) {
     size_t buffer_size;
     union MessageAny message;
 
-    buffer_size = serailize_joint_max_accel(
+    buffer_size = serialize_joint_max_accel(
             &message, 1234, 56.78, &buffer_iterator, &buffer_space);
 
     assert_int_equal(buffer_size, sizeof(struct Message_set_max_accel));
@@ -244,7 +244,7 @@ static void test_serialize_joint_io_step(void **state) {
     size_t buffer_size;
     union MessageAny message;
 
-    buffer_size = serailize_joint_io_step(
+    buffer_size = serialize_joint_io_step(
             &message, 1234, 1, &buffer_iterator, &buffer_space);
 
     assert_int_equal(buffer_size, sizeof(struct Message_joint_gpio));
@@ -262,7 +262,7 @@ static void test_serialize_joint_io_dir(void **state) {
     size_t buffer_size;
     union MessageAny message;
 
-    buffer_size = serailize_joint_io_dir(
+    buffer_size = serialize_joint_io_dir(
             &message, 1234, 2, &buffer_iterator, &buffer_space);
 
     assert_int_equal(buffer_size, sizeof(struct Message_joint_gpio));
@@ -280,7 +280,7 @@ static void test_serialize_joint_enable(void **state) {
     size_t buffer_size;
     union MessageAny message;
 
-    buffer_size = serailize_joint_enable(
+    buffer_size = serialize_joint_enable(
             &message, 1234, 0, &buffer_iterator, &buffer_space);
 
     assert_int_equal(buffer_size, sizeof(struct Message_joint_enable));
