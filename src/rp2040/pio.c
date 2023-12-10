@@ -9,20 +9,21 @@
 #include "pio.h"
 #include "config.h"
 
-#define STEP_PIO_LEN_OVERHEAD 14.0
+#define STEP_PIO_LEN_OVERHEAD 9.0
 #define STEP_PIO_MULTIPLIER 2.0
 #define DEAD_ZONE_THRESHOLD 1  // steps / ms
 
 /* Initialize a pair of PIO programmes.
  * One for step generation on pio0 and one for counting said steps on pio1.
  */
+static uint32_t sm0[MAX_AXIS];
+static uint32_t sm1[MAX_AXIS];
+
 void init_pio(const uint32_t axis)
 {
   static bool init_done[MAX_AXIS] = {false, false, false, false};
   static uint32_t offset_pio0 = 0;
   static uint32_t offset_pio1 = 0;
-  static uint32_t sm0[MAX_AXIS];
-  static uint32_t sm1[MAX_AXIS];
   static uint8_t programs_loaded = 0;
 
   if(init_done[axis]) {
@@ -103,10 +104,6 @@ void init_pio(const uint32_t axis)
         axis, sm1[axis]);
   }
 
-  // Initial value for counter.
-  // Puts the start position in the middle of the possible range.
-  pio_sm_put(pio1, axis, UINT_MAX / 2);
-
   init_done[axis] = true;
 }
 
@@ -114,7 +111,7 @@ void init_pio(const uint32_t axis)
 double get_velocity(
     const uint32_t update_period_us,
     const uint8_t axis,
-    const uint32_t abs_pos_acheived,
+    const int32_t abs_pos_acheived,
     const double abs_pos_requested,
     const double expected_velocity)
 {
@@ -142,7 +139,7 @@ double get_velocity(
 uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
   static uint32_t failcount = 0;
   static uint32_t count = 0;
-  static uint32_t last_pos[MAX_AXIS] = {UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2, UINT_MAX / 2};
+  static int32_t last_pos[MAX_AXIS] = {0, 0, 0, 0};
   static uint32_t last_enabled[MAX_AXIS] = {0, 0, 0, 0};
   static double step_count[MAX_AXIS] = {0.0, 0.0, 0.0, 0.0};
   static uint8_t last_direction[MAX_AXIS] = {0, 0, 0, 0};
@@ -150,7 +147,7 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
   //uint32_t clock_multiplier = clock_get_hz(clk_sys) / 1000000;
   static const uint32_t clock_multiplier = 133;
   uint8_t enabled;
-  uint32_t abs_pos_acheived = 0;
+  int32_t abs_pos_acheived = 0;
   double rel_pos_requested;
   double abs_pos_requested;
   double max_velocity;
@@ -201,9 +198,9 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
   }
 
   // Drain rx_fifo of PIO feedback data and keep the last value received.
-  uint8_t fifo_len = pio_sm_get_rx_fifo_level(pio1, axis);
+  uint8_t fifo_len = pio_sm_get_rx_fifo_level(pio1, sm1[axis]);
   while(fifo_len > 0) {
-    abs_pos_acheived = pio_sm_get_blocking(pio1, axis);
+    abs_pos_acheived = pio_sm_get_blocking(pio1, sm1[axis]);
     fifo_len--;
   }
 
@@ -211,7 +208,7 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
       update_period_us,
       axis,
       abs_pos_acheived,
-      abs_pos_requested + (double)(UINT_MAX / 2),
+      abs_pos_requested,
       rel_pos_requested);
 
   uint8_t direction = (velocity > 0);
@@ -241,15 +238,13 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
   }
 
   // Request steps from PIO.
-  if(pio_sm_is_tx_fifo_empty(pio0, axis)) {
-    pio_sm_put(pio0, axis, direction);
-    pio_sm_put(pio0, axis, step_len_ticks);
-  }
+  if(pio_sm_is_tx_fifo_empty(pio0, sm0[axis]))
+    pio_sm_put(pio0, sm0[axis], (step_len_ticks << 1) | direction);
 
   velocity_acheived = abs_pos_acheived - last_pos[axis];
   int32_t velocity_requested = velocity;
 
-  //int32_t pos_error = (abs_pos_requested + (UINT_MAX / 2)) - abs_pos_acheived;
+  //int32_t pos_error = abs_pos_requested - abs_pos_acheived;
 
   update_axis_config(
       axis,

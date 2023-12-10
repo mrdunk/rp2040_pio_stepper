@@ -261,7 +261,7 @@ void process_data(char* buf, skeleton_t* data, int debug) {
               reply_axis_config.velocity_acheived);
         }
         *data->joint_pos_feedback[reply_axis_config.axis] =
-          ((double)reply_axis_config.abs_pos_acheived - (UINT_MAX / 2))
+          ((double)reply_axis_config.abs_pos_acheived)
           / *data->joint_scale[reply_axis_config.axis];
 
         //*data->joint_pos_error[reply_axis_config.axis] =

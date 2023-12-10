@@ -20,10 +20,11 @@
 
   set x, 0
 
+.wrap_target
 start:
     mov y, STATUS   side 0    ; Determine if new data has arrived.
     jmp !y, new_data
-    nop [7]                   ; No new data.
+    nop [3]                   ; No new data.
 
 data_acquired:
     jmp !x, start             ; Special case. Treat step length of 0 as no steps
@@ -36,21 +37,12 @@ pause_off:
     mov y, x       side 1     ; Restore the step length. Turn step pin on.
 pause_on:
     jmp y-- pause_on
-
-    jmp start
+.wrap
 
 new_data:
     pull
-    out x, 32                 ; Data for direction IO pin.
-    jmp !x direction_off
-    set pins, 1               ; Direction pin on.
-    jmp direction_done
-direction_off:
-    set pins, 0  [1]          ; Direction pin on.
-direction_done:
-
-    pull
-    out x, 32                 ; Store step length in X.
+    out pins, 1                 ; Data for direction IO pin.
+    out x, 31                 ; Store step length in X.
 
     jmp data_acquired
 
@@ -78,7 +70,7 @@ static inline void step_gen_program_init(
   // Direction pin is set directly.
   pio_gpio_init(pio, pin_direction);
   pio_sm_set_consecutive_pindirs(pio, sm, pin_direction, 1, true);
-  sm_config_set_set_pins(&config, pin_direction, 1);
+  sm_config_set_out_pins(&config, pin_direction, 1);
 
 
   // Configure FIFOs.
@@ -117,8 +109,7 @@ static inline void step_gen_program_init(
 .program step_count
 .side_set 1 opt
 
-    pull                      ; Send a single 32bit word as the
-    out y, 32                 ; initial starting position.
+    set y, 0                  ; Set the initial starting position
 
 start:
     wait 0 pin 0              ; Wait for the step pin to transition from low to high.
@@ -165,10 +156,6 @@ static inline void step_count_program_init(
 
 
   // Configure FIFOs.
-  // Out.
-  // sm_config_set_out_shift(pio_sm_config *c, bool shift_right, bool autopull, uint pull_threshold)
-  sm_config_set_out_shift(&config, true, true, 32);
-
   // In.
   // sm_config_set_in_shift(pio_sm_config *c, bool shift_right, bool autopush, uint push_threshold)
   sm_config_set_in_shift(&config, true, false, 32);
