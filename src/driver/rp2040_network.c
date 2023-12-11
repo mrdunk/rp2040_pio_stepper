@@ -84,6 +84,7 @@ uint8_t send_data(int device, char* packet, size_t packet_size) {
 
 /* Get data via UDP. */
 size_t get_reply_non_block(int device, char* receive_buffer) {
+  memset(receive_buffer, '\0', BUFSIZE);
   int addr_len;
   int flags = MSG_DONTWAIT;
   ssize_t receive_count = recvfrom(
@@ -227,13 +228,14 @@ size_t serialize_joint_enable(
 }
 
 void process_data(char* buf, skeleton_t* data, int debug) {
+  // TODO: Pass in receive_count.
   struct Reply_metrics reply_metrics;
   struct Reply_axis_config reply_axis_config;
   char* itterator = buf;
   size_t size;
   uint32_t msg_type;
   size_t msg_count = 0;
-  while((msg_type = *(uint32_t*)itterator)) {  // First uint32_t of each massage is the type.
+  while((msg_type = *(uint32_t*)itterator)) {  // First uint32_t of each message is the type.
     switch(msg_type) {
       case REPLY_METRICS:
         size = sizeof(struct Reply_metrics);
@@ -263,9 +265,6 @@ void process_data(char* buf, skeleton_t* data, int debug) {
         *data->joint_pos_feedback[reply_axis_config.axis] =
           ((double)reply_axis_config.abs_pos_acheived)
           / *data->joint_scale[reply_axis_config.axis];
-
-        //*data->joint_pos_error[reply_axis_config.axis] =
-        //  reply_axis_config.pos_error;
 
         *data->joint_step_len_ticks[reply_axis_config.axis] =
           reply_axis_config.step_len_ticks;

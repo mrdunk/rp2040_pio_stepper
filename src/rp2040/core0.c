@@ -251,7 +251,6 @@ void core0_main() {
     for(size_t axis = 0; axis < MAX_AXIS; axis++) {
       // Get data from config and put in TX buffer.
       axis_count += serialise_axis_config(axis, tx_buf, &tx_buf_len, true);
-      //axis_count += serialise_axis_config(axis, tx_buf, &tx_buf_len, false);
     }
 
     put_UDP(

@@ -85,11 +85,10 @@ static void test_axis_config(void **state) {
 
     process_data(buffer, &data, 0);
 
-    double jpf = (double)message.abs_pos_acheived - (UINT_MAX / 2);
-    jpf /= *(data.joint_scale[axis]);
-    assert_double_equal(*(data.joint_pos_feedback[axis]), jpf, 0.0001);
-
-
+    assert_double_equal(
+            *(data.joint_pos_feedback[axis]),
+            (double)message.abs_pos_acheived / *(data.joint_scale[axis]),
+            0.0001);
     assert_int_equal(*(data.joint_step_len_ticks[axis]), message.step_len_ticks);
     assert_int_equal(*(data.joint_velocity_cmd[axis]), message.velocity_requested);
     assert_int_equal(*(data.joint_velocity_feedback[axis]), message.velocity_acheived);

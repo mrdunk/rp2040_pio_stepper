@@ -53,8 +53,8 @@ target_link_libraries(
 #    -D BUILD_TESTS
 #    )
 add_executable(
-    networkTest
-    ${CMAKE_CURRENT_SOURCE_DIR}/network_test.c
+  rpNetworkTest
+    ${CMAKE_CURRENT_SOURCE_DIR}/rp_network_test.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
     ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
@@ -63,7 +63,23 @@ add_executable(
     ${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c
     )
 target_link_libraries(
-    networkTest
+    rpNetworkTest
+    cmocka
+    )
+
+
+add_executable(
+  rpNetworkTxTest
+    ${CMAKE_CURRENT_SOURCE_DIR}/rp_network_tx_test.c
+    ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
+    ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
+    #${CMAKE_CURRENT_SOURCE_DIR}/mocks/config_mocks.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c
+    )
+target_link_libraries(
+    rpNetworkTxTest
     cmocka
     )
 

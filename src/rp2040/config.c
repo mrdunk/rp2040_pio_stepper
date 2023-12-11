@@ -338,24 +338,26 @@ uint32_t get_axis_config(
 
 /* Serialise metrics stored in global config in a format for sending over UDP. */
 size_t serialise_metrics(uint8_t* tx_buf, size_t* tx_buf_len, int32_t update_id, int32_t time_diff) {
-	size_t max_buf_len = DATA_BUF_SIZE - sizeof(uint32_t);
+  // Leave space for null termination.
+  size_t max_buf_len = DATA_BUF_SIZE - sizeof(uint32_t);
 
-  if(*tx_buf_len + sizeof(struct Reply_metrics) <= max_buf_len) {
-    struct Reply_metrics reply;
-    reply.type = REPLY_METRICS;
-    reply.time_diff = time_diff;
-    reply.rp_update_len = get_period();
-
-    reply.update_id = update_id;
-
-    memcpy(tx_buf + *tx_buf_len, &reply, sizeof(struct Reply_metrics));
-    *tx_buf_len += sizeof(struct Reply_metrics);
-
-    return 1;
+  if(*tx_buf_len + sizeof(struct Reply_metrics) > max_buf_len) {
+    printf("ERROR: Buffer overrun: %u > %u\n",
+        *tx_buf_len + sizeof(struct Reply_metrics), max_buf_len);
+    return 0;
   }
-  printf("ERROR: Buffer overrun: %u > %u\n",
-      *tx_buf_len + sizeof(struct Reply_axis_config), max_buf_len);
-  return 0;
+
+  struct Reply_metrics reply;
+  reply.type = REPLY_METRICS;
+  reply.time_diff = time_diff;
+  reply.rp_update_len = get_period();
+
+  reply.update_id = update_id;
+
+  memcpy(tx_buf + *tx_buf_len, &reply, sizeof(struct Reply_metrics));
+  *tx_buf_len += sizeof(struct Reply_metrics);
+
+  return 1;
 }
 
 
@@ -371,23 +373,16 @@ size_t serialise_axis_config(
     return 0;
   }
 
-  static uint32_t failcount = 0;
-  //static uint32_t count = 0;
+  // Leave space for null termination.
+  size_t max_buf_len = DATA_BUF_SIZE - sizeof(uint32_t);
 
-	size_t max_buf_len = DATA_BUF_SIZE - sizeof(uint32_t);
-
-  //uint8_t enabled;
-  //int8_t io_pos_step;
-  //int8_t io_pos_dir;
   int32_t abs_pos_acheived;
-  //double rel_pos_requested;
   double max_velocity;
   double max_accel_ticks;
   int32_t velocity_requested;
   int32_t velocity_acheived;
   int32_t pos_error;
   int32_t step_len_ticks;
-  //float kp;
   uint32_t updated = 0;
 
   do {
@@ -410,32 +405,28 @@ size_t serialise_axis_config(
         );
   } while(updated == 0 && wait_for_data);
 
-  //count++;
   if(updated > 1) {
-    failcount++;
-    //printf("WC0, mult ud: %u \t%lu \t%f\n",
-    //    axis, updated, (double)failcount / (double)count);
     printf("WC0, mult ud: %u \t%lu\n", axis, updated);
   }
 
-  if(*tx_buf_len + sizeof(struct Reply_axis_config) <= max_buf_len) {
-    struct Reply_axis_config reply;
-    reply.type = REPLY_AXIS_CONFIG;
-    reply.axis = axis;
-    reply.abs_pos_acheived = abs_pos_acheived;
-    reply.max_velocity = max_velocity;
-    reply.max_accel_ticks = max_accel_ticks;
-    reply.velocity_requested = velocity_requested;
-    reply.velocity_acheived = velocity_acheived;
-    //reply.pos_error = pos_error;
-    reply.step_len_ticks = step_len_ticks;
-
-    memcpy(tx_buf + *tx_buf_len, &reply, sizeof(struct Reply_axis_config));
-    *tx_buf_len += sizeof(struct Reply_axis_config);
-
-    return 1;
+  if(*tx_buf_len + sizeof(struct Reply_axis_config) > max_buf_len) {
+    printf("ERROR: Buffer overrun: %u > %u\n",
+        *tx_buf_len + sizeof(struct Reply_axis_config), max_buf_len);
+    return 0;
   }
-  printf("ERROR: Buffer overrun: %u > %u\n",
-      *tx_buf_len + sizeof(struct Reply_axis_config), max_buf_len);
-  return 0;
+
+  struct Reply_axis_config reply;
+  reply.type = REPLY_AXIS_CONFIG;
+  reply.axis = axis;
+  reply.abs_pos_acheived = abs_pos_acheived;
+  reply.max_velocity = max_velocity;
+  reply.max_accel_ticks = max_accel_ticks;
+  reply.velocity_requested = velocity_requested;
+  reply.velocity_acheived = velocity_acheived;
+  reply.step_len_ticks = step_len_ticks;
+
+  memcpy(tx_buf + *tx_buf_len, &reply, sizeof(struct Reply_axis_config));
+  *tx_buf_len += sizeof(struct Reply_axis_config);
+
+  return 1;
 }

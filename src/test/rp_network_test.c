@@ -14,7 +14,6 @@
 #include "../rp2040/ring_buffer.h"
 #include "mocks/rp_mocks.h"
 
-//volatile uint32_t tick = 0;
 
 extern volatile struct ConfigGlobal config;
 
