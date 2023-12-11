@@ -69,13 +69,25 @@ target_link_libraries(
 
 
 add_executable(
-    driverNetworkTest
-    ${CMAKE_CURRENT_SOURCE_DIR}/driver_network_test.c
+    driverNetworkPCtoRPTest
+    ${CMAKE_CURRENT_SOURCE_DIR}/driver_network_PCtoRP_test.c
     #${CMAKE_SOURCE_DIR}/src/driver/rp2040_network.c
     ${CMAKE_CURRENT_SOURCE_DIR}/mocks/driver_mocks.c
     )
 target_link_libraries(
-    driverNetworkTest
+    driverNetworkPCtoRPTest
+    cmocka
+    )
+
+
+add_executable(
+  driverNetworkRPtoPCTest
+  ${CMAKE_CURRENT_SOURCE_DIR}/driver_network_RPtoPC_test.c
+    #${CMAKE_SOURCE_DIR}/src/driver/rp2040_network.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/driver_mocks.c
+    )
+target_link_libraries(
+    driverNetworkRPtoPCTest
     cmocka
     )
 

@@ -26,7 +26,7 @@ static void test_serialize_data__one_message(void **state) {
     message.timing.time = 4567;
     buffer_size += serialize_data(
             &message, sizeof(struct Message_timing), &buffer_iterator, &buffer_space);
-    
+
     assert_int_equal(buffer_size, sizeof(struct Message_timing));
     assert_int_equal(buffer_space, buffer_space_init - sizeof(struct Message_timing));
     assert_memory_equal(buffer, &message, sizeof(struct Message_timing));
@@ -45,7 +45,7 @@ static void test_serialize_data__multi_message(void **state) {
     size_t buffer_size = 0;
     size_t total_mess_size = 0;
 
-    
+
     message.timing.type = MSG_TIMING;
     message.timing.update_id = 1234;
     message.timing.time = 4567;
@@ -53,14 +53,14 @@ static void test_serialize_data__multi_message(void **state) {
             &message, sizeof(struct Message_timing), &buffer_iterator, &buffer_space);
 
     assert_memory_equal(buffer + total_mess_size, &message, sizeof(struct Message_timing));
-    
+
     total_mess_size += sizeof(struct Message_timing);
-    
+
     assert_int_equal(buffer_size, total_mess_size);
     assert_int_equal(buffer_space, buffer_space_init - total_mess_size);
     assert_ptr_equal(buffer + total_mess_size, buffer_iterator);
 
-    
+
     message.set_velocity.type = MSG_SET_AXIS_VELOCITY;
     message.set_velocity.axis = 4;
     message.set_velocity.value = 12345678;
@@ -75,13 +75,13 @@ static void test_serialize_data__multi_message(void **state) {
     assert_int_equal(buffer_space, buffer_space_init - total_mess_size);
     assert_ptr_equal(buffer + total_mess_size, buffer_iterator);
 
-    
+
     message.joint_enable.type = MSG_SET_AXIS_ENABLED;
     message.joint_enable.axis = 3;
     message.joint_enable.value = 0;
     buffer_size += serialize_data(
             &message, sizeof(struct Message_joint_enable), &buffer_iterator, &buffer_space);
-    
+
     assert_memory_equal(buffer + total_mess_size, &message, sizeof(struct Message_joint_enable));
 
     total_mess_size += sizeof(struct Message_joint_enable);

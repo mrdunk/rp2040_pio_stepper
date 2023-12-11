@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <limits.h>
+#include <stdint.h>
 #include "../../driver/rp2040_defines.h"
 
 #define JOINTS 4

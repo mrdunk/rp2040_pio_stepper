@@ -42,7 +42,7 @@ typedef struct {
   hal_float_t* joint_pos_feedback[JOINTS];
   //hal_s32_t* joint_pos_error[JOINTS];
   hal_s32_t* joint_step_len_ticks[JOINTS];
-  hal_float_t* joint_velocity_cmd[JOINTS];
+  hal_float_t* joint_velocity_cmd[JOINTS];   // TODO: why a joint_vel_cmd and a joint_velocity_cmd?
   hal_float_t* joint_velocity_feedback[JOINTS];
   hal_bit_t* pin_out[IO];
   hal_bit_t* pin_in[IO];
@@ -388,10 +388,6 @@ static void write_port(void *arg, long period)
   size_t buffer_space = BUFSIZE;
   size_t buffer_size = 0;
 
-  //message.timing.type = MSG_TIMING;
-  //message.timing.update_id = count;
-  //message.timing.time = rtapi_get_time();
-  //buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
   buffer_size += serailize_timing(
       &message, count, rtapi_get_time(), &buffer_iterator, &buffer_space);
 
@@ -410,16 +406,6 @@ static void write_port(void *arg, long period)
       printf("ERROR: Not implemented velocity mode. joint: %u\n", num_joint);
     } else {
       // Absolute position mode.
-      //message.set_abs_pos.type = MSG_SET_AXIS_ABS_POS;
-      //message.set_abs_pos.axis = num_joint;
-      //message.set_abs_pos.value = *data->joint_scale[num_joint] * *data->joint_pos_cmd[num_joint];
-      //buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
-
-      //message.set_rel_pos.type = MSG_SET_AXIS_VELOCITY;
-      //message.set_rel_pos.axis = num_joint;
-      //message.set_rel_pos.value = *data->joint_scale[num_joint] * *data->joint_vel_cmd[num_joint];
-      //buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
-      
       double position = *data->joint_scale[num_joint] * *data->joint_pos_cmd[num_joint];
       double velocity = *data->joint_scale[num_joint] * *data->joint_vel_cmd[num_joint];
       buffer_size += serialize_joint_pos(
@@ -440,20 +426,12 @@ static void write_port(void *arg, long period)
 
     if(last_max_velocity[num_joint] != *data->joint_max_velocity[num_joint]) {
       last_max_velocity[num_joint] = *data->joint_max_velocity[num_joint];
-      //message.set_max_velocity.type = MSG_SET_AXIS_MAX_SPEED;
-      //message.set_abs_pos.axis = num_joint;
-      //message.set_abs_pos.value = *data->joint_max_velocity[num_joint];
-      //buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
       buffer_size += serailize_joint_max_velocity(
           &message, num_joint, last_max_velocity[num_joint], &buffer_iterator, &buffer_space);
     }
 
     if(last_max_accel[num_joint] != *data->joint_max_accel[num_joint]) {
       last_max_accel[num_joint] = *data->joint_max_accel[num_joint];;
-      //message.set_max_velocity.type = MSG_SET_AXIS_MAX_ACCEL;
-      //message.set_abs_pos.axis = num_joint;
-      //message.set_abs_pos.value = *data->joint_max_accel[num_joint];
-      //buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
       buffer_size += serailize_joint_max_accel(
           &message, num_joint, last_max_accel[num_joint], &buffer_iterator, &buffer_space);
     }
@@ -533,10 +511,6 @@ void enable_io(
     rtapi_print_msg(RTAPI_MSG_INFO, "Configure joint: %u  step io: %u\n",
         num_joint, *data->joint_gpio_step[num_joint]);
     printf("Configure joint: %u  step io: %u\n", num_joint, *data->joint_gpio_step[num_joint]);
-    //message.joint_enable.type = MSG_SET_AXIS_IO_STEP;
-    //message.joint_enable.axis = num_joint;
-    //message.joint_enable.value = *data->joint_gpio_step[num_joint];
-    //*buffer_size += serialize_data(&message, buffer_iterator, buffer_space);
     *buffer_size += serialize_joint_io_step(
         &message, num_joint, *data->joint_gpio_step[num_joint], buffer_iterator, buffer_space);
 
@@ -544,10 +518,6 @@ void enable_io(
     rtapi_print_msg(RTAPI_MSG_INFO, "Configure joint: %u  dir io: %u\n",
         num_joint, *data->joint_gpio_dir[num_joint]);
     printf("Configure joint: %u  dir io: %u\n", num_joint, *data->joint_gpio_dir[num_joint]);
-    //message.joint_enable.type = MSG_SET_AXIS_IO_DIR;
-    //message.joint_enable.axis = num_joint;
-    //message.joint_enable.value = *data->joint_gpio_dir[num_joint];
-    //*buffer_size += serialize_data(&message, buffer_iterator, buffer_space);
     *buffer_size += serialize_joint_io_dir(
         &message, num_joint, *data->joint_gpio_dir[num_joint], buffer_iterator, buffer_space);
 
@@ -578,10 +548,6 @@ void enable_joint(
 
     last_enabled[num_joint] = *data->joint_enable[num_joint];
 
-    //message.joint_enable.type = MSG_SET_AXIS_ENABLED;
-    //message.joint_enable.axis = num_joint;
-    //message.joint_enable.value = (int32_t)(*data->joint_enable[num_joint]);
-    //*buffer_size += serialize_data(&message, buffer_iterator, buffer_space);
     *buffer_size += serialize_joint_enable(
         &message, num_joint, *data->joint_enable[num_joint], buffer_iterator, buffer_space);
   }

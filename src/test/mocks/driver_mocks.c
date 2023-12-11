@@ -1,3 +1,5 @@
+#include "driver_mocks.h"
+
 void rtapi_print_msg() {
 }
 
