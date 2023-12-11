@@ -25,7 +25,7 @@ struct ConfigAxis {
   int8_t io_pos_dir;            // Physical direction IO pin.
   double rel_pos_requested;     // In steps. Default value is UINT_MAX / 2.
   double abs_pos_requested;     // In steps. Default value is UINT_MAX / 2.
-  uint32_t abs_pos_acheived;    // In steps. Default value is UINT_MAX / 2.
+  int32_t abs_pos_acheived;    // In steps. Default value is UINT_MAX / 2.
   double max_velocity;
   double max_accel_ticks;       // ticks / update_time_ticks ^ 2
   int32_t velocity_requested;   // Calculated steps per update_time_us.
@@ -71,7 +71,7 @@ void update_axis_config(
     const int8_t* io_pos_dir,
     const double* rel_pos_requested,
     const double* abs_pos_requested,
-    const uint32_t* abs_pos_acheived,
+    const int32_t* abs_pos_acheived,
     const double* max_velocity,
     const double* max_accel_ticks,
     const int32_t* velocity_requested,
@@ -89,7 +89,7 @@ uint32_t get_axis_config(
     int8_t* io_pos_dir,
     double* rel_pos_requested,
     double* abs_pos_requested,
-    uint32_t* abs_pos_acheived,
+    int32_t* abs_pos_acheived,
     double* max_velocity,
     double* max_accel_ticks,
     int32_t* velocity_requested,

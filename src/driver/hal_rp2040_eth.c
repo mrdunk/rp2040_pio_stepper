@@ -388,7 +388,7 @@ static void write_port(void *arg, long period)
   size_t buffer_space = BUFSIZE;
   size_t buffer_size = 0;
 
-  buffer_size += serailize_timing(
+  buffer_size += serialize_timing(
       &message, count, rtapi_get_time(), &buffer_iterator, &buffer_space);
 
   // Put GPIO values in buffer.
@@ -426,13 +426,13 @@ static void write_port(void *arg, long period)
 
     if(last_max_velocity[num_joint] != *data->joint_max_velocity[num_joint]) {
       last_max_velocity[num_joint] = *data->joint_max_velocity[num_joint];
-      buffer_size += serailize_joint_max_velocity(
+      buffer_size += serialize_joint_max_velocity(
           &message, num_joint, last_max_velocity[num_joint], &buffer_iterator, &buffer_space);
     }
 
     if(last_max_accel[num_joint] != *data->joint_max_accel[num_joint]) {
       last_max_accel[num_joint] = *data->joint_max_accel[num_joint];;
-      buffer_size += serailize_joint_max_accel(
+      buffer_size += serialize_joint_max_accel(
           &message, num_joint, last_max_accel[num_joint], &buffer_iterator, &buffer_space);
     }
 
