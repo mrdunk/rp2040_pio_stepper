@@ -97,7 +97,7 @@ struct Reply_metrics {
 struct Reply_axis_config {
   uint32_t type;
   uint32_t axis;
-  uint32_t abs_pos_acheived;
+  int32_t abs_pos_acheived;
   uint32_t max_velocity;
   uint32_t max_accel_ticks;
   int32_t velocity_requested;

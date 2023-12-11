@@ -36,8 +36,8 @@ volatile struct ConfigGlobal config = {
       .enabled = 0,
       .io_pos_step = -1,
       .io_pos_dir = -1,
-      .rel_pos_requested = UINT_MAX / 2,
-      .abs_pos_acheived = UINT_MAX / 2,
+      .rel_pos_requested = 0,
+      .abs_pos_acheived = 0,
       .max_velocity = 50,
       .max_accel_ticks = 2.0,
       .velocity_requested = 0,
@@ -51,8 +51,8 @@ volatile struct ConfigGlobal config = {
       .enabled = 0,
       .io_pos_step = -1,
       .io_pos_dir = -1,
-      .rel_pos_requested = UINT_MAX / 2,
-      .abs_pos_acheived = UINT_MAX / 2,
+      .rel_pos_requested = 0,
+      .abs_pos_acheived = 0,
       .max_velocity = 50,
       .max_accel_ticks = 10.0,
       .velocity_requested = 0,
@@ -66,8 +66,8 @@ volatile struct ConfigGlobal config = {
       .enabled = 0,
       .io_pos_step = -1,
       .io_pos_dir = -1,
-      .rel_pos_requested = UINT_MAX / 2,
-      .abs_pos_acheived = UINT_MAX / 2,
+      .rel_pos_requested = 0,
+      .abs_pos_acheived = 0,
       .max_velocity = 50,
       .max_accel_ticks = 200.0,
       .velocity_requested = 0,
@@ -81,8 +81,8 @@ volatile struct ConfigGlobal config = {
       .enabled = 0,
       .io_pos_step = -1,
       .io_pos_dir = -1,
-      .rel_pos_requested = UINT_MAX / 2,
-      .abs_pos_acheived = UINT_MAX / 2,
+      .rel_pos_requested = 0,
+      .abs_pos_acheived = 0,
       .max_velocity = 50,
       .max_accel_ticks = 200.0,
       .velocity_requested = 0,
@@ -183,7 +183,7 @@ void update_axis_config(
     const int8_t* io_pos_dir,
     const double* rel_pos_requested,
     const double* abs_pos_requested,
-    const uint32_t* abs_pos_acheived,
+    const int32_t* abs_pos_acheived,
     const double* max_velocity,
     const double* max_accel_ticks,
     const int32_t* velocity_requested,
@@ -261,7 +261,7 @@ uint32_t get_axis_config(
     int8_t* io_pos_dir,
     double* rel_pos_requested,
     double* abs_pos_requested,
-    uint32_t* abs_pos_acheived,
+    int32_t* abs_pos_acheived,
     double* max_velocity,
     double* max_accel_ticks,
     int32_t* velocity_requested,
@@ -379,7 +379,7 @@ size_t serialise_axis_config(
   //uint8_t enabled;
   //int8_t io_pos_step;
   //int8_t io_pos_dir;
-  uint32_t abs_pos_acheived;
+  int32_t abs_pos_acheived;
   //double rel_pos_requested;
   double max_velocity;
   double max_accel_ticks;
