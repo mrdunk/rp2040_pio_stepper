@@ -1,5 +1,6 @@
 #ifndef UPDATE_TYPES__H
 #define UPDATE_TYPES__H
+
 #include <sys/types.h>
 
 /* This file contains objects that are passed over Ethernet UDP between host and RP2040.

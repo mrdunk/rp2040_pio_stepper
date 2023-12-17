@@ -28,7 +28,7 @@ target_compile_features(
   )
 target_link_libraries(
     ringBufferTest
-    cmocka #-static
+    cmocka
     -Wl,--wrap,time_us_64
     -Wl,--wrap,tight_loop_contents
     -Wl,--wrap,update_period
@@ -97,8 +97,8 @@ target_link_libraries(
 
 
 add_executable(
-  driverNetworkRPtoPCTest
-  ${CMAKE_CURRENT_SOURCE_DIR}/driver_network_RPtoPC_test.c
+    driverNetworkRPtoPCTest
+    ${CMAKE_CURRENT_SOURCE_DIR}/driver_network_RPtoPC_test.c
     #${CMAKE_SOURCE_DIR}/src/driver/rp2040_network.c
     ${CMAKE_CURRENT_SOURCE_DIR}/mocks/driver_mocks.c
     )
@@ -106,4 +106,20 @@ target_link_libraries(
     driverNetworkRPtoPCTest
     cmocka
     )
+
+
+add_executable(
+    sharedBufferTest
+    ${CMAKE_CURRENT_SOURCE_DIR}/shared_buffer_test.c
+    )
+target_link_libraries(
+    sharedBufferTest
+    cmocka::cmocka
+    ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
+    ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
+    -Wl,--wrap=checksum
+    )
+add_test(sharedBufferTest ${CMAKE_CURRENT_BINARY_DIR}/src/test/)
+
+
 
