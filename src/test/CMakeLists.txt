@@ -119,7 +119,17 @@ target_link_libraries(
     ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
     -Wl,--wrap=checksum
     )
-add_test(sharedBufferTest ${CMAKE_CURRENT_BINARY_DIR}/src/test/)
+
+
+add_executable(
+    sharedChecksumTest
+    ${CMAKE_CURRENT_SOURCE_DIR}/shared_checksum_test.c
+    )
+target_link_libraries(
+    sharedChecksumTest
+    cmocka::cmocka
+    ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
+    )
 
 
 

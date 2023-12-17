@@ -8,7 +8,13 @@
 
 #include "buffer.h"
 
-uint16_t __wrap_checksum(uint16_t checksum, void* new_data, uint16_t new_data_len) {
+uint8_t mock_checksum = 0;
+uint16_t __real_checksum(uint16_t val_in, void* new_data, uint16_t new_data_len);
+
+uint16_t __wrap_checksum(uint16_t val_in, void* new_data, uint16_t new_data_len) {
+    if(mock_checksum) {
+        return __real_checksum(val_in, new_data, new_data_len);
+    }
     return mock_type(int);
 }
 
@@ -38,6 +44,44 @@ static void test_pack_one(void **state) {
         .c = -8901,
         .e = 12.345
     };
+
+    uint16_t return_val;
+
+    will_return(__wrap_checksum, 1234);
+
+    return_val = packNWBuff(&buffer, (void*)&test_message, sizeof(test_message));
+
+    assert_int_equal(return_val, sizeof(test_message));
+    assert_int_equal(buffer.length, sizeof(test_message));
+    assert_int_equal(buffer.checksum, 1234);
+    assert_memory_equal(buffer.payload, &test_message, sizeof(test_message));
+    assert_int_equal(*(buffer.payload + sizeof(test_message)), 0);
+}
+
+static void test_pack_one_in_dirty_buffer(void **state) {
+    (void) state; /* unused */
+
+    struct TestMessage {
+        uint8_t a;
+        uint16_t b;
+        int16_t c;
+        double e;
+    } test_message = {
+        .a = 123,
+        .b = 4567,
+        .c = -8901,
+        .e = 12.345
+    };
+
+    struct NWBuffer buffer = {
+        .length = 0,
+        .checksum = 0,
+        .payload = {0}
+    };
+    // Dirty the buffer before storing.
+    for(uint16_t i = 0; i < sizeof(struct TestMessage); i++) {
+        buffer.payload[1] = i;
+    }
 
     uint16_t return_val;
 
@@ -380,17 +424,69 @@ static void test_unpack_overflow(void **state) {
     assert_int_equal(return_val, 0);
 }
 
+/* Use both wrap and unrap methods. Do not mock the checksum. */
+static void test_end_to_end(void **state) {
+    (void) state; /* unused */
+
+    struct TestMessage {
+        uint8_t a;
+        uint16_t b;
+        int16_t c;
+        double e;
+    };
+    
+    struct TestMessage test_message_send = {
+        .a = 123,
+        .b = 4567,
+        .c = -8901,
+        .e = 12.345
+    };
+
+    struct TestMessage test_message_receive;
+
+    struct NWBuffer buffer = {
+        .length = 0,
+        .checksum = 0,
+        .payload = {0}
+    };
+    // Dirty the buffer before storing.
+    for(uint16_t i = 0; i < sizeof(struct TestMessage); i++) {
+        buffer.payload[1] = i;
+    }
+
+    uint16_t return_val;
+
+    mock_checksum = 1;
+    return_val = packNWBuff(&buffer, (void*)&test_message_send, sizeof(struct TestMessage));
+    assert_int_equal(return_val, sizeof(struct TestMessage));
+
+    return_val = unPackNWBuff(
+            &buffer,
+            0,
+            &test_message_receive,
+            sizeof(test_message_receive));
+    assert_int_equal(return_val, 1);
+
+    assert_memory_equal(&test_message_send, &test_message_receive, sizeof(struct TestMessage));
+
+    uint16_t cs_val_in = 0;
+    assert_int_equal(buffer.checksum, checksum(cs_val_in, buffer.payload, NW_BUF_LEN));
+    mock_checksum = 0;
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_NW_BUF_LEN_is_even),
         cmocka_unit_test(test_pack_one),
+        cmocka_unit_test(test_pack_one_in_dirty_buffer),
         cmocka_unit_test(test_pack_multiple),
         cmocka_unit_test(test_pack_overflow),
         cmocka_unit_test(test_unpack_one),
         cmocka_unit_test(test_unpack_multi),
         cmocka_unit_test(test_unpack_invalid_length),
         cmocka_unit_test(test_unpack_invalid_length_off_by_one),
-        cmocka_unit_test(test_unpack_overflow)
+        cmocka_unit_test(test_unpack_overflow),
+        cmocka_unit_test(test_end_to_end)
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);
