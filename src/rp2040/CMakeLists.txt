@@ -28,6 +28,8 @@ target_sources(
   core1.c
   pio.c
   ring_buffer.c
+  ../shared/buffer.c
+  ../shared/checksum.c
 )
 
 target_link_libraries(

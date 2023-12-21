@@ -4,9 +4,15 @@
 
 #include "config.h"
 #include "messages.h"
+#include "buffer.h"
 
 
-#ifndef BUILD_TESTS
+#ifdef BUILD_TESTS
+
+#include "../test/mocks/rp_mocks.h"
+#include "../test/mocks/network_mocks.h"
+
+#else  // BUILD_TESTS
 
 #include "pico/stdlib.h"
 #include "stepper_control.h"
@@ -69,141 +75,282 @@ void recover_clock() {
   }
 }
 
+bool unpack_timing(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    uint8_t* tx_buf,
+    size_t* tx_buf_len,
+    uint8_t* received_count
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_timing));
+
+  if(! data_p) {
+    return NULL;
+  }
+
+  struct Message_timing* message = data_p;
+  int32_t id_diff;
+  int32_t time_diff;
+  update_packet_metrics(message, &id_diff, &time_diff);
+  serialise_metrics(tx_buf, tx_buf_len, message->update_id, time_diff);
+
+  (*received_count)++;
+  return true;
+}
+
+bool unpack_joint_enable(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    uint8_t* received_count
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_joint_enable));
+
+  if(! data_p) {
+    return NULL;
+  }
+
+  struct Message_joint_enable* message = data_p;
+  uint32_t joint = message->axis;
+  uint8_t enabled = message->value;
+
+  printf("%u Enabling joint: %u\t%i\n", *received_count, joint, enabled);
+  update_axis_config(
+      joint, CORE0,
+      &enabled, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+
+  (*received_count)++;
+  return true;
+}
+
+bool unpack_joint_abs_pos(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    uint8_t* received_count
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_set_abs_pos));
+
+  if(! data_p) {
+    return NULL;
+  }
+
+  struct Message_set_abs_pos* message = data_p;
+  uint32_t joint = message->axis;
+  double abs_pos = message->value;
+
+  update_axis_config(
+      joint, CORE0,
+      NULL, NULL, NULL, NULL, &abs_pos, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+
+  (*received_count)++;
+  return true;
+}
+
+bool unpack_joint_velocity(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    uint8_t* received_count
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_set_velocity));
+
+  if(! data_p) {
+    return NULL;
+  }
+
+  struct Message_set_velocity* message = data_p;
+  uint32_t joint = message->axis;
+  double vel_reques = message->value;
+
+  update_axis_config(
+      joint, CORE0,
+      NULL, NULL, NULL, &vel_reques, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+
+  (*received_count)++;
+  return true;
+}
+
+bool unpack_joint_max_velocity(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    uint8_t* received_count
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_set_max_velocity));
+
+  if(! data_p) {
+    return NULL;
+  }
+
+  struct Message_set_max_velocity* message = data_p;
+  uint32_t joint = message->axis;
+  double max_velocity = message->value;
+
+  update_axis_config(
+      joint, CORE0,
+      NULL, NULL, NULL, NULL, NULL, NULL, &max_velocity, NULL, NULL, NULL, NULL, NULL, NULL);
+
+  (*received_count)++;
+  return true;
+}
+
+bool unpack_joint_max_accel(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    uint8_t* received_count
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_set_max_accel));
+
+  if(! data_p) {
+    return NULL;
+  }
+
+  struct Message_set_max_accel* message = data_p;
+  uint32_t joint = message->axis;
+  double max_accel = message->value;
+
+  update_axis_config(
+      joint, CORE0,
+      NULL, NULL, NULL, NULL, NULL, NULL, NULL, &max_accel, NULL, NULL, NULL, NULL, NULL);
+
+  (*received_count)++;
+  return true;
+}
+
+bool unpack_joint_io_step(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    uint8_t* received_count
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_joint_gpio));
+
+  if(! data_p) {
+    return NULL;
+  }
+  
+  struct Message_joint_gpio* message = data_p;
+  uint32_t joint = message->axis;
+  int8_t io_step = message->value;
+
+  printf("%u Setting axis: %u\tstep-io: %i\n", *received_count, joint, io_step);
+  update_axis_config(
+      joint, CORE0,
+            NULL, &io_step, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+
+
+  (*received_count)++;
+  return true;
+}
+
+bool unpack_joint_io_dir(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    uint8_t* received_count
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_joint_gpio));
+
+  if(! data_p) {
+    return NULL;
+  }
+
+  struct Message_joint_gpio* message = data_p;
+  uint32_t joint = message->axis;
+  int8_t io_dir = message->value;
+
+  printf("%u Setting axis: %u\tdir-io:  %i\n", *received_count, joint, io_dir);
+  update_axis_config(
+      joint, CORE0,
+      NULL, NULL, &io_dir, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+
+  (*received_count)++;
+  return true;
+}
+
 /* Process data received over the network.
  * This consists of serialised structs as defined in src/shared/massages.h
  */
-size_t process_received_buffer( uint8_t* rx_buf, uint8_t* tx_buf, uint8_t* received_count) {
-  uint8_t* rx_itterator = rx_buf;
+size_t process_received_buffer(struct NWBuffer* rx_buf, uint8_t* tx_buf, uint8_t* received_count) {
+  uint16_t rx_offset = 0;
   size_t tx_buf_len = 0;
-  uint32_t msg_type;
-  uint32_t axis;
-  int8_t io_pos_value = -1;
+  union MessageAny message;
 
-  while((msg_type = *(uint32_t*)(rx_itterator))) {  // msg_type of 0 indicates end of data.
-    switch(msg_type) {
+  bool unpack_success = checkNWBuff(rx_buf);
+
+  if(! unpack_success) {
+    printf("WARN: RX checksum fail. %u\n", *received_count);
+  }
+
+  while(unpack_success) {
+    unpack_success = unpack_success && unpack_nw_buff(
+        rx_buf, rx_offset, NULL, &message, sizeof(struct Message_header));
+    if(!unpack_success) {
+      // End of data.
+      break;
+    }
+
+    switch(message.header.type) {
       case MSG_TIMING:
         ;
-        uint32_t update_id = ((struct Message_timing*)(rx_itterator))->update_id;
-        uint32_t tx_time = ((struct Message_timing*)(rx_itterator))->time;
-
-        rx_itterator += sizeof(struct Message_timing);
-
-        int32_t id_diff;
-        int32_t time_diff;
-        update_packet_metrics(update_id, tx_time, &id_diff, &time_diff);
-        serialise_metrics(tx_buf, &tx_buf_len, update_id, time_diff);
-        (*received_count)++;
+        unpack_success = unpack_success && unpack_timing(
+            rx_buf, &rx_offset, tx_buf, &tx_buf_len, received_count);
         break;
       case MSG_SET_AXIS_ENABLED:
-        axis = ((struct Message_joint_enable*)(rx_itterator))->axis;
-        uint8_t enabled = ((struct Message_joint_enable*)(rx_itterator))->value;
-        
-        rx_itterator += sizeof(struct Message_joint_enable);
-
-        printf("%u Enabling axis: %u\t%i\n", *received_count, axis, enabled);
-        update_axis_config(
-            axis, CORE0,
-            &enabled, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-        (*received_count)++;
+        unpack_success = unpack_success && unpack_joint_enable(
+            rx_buf, &rx_offset, received_count);
         break;
       case MSG_SET_AXIS_ABS_POS:
-        axis = ((struct Message_set_abs_pos*)(rx_itterator))->axis;
-        double abs_pos_requested =
-          ((struct Message_set_abs_pos*)(rx_itterator))->value;
-        
-        rx_itterator += sizeof(struct Message_set_abs_pos);
-
-        update_axis_config(
-            axis, CORE0,
-            NULL, NULL, NULL, NULL, &abs_pos_requested, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-        (*received_count)++;
+        unpack_success = unpack_success && unpack_joint_abs_pos(
+            rx_buf, &rx_offset, received_count);
         break;
       case MSG_SET_AXIS_VELOCITY:
-        axis = ((struct Message_set_velocity*)(rx_itterator))->axis;
-        double velocity_requested =
-          ((struct Message_set_velocity*)(rx_itterator))->value;
-        
-        rx_itterator += sizeof(struct Message_set_velocity);
-
-        update_axis_config(
-            axis, CORE0,
-            NULL, NULL, NULL, &velocity_requested, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-        (*received_count)++;
+        unpack_success = unpack_success && unpack_joint_velocity(
+            rx_buf, &rx_offset, received_count);
         break;
       case MSG_SET_AXIS_MAX_VELOCITY:
-        axis = ((struct Message_set_max_velocity*)(rx_itterator))->axis;
-        double max_velocity = 
-          ((struct Message_set_max_velocity*)(rx_itterator))->value;
-
-        rx_itterator += sizeof(struct Message_set_max_velocity);
-
-        update_axis_config(
-            axis, CORE0,
-            NULL, NULL, NULL, NULL, NULL, NULL, &max_velocity, NULL, NULL, NULL, NULL, NULL, NULL);
-        (*received_count)++;
+        unpack_success = unpack_success && unpack_joint_max_velocity(
+            rx_buf, &rx_offset, received_count);
         break;
       case MSG_SET_AXIS_MAX_ACCEL:
-        axis = ((struct Message_set_max_accel*)(rx_itterator))->axis;
-        double max_accel = ((struct Message_set_max_accel*)(rx_itterator))->value;
-
-        rx_itterator += sizeof(struct Message_set_max_accel);
-
-        update_axis_config(
-            axis, CORE0,
-            NULL, NULL, NULL, NULL, NULL, NULL, NULL, &max_accel, NULL, NULL, NULL, NULL, NULL);
-        (*received_count)++;
-        break;
-      case MSG_SET_AXIS_PID_KP:
-        axis = ((struct Message_set_kp*)(rx_itterator))->axis;
-        float kp = ((struct Message_set_kp*)(rx_itterator))->value;
-
-        rx_itterator += sizeof(struct Message_set_kp);
-
-        printf("%u Setting axis: %u\tkp:      %f\n", *received_count, axis, kp);
-        update_axis_config(
-            axis, CORE0,
-            NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &kp);
-        (*received_count)++;
+        unpack_success = unpack_success && unpack_joint_max_accel(
+            rx_buf, &rx_offset, received_count);
         break;
       case MSG_SET_AXIS_IO_STEP:
-        axis = ((struct Message_joint_gpio*)(rx_itterator))->axis;
-        io_pos_value = ((struct Message_joint_gpio*)(rx_itterator))->value;
-
-        rx_itterator += sizeof(struct Message_joint_gpio);
-
-        printf("%u Setting axis: %u\tstep-io: %i\n", *received_count, axis, io_pos_value);
-        update_axis_config(
-            axis, CORE0,
-            NULL, &io_pos_value, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-        (*received_count)++;
+        unpack_success = unpack_success && unpack_joint_io_step(
+            rx_buf, &rx_offset, received_count);
         break;
       case MSG_SET_AXIS_IO_DIR:
-        axis = ((struct Message_joint_gpio*)(rx_itterator))->axis;
-        io_pos_value = ((struct Message_joint_gpio*)(rx_itterator))->value;
-
-        rx_itterator += sizeof(struct Message_joint_gpio);
-
-        printf("%u Setting axis: %u\tdir-io:  %i\n", *received_count, axis, io_pos_value);
-        update_axis_config(
-            axis, CORE0,
-            NULL, NULL, &io_pos_value, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-        (*received_count)++;
+        unpack_success = unpack_success && unpack_joint_io_dir(
+            rx_buf, &rx_offset, received_count);
         break;
       default:
-        printf("%u Invalid message type: %lu\r\n", *received_count, msg_type);
-        *(uint32_t*)(rx_itterator) = 0;  // 0 msg_type stops execution.
+        printf("WARN: Invalid message type: %u\t%lu\n", *received_count, message.header.type);
+        // Implies data corruption.
         tx_buf_len = 0;
+        unpack_success = false;
         break;
     }
   }
-  memset(rx_buf, '\0', DATA_BUF_SIZE);
 
+  if(rx_offset < rx_buf->length) {
+    printf("WARN: Unconsumed RX buffer remainder: %u bytes.\t%u\n",
+        rx_buf->length - rx_offset, *received_count);
+    // Implies data corruption.
+    // Received a message type in the header but not enough data in the buffer
+    // to populate the struct.
+  }
+
+  reset_nw_buf(rx_buf);
   return tx_buf_len;
 }
 
 void core0_main() {
   int retval = 0;
-  uint8_t rx_buf[DATA_BUF_SIZE] = {0};
+  struct NWBuffer rx_buf;
   uint8_t tx_buf[DATA_BUF_SIZE] = {0};
   size_t tx_buf_len = 0;
   uint8_t received_msg_count = 0;
@@ -215,7 +362,6 @@ void core0_main() {
   // These store them for when we want to reply later.
   uint8_t  destip_machine[4] = {0, 0, 0, 0};
   uint16_t destport_machine = 0;
-  memset(rx_buf, 0, DATA_BUF_SIZE);
 
   while (1) {
     tx_buf_len = 0;
@@ -226,13 +372,13 @@ void core0_main() {
       retval = get_UDP(
           SOCKET_NUMBER,
           NW_PORT,
-          rx_buf,
+          rx_buf.payload,
           &data_received,
           destip_machine,
           &destport_machine);
     }
 
-    tx_buf_len = process_received_buffer(rx_buf, tx_buf, &received_msg_count);
+    tx_buf_len = process_received_buffer(&rx_buf, tx_buf, &received_msg_count);
     if(received_msg_count != 9) {
       // Not the standard number of received packets.
       // This likely was a config update.

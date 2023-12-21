@@ -16,11 +16,10 @@
 #define MSG_SET_AXIS_VELOCITY        5  // Set relative axis position. (Velocity)
 #define MSG_SET_AXIS_MAX_VELOCITY    6  // Not yet implemented.
 #define MSG_SET_AXIS_MAX_ACCEL       7  // Not yet implemented.
-#define MSG_SET_AXIS_PID_KP          8  // Multiplier for position updates.
-#define MSG_SET_AXIS_IO_STEP         9  // Set GPIO step pin.
-#define MSG_SET_AXIS_IO_DIR         10  // Set GPIO direction pin.
+#define MSG_SET_AXIS_IO_STEP         8  // Set GPIO step pin.
+#define MSG_SET_AXIS_IO_DIR          9  // Set GPIO direction pin.
 
-struct Message {
+struct Message_header {
   uint32_t type;
 };
 
@@ -28,12 +27,6 @@ struct Message_timing {
   uint32_t type;
   uint32_t update_id;
   uint32_t time;
-};
-
-struct Message_set_kp {
-  uint32_t type;
-  uint32_t axis;
-  float value;
 };
 
 struct Message_set_max_velocity {
@@ -73,12 +66,12 @@ struct Message_joint_gpio {
 };
 
 union MessageAny {
+  struct Message_header header;
   struct Message_timing timing;
-  struct Message_set_kp set_kp;
   struct Message_set_max_velocity set_max_velocity;
   struct Message_set_max_accel set_max_accel;
   struct Message_set_abs_pos set_abs_pos;
-  struct Message_set_abs_pos set_velocity;
+  struct Message_set_velocity set_velocity;
   struct Message_joint_enable joint_enable;
   struct Message_joint_gpio joint_gpio;
 };

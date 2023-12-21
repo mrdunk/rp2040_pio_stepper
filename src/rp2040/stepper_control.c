@@ -78,7 +78,6 @@ int main() {
   wizchip_initialize();
   wizchip_check();
   network_initialize(g_net_info);
-  /* Get network information */
   print_network_information(g_net_info);
 
   init_core1();

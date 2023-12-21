@@ -74,13 +74,8 @@ static void write_port(void *arg, long period);
 void on_eth_up(skeleton_t *data, uint count);
 void on_eth_down(skeleton_t *data, uint count);
 
-void enable_joint(
-    int num_joint, size_t* buffer_space, size_t* buffer_size,
-    void** buffer_iterator, skeleton_t *data);
-
-void enable_io(
-    int num_joint, size_t* buffer_space, size_t* buffer_size,
-    void** buffer_iterator, skeleton_t *data);
+void enable_joint(struct NWBuffer* buffer, bool* pack_success, int joint, skeleton_t *data);
+void enable_io(struct NWBuffer* buffer, bool* pack_success, int joint, skeleton_t *data);
 
 /***********************************************************************
  *                       INIT AND EXIT CODE                             *
@@ -379,17 +374,11 @@ static void write_port(void *arg, long period)
   skeleton_t *data = arg;
   data->joints_enabled_this_cycle = 0;
 
-  char buffer[BUFSIZE];
-  memset(buffer, '\0', BUFSIZE);
-  void* buffer_iterator = &buffer[0];
-
-  // Put metrics packet in buffer.
+  struct NWBuffer buffer;
   union MessageAny message;
-  size_t buffer_space = BUFSIZE;
-  size_t buffer_size = 0;
+  bool pack_success = true;
 
-  buffer_size += serialize_timing(
-      &message, count, rtapi_get_time(), &buffer_iterator, &buffer_space);
+  pack_success = pack_success && serialize_timing(&buffer, &message, count, rtapi_get_time());
 
   // Put GPIO values in buffer.
   // TODO: Not yet implemented.
@@ -398,45 +387,33 @@ static void write_port(void *arg, long period)
   }
 
   // Iterate through joints.
-  for(int num_joint = 0; num_joint < JOINTS; num_joint++) {
+  for(int joint = 0; joint < JOINTS; joint++) {
     // Put joint positions packet in buffer.
-    if(*data->joint_velocity_mode[num_joint] == 1) {
+    if(*data->joint_velocity_mode[joint] == 1) {
       // Velocity mode.
       // TODO: Not tested.
-      printf("ERROR: Not implemented velocity mode. joint: %u\n", num_joint);
+      printf("ERROR: Not implemented velocity mode. joint: %u\n", joint);
     } else {
       // Absolute position mode.
-      double position = *data->joint_scale[num_joint] * *data->joint_pos_cmd[num_joint];
-      double velocity = *data->joint_scale[num_joint] * *data->joint_vel_cmd[num_joint];
-      buffer_size += serialize_joint_pos(
-          &message, num_joint, position, &buffer_iterator, &buffer_space);
-      buffer_size += serialize_joint_velocity(
-          &message, num_joint, velocity, &buffer_iterator, &buffer_space);
-
+      double position = *data->joint_scale[joint] * *data->joint_pos_cmd[joint];
+      double velocity = *data->joint_scale[joint] * *data->joint_vel_cmd[joint];
+      pack_success = pack_success && serialize_joint_pos(&buffer, &message, joint, position);
+      pack_success = pack_success && serialize_joint_velocity(&buffer, &message, joint, velocity);
     }
 
-    // Look for parameter changes.
-    //if(last_kp[num_joint] != *data->joint_kp[num_joint]) {
-      //last_kp[num_joint] = *data->joint_kp[num_joint];
-      //message.set_kp.type = MSG_SET_AXIS_PID_KP;
-      //message.set_kp.axis = num_joint;
-      //message.set_kp.value = *data->joint_kp[num_joint];
-      //buffer_size += serialize_data(&message, &buffer_iterator, &buffer_space);
-    //}
-
-    if(last_max_velocity[num_joint] != *data->joint_max_velocity[num_joint]) {
-      last_max_velocity[num_joint] = *data->joint_max_velocity[num_joint];
-      buffer_size += serialize_joint_max_velocity(
-          &message, num_joint, last_max_velocity[num_joint], &buffer_iterator, &buffer_space);
+    if(last_max_velocity[joint] != *data->joint_max_velocity[joint]) {
+      last_max_velocity[joint] = *data->joint_max_velocity[joint];
+      pack_success = pack_success && serialize_joint_max_velocity(
+          &buffer, &message, joint, last_max_velocity[joint]);
     }
 
-    if(last_max_accel[num_joint] != *data->joint_max_accel[num_joint]) {
-      last_max_accel[num_joint] = *data->joint_max_accel[num_joint];;
-      buffer_size += serialize_joint_max_accel(
-          &message, num_joint, last_max_accel[num_joint], &buffer_iterator, &buffer_space);
+    if(last_max_accel[joint] != *data->joint_max_accel[joint]) {
+      last_max_accel[joint] = *data->joint_max_accel[joint];;
+      pack_success = pack_success && serialize_joint_max_accel(
+          &buffer, &message, joint, last_max_accel[joint]);
     }
 
-    enable_joint(num_joint, &buffer_space, &buffer_size, &buffer_iterator, data);
+    enable_joint(&buffer, &pack_success, joint, data);
   }
 
   send_data(num_device, buffer, buffer_size);
@@ -476,8 +453,8 @@ void on_eth_up(skeleton_t *data, uint count) {
   *data->metric_eth_state = true;
 
   // Iterate through joints.
-  for(int num_joint = 0; num_joint < JOINTS; num_joint++) {
-    data->reset_joint[num_joint] = true;
+  for(int joint = 0; joint < JOINTS; joint++) {
+    data->reset_joint[joint] = true;
   }
 }
 
@@ -490,66 +467,60 @@ void on_eth_down(skeleton_t *data, uint count) {
   *data->metric_eth_state = false;
 
   // Iterate through joints, disabling them in the config.
-  for(int num_joint = 0; num_joint < JOINTS; num_joint++) {
-      *data->joint_enable[num_joint] = false;
+  for(int joint = 0; joint < JOINTS; joint++) {
+      *data->joint_enable[joint] = false;
   }
 }
 
-void enable_io(
-    int num_joint, size_t* buffer_space, size_t* buffer_size,
-    void** buffer_iterator, skeleton_t *data
-) {
+void enable_io(struct NWBuffer* buffer, bool* pack_success, int joint, skeleton_t *data) {
   static int last_io_pos_step[JOINTS] = {-2, -2, -2, -2};
   static int last_io_pos_dir[JOINTS] = {-2, -2, -2, -2};
 
-  if(last_io_pos_step[num_joint] != *data->joint_gpio_step[num_joint] ||
-      data->reset_joint[num_joint]
+  if(last_io_pos_step[joint] != *data->joint_gpio_step[joint] ||
+      data->reset_joint[joint]
   ) {
-    union MessageAny message = {0};
+    union MessageAny message;
 
-    last_io_pos_step[num_joint] = *data->joint_gpio_step[num_joint];
+    last_io_pos_step[joint] = *data->joint_gpio_step[joint];
     rtapi_print_msg(RTAPI_MSG_INFO, "Configure joint: %u  step io: %u\n",
-        num_joint, *data->joint_gpio_step[num_joint]);
-    printf("Configure joint: %u  step io: %u\n", num_joint, *data->joint_gpio_step[num_joint]);
-    *buffer_size += serialize_joint_io_step(
-        &message, num_joint, *data->joint_gpio_step[num_joint], buffer_iterator, buffer_space);
+        joint, *data->joint_gpio_step[joint]);
+    printf("Configure joint: %u  step io: %u\n", joint, *data->joint_gpio_step[joint]);
+    *pack_success = *pack_success && serialize_joint_io_step(
+        &buffer, &message, joint, *data->joint_gpio_step[joint]);
 
-    last_io_pos_dir[num_joint] = *data->joint_gpio_dir[num_joint];
+    last_io_pos_dir[joint] = *data->joint_gpio_dir[joint];
     rtapi_print_msg(RTAPI_MSG_INFO, "Configure joint: %u  dir io: %u\n",
-        num_joint, *data->joint_gpio_dir[num_joint]);
-    printf("Configure joint: %u  dir io: %u\n", num_joint, *data->joint_gpio_dir[num_joint]);
-    *buffer_size += serialize_joint_io_dir(
-        &message, num_joint, *data->joint_gpio_dir[num_joint], buffer_iterator, buffer_space);
+        joint, *data->joint_gpio_dir[joint]);
+    printf("Configure joint: %u  dir io: %u\n", joint, *data->joint_gpio_dir[joint]);
+    *pack_success = *pack_success && serialize_joint_io_dir(
+        &buffer, &message, joint, *data->joint_gpio_dir[joint]);
 
-    data->reset_joint[num_joint] = false;
+    data->reset_joint[joint] = false;
   }
 }
 
-void enable_joint(
-    int num_joint, size_t* buffer_space, size_t* buffer_size,
-    void** buffer_iterator, skeleton_t *data
-) {
+void enable_joint(struct NWBuffer* buffer, bool* pack_success, int joint, skeleton_t *data) {
   static int last_enabled[JOINTS] = {-1, -1, -1, -1};
   union MessageAny message = {0};
 
-  if(last_enabled[num_joint] != *data->joint_enable[num_joint]) {
+  if(last_enabled[joint] != *data->joint_enable[joint]) {
     if(data->joints_enabled_this_cycle > 0) {
       return;
     }
 
     data->joints_enabled_this_cycle++;
 
-    if(*data->joint_enable[num_joint]) {
-      printf("enable joint: %u\n", num_joint);
-      enable_io(num_joint, buffer_space, buffer_size, buffer_iterator, data);
+    if(*data->joint_enable[joint]) {
+      printf("enable joint: %u\n", joint);
+      enable_io(buffer, pack_success, joint, data);
     } else {
-      printf("disable joint: %u\n", num_joint);
+      printf("disable joint: %u\n", joint);
     }
 
-    last_enabled[num_joint] = *data->joint_enable[num_joint];
+    last_enabled[joint] = *data->joint_enable[joint];
 
-    *buffer_size += serialize_joint_enable(
-        &message, num_joint, *data->joint_enable[num_joint], buffer_iterator, buffer_space);
+    *pack_success = *pack_success && serialize_joint_enable(
+        &buffer, &message, joint, *data->joint_enable[joint]);
   }
 }
 

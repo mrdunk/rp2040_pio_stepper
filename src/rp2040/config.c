@@ -37,6 +37,7 @@ volatile struct ConfigGlobal config = {
       .io_pos_step = -1,
       .io_pos_dir = -1,
       .rel_pos_requested = 0,
+      .abs_pos_requested = 0,
       .abs_pos_acheived = 0,
       .max_velocity = 50,
       .max_accel_ticks = 2.0,
@@ -52,6 +53,7 @@ volatile struct ConfigGlobal config = {
       .io_pos_step = -1,
       .io_pos_dir = -1,
       .rel_pos_requested = 0,
+      .abs_pos_requested = 0,
       .abs_pos_acheived = 0,
       .max_velocity = 50,
       .max_accel_ticks = 10.0,
@@ -67,6 +69,7 @@ volatile struct ConfigGlobal config = {
       .io_pos_step = -1,
       .io_pos_dir = -1,
       .rel_pos_requested = 0,
+      .abs_pos_requested = 0,
       .abs_pos_acheived = 0,
       .max_velocity = 50,
       .max_accel_ticks = 200.0,
@@ -82,6 +85,7 @@ volatile struct ConfigGlobal config = {
       .io_pos_step = -1,
       .io_pos_dir = -1,
       .rel_pos_requested = 0,
+      .abs_pos_requested = 0,
       .abs_pos_acheived = 0,
       .max_velocity = 50,
       .max_accel_ticks = 200.0,
@@ -129,8 +133,7 @@ uint32_t get_period() {
 
 /* Set metrics for tracking successful update transmission and jitter. */
 void update_packet_metrics(
-    uint32_t update_id,
-    uint32_t time,
+    struct Message_timing* message,
     int32_t* id_diff,
     int32_t* time_diff
 ) {
@@ -138,8 +141,8 @@ void update_packet_metrics(
 
   mutex_enter_blocking(&mtx_top);
 
-  *id_diff = update_id - config.last_update_id;
-  *time_diff = time - config.last_update_time;
+  *id_diff = message->update_id - config.last_update_id;
+  *time_diff = message->time - config.last_update_time;
 
   /*
   if(*id_diff == 0) {
@@ -161,8 +164,8 @@ void update_packet_metrics(
   }
   */
 
-  config.last_update_id = update_id;
-  config.last_update_time = time;
+  config.last_update_id = message->update_id;
+  config.last_update_time = message->time;
 
   mutex_exit(&mtx_top);
 }

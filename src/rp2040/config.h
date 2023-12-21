@@ -6,6 +6,7 @@
 #include <limits.h>
 #include <stdbool.h>
 
+#include "messages.h"
 #include "stepper_control.h"
 #include "ring_buffer.h"
 
@@ -25,7 +26,7 @@ struct ConfigAxis {
   int8_t io_pos_dir;            // Physical direction IO pin.
   double rel_pos_requested;     // In steps. Default value is UINT_MAX / 2.
   double abs_pos_requested;     // In steps. Default value is UINT_MAX / 2.
-  int32_t abs_pos_acheived;    // In steps. Default value is UINT_MAX / 2.
+  int32_t abs_pos_acheived;     // In steps. Default value is UINT_MAX / 2.
   double max_velocity;
   double max_accel_ticks;       // ticks / update_time_ticks ^ 2
   int32_t velocity_requested;   // Calculated steps per update_time_us.
@@ -59,7 +60,9 @@ uint32_t get_period();
 
 /* Set metrics for tracking successful update transmission and jitter. */
 void update_packet_metrics(
-    uint32_t update_id, uint32_t time, int32_t* id_dif, int32_t* time_dif);
+    struct Message_timing* message,
+    int32_t* id_diff,
+    int32_t* time_diff);
 
 uint8_t has_new_c0_data(const uint8_t axis);
 

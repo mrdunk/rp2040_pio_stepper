@@ -4,6 +4,8 @@
 
 #include "rp2040_defines.h"
 #include "../shared/messages.h"
+#include "../shared/buffer.c"
+#include "../shared/checksum.c"
 
 #ifdef BUILD_TESTS
 
@@ -66,12 +68,12 @@ int init_eth(int device) {
 }
 
 /* Send data via UDP.*/
-uint8_t send_data(int device, char* packet, size_t packet_size) {
+uint8_t send_data(int device, struct NWBuffer* buffer) {
   int addr_len = sizeof(remote_addr[device]);
   int n = sendto(
       sockfd[device],
-      (void*)packet,
-      packet_size,
+      (void*)(buffer->payload),
+      buffer->length,
       0,
       (struct sockaddr *)&remote_addr[device],
       addr_len);
@@ -101,130 +103,108 @@ size_t get_reply_non_block(int device, char* receive_buffer) {
   return receive_count;
 }
 
-size_t serialize_data(void* message, size_t message_size, void** packet, size_t* packet_space) {
-  if(*packet_space < message_size) {
-    printf("ERROR: No space left in packet\n");
-    return 0;
-  }
-
-  memcpy(*packet, message, message_size);
-
-  *packet_space -= message_size;
-  *packet += message_size;
-
-  return message_size;
-}
-
 size_t serialize_timing(
+    struct NWBuffer* buffer,
     union MessageAny* message,
     uint32_t update_id,
-    uint32_t time,
-    void** packet,
-    size_t* packet_space
+    uint32_t time
 ) {
   message->timing.type = MSG_TIMING;
   message->timing.update_id = update_id;
   message->timing.time = time;
 
-  return serialize_data(message, sizeof(struct Message_timing), packet, packet_space);
+  return pack_nw_buff(buffer, message, sizeof(struct Message_timing));
 }
 
 size_t serialize_joint_pos(
+    struct NWBuffer* buffer,
     union MessageAny* message,
-    uint32_t axis,
-    double position,
-    void** packet,
-    size_t* packet_space
+    uint32_t joint,
+    double position
 ) {
   message->set_abs_pos.type = MSG_SET_AXIS_ABS_POS;
-  message->set_abs_pos.axis = axis;
+  message->set_abs_pos.axis = joint;
   message->set_abs_pos.value = position;
 
-  return serialize_data(message, sizeof(struct Message_set_abs_pos), packet, packet_space);
+  return pack_nw_buff(buffer, message, sizeof(struct Message_set_abs_pos));
 }
 
 size_t serialize_joint_velocity(
+    struct NWBuffer* buffer,
     union MessageAny* message,
-    uint32_t axis,
-    double velocity,
-    void** packet,
-    size_t* packet_space
+    uint32_t joint,
+    double velocity
 ) {
   message->set_velocity.type = MSG_SET_AXIS_VELOCITY;
-  message->set_velocity.axis = axis;
+  message->set_velocity.axis = joint;
   message->set_velocity.value = velocity;
 
-  return serialize_data(message, sizeof(struct Message_set_velocity), packet, packet_space);
+  return pack_nw_buff(buffer, message, sizeof(struct Message_set_velocity));
 }
 
 size_t serialize_joint_max_velocity(
+    struct NWBuffer* buffer,
     union MessageAny* message,
-    uint32_t axis,
-    double velocity,
-    void** packet,
-    size_t* packet_space
+    uint32_t joint,
+    double velocity
 ) {
   message->set_velocity.type = MSG_SET_AXIS_MAX_VELOCITY;
-  message->set_velocity.axis = axis;
+  message->set_velocity.axis = joint;
   message->set_velocity.value = velocity;
 
-  return serialize_data(message, sizeof(struct Message_set_max_velocity), packet, packet_space);
+  return pack_nw_buff(buffer, message, sizeof(struct Message_set_max_velocity));
 }
 
 size_t serialize_joint_max_accel(
+    struct NWBuffer* buffer,
     union MessageAny* message,
-    uint32_t axis,
-    double accel,
-    void** packet,
-    size_t* packet_space
+    uint32_t joint,
+    double accel
 ) {
   message->set_velocity.type = MSG_SET_AXIS_MAX_VELOCITY;
-  message->set_velocity.axis = axis;
+  message->set_velocity.axis = joint;
   message->set_velocity.value = accel;
 
-  return serialize_data(message, sizeof(struct Message_set_max_accel), packet, packet_space);
+  return pack_nw_buff(buffer, message, sizeof(struct Message_set_max_accel));
 }
 
 size_t serialize_joint_io_step(
+    struct NWBuffer* buffer,
     union MessageAny* message,
-    uint32_t axis,
-    uint8_t value,
-    void** packet,
-    size_t* packet_space
+    uint32_t joint,
+    uint8_t value
 ) {
   message->joint_gpio.type = MSG_SET_AXIS_IO_STEP;
-  message->joint_gpio.axis = axis;
+  message->joint_gpio.axis = joint;
   message->joint_gpio.value = value;
 
-  return serialize_data(message, sizeof(struct Message_joint_gpio), packet, packet_space);
+  return pack_nw_buff(buffer, message, sizeof(struct Message_joint_gpio));
 }
 
 size_t serialize_joint_io_dir(
+    struct NWBuffer* buffer,
     union MessageAny* message,
-    uint32_t axis,
-    uint8_t value,
-    void** packet,
-    size_t* packet_space
+    uint32_t joint,
+    uint8_t value
 ) {
   message->joint_gpio.type = MSG_SET_AXIS_IO_DIR;
-  message->joint_gpio.axis = axis;
+  message->joint_gpio.axis = joint;
   message->joint_gpio.value = value;
 
-  return serialize_data(message, sizeof(struct Message_joint_gpio), packet, packet_space);
+  return pack_nw_buff(buffer, message, sizeof(struct Message_joint_gpio));
 }
 
 size_t serialize_joint_enable(
+    struct NWBuffer* buffer,
     union MessageAny* message,
-    uint32_t axis,
-    uint8_t value,
-    void** packet,
-    size_t* packet_space
+    uint32_t joint,
+    uint8_t value
 ) {
   message->joint_gpio.type = MSG_SET_AXIS_ENABLED;
-  message->joint_gpio.axis = axis;
+  message->joint_gpio.axis = joint;
   message->joint_gpio.value = value;
 
-  return serialize_data(message, sizeof(struct Message_joint_enable), packet, packet_space);
+  return pack_nw_buff(buffer, message, sizeof(struct Message_joint_enable));
 }
 
 void process_data(char* buf, skeleton_t* data, int debug) {
