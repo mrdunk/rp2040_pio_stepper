@@ -279,6 +279,11 @@ size_t process_received_buffer(struct NWBuffer* rx_buf, uint8_t* tx_buf, uint8_t
   size_t tx_buf_len = 0;
   union MessageAny message;
 
+  if(rx_buf->length > NW_BUF_LEN) {
+    printf("WARN: RX length greater than buffer size. %u\n", *received_count);
+    return 0;
+  }
+
   bool unpack_success = checkNWBuff(rx_buf);
 
   if(! unpack_success) {
@@ -350,7 +355,7 @@ size_t process_received_buffer(struct NWBuffer* rx_buf, uint8_t* tx_buf, uint8_t
 
 void core0_main() {
   int retval = 0;
-  struct NWBuffer rx_buf;
+  struct NWBuffer rx_buf = {0};
   uint8_t tx_buf[DATA_BUF_SIZE] = {0};
   size_t tx_buf_len = 0;
   uint8_t received_msg_count = 0;
@@ -372,11 +377,18 @@ void core0_main() {
       retval = get_UDP(
           SOCKET_NUMBER,
           NW_PORT,
-          rx_buf.payload,
+          &rx_buf,
           &data_received,
           destip_machine,
           &destport_machine);
     }
+
+    //static size_t count = 0;
+    //printf("%u, %u, %u\t", rx_buf.length, data_received, *((uint16_t*)&rx_buf));
+    //if(count++ % 20 == 0) {
+    //  printf("\n");
+    //}
+
 
     tx_buf_len = process_received_buffer(&rx_buf, tx_buf, &received_msg_count);
     if(received_msg_count != 9) {
@@ -391,12 +403,12 @@ void core0_main() {
       time_now = time_us_64();
       gpio_put(LED_PIN, (time_now / 1000000) % 2);
       received_msg_count = 0;
-    }
 
-    size_t axis_count = 0;
-    for(size_t axis = 0; axis < MAX_AXIS; axis++) {
-      // Get data from config and put in TX buffer.
-      axis_count += serialise_axis_config(axis, tx_buf, &tx_buf_len, true);
+      size_t axis_count = 0;
+      for(size_t axis = 0; axis < MAX_AXIS; axis++) {
+        // Get data from config and put in TX buffer.
+        axis_count += serialise_axis_config(axis, tx_buf, &tx_buf_len, true);
+      }
     }
 
     put_UDP(
@@ -406,7 +418,6 @@ void core0_main() {
         tx_buf_len,
         destip_machine,
         &destport_machine);
-
   }
 }
 

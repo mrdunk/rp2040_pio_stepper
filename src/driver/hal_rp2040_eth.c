@@ -374,9 +374,11 @@ static void write_port(void *arg, long period)
   skeleton_t *data = arg;
   data->joints_enabled_this_cycle = 0;
 
-  struct NWBuffer buffer;
+  struct NWBuffer buffer = {0};
   union MessageAny message;
   bool pack_success = true;
+
+  char rx_buffer[BUFSIZE] = {0};
 
   pack_success = pack_success && serialize_timing(&buffer, &message, count, rtapi_get_time());
 
@@ -416,13 +418,13 @@ static void write_port(void *arg, long period)
     enable_joint(&buffer, &pack_success, joint, data);
   }
 
-  send_data(num_device, buffer, buffer_size);
+  send_data(num_device, &buffer);
 
   // Receive data and check packets all completed round trip.
   int receive_count;
-  receive_count = get_reply_non_block(num_device, buffer);
+  receive_count = get_reply_non_block(num_device, rx_buffer);
   if(receive_count > 0) {
-    process_data(buffer, data, 0);
+    process_data(rx_buffer, data, 0);
 
     if(! *data->metric_eth_state) {
       // Network connection just came up after being down.
@@ -486,14 +488,14 @@ void enable_io(struct NWBuffer* buffer, bool* pack_success, int joint, skeleton_
         joint, *data->joint_gpio_step[joint]);
     printf("Configure joint: %u  step io: %u\n", joint, *data->joint_gpio_step[joint]);
     *pack_success = *pack_success && serialize_joint_io_step(
-        &buffer, &message, joint, *data->joint_gpio_step[joint]);
+        buffer, &message, joint, *data->joint_gpio_step[joint]);
 
     last_io_pos_dir[joint] = *data->joint_gpio_dir[joint];
     rtapi_print_msg(RTAPI_MSG_INFO, "Configure joint: %u  dir io: %u\n",
         joint, *data->joint_gpio_dir[joint]);
     printf("Configure joint: %u  dir io: %u\n", joint, *data->joint_gpio_dir[joint]);
     *pack_success = *pack_success && serialize_joint_io_dir(
-        &buffer, &message, joint, *data->joint_gpio_dir[joint]);
+        buffer, &message, joint, *data->joint_gpio_dir[joint]);
 
     data->reset_joint[joint] = false;
   }
@@ -520,7 +522,7 @@ void enable_joint(struct NWBuffer* buffer, bool* pack_success, int joint, skelet
     last_enabled[joint] = *data->joint_enable[joint];
 
     *pack_success = *pack_success && serialize_joint_enable(
-        &buffer, &message, joint, *data->joint_enable[joint]);
+        buffer, &message, joint, *data->joint_enable[joint]);
   }
 }
 
