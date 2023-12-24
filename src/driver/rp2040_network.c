@@ -73,7 +73,7 @@ uint8_t send_data(int device, struct NWBuffer* buffer) {
   int n = sendto(
       sockfd[device],
       (void*)buffer,
-      buffer->length,
+      sizeof(buffer->length) + sizeof(buffer->checksum) + buffer->length,
       0,
       (struct sockaddr *)&remote_addr[device],
       addr_len);

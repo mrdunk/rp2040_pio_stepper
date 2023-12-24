@@ -349,7 +349,6 @@ size_t process_received_buffer(struct NWBuffer* rx_buf, uint8_t* tx_buf, uint8_t
     // to populate the struct.
   }
 
-  reset_nw_buf(rx_buf);
   return tx_buf_len;
 }
 
@@ -373,6 +372,7 @@ void core0_main() {
     data_received = 0;
     memset(tx_buf, 0, DATA_BUF_SIZE);
 
+    reset_nw_buf(&rx_buf);
     while(data_received == 0 || retval <= 0) {
       retval = get_UDP(
           SOCKET_NUMBER,
@@ -383,18 +383,11 @@ void core0_main() {
           &destport_machine);
     }
 
-    //static size_t count = 0;
-    //printf("%u, %u, %u\t", rx_buf.length, data_received, *((uint16_t*)&rx_buf));
-    //if(count++ % 20 == 0) {
-    //  printf("\n");
-    //}
-
-
     tx_buf_len = process_received_buffer(&rx_buf, tx_buf, &received_msg_count);
     if(received_msg_count != 9) {
       // Not the standard number of received packets.
       // This likely was a config update.
-      printf("Received msgs: %u\t%u\t%i\n", received_msg_count, data_received, retval);
+      printf("Received msgs: %u\t%u\n", received_msg_count, data_received);
     }
 
     if(received_msg_count > 0) {
@@ -409,15 +402,15 @@ void core0_main() {
         // Get data from config and put in TX buffer.
         axis_count += serialise_axis_config(axis, tx_buf, &tx_buf_len, true);
       }
-    }
 
-    put_UDP(
-        SOCKET_NUMBER,
-        NW_PORT,
-        tx_buf,
-        tx_buf_len,
-        destip_machine,
-        &destport_machine);
+      put_UDP(
+          SOCKET_NUMBER,
+          NW_PORT,
+          tx_buf,
+          tx_buf_len,
+          destip_machine,
+          &destport_machine);
+    }
   }
 }
 

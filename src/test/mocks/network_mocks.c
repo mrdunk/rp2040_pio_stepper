@@ -1,6 +1,5 @@
 #include <stdint.h>
 #include <stddef.h>
-#include "../rp2040/network.h"
 
 int32_t put_UDP(
     uint8_t socket_num,

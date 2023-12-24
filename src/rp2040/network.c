@@ -6,6 +6,7 @@
 #include "socket.h"
 
 #include "config.h"
+#include "buffer.h"
 
 /* Get data over UDP.
  * $ nc -u <host> <port>
@@ -28,8 +29,8 @@ int32_t get_UDP(
      case SOCK_UDP :
        if((size = getSn_RX_RSR(socket_num)) > 0) {
          // Receiving data.
-         if(size > DATA_BUF_SIZE) {
-           size = DATA_BUF_SIZE;
+         if(size > NW_BUF_LEN) {
+           size = NW_BUF_LEN;
          }
 
          ret = recvfrom(socket_num, rx_buf, size, destip, destport);
@@ -39,6 +40,7 @@ int32_t get_UDP(
            printf("%d: recvfrom error. %ld\r\n", socket_num, ret);
            return ret;
          }
+         size = ret;
          (*data_received) += size;
        }
        break;

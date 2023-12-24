@@ -4,8 +4,8 @@
  * allow it to be mocked for the calling functions. */
 
 uint16_t checksum(uint16_t val_in, void* data, uint16_t data_len) {
-    for(uint16_t index = 0; index < data_len / 2; index++) {
-        val_in += *((uint16_t*)data + index);
+    for(size_t index = 0; index < (data_len / 2); index++) {
+        val_in += ((uint16_t*)data)[index];
     }
     return val_in;
 }

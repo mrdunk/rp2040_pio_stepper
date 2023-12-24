@@ -10,7 +10,7 @@
 
 
 #define MSG_NONE                     0
-#define MSG_TIMING                   1  // Contains packet count and time sent.
+#define MSG_TIMING                   0x88888888  // Contains packet count and time sent.
 #define MSG_SET_AXIS_ENABLED         3  // Set absolute axis position.
 #define MSG_SET_AXIS_ABS_POS         4  // Set absolute axis position.
 #define MSG_SET_AXIS_VELOCITY        5  // Set relative axis position. (Velocity)
