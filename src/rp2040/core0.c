@@ -274,13 +274,20 @@ bool unpack_joint_io_dir(
 /* Process data received over the network.
  * This consists of serialised structs as defined in src/shared/massages.h
  */
-size_t process_received_buffer(struct NWBuffer* rx_buf, uint8_t* tx_buf, uint8_t* received_count) {
+size_t process_received_buffer(
+    struct NWBuffer* rx_buf, uint8_t* tx_buf, uint8_t* received_count, uint16_t expected_length) {
   uint16_t rx_offset = 0;
   size_t tx_buf_len = 0;
   union MessageAny message;
 
+  if(rx_buf->length + sizeof(rx_buf->length) + sizeof(rx_buf->checksum) != expected_length) {
+    printf("WARN: RX length not equal to expected. %u\n", *received_count);
+    reset_nw_buf(rx_buf);
+    return 0;
+  }
   if(rx_buf->length > NW_BUF_LEN) {
     printf("WARN: RX length greater than buffer size. %u\n", *received_count);
+    reset_nw_buf(rx_buf);
     return 0;
   }
 
@@ -349,6 +356,7 @@ size_t process_received_buffer(struct NWBuffer* rx_buf, uint8_t* tx_buf, uint8_t
     // to populate the struct.
   }
 
+  reset_nw_buf(rx_buf);
   return tx_buf_len;
 }
 
@@ -358,7 +366,7 @@ void core0_main() {
   uint8_t tx_buf[DATA_BUF_SIZE] = {0};
   size_t tx_buf_len = 0;
   uint8_t received_msg_count = 0;
-  uint8_t data_received = 0;
+  uint16_t data_received = 0;
   size_t time_now;
 
   // Need these to store the IP and port.
@@ -372,7 +380,6 @@ void core0_main() {
     data_received = 0;
     memset(tx_buf, 0, DATA_BUF_SIZE);
 
-    reset_nw_buf(&rx_buf);
     while(data_received == 0 || retval <= 0) {
       retval = get_UDP(
           SOCKET_NUMBER,
@@ -383,7 +390,7 @@ void core0_main() {
           &destport_machine);
     }
 
-    tx_buf_len = process_received_buffer(&rx_buf, tx_buf, &received_msg_count);
+    tx_buf_len = process_received_buffer(&rx_buf, tx_buf, &received_msg_count, data_received);
     if(received_msg_count != 9) {
       // Not the standard number of received packets.
       // This likely was a config update.

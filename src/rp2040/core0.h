@@ -3,7 +3,8 @@
 
 #include "buffer.h"
 
-size_t process_received_buffer( struct NWBuffer* rx_buf, uint8_t* tx_buf, uint8_t* received_count);
+size_t process_received_buffer(
+    struct NWBuffer* rx_buf, uint8_t* tx_buf, uint8_t* received_count, uint16_t expected_length);
 
 void core0_main();
 
