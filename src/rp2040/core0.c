@@ -86,7 +86,7 @@ bool unpack_timing(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_timing));
 
   if(! data_p) {
-    return NULL;
+    return false;
   }
 
   struct Message_timing* message = data_p;
@@ -108,7 +108,7 @@ bool unpack_joint_enable(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_joint_enable));
 
   if(! data_p) {
-    return NULL;
+    return false;
   }
 
   struct Message_joint_enable* message = data_p;
@@ -133,7 +133,7 @@ bool unpack_joint_abs_pos(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_set_abs_pos));
 
   if(! data_p) {
-    return NULL;
+    return false;
   }
 
   struct Message_set_abs_pos* message = data_p;
@@ -157,7 +157,7 @@ bool unpack_joint_velocity(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_set_velocity));
 
   if(! data_p) {
-    return NULL;
+    return false;
   }
 
   struct Message_set_velocity* message = data_p;
@@ -181,7 +181,7 @@ bool unpack_joint_max_velocity(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_set_max_velocity));
 
   if(! data_p) {
-    return NULL;
+    return false;
   }
 
   struct Message_set_max_velocity* message = data_p;
@@ -205,7 +205,7 @@ bool unpack_joint_max_accel(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_set_max_accel));
 
   if(! data_p) {
-    return NULL;
+    return false;
   }
 
   struct Message_set_max_accel* message = data_p;
@@ -229,9 +229,9 @@ bool unpack_joint_io_step(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_joint_gpio));
 
   if(! data_p) {
-    return NULL;
+    return false;
   }
-  
+
   struct Message_joint_gpio* message = data_p;
   uint32_t joint = message->axis;
   int8_t io_step = message->value;
@@ -255,7 +255,7 @@ bool unpack_joint_io_dir(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_joint_gpio));
 
   if(! data_p) {
-    return NULL;
+    return false;
   }
 
   struct Message_joint_gpio* message = data_p;
@@ -278,7 +278,6 @@ size_t process_received_buffer(
     struct NWBuffer* rx_buf, uint8_t* tx_buf, uint8_t* received_count, uint16_t expected_length) {
   uint16_t rx_offset = 0;
   size_t tx_buf_len = 0;
-  union MessageAny message;
 
   if(rx_buf->length + sizeof(rx_buf->length) + sizeof(rx_buf->checksum) != expected_length) {
     printf("WARN: RX length not equal to expected. %u\n", *received_count);
@@ -298,14 +297,14 @@ size_t process_received_buffer(
   }
 
   while(unpack_success) {
-    unpack_success = unpack_success && unpack_nw_buff(
-        rx_buf, rx_offset, NULL, &message, sizeof(struct Message_header));
-    if(!unpack_success) {
+    struct Message_header* header = unpack_nw_buff(
+        rx_buf, rx_offset, NULL, NULL, sizeof(struct Message_header));
+
+    if(!header) {
       // End of data.
       break;
     }
-
-    switch(message.header.type) {
+    switch(header->type) {
       case MSG_TIMING:
         ;
         unpack_success = unpack_success && unpack_timing(
@@ -340,7 +339,7 @@ size_t process_received_buffer(
             rx_buf, &rx_offset, received_count);
         break;
       default:
-        printf("WARN: Invalid message type: %u\t%lu\n", *received_count, message.header.type);
+        printf("WARN: Invalid message type: %u\t%lu\n", *received_count, header->type);
         // Implies data corruption.
         tx_buf_len = 0;
         unpack_success = false;

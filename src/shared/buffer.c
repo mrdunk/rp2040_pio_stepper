@@ -7,7 +7,9 @@ uint16_t pack_nw_buff(struct NWBuffer* buffer, void* new_data, uint16_t new_data
     return 0;
   }
 
-  memcpy(buffer->payload + buffer->length, new_data, new_data_len);
+  if(new_data) {
+    memcpy(buffer->payload + buffer->length, new_data, new_data_len);
+  }
 
   buffer->length += new_data_len;
   buffer->checksum = checksum(buffer->checksum, new_data, new_data_len);
@@ -15,6 +17,8 @@ uint16_t pack_nw_buff(struct NWBuffer* buffer, void* new_data, uint16_t new_data
   return new_data_len;
 }
 
+/* Returns pointer to struct position within network packet.
+ * Updates offset value to point to next struct if required. */
 void* unpack_nw_buff(
     struct NWBuffer* buffer,
     uint16_t payload_offset,
@@ -47,6 +51,7 @@ void* unpack_nw_buff(
   return data_p;
 }
 
+/* Calculate checksum and compare to the checksum stored in the NW data. */
 uint8_t checkNWBuff(struct NWBuffer* buffer) {
   uint16_t cs = 0;
   if(buffer->checksum != checksum(cs, buffer->payload, buffer->length)) {

@@ -1,5 +1,4 @@
-cmake_minimum_required(VERSION 3.13)
-
+cmake_minimum_required(VERSION 3.14)
 
 include(${CMAKE_SOURCE_DIR}/libraries/FetchCMocka.cmake)
 
@@ -34,24 +33,6 @@ target_link_libraries(
     -Wl,--wrap,update_period
     )
 
-  #add_executable(
-  #  timingTest
-  #  ${CMAKE_SOURCE_DIR}/src/rp2040/timing.c
-  #  )
-  #target_link_libraries(
-  #  timingTest
-  #  cmocka #-static
-  #  -Wl,--wrap,time_us_64
-  #  -Wl,--wrap,ring_buf_uint_ave
-  #  -Wl,--wrap,tight_loop_contents
-  #  -Wl,--wrap,update_period
-  #  )
-
-# pass -D BUILD_TESTS when compiling
-#target_compile_definitions(
-#    networkTest PUBLIC
-#    -D BUILD_TESTS
-#    )
 add_executable(
   rpNetworkTest
     ${CMAKE_CURRENT_SOURCE_DIR}/rp_network_test.c
@@ -67,6 +48,10 @@ add_executable(
 target_link_libraries(
     rpNetworkTest
     cmocka
+    )
+add_test(
+    rpNetworkTest
+    rpNetworkTest
     )
 
 
@@ -86,6 +71,10 @@ target_link_libraries(
     rpNetworkTxTest
     cmocka
     )
+add_test(
+    rpNetworkTxTest
+    rpNetworkTxTest
+    )
 
 
 add_executable(
@@ -98,6 +87,10 @@ target_link_libraries(
     driverNetworkPCtoRPTest
     cmocka
     )
+add_test(
+    driverNetworkPCtoRPTest
+    driverNetworkPCtoRPTest
+    )
 
 
 add_executable(
@@ -109,6 +102,10 @@ add_executable(
 target_link_libraries(
     driverNetworkRPtoPCTest
     cmocka
+    )
+add_test(
+    driverNetworkRPtoPCTest
+    driverNetworkRPtoPCTest
     )
 
 
@@ -123,6 +120,10 @@ target_link_libraries(
     ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
     -Wl,--wrap=checksum
     )
+add_test(
+    sharedBufferTest
+    sharedBufferTest
+    )
 
 
 add_executable(
@@ -134,6 +135,8 @@ target_link_libraries(
     cmocka::cmocka
     ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
     )
-
-
+add_test(
+    sharedChecksumTest
+    sharedChecksumTest
+    )
 

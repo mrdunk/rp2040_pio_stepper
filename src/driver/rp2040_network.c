@@ -105,106 +105,106 @@ size_t get_reply_non_block(int device, char* receive_buffer) {
 
 size_t serialize_timing(
     struct NWBuffer* buffer,
-    union MessageAny* message,
     uint32_t update_id,
     uint32_t time
 ) {
-  message->timing.type = MSG_TIMING;
-  message->timing.update_id = update_id;
-  message->timing.time = time;
+  union MessageAny message;
+  message.timing.type = MSG_TIMING;
+  message.timing.update_id = update_id;
+  message.timing.time = time;
 
-  return pack_nw_buff(buffer, message, sizeof(struct Message_timing));
+  return pack_nw_buff(buffer, &message, sizeof(struct Message_timing));
 }
 
 size_t serialize_joint_pos(
     struct NWBuffer* buffer,
-    union MessageAny* message,
     uint32_t joint,
     double position
 ) {
-  message->set_abs_pos.type = MSG_SET_AXIS_ABS_POS;
-  message->set_abs_pos.axis = joint;
-  message->set_abs_pos.value = position;
+  union MessageAny message;
+  message.set_abs_pos.type = MSG_SET_AXIS_ABS_POS;
+  message.set_abs_pos.axis = joint;
+  message.set_abs_pos.value = position;
 
-  return pack_nw_buff(buffer, message, sizeof(struct Message_set_abs_pos));
+  return pack_nw_buff(buffer, &message, sizeof(struct Message_set_abs_pos));
 }
 
 size_t serialize_joint_velocity(
     struct NWBuffer* buffer,
-    union MessageAny* message,
     uint32_t joint,
     double velocity
 ) {
-  message->set_velocity.type = MSG_SET_AXIS_VELOCITY;
-  message->set_velocity.axis = joint;
-  message->set_velocity.value = velocity;
+  union MessageAny message;
+  message.set_velocity.type = MSG_SET_AXIS_VELOCITY;
+  message.set_velocity.axis = joint;
+  message.set_velocity.value = velocity;
 
-  return pack_nw_buff(buffer, message, sizeof(struct Message_set_velocity));
+  return pack_nw_buff(buffer, &message, sizeof(struct Message_set_velocity));
 }
 
 size_t serialize_joint_max_velocity(
     struct NWBuffer* buffer,
-    union MessageAny* message,
     uint32_t joint,
     double velocity
 ) {
-  message->set_velocity.type = MSG_SET_AXIS_MAX_VELOCITY;
-  message->set_velocity.axis = joint;
-  message->set_velocity.value = velocity;
+  union MessageAny message;
+  message.set_max_velocity.type = MSG_SET_AXIS_MAX_VELOCITY;
+  message.set_max_velocity.axis = joint;
+  message.set_max_velocity.value = velocity;
 
-  return pack_nw_buff(buffer, message, sizeof(struct Message_set_max_velocity));
+  return pack_nw_buff(buffer, &message, sizeof(struct Message_set_max_velocity));
 }
 
 size_t serialize_joint_max_accel(
     struct NWBuffer* buffer,
-    union MessageAny* message,
     uint32_t joint,
     double accel
 ) {
-  message->set_velocity.type = MSG_SET_AXIS_MAX_VELOCITY;
-  message->set_velocity.axis = joint;
-  message->set_velocity.value = accel;
+  union MessageAny message;
+  message.set_max_accel.type = MSG_SET_AXIS_MAX_ACCEL;
+  message.set_max_accel.axis = joint;
+  message.set_max_accel.value = accel;
 
-  return pack_nw_buff(buffer, message, sizeof(struct Message_set_max_accel));
+  return pack_nw_buff(buffer, &message, sizeof(struct Message_set_max_accel));
 }
 
 size_t serialize_joint_io_step(
     struct NWBuffer* buffer,
-    union MessageAny* message,
     uint32_t joint,
     uint8_t value
 ) {
-  message->joint_gpio.type = MSG_SET_AXIS_IO_STEP;
-  message->joint_gpio.axis = joint;
-  message->joint_gpio.value = value;
+  union MessageAny message;
+  message.joint_gpio.type = MSG_SET_AXIS_IO_STEP;
+  message.joint_gpio.axis = joint;
+  message.joint_gpio.value = value;
 
-  return pack_nw_buff(buffer, message, sizeof(struct Message_joint_gpio));
+  return pack_nw_buff(buffer, &message, sizeof(struct Message_joint_gpio));
 }
 
 size_t serialize_joint_io_dir(
     struct NWBuffer* buffer,
-    union MessageAny* message,
     uint32_t joint,
     uint8_t value
 ) {
-  message->joint_gpio.type = MSG_SET_AXIS_IO_DIR;
-  message->joint_gpio.axis = joint;
-  message->joint_gpio.value = value;
+  union MessageAny message;
+  message.joint_gpio.type = MSG_SET_AXIS_IO_DIR;
+  message.joint_gpio.axis = joint;
+  message.joint_gpio.value = value;
 
-  return pack_nw_buff(buffer, message, sizeof(struct Message_joint_gpio));
+  return pack_nw_buff(buffer, &message, sizeof(struct Message_joint_gpio));
 }
 
 size_t serialize_joint_enable(
     struct NWBuffer* buffer,
-    union MessageAny* message,
     uint32_t joint,
     uint8_t value
 ) {
-  message->joint_gpio.type = MSG_SET_AXIS_ENABLED;
-  message->joint_gpio.axis = joint;
-  message->joint_gpio.value = value;
+  union MessageAny message;
+  message.joint_gpio.type = MSG_SET_AXIS_ENABLED;
+  message.joint_gpio.axis = joint;
+  message.joint_gpio.value = value;
 
-  return pack_nw_buff(buffer, message, sizeof(struct Message_joint_enable));
+  return pack_nw_buff(buffer, &message, sizeof(struct Message_joint_enable));
 }
 
 void process_data(char* buf, skeleton_t* data, int debug) {

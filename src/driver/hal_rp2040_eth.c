@@ -380,7 +380,7 @@ static void write_port(void *arg, long period)
 
   char rx_buffer[BUFSIZE] = {0};
 
-  pack_success = pack_success && serialize_timing(&buffer, &message, count, rtapi_get_time());
+  pack_success = pack_success && serialize_timing(&buffer, count, rtapi_get_time());
 
   // Put GPIO values in buffer.
   // TODO: Not yet implemented.
@@ -399,20 +399,20 @@ static void write_port(void *arg, long period)
       // Absolute position mode.
       double position = *data->joint_scale[joint] * *data->joint_pos_cmd[joint];
       double velocity = *data->joint_scale[joint] * *data->joint_vel_cmd[joint];
-      pack_success = pack_success && serialize_joint_pos(&buffer, &message, joint, position);
-      pack_success = pack_success && serialize_joint_velocity(&buffer, &message, joint, velocity);
+      pack_success = pack_success && serialize_joint_pos(&buffer, joint, position);
+      pack_success = pack_success && serialize_joint_velocity(&buffer, joint, velocity);
     }
 
     if(last_max_velocity[joint] != *data->joint_max_velocity[joint]) {
       last_max_velocity[joint] = *data->joint_max_velocity[joint];
       pack_success = pack_success && serialize_joint_max_velocity(
-          &buffer, &message, joint, last_max_velocity[joint]);
+          &buffer, joint, last_max_velocity[joint]);
     }
 
     if(last_max_accel[joint] != *data->joint_max_accel[joint]) {
       last_max_accel[joint] = *data->joint_max_accel[joint];;
       pack_success = pack_success && serialize_joint_max_accel(
-          &buffer, &message, joint, last_max_accel[joint]);
+          &buffer, joint, last_max_accel[joint]);
     }
 
     enable_joint(&buffer, &pack_success, joint, data);
@@ -488,14 +488,14 @@ void enable_io(struct NWBuffer* buffer, bool* pack_success, int joint, skeleton_
         joint, *data->joint_gpio_step[joint]);
     printf("Configure joint: %u  step io: %u\n", joint, *data->joint_gpio_step[joint]);
     *pack_success = *pack_success && serialize_joint_io_step(
-        buffer, &message, joint, *data->joint_gpio_step[joint]);
+        buffer, joint, *data->joint_gpio_step[joint]);
 
     last_io_pos_dir[joint] = *data->joint_gpio_dir[joint];
     rtapi_print_msg(RTAPI_MSG_INFO, "Configure joint: %u  dir io: %u\n",
         joint, *data->joint_gpio_dir[joint]);
     printf("Configure joint: %u  dir io: %u\n", joint, *data->joint_gpio_dir[joint]);
     *pack_success = *pack_success && serialize_joint_io_dir(
-        buffer, &message, joint, *data->joint_gpio_dir[joint]);
+        buffer, joint, *data->joint_gpio_dir[joint]);
 
     data->reset_joint[joint] = false;
   }
@@ -522,7 +522,7 @@ void enable_joint(struct NWBuffer* buffer, bool* pack_success, int joint, skelet
     last_enabled[joint] = *data->joint_enable[joint];
 
     *pack_success = *pack_success && serialize_joint_enable(
-        buffer, &message, joint, *data->joint_enable[joint]);
+        buffer, joint, *data->joint_enable[joint]);
   }
 }
 

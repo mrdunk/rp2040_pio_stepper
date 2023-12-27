@@ -72,6 +72,8 @@ endif()
 
 OPTION(BUILD_TESTS "Build the test binary" OFF)
 if(BUILD_TESTS)
+  enable_testing()
+
   enable_language(C CXX)
   add_subdirectory(./src/test)
 endif()

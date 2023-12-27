@@ -14,148 +14,202 @@ static void test_serialize_timing(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer buffer = {0};
-    union MessageAny message;
+    assert_int_equal(buffer.checksum, 0);
+    assert_int_equal(buffer.length, 0);
 
-    size_t data_size = serialize_timing(&buffer, &message, 1234, 5678);
+    struct Message_timing message = {
+        .type = MSG_TIMING,
+        .update_id = 1234,
+        .time = 5678
+    };
+
+    size_t data_size = serialize_timing(&buffer, message.update_id, message.time);
 
     assert_int_equal(data_size, sizeof(struct Message_timing));
     assert_int_equal(buffer.length, data_size);
     assert_int_not_equal(buffer.checksum, 0);
-    assert_memory_equal(buffer.payload, &message, sizeof(struct Message_timing));
+
+    struct Message_timing* message_p = (void*)buffer.payload;
+    assert_int_equal(message.type, message_p->type);
+    assert_int_equal(message.update_id, message_p->update_id);
+    assert_int_equal(message.time, message_p->time);
 }
 
 static void test_serialize_jont_pos(void **state) {
     (void) state; /* unused */
     
     struct NWBuffer buffer = {0};
-    union MessageAny message;
+    assert_int_equal(buffer.checksum, 0);
+    assert_int_equal(buffer.length, 0);
 
-    size_t data_size = serialize_joint_pos(&buffer, &message, 1234, 56.78);
+    struct Message_set_abs_pos message = {
+        .type = MSG_SET_AXIS_ABS_POS,
+        .axis = 1234,
+        .value = 56.78
+    };
+
+    size_t data_size = serialize_joint_pos(&buffer, message.axis, message.value);
 
     assert_int_equal(data_size, sizeof(struct Message_set_abs_pos));
     assert_int_equal(buffer.length, data_size);
     assert_int_not_equal(buffer.checksum, 0);
-    assert_memory_equal(buffer.payload, &message, sizeof(struct Message_set_abs_pos));
+
+    struct Message_set_abs_pos* message_p = (void*)buffer.payload;
+    assert_int_equal(message.type, message_p->type);
+    assert_int_equal(message.axis, message_p->axis);
+    assert_int_equal(message.value, message_p->value);
 }
 
 static void test_serialize_joint_velocity(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer buffer = {0};
-    union MessageAny message;
+    assert_int_equal(buffer.checksum, 0);
+    assert_int_equal(buffer.length, 0);
 
-    size_t data_size = serialize_joint_velocity(
-            &buffer, &message, 1234, 56.78);
+    struct Message_set_velocity message = {
+        .type = MSG_SET_AXIS_VELOCITY,
+        .axis = 1234,
+        .value = 56.78
+    };
+
+
+    size_t data_size = serialize_joint_velocity(&buffer, message.axis, message.value);
 
     assert_int_equal(data_size, sizeof(struct Message_set_velocity));
     assert_int_equal(buffer.length, data_size);
     assert_int_not_equal(buffer.checksum, 0);
-    assert_memory_equal(buffer.payload, &message, sizeof(struct Message_set_velocity));
+
+    struct Message_set_velocity* message_p = (void*)buffer.payload;
+    assert_int_equal(message.type, message_p->type);
+    assert_int_equal(message.axis, message_p->axis);
+    assert_int_equal(message.value, message_p->value);
 }
 
 static void test_serialize_joint_max_velocity(void **state) {
     (void) state; /* unused */
 
-    //char buffer[BUFSIZE];
-    //void* buffer_iterator = &buffer[0];
-    //size_t buffer_space = BUFSIZE;
-    //size_t buffer_size;
     struct NWBuffer buffer = {0};
-    union MessageAny message;
+    assert_int_equal(buffer.checksum, 0);
+    assert_int_equal(buffer.length, 0);
 
-    //buffer_size = serialize_joint_max_velocity(
-    //        &message, 1234, 56.78, &buffer_iterator, &buffer_space);
-    size_t data_size = serialize_joint_max_velocity(
-            &buffer, &message, 1234, 56.78);
+    struct Message_set_max_velocity message = {
+        .type = MSG_SET_AXIS_MAX_VELOCITY,
+        .axis = 1234,
+        .value = 56.78
+    };
+
+    size_t data_size = serialize_joint_max_velocity(&buffer, message.axis, message.value);
 
     assert_int_equal(data_size, sizeof(struct Message_set_max_velocity));
     assert_int_equal(buffer.length, data_size);
     assert_int_not_equal(buffer.checksum, 0);
-    assert_memory_equal(buffer.payload, &message, sizeof(struct Message_set_max_velocity));
+
+    struct Message_set_velocity* message_p = (void*)buffer.payload;
+    assert_int_equal(message.type, message_p->type);
+    assert_int_equal(message.axis, message_p->axis);
+    assert_int_equal(message.value, message_p->value);
 }
 
 static void test_serialize_joint_max_accel(void **state) {
     (void) state; /* unused */
 
-    //char buffer[BUFSIZE];
-    //void* buffer_iterator = &buffer[0];
-    //size_t buffer_space = BUFSIZE;
-    //size_t buffer_size;
     struct NWBuffer buffer = {0};
-    union MessageAny message;
+    assert_int_equal(buffer.checksum, 0);
+    assert_int_equal(buffer.length, 0);
 
-    //buffer_size = serialize_joint_max_accel(
-    //        &message, 1234, 56.78, &buffer_iterator, &buffer_space);
-    size_t data_size = serialize_joint_max_accel(
-            &buffer, &message, 1234, 56.78);
+    struct Message_set_max_accel message = {
+        .type = MSG_SET_AXIS_MAX_ACCEL,
+        .axis = 1234,
+        .value = 56.78
+    };
+
+    size_t data_size = serialize_joint_max_accel(&buffer, message.axis, message.value);
 
     assert_int_equal(data_size, sizeof(struct Message_set_max_accel));
     assert_int_equal(buffer.length, data_size);
     assert_int_not_equal(buffer.checksum, 0);
-    assert_memory_equal(buffer.payload, &message, sizeof(struct Message_set_max_accel));
+
+    struct Message_set_max_accel* message_p = (void*)buffer.payload;
+    assert_int_equal(message.type, message_p->type);
+    assert_int_equal(message.axis, message_p->axis);
+    assert_int_equal(message.value, message_p->value);
 }
 
 static void test_serialize_joint_io_step(void **state) {
     (void) state; /* unused */
 
-    //char buffer[BUFSIZE];
-    //void* buffer_iterator = &buffer[0];
-    //size_t buffer_space = BUFSIZE;
-    //size_t buffer_size;
     struct NWBuffer buffer = {0};
-    union MessageAny message;
+    assert_int_equal(buffer.checksum, 0);
+    assert_int_equal(buffer.length, 0);
 
-    //buffer_size = serialize_joint_io_step(
-    //        &message, 1234, 1, &buffer_iterator, &buffer_space);
-    size_t data_size = serialize_joint_io_step(
-        &buffer, &message, 1234, 56);
+    struct Message_joint_gpio message = {
+        .type = MSG_SET_AXIS_IO_STEP,
+        .axis = 1234,
+        .value = 1
+    };
+
+    size_t data_size = serialize_joint_io_step(&buffer, message.axis, message.value);
 
     assert_int_equal(data_size, sizeof(struct Message_joint_gpio));
     assert_int_equal(buffer.length, data_size);
     assert_int_not_equal(buffer.checksum, 0);
-    assert_memory_equal(buffer.payload, &message, sizeof(struct Message_joint_gpio));
+
+    struct Message_joint_gpio* message_p = (void*)buffer.payload;
+    assert_int_equal(message.type, message_p->type);
+    assert_int_equal(message.axis, message_p->axis);
+    assert_int_equal(message.value, message_p->value);
 }
 
 static void test_serialize_joint_io_dir(void **state) {
     (void) state; /* unused */
 
-    //char buffer[BUFSIZE];
-    //void* buffer_iterator = &buffer[0];
-    //size_t buffer_space = BUFSIZE;
-    //size_t buffer_size;
     struct NWBuffer buffer = {0};
-    union MessageAny message;
+    assert_int_equal(buffer.checksum, 0);
+    assert_int_equal(buffer.length, 0);
 
-    //buffer_size = serialize_joint_io_dir(
-    //        &message, 1234, 2, &buffer_iterator, &buffer_space);
-    size_t data_size = serialize_joint_io_dir(
-        &buffer, &message, 1234, 56);
+    struct Message_joint_gpio message = {
+        .type = MSG_SET_AXIS_IO_DIR,
+        .axis = 1234,
+        .value = 1
+    };
+
+    size_t data_size = serialize_joint_io_dir(&buffer, message.axis, message.value);
 
     assert_int_equal(data_size, sizeof(struct Message_joint_gpio));
     assert_int_equal(buffer.length, data_size);
     assert_int_not_equal(buffer.checksum, 0);
-    assert_memory_equal(buffer.payload, &message, sizeof(struct Message_joint_gpio));
+
+    struct Message_joint_gpio* message_p = (void*)buffer.payload;
+    assert_int_equal(message.type, message_p->type);
+    assert_int_equal(message.axis, message_p->axis);
+    assert_int_equal(message.value, message_p->value);
 }
 
 static void test_serialize_joint_enable(void **state) {
     (void) state; /* unused */
 
-    //char buffer[BUFSIZE];
-    //void* buffer_iterator = &buffer[0];
-    //size_t buffer_space = BUFSIZE;
-    //size_t buffer_size;
     struct NWBuffer buffer = {0};
-    union MessageAny message;
+    assert_int_equal(buffer.checksum, 0);
+    assert_int_equal(buffer.length, 0);
 
-    //buffer_size = serialize_joint_enable(
-    //        &message, 1234, 0, &buffer_iterator, &buffer_space);
-    size_t data_size = serialize_joint_enable(
-            &buffer, &message, 1234, 1);
+    struct Message_joint_enable message = {
+        .type = MSG_SET_AXIS_ENABLED,
+        .axis = 1234,
+        .value = 1
+    };
+
+
+    size_t data_size = serialize_joint_enable(&buffer, message.axis, message.value);
 
     assert_int_equal(data_size, sizeof(struct Message_joint_enable));
     assert_int_equal(buffer.length, data_size);
     assert_int_not_equal(buffer.checksum, 0);
-    assert_memory_equal(buffer.payload, &message, sizeof(struct Message_joint_enable));
+
+    struct Message_joint_enable* message_p = (void*)buffer.payload;
+    assert_int_equal(message.type, message_p->type);
+    assert_int_equal(message.axis, message_p->axis);
+    assert_int_equal(message.value, message_p->value);
 }
 
 int main(void) {
