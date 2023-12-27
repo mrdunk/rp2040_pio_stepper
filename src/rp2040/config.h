@@ -7,6 +7,7 @@
 #include <stdbool.h>
 
 #include "messages.h"
+#include "buffer.h"
 #include "stepper_control.h"
 #include "ring_buffer.h"
 
@@ -103,13 +104,12 @@ uint32_t get_axis_config(
     );
 
 /* Serialise metrics stored in global config in a format for sending over UDP. */
-size_t serialise_metrics(uint8_t* tx_buf, size_t* tx_buf_len, int32_t update_id, int32_t time_diff);
+bool serialise_metrics(struct NWBuffer* tx_buf, int32_t update_id, int32_t time_diff);
 
 /* Serialise data stored in global config in a format for sending over UDP. */
-size_t serialise_axis_config(
+bool serialise_axis_config(
     const uint32_t axis,
-    uint8_t* tx_buf,
-    size_t* tx_buf_len,
+    struct NWBuffer* tx_buf,
     uint8_t wait_for_data);
 
 #endif  // CONFIG__H

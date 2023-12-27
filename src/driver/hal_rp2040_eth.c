@@ -374,11 +374,10 @@ static void write_port(void *arg, long period)
   skeleton_t *data = arg;
   data->joints_enabled_this_cycle = 0;
 
-  struct NWBuffer buffer = {0};
+  struct NWBuffer buffer;
+  reset_nw_buf(&buffer);
   union MessageAny message;
   bool pack_success = true;
-
-  char rx_buffer[BUFSIZE] = {0};
 
   pack_success = pack_success && serialize_timing(&buffer, count, rtapi_get_time());
 
@@ -421,10 +420,11 @@ static void write_port(void *arg, long period)
   send_data(num_device, &buffer);
 
   // Receive data and check packets all completed round trip.
-  int receive_count;
-  receive_count = get_reply_non_block(num_device, rx_buffer);
-  if(receive_count > 0) {
-    process_data(rx_buffer, data, 0);
+  reset_nw_buf(&buffer);
+  size_t data_length = get_reply_non_block(num_device, buffer.payload);
+  if(data_length > 0) {
+    uint16_t mess_received_count = 0;
+    process_data(&buffer, data, &mess_received_count, data_length);
 
     if(! *data->metric_eth_state) {
       // Network connection just came up after being down.

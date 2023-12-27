@@ -70,8 +70,7 @@ static void test_unpack_multiple_message(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer rx_buf = {0};
-    uint8_t tx_buf[DATA_BUF_SIZE] = {0};
-    size_t tx_buf_len = 0;
+    struct NWBuffer tx_buf = {0};
     uint8_t received_msg_count = 0;
     uint16_t expected_length = sizeof(rx_buf.length) + sizeof(rx_buf.checksum);
 
@@ -79,9 +78,9 @@ static void test_unpack_multiple_message(void **state) {
     expected_length += append_enable_message(&rx_buf, 1, 1);
     expected_length += append_enable_message(&rx_buf, 2, 0);
 
-    tx_buf_len = process_received_buffer(&rx_buf, tx_buf, &received_msg_count, expected_length);
+    process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, expected_length);
 
-    assert_int_equal(tx_buf_len, 0);
+    assert_int_equal(tx_buf.length, 0);
     // 3 messages processed.
     assert_int_equal(received_msg_count, 3);
 }
@@ -90,8 +89,7 @@ static void test_unpack_multiple_message_stop_at_length(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer rx_buf = {0};
-    uint8_t tx_buf[DATA_BUF_SIZE] = {0};
-    size_t tx_buf_len = 0;
+    struct NWBuffer tx_buf = {0};
     uint8_t received_msg_count = 0;
     uint16_t expected_length = sizeof(rx_buf.length) + sizeof(rx_buf.checksum);
 
@@ -107,9 +105,9 @@ static void test_unpack_multiple_message_stop_at_length(void **state) {
     rx_buf.checksum = checksum(
             cs, &rx_buf.payload, sizeof(struct Message_joint_enable) * 3 -1);
 
-    tx_buf_len = process_received_buffer(&rx_buf, tx_buf, &received_msg_count, expected_length);
+    process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, expected_length);
 
-    assert_int_equal(tx_buf_len, 0);
+    assert_int_equal(tx_buf.length, 0);
     // 2 messages processed.
     assert_int_equal(received_msg_count, 2);
 }
@@ -119,16 +117,15 @@ static void test_unpack_joint_enable_message(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer rx_buf = {0};
-    uint8_t tx_buf[DATA_BUF_SIZE] = {0};
-    size_t tx_buf_len = 0;
+    struct NWBuffer tx_buf = {0};
     uint8_t received_msg_count = 0;
     uint16_t expected_length = sizeof(rx_buf.length) + sizeof(rx_buf.checksum);
 
     expected_length += append_enable_message(&rx_buf, 2, 1);
 
-    tx_buf_len = process_received_buffer(&rx_buf, tx_buf, &received_msg_count, expected_length);
+    process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, expected_length);
 
-    assert_int_equal(tx_buf_len, 0);
+    assert_int_equal(tx_buf.length, 0);
     // 1 message processed.
     assert_int_equal(received_msg_count, 1);
 
@@ -142,7 +139,7 @@ static void test_unpack_timing_message(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer rx_buf = {0};
-    uint8_t tx_buf[DATA_BUF_SIZE] = {0};
+    struct NWBuffer tx_buf = {0};
     uint8_t received_msg_count = 0;
     uint16_t expected_length = sizeof(rx_buf.length) + sizeof(rx_buf.checksum);
 
@@ -158,7 +155,7 @@ static void test_unpack_timing_message(void **state) {
     expected_length += append_message(&rx_buf, message);
     assert_memory_equal(&rx_buf.payload, &message, sizeof(struct Message_timing));
 
-    size_t tx_buf_len = process_received_buffer(&rx_buf, tx_buf, &received_msg_count, expected_length);
+    process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, expected_length);
 
     // 1 message processed.
     assert_int_equal(received_msg_count, 1);
@@ -170,7 +167,7 @@ static void test_unpack_timing_message(void **state) {
 
     // The serialise_metrics(...) method has not been mocked
     // so there will be data on the tx_buf.
-    assert_int_equal(tx_buf_len, sizeof(struct Reply_metrics));
+    assert_int_equal(tx_buf.length, sizeof(struct Reply_metrics));
 }
 
 /* Test unpacking the struct Message_set_abs_pos works as intended. */
@@ -178,7 +175,7 @@ static void test_unpack_set_abs_pos_message(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer rx_buf = {0};
-    uint8_t tx_buf[DATA_BUF_SIZE] = {0};
+    struct NWBuffer tx_buf = {0};
     uint8_t received_msg_count = 0;
     uint16_t expected_length = sizeof(rx_buf.length) + sizeof(rx_buf.checksum);
 
@@ -194,9 +191,9 @@ static void test_unpack_set_abs_pos_message(void **state) {
     expected_length += append_message(&rx_buf, message);
     assert_memory_equal(&rx_buf.payload, &message, sizeof(struct Message_set_abs_pos));
 
-    size_t tx_buf_len = process_received_buffer(&rx_buf, tx_buf, &received_msg_count, expected_length);
+    process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, expected_length);
 
-    assert_int_equal(tx_buf_len, 0);
+    assert_int_equal(tx_buf.length, 0);
     // 1 message processed.
     assert_int_equal(received_msg_count, 1);
 
@@ -210,7 +207,7 @@ static void test_unpack_set_velocity_message(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer rx_buf = {0};
-    uint8_t tx_buf[DATA_BUF_SIZE] = {0};
+    struct NWBuffer tx_buf = {0};
     uint8_t received_msg_count = 0;
     uint16_t expected_length = sizeof(rx_buf.length) + sizeof(rx_buf.checksum);
 
@@ -226,9 +223,9 @@ static void test_unpack_set_velocity_message(void **state) {
     expected_length += append_message(&rx_buf, message);
     assert_memory_equal(&rx_buf.payload, &message, sizeof(struct Message_set_velocity));
 
-    size_t tx_buf_len = process_received_buffer(&rx_buf, tx_buf, &received_msg_count, expected_length);
+    process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, expected_length);
 
-    assert_int_equal(tx_buf_len, 0);
+    assert_int_equal(tx_buf.length, 0);
     // 1 message processed.
     assert_int_equal(received_msg_count, 1);
 
@@ -242,7 +239,7 @@ static void test_unpack_set_max_velocity_message(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer rx_buf = {0};
-    uint8_t tx_buf[DATA_BUF_SIZE] = {0};
+    struct NWBuffer tx_buf = {0};
     uint8_t received_msg_count = 0;
     uint16_t expected_length = sizeof(rx_buf.length) + sizeof(rx_buf.checksum);
 
@@ -258,9 +255,9 @@ static void test_unpack_set_max_velocity_message(void **state) {
     expected_length += append_message(&rx_buf, message);
     assert_memory_equal(&rx_buf.payload, &message, sizeof(struct Message_set_max_velocity));
 
-    size_t tx_buf_len = process_received_buffer(&rx_buf, tx_buf, &received_msg_count, expected_length);
+    process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, expected_length);
 
-    assert_int_equal(tx_buf_len, 0);
+    assert_int_equal(tx_buf.length, 0);
     // 1 message processed.
     assert_int_equal(received_msg_count, 1);
 
@@ -274,7 +271,7 @@ static void test_unpack_set_max_accel_message(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer rx_buf = {0};
-    uint8_t tx_buf[DATA_BUF_SIZE] = {0};
+    struct NWBuffer tx_buf = {0};
     uint8_t received_msg_count = 0;
     uint16_t expected_length = sizeof(rx_buf.length) + sizeof(rx_buf.checksum);
 
@@ -290,9 +287,9 @@ static void test_unpack_set_max_accel_message(void **state) {
     expected_length += append_message(&rx_buf, message);
     assert_memory_equal(&rx_buf.payload, &message, sizeof(struct Message_set_max_accel));
 
-    size_t tx_buf_len = process_received_buffer(&rx_buf, tx_buf, &received_msg_count, expected_length);
+    process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, expected_length);
 
-    assert_int_equal(tx_buf_len, 0);
+    assert_int_equal(tx_buf.length, 0);
     // 1 message processed.
     assert_int_equal(received_msg_count, 1);
 
@@ -306,7 +303,8 @@ static void test_unpack_joint_gpio_step_message(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer rx_buf = {0};
-    uint8_t tx_buf[DATA_BUF_SIZE] = {0};
+    struct NWBuffer tx_buf = {0};
+    //uint8_t tx_buf[DATA_BUF_SIZE] = {0};
     uint8_t received_msg_count = 0;
     uint16_t expected_length = sizeof(rx_buf.length) + sizeof(rx_buf.checksum);
 
@@ -322,9 +320,9 @@ static void test_unpack_joint_gpio_step_message(void **state) {
     expected_length += append_message(&rx_buf, message);
     assert_memory_equal(&rx_buf.payload, &message, sizeof(struct Message_joint_gpio));
 
-    size_t tx_buf_len = process_received_buffer(&rx_buf, tx_buf, &received_msg_count, expected_length);
+    process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, expected_length);
 
-    assert_int_equal(tx_buf_len, 0);
+    assert_int_equal(tx_buf.length, 0);
     // 1 message processed.
     assert_int_equal(received_msg_count, 1);
 
@@ -338,7 +336,8 @@ static void test_unpack_joint_gpio_dir_message(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer rx_buf = {0};
-    uint8_t tx_buf[DATA_BUF_SIZE] = {0};
+    struct NWBuffer tx_buf = {0};
+    //uint8_t tx_buf[DATA_BUF_SIZE] = {0};
     uint8_t received_msg_count = 0;
     uint16_t expected_length = sizeof(rx_buf.length) + sizeof(rx_buf.checksum);
 
@@ -354,9 +353,9 @@ static void test_unpack_joint_gpio_dir_message(void **state) {
     expected_length += append_message(&rx_buf, message);
     assert_memory_equal(&rx_buf.payload, &message, sizeof(struct Message_joint_gpio));
 
-    size_t tx_buf_len = process_received_buffer(&rx_buf, tx_buf, &received_msg_count, expected_length);
+    process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, expected_length);
 
-    assert_int_equal(tx_buf_len, 0);
+    assert_int_equal(tx_buf.length, 0);
     // 1 message processed.
     assert_int_equal(received_msg_count, 1);
 
@@ -369,7 +368,8 @@ static void test_unpack_one_of_each(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer rx_buf = {0};
-    uint8_t tx_buf[DATA_BUF_SIZE] = {0};
+    struct NWBuffer tx_buf = {0};
+    //uint8_t tx_buf[DATA_BUF_SIZE] = {0};
     uint8_t received_msg_count = 0;
     uint16_t expected_length = sizeof(rx_buf.length) + sizeof(rx_buf.checksum);
 
@@ -430,13 +430,13 @@ static void test_unpack_one_of_each(void **state) {
     expected_length += append_message(&rx_buf, (union MessageAny)joint_gpio_dir);
 
 
-    size_t tx_buf_len = process_received_buffer(&rx_buf, tx_buf, &received_msg_count, expected_length);
+    process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, expected_length);
 
     // 8 messages processed.
     assert_int_equal(received_msg_count, 8);
 
     // The MSG_TIMING populates tx_buf.
-    assert_int_equal(tx_buf_len, sizeof(struct Reply_metrics));
+    assert_int_equal(tx_buf.length, sizeof(struct Reply_metrics));
 
     // Should have reset the rx_buf.
     assert_int_equal(rx_buf.length, 0);

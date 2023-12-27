@@ -15,6 +15,7 @@
 
 #include "config.h"
 #include "messages.h"
+#include "buffer.h"
 
 // Mutexes for locking the main config which is shared between cores.
 mutex_t mtx_top;
@@ -340,16 +341,7 @@ uint32_t get_axis_config(
 }
 
 /* Serialise metrics stored in global config in a format for sending over UDP. */
-size_t serialise_metrics(uint8_t* tx_buf, size_t* tx_buf_len, int32_t update_id, int32_t time_diff) {
-  // Leave space for null termination.
-  size_t max_buf_len = DATA_BUF_SIZE - sizeof(uint32_t);
-
-  if(*tx_buf_len + sizeof(struct Reply_metrics) > max_buf_len) {
-    printf("ERROR: Buffer overrun: %u > %u\n",
-        *tx_buf_len + sizeof(struct Reply_metrics), max_buf_len);
-    return 0;
-  }
-
+bool serialise_metrics(struct NWBuffer* tx_buf, int32_t update_id, int32_t time_diff) {
   struct Reply_metrics reply;
   reply.type = REPLY_METRICS;
   reply.time_diff = time_diff;
@@ -357,27 +349,27 @@ size_t serialise_metrics(uint8_t* tx_buf, size_t* tx_buf_len, int32_t update_id,
 
   reply.update_id = update_id;
 
-  memcpy(tx_buf + *tx_buf_len, &reply, sizeof(struct Reply_metrics));
-  *tx_buf_len += sizeof(struct Reply_metrics);
+  uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
 
-  return 1;
+  if(!tx_buf_len) {
+    printf("WARN: TX length greater than buffer size. %u\n", update_id);
+    return false;
+  }
+
+  return true;
 }
 
 
 /* Serialise data stored in global config in a format for sending over UDP. */
-size_t serialise_axis_config(
+bool serialise_axis_config(
     const uint32_t axis,
-    uint8_t* tx_buf,
-    size_t* tx_buf_len,
+    struct NWBuffer* tx_buf,
     uint8_t wait_for_data)
 {
   if(axis >= MAX_AXIS) {
     printf("ERROR: Invalid axis: %u\n", axis);
-    return 0;
+    return false;
   }
-
-  // Leave space for null termination.
-  size_t max_buf_len = DATA_BUF_SIZE - sizeof(uint32_t);
 
   int32_t abs_pos_acheived;
   double max_velocity;
@@ -412,12 +404,6 @@ size_t serialise_axis_config(
     printf("WC0, mult ud: %u \t%lu\n", axis, updated);
   }
 
-  if(*tx_buf_len + sizeof(struct Reply_axis_config) > max_buf_len) {
-    printf("ERROR: Buffer overrun: %u > %u\n",
-        *tx_buf_len + sizeof(struct Reply_axis_config), max_buf_len);
-    return 0;
-  }
-
   struct Reply_axis_config reply;
   reply.type = REPLY_AXIS_CONFIG;
   reply.axis = axis;
@@ -428,8 +414,12 @@ size_t serialise_axis_config(
   reply.velocity_acheived = velocity_acheived;
   reply.step_len_ticks = step_len_ticks;
 
-  memcpy(tx_buf + *tx_buf_len, &reply, sizeof(struct Reply_axis_config));
-  *tx_buf_len += sizeof(struct Reply_axis_config);
+  uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
 
-  return 1;
+  if(!tx_buf_len) {
+    //printf("WARN: TX length greater than buffer size. %u\n", update_id);
+    return false;
+  }
+
+  return true;
 }

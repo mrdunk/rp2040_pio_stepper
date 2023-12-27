@@ -85,14 +85,13 @@ uint8_t send_data(int device, struct NWBuffer* buffer) {
 }
 
 /* Get data via UDP. */
-size_t get_reply_non_block(int device, char* receive_buffer) {
-  memset(receive_buffer, '\0', BUFSIZE);
+size_t get_reply_non_block(int device, void* receive_buffer) {
   int addr_len;
   int flags = MSG_DONTWAIT;
   ssize_t receive_count = recvfrom(
       sockfd[device],
       receive_buffer,
-      BUFSIZE,
+      NW_BUF_LEN,
       flags,
       (struct sockaddr *)&remote_addr[device],
       (socklen_t *)&addr_len);
@@ -207,8 +206,121 @@ size_t serialize_joint_enable(
   return pack_nw_buff(buffer, &message, sizeof(struct Message_joint_enable));
 }
 
-void process_data(char* buf, skeleton_t* data, int debug) {
+bool unpack_metrics(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    uint16_t* received_count,
+    skeleton_t* data
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_metrics));
+
+  if(! data_p) {
+    return false;
+  }
+
+  struct Reply_metrics* reply = data_p;
+  *data->metric_update_id = reply->update_id;
+  *data->metric_time_diff = reply->time_diff;
+  *data->metric_rp_update_len = reply->rp_update_len;
+
+  (*received_count)++;
+  return true;
+}
+
+bool unpack_joint_config(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    uint16_t* received_count,
+    skeleton_t* data
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_axis_config));
+
+  if(! data_p) {
+    return false;
+  }
+
+  struct Reply_axis_config* reply = data_p;
+  uint32_t joint = reply->axis;
+  *data->joint_pos_feedback[joint] =
+          ((double)reply->abs_pos_acheived)
+          / *data->joint_scale[joint];
+
+  *data->joint_step_len_ticks[joint] =
+          reply->step_len_ticks;
+
+  *data->joint_velocity_cmd[joint] =
+          (float)reply->velocity_requested;
+
+  *data->joint_velocity_feedback[joint] =
+          (float)reply->velocity_acheived;
+
+  (*received_count)++;
+  return true;
+}
+
+void process_data(
+    struct NWBuffer* rx_buf,
+    skeleton_t* data,
+    uint16_t* received_count,
+    uint16_t expected_length
+) {
   // TODO: Pass in receive_count.
+  uint16_t rx_offset = 0;
+
+  if(rx_buf->length + sizeof(rx_buf->length) + sizeof(rx_buf->checksum) != expected_length) {
+    printf("WARN: RX length not equal to expected. %u\n", *received_count);
+    reset_nw_buf(rx_buf);
+    return;
+  }
+  if(rx_buf->length > NW_BUF_LEN) {
+    printf("WARN: RX length greater than buffer size. %u\n", *received_count);
+    reset_nw_buf(rx_buf);
+    return;
+  }
+
+  if(checkNWBuff(rx_buf)) {
+    printf("WARN: RX checksum fail. %u\n", *received_count);
+  }
+
+  bool unpack_success = true;
+
+  while(unpack_success) {
+    struct Reply_header* header = unpack_nw_buff(
+        rx_buf, rx_offset, NULL, NULL, sizeof(struct Reply_header));
+
+    if(!header) {
+      // End of data.
+      break;
+    }
+    switch(header->type) {
+      case REPLY_METRICS:
+        ;
+        unpack_success = unpack_success && unpack_metrics(
+            rx_buf, &rx_offset, received_count, data);
+        break;
+      case REPLY_AXIS_CONFIG:
+        unpack_success = unpack_success && unpack_joint_config(
+            rx_buf, &rx_offset, received_count, data);
+        break;
+      default:
+        printf("WARN: Invalid message type: %u\t%lu\n", *received_count, header->type);
+        // Implies data corruption.
+        unpack_success = false;
+        break;
+    }
+  }
+
+  if(rx_offset < rx_buf->length) {
+    printf("WARN: Unconsumed RX buffer remainder: %u bytes.\t%u\n",
+        rx_buf->length - rx_offset, *received_count);
+    // Implies data corruption.
+    // Received a message type in the header but not enough data in the buffer
+    // to populate the struct.
+  }
+
+  /*
   struct Reply_metrics reply_metrics;
   struct Reply_axis_config reply_axis_config;
   char* itterator = buf;
@@ -268,5 +380,6 @@ void process_data(char* buf, skeleton_t* data, int debug) {
   if(msg_count != 5) {
     printf("msg_count: %u  %u\n", msg_count, *data->metric_update_id);
   }
+  */
 }
 

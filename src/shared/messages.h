@@ -81,6 +81,10 @@ union MessageAny {
 #define REPLY_METRICS                1
 #define REPLY_AXIS_CONFIG            2
 
+struct Reply_header {
+  uint32_t type;
+};
+
 struct Reply_metrics {
   uint32_t type;
   uint32_t update_id;
@@ -97,6 +101,12 @@ struct Reply_axis_config {
   int32_t velocity_requested;
   int32_t velocity_acheived;
   int32_t step_len_ticks;
+};
+
+union ReplyAny {
+  struct Reply_header header;
+  struct Reply_metrics metrics;
+  struct Reply_axis_config joint_config;
 };
 
 #endif  // UPDATE_TYPES__H

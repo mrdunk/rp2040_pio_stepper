@@ -36,8 +36,8 @@ void setup_data(skeleton_t* data) {
 static void test_metrics(void **state) {
     (void) state; /* unused */
 
-    char buffer[BUFSIZE];
-    memset(buffer, '\0', BUFSIZE);
+    struct NWBuffer buffer = {0};
+    uint16_t mess_received_count = 0;
 
     skeleton_t data;
     setup_data(&data);
@@ -49,10 +49,16 @@ static void test_metrics(void **state) {
         .rp_update_len = 9012
     };
 
-    memcpy(buffer, &message, sizeof(message));
+    memcpy(buffer.payload, &message, sizeof(message));
+    buffer.length = sizeof(message);
 
 
-    process_data(buffer, &data, 0);
+    process_data(
+            &buffer,
+            &data,
+            &mess_received_count,
+            sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum));
+
 
     assert_int_equal(*(data.metric_update_id), message.update_id);
     assert_int_equal(*(data.metric_time_diff), message.time_diff);
@@ -62,8 +68,8 @@ static void test_metrics(void **state) {
 static void test_axis_config(void **state) {
     (void) state; /* unused */
 
-    char buffer[BUFSIZE];
-    memset(buffer, '\0', BUFSIZE);
+    struct NWBuffer buffer = {0};
+    uint16_t mess_received_count = 0;
 
     skeleton_t data;
     setup_data(&data);
@@ -80,10 +86,14 @@ static void test_axis_config(void **state) {
         .step_len_ticks = 1357
     };
 
-    memcpy(buffer, &message, sizeof(message));
+    memcpy(buffer.payload, &message, sizeof(message));
+    buffer.length = sizeof(message);
 
-
-    process_data(buffer, &data, 0);
+    process_data(
+            &buffer,
+            &data,
+            &mess_received_count,
+            sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum));
 
     assert_double_equal(
             *(data.joint_pos_feedback[axis]),

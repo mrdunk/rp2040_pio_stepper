@@ -78,8 +78,7 @@ void recover_clock() {
 bool unpack_timing(
     struct NWBuffer* rx_buf,
     uint16_t* rx_offset,
-    uint8_t* tx_buf,
-    size_t* tx_buf_len,
+    struct NWBuffer* tx_buf,
     uint8_t* received_count
 ) {
   void* data_p = unpack_nw_buff(
@@ -93,7 +92,7 @@ bool unpack_timing(
   int32_t id_diff;
   int32_t time_diff;
   update_packet_metrics(message, &id_diff, &time_diff);
-  serialise_metrics(tx_buf, tx_buf_len, message->update_id, time_diff);
+  serialise_metrics(tx_buf, message->update_id, time_diff);
 
   (*received_count)++;
   return true;
@@ -274,27 +273,30 @@ bool unpack_joint_io_dir(
 /* Process data received over the network.
  * This consists of serialised structs as defined in src/shared/massages.h
  */
-size_t process_received_buffer(
-    struct NWBuffer* rx_buf, uint8_t* tx_buf, uint8_t* received_count, uint16_t expected_length) {
+void process_received_buffer(
+    struct NWBuffer* rx_buf,
+    struct NWBuffer* tx_buf,
+    uint8_t* received_count,
+    uint16_t expected_length
+) {
   uint16_t rx_offset = 0;
-  size_t tx_buf_len = 0;
 
   if(rx_buf->length + sizeof(rx_buf->length) + sizeof(rx_buf->checksum) != expected_length) {
     printf("WARN: RX length not equal to expected. %u\n", *received_count);
     reset_nw_buf(rx_buf);
-    return 0;
+    return;
   }
   if(rx_buf->length > NW_BUF_LEN) {
     printf("WARN: RX length greater than buffer size. %u\n", *received_count);
     reset_nw_buf(rx_buf);
-    return 0;
+    return;
   }
 
-  bool unpack_success = checkNWBuff(rx_buf);
-
-  if(! unpack_success) {
+  if(checkNWBuff(rx_buf)) {
     printf("WARN: RX checksum fail. %u\n", *received_count);
   }
+
+  bool unpack_success = true;
 
   while(unpack_success) {
     struct Message_header* header = unpack_nw_buff(
@@ -308,7 +310,7 @@ size_t process_received_buffer(
       case MSG_TIMING:
         ;
         unpack_success = unpack_success && unpack_timing(
-            rx_buf, &rx_offset, tx_buf, &tx_buf_len, received_count);
+            rx_buf, &rx_offset, tx_buf, received_count);
         break;
       case MSG_SET_AXIS_ENABLED:
         unpack_success = unpack_success && unpack_joint_enable(
@@ -341,7 +343,6 @@ size_t process_received_buffer(
       default:
         printf("WARN: Invalid message type: %u\t%lu\n", *received_count, header->type);
         // Implies data corruption.
-        tx_buf_len = 0;
         unpack_success = false;
         break;
     }
@@ -356,14 +357,13 @@ size_t process_received_buffer(
   }
 
   reset_nw_buf(rx_buf);
-  return tx_buf_len;
+  return;
 }
 
 void core0_main() {
   int retval = 0;
   struct NWBuffer rx_buf = {0};
-  uint8_t tx_buf[DATA_BUF_SIZE] = {0};
-  size_t tx_buf_len = 0;
+  struct NWBuffer tx_buf = {0};
   uint8_t received_msg_count = 0;
   uint16_t data_received = 0;
   size_t time_now;
@@ -375,9 +375,7 @@ void core0_main() {
   uint16_t destport_machine = 0;
 
   while (1) {
-    tx_buf_len = 0;
     data_received = 0;
-    memset(tx_buf, 0, DATA_BUF_SIZE);
 
     while(data_received == 0 || retval <= 0) {
       retval = get_UDP(
@@ -389,7 +387,7 @@ void core0_main() {
           &destport_machine);
     }
 
-    tx_buf_len = process_received_buffer(&rx_buf, tx_buf, &received_msg_count, data_received);
+    process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, data_received);
     if(received_msg_count != 9) {
       // Not the standard number of received packets.
       // This likely was a config update.
@@ -406,18 +404,19 @@ void core0_main() {
       size_t axis_count = 0;
       for(size_t axis = 0; axis < MAX_AXIS; axis++) {
         // Get data from config and put in TX buffer.
-        axis_count += serialise_axis_config(axis, tx_buf, &tx_buf_len, true);
+        axis_count += serialise_axis_config(axis, &tx_buf, true);
       }
 
       put_UDP(
           SOCKET_NUMBER,
           NW_PORT,
-          tx_buf,
-          tx_buf_len,
+          &tx_buf,
+          tx_buf.length + sizeof(tx_buf.length) + sizeof(tx_buf.checksum),
           destip_machine,
           &destport_machine);
     }
   }
+  reset_nw_buf(&tx_buf);
 }
 
 
