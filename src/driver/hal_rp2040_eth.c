@@ -421,7 +421,7 @@ static void write_port(void *arg, long period)
 
   // Receive data and check packets all completed round trip.
   reset_nw_buf(&buffer);
-  size_t data_length = get_reply_non_block(num_device, buffer.payload);
+  size_t data_length = get_reply_non_block(num_device, &buffer);
   if(data_length > 0) {
     uint16_t mess_received_count = 0;
     process_data(&buffer, data, &mess_received_count, data_length);

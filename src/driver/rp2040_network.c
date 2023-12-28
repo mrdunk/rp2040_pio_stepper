@@ -95,8 +95,10 @@ size_t get_reply_non_block(int device, void* receive_buffer) {
       flags,
       (struct sockaddr *)&remote_addr[device],
       (socklen_t *)&addr_len);
-  if (receive_count < 0 && errno != EAGAIN) {
-    rtapi_print_msg(RTAPI_MSG_ERR, "ERROR receiving on network port %i\n ", sockfd[device]);
+  if (receive_count < 0) {
+    if(errno != EAGAIN) {
+      rtapi_print_msg(RTAPI_MSG_ERR, "ERROR receiving on network port %i\n ", sockfd[device]);
+    }
     return 0;
   }
   return receive_count;
@@ -280,8 +282,8 @@ void process_data(
     return;
   }
 
-  if(checkNWBuff(rx_buf)) {
-    printf("WARN: RX checksum fail. %u\n", *received_count);
+  if(!checkNWBuff(rx_buf)) {
+    printf("WARN: RX checksum fail.\n");
   }
 
   bool unpack_success = true;

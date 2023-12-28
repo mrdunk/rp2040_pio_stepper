@@ -292,8 +292,8 @@ void process_received_buffer(
     return;
   }
 
-  if(checkNWBuff(rx_buf)) {
-    printf("WARN: RX checksum fail. %u\n", *received_count);
+  if(!checkNWBuff(rx_buf)) {
+    printf("WARN: RX checksum fail.\n");
   }
 
   bool unpack_success = true;
@@ -415,8 +415,8 @@ void core0_main() {
           destip_machine,
           &destport_machine);
     }
+    reset_nw_buf(&tx_buf);
   }
-  reset_nw_buf(&tx_buf);
 }
 
 
