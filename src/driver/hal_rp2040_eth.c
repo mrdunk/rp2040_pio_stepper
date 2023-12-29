@@ -360,6 +360,15 @@ void rtapi_app_exit(void)
  * REALTIME PORT WRITE FUNCTION                                *
  **************************************************************/
 
+void log_network_error(const char *operation, int device, int error)
+{
+  char addr[INET_ADDRSTRLEN];
+  char port[10];
+  getnameinfo((const struct sockaddr *)&remote_addr[device], sizeof(remote_addr[device]), addr, sizeof(addr), port, sizeof(port), NI_NUMERICHOST | NI_NUMERICSERV);
+  char errormsg[256];
+  rtapi_print_msg(RTAPI_MSG_ERR, "ERROR: failed to %s on network address %s:%s (%s)\n", operation, addr, port, strerror_r(error, errormsg, sizeof(errormsg)));
+}
+
 static void write_port(void *arg, long period)
 {
   int num_device = 0;
@@ -369,6 +378,14 @@ static void write_port(void *arg, long period)
   //static double last_max_accel[JOINTS] = {0, 0, 0, 0};
   static struct Message_joint_config last_joint_config[JOINTS] = {0};
   static uint32_t last_update_id = 0;
+  static int last_errno = 0;
+  static int cooloff = 0;
+  static int send_fail_count = 0;
+
+  if (cooloff > 0) {
+    cooloff--;
+    return;
+  }
 
   skeleton_t *data = arg;
   data->joints_enabled_this_cycle = 0;
@@ -444,8 +461,20 @@ static void write_port(void *arg, long period)
   }
 
   if(pack_success) {
-    send_data(num_device, &buffer);
+    if (send_data(num_device, &buffer) != 0) {
+      cooloff = 2000;
+      if (errno != last_errno) {
+        last_errno = errno;
+        log_network_error("send", num_device, errno);
+      }
+      send_fail_count++;
+      if (!(send_fail_count % 10)) {
+        last_errno = 0;
+      }
+      return;
+    }
   }
+  send_fail_count = 0;
 
   // Receive data and check packets all completed round trip.
   reset_nw_buf(&buffer);
@@ -466,11 +495,18 @@ static void write_port(void *arg, long period)
     last_update_id = *data->metric_update_id;
     *data->metric_missed_packets = 0;
   } else {
+    if(errno != EAGAIN && last_errno != errno) {
+      last_errno = errno;
+      log_network_error("receive", num_device, errno);
+    }
     if(*data->metric_eth_state) {
       // Network connection just went down after being up.
       on_eth_down(data, count);
     }
     (*data->metric_missed_packets)++;
+    if (*data->metric_missed_packets == 5000 || !(*data->metric_missed_packets % 10000)) {
+      printf("WARN: Still no connection over Ethernet link.\n");
+    }
   }
 
   count++;
