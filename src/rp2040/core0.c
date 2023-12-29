@@ -92,7 +92,7 @@ bool unpack_timing(
   int32_t id_diff;
   int32_t time_diff;
   update_packet_metrics(message, &id_diff, &time_diff);
-  serialise_metrics(tx_buf, message->update_id, time_diff);
+  serialise_timing(tx_buf, message->update_id, time_diff);
 
   (*received_count)++;
   return true;
@@ -270,6 +270,48 @@ bool unpack_joint_io_dir(
   return true;
 }
 
+bool unpack_joint_config(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    struct NWBuffer* tx_buf,
+    uint8_t* received_count
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_joint_config));
+
+  if(! data_p) {
+    return false;
+  }
+
+  struct Message_joint_config* message = data_p;
+  uint32_t joint = message->axis;
+  uint8_t enabled = message->enable;
+  int8_t io_step = message->gpio_step;
+  int8_t io_dir = message->gpio_dir;
+  double max_velocity = message->max_velocity;
+  double max_accel = message->max_accel;
+
+
+  printf("%u Configuring joint: %u\n", *received_count, joint);
+  update_axis_config(
+      joint,
+      CORE0,
+      &enabled, 
+      &io_step, 
+      &io_dir,
+      NULL,
+      NULL,
+      NULL,
+      &max_velocity,
+      &max_accel,
+      NULL, NULL, NULL, NULL, NULL);
+
+  serialise_axis_config(joint, tx_buf);
+
+  (*received_count)++;
+  return true;
+}
+
 /* Process data received over the network.
  * This consists of serialised structs as defined in src/shared/massages.h
  */
@@ -340,6 +382,10 @@ void process_received_buffer(
         unpack_success = unpack_success && unpack_joint_io_dir(
             rx_buf, &rx_offset, received_count);
         break;
+      case MSG_SET_AXIS_CONFIG:
+        unpack_success = unpack_success && unpack_joint_config(
+            rx_buf, &rx_offset, tx_buf, received_count);
+        break;
       default:
         printf("WARN: Invalid message type: %u\t%lu\n", *received_count, header->type);
         // Implies data corruption.
@@ -404,7 +450,7 @@ void core0_main() {
       size_t axis_count = 0;
       for(size_t axis = 0; axis < MAX_AXIS; axis++) {
         // Get data from config and put in TX buffer.
-        axis_count += serialise_axis_config(axis, &tx_buf, true);
+        axis_count += serialise_axis_movement(axis, &tx_buf, true);
       }
 
       put_UDP(

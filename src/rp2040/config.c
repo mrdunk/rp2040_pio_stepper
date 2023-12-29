@@ -341,9 +341,9 @@ uint32_t get_axis_config(
 }
 
 /* Serialise metrics stored in global config in a format for sending over UDP. */
-bool serialise_metrics(struct NWBuffer* tx_buf, int32_t update_id, int32_t time_diff) {
-  struct Reply_metrics reply;
-  reply.type = REPLY_METRICS;
+bool serialise_timing(struct NWBuffer* tx_buf, int32_t update_id, int32_t time_diff) {
+  struct Reply_timing reply;
+  reply.type = REPLY_TIMING; 
   reply.time_diff = time_diff;
   reply.rp_update_len = get_period();
 
@@ -359,9 +359,8 @@ bool serialise_metrics(struct NWBuffer* tx_buf, int32_t update_id, int32_t time_
   return true;
 }
 
-
 /* Serialise data stored in global config in a format for sending over UDP. */
-bool serialise_axis_config(
+bool serialise_axis_movement(
     const uint32_t axis,
     struct NWBuffer* tx_buf,
     uint8_t wait_for_data)
@@ -372,12 +371,7 @@ bool serialise_axis_config(
   }
 
   int32_t abs_pos_acheived;
-  double max_velocity;
-  double max_accel_ticks;
-  int32_t velocity_requested;
   int32_t velocity_acheived;
-  int32_t pos_error;
-  int32_t step_len_ticks;
   uint32_t updated = 0;
 
   do {
@@ -390,12 +384,12 @@ bool serialise_axis_config(
         NULL, //&rel_pos_requested,
         NULL, //&abs_pos_requested,
         &abs_pos_acheived,
-        &max_velocity,
-        &max_accel_ticks,
-        &velocity_requested,
+        NULL, //&max_velocity,
+        NULL, //&max_accel_ticks,
+        NULL, //&velocity_requested,
         &velocity_acheived,
-        &pos_error,
-        &step_len_ticks,
+        NULL, //&pos_error,
+        NULL, //&step_len_ticks,
         NULL //&kp
         );
   } while(updated == 0 && wait_for_data);
@@ -404,20 +398,66 @@ bool serialise_axis_config(
     printf("WC0, mult ud: %u \t%lu\n", axis, updated);
   }
 
-  struct Reply_axis_config reply;
-  reply.type = REPLY_AXIS_CONFIG;
+  struct Reply_axis_movement reply;
+  reply.type = REPLY_AXIS_MOVEMENT;
   reply.axis = axis;
   reply.abs_pos_acheived = abs_pos_acheived;
-  reply.max_velocity = max_velocity;
-  reply.max_accel_ticks = max_accel_ticks;
-  reply.velocity_requested = velocity_requested;
   reply.velocity_acheived = velocity_acheived;
-  reply.step_len_ticks = step_len_ticks;
 
   uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
 
   if(!tx_buf_len) {
     //printf("WARN: TX length greater than buffer size. %u\n", update_id);
+    return false;
+  }
+
+  return true;
+}
+
+/* Serialise data stored in global config in a format for sending over UDP. */
+bool serialise_axis_config(const uint32_t axis, struct NWBuffer* tx_buf) {
+  if(axis >= MAX_AXIS) {
+    printf("ERROR: Invalid axis: %u\n", axis);
+    return false;
+  }
+
+  uint8_t enabled;
+  int8_t io_pos_step;
+  int8_t io_pos_dir;
+  double max_velocity;
+  double max_accel;
+
+  get_axis_config(
+        axis,
+        CORE0,
+        &enabled,
+        &io_pos_step,
+        &io_pos_dir,
+        NULL, //&rel_pos_requested,
+        NULL, //&abs_pos_requested,
+        NULL, //&abs_pos_acheived,
+        &max_velocity,
+        &max_accel,
+        NULL, //&velocity_requested,
+        NULL, //&velocity_acheived,
+        NULL, //&pos_error,
+        NULL, //&step_len_ticks,
+        NULL //&kp
+        );
+
+  struct Reply_axis_config reply;
+  reply.type = REPLY_AXIS_CONFIG;
+  reply.axis = axis;
+  reply.enable = enabled;
+  reply.gpio_step = io_pos_step;
+  reply.gpio_dir = io_pos_dir;
+  reply.max_velocity = max_velocity;
+  reply.max_accel = max_accel;
+
+  uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
+
+  if(!tx_buf_len) {
+    printf("WARN: TX length greater than buffer size.\n");
     return false;
   }
 

@@ -29,12 +29,21 @@ void update_packet_metrics(
 ) {
 }
 
-size_t serialise_metrics(
+size_t serialise_timing(
         uint8_t* tx_buf,
         size_t* tx_buf_len,
         int32_t update_id,
         int32_t time_diff
 ) {
+    return 0;
+}
+
+size_t serialise_axis_movement(
+    const uint32_t axis,
+    uint8_t* tx_buf,
+    size_t* tx_buf_len,
+    uint8_t wait_for_data)
+{
     return 0;
 }
 

@@ -143,6 +143,7 @@ size_t serialize_joint_velocity(
   return pack_nw_buff(buffer, &message, sizeof(struct Message_set_velocity));
 }
 
+/*
 size_t serialize_joint_max_velocity(
     struct NWBuffer* buffer,
     uint32_t joint,
@@ -168,6 +169,7 @@ size_t serialize_joint_max_accel(
 
   return pack_nw_buff(buffer, &message, sizeof(struct Message_set_max_accel));
 }
+*/
 
 size_t serialize_joint_io_step(
     struct NWBuffer* buffer,
@@ -201,11 +203,32 @@ size_t serialize_joint_enable(
     uint8_t value
 ) {
   union MessageAny message;
-  message.joint_gpio.type = MSG_SET_AXIS_ENABLED;
-  message.joint_gpio.axis = joint;
-  message.joint_gpio.value = value;
+  message.joint_enable.type = MSG_SET_AXIS_ENABLED;
+  message.joint_enable.axis = joint;
+  message.joint_enable.value = value;
 
   return pack_nw_buff(buffer, &message, sizeof(struct Message_joint_enable));
+}
+
+size_t serialize_joint_config(
+    struct NWBuffer* buffer,
+    uint32_t joint,
+    uint32_t enable,
+    uint8_t gpio_step,
+    uint8_t gpio_dir,
+    double max_velocity,
+    double max_accel
+) {
+  union MessageAny message;
+  message.joint_config.type = MSG_SET_AXIS_CONFIG;
+  message.joint_config.axis = joint;
+  message.joint_config.enable = enable;
+  message.joint_config.gpio_step = gpio_step;
+  message.joint_config.gpio_dir = gpio_dir;
+  message.joint_config.max_velocity = max_velocity;
+  message.joint_config.max_accel = max_accel;
+
+  return pack_nw_buff(buffer, &message, sizeof(struct Message_joint_config));
 }
 
 bool unpack_metrics(
@@ -215,16 +238,43 @@ bool unpack_metrics(
     skeleton_t* data
 ) {
   void* data_p = unpack_nw_buff(
-      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_metrics));
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_timing));
 
   if(! data_p) {
     return false;
   }
 
-  struct Reply_metrics* reply = data_p;
+  struct Reply_timing* reply = data_p;
   *data->metric_update_id = reply->update_id;
   *data->metric_time_diff = reply->time_diff;
   *data->metric_rp_update_len = reply->rp_update_len;
+
+  (*received_count)++;
+  return true;
+}
+
+bool unpack_joint_movement(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    uint16_t* received_count,
+    skeleton_t* data
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_axis_movement));
+
+  if(! data_p) {
+    return false;
+  }
+
+  struct Reply_axis_movement* reply = data_p;
+  uint32_t joint = reply->axis;
+
+  *data->joint_pos_feedback[joint] =
+          ((double)reply->abs_pos_acheived)
+          / *data->joint_scale[joint];
+
+  *data->joint_velocity_feedback[joint] =
+          (double)reply->velocity_acheived;
 
   (*received_count)++;
   return true;
@@ -245,18 +295,18 @@ bool unpack_joint_config(
 
   struct Reply_axis_config* reply = data_p;
   uint32_t joint = reply->axis;
-  *data->joint_pos_feedback[joint] =
-          ((double)reply->abs_pos_acheived)
-          / *data->joint_scale[joint];
 
-  *data->joint_step_len_ticks[joint] =
-          reply->step_len_ticks;
+  *data->joint_enable[joint] = reply->enable;
+  *data->joint_gpio_step[joint] = reply->gpio_step;
+  *data->joint_gpio_dir[joint] = reply->gpio_dir;
+  *data->joint_max_velocity[joint] = reply->max_velocity;
+  *data->joint_max_accel[joint] = reply->max_accel;
 
-  *data->joint_velocity_cmd[joint] =
-          (float)reply->velocity_requested;
+  //*data->joint_step_len_ticks[joint] =
+  //        reply->step_len_ticks;
 
-  *data->joint_velocity_feedback[joint] =
-          (float)reply->velocity_acheived;
+  //*data->joint_velocity_cmd[joint] =
+  //        (float)reply->velocity_requested;
 
   (*received_count)++;
   return true;
@@ -297,9 +347,13 @@ void process_data(
       break;
     }
     switch(header->type) {
-      case REPLY_METRICS:
+      case REPLY_TIMING:
         ;
         unpack_success = unpack_success && unpack_metrics(
+            rx_buf, &rx_offset, received_count, data);
+        break;
+      case REPLY_AXIS_MOVEMENT:
+        unpack_success = unpack_success && unpack_joint_movement(
             rx_buf, &rx_offset, received_count, data);
         break;
       case REPLY_AXIS_CONFIG:
@@ -321,67 +375,5 @@ void process_data(
     // Received a message type in the header but not enough data in the buffer
     // to populate the struct.
   }
-
-  /*
-  struct Reply_metrics reply_metrics;
-  struct Reply_axis_config reply_axis_config;
-  char* itterator = buf;
-  size_t size;
-  uint32_t msg_type;
-  size_t msg_count = 0;
-  while((msg_type = *(uint32_t*)itterator)) {  // First uint32_t of each message is the type.
-    switch(msg_type) {
-      case REPLY_METRICS:
-        size = sizeof(struct Reply_metrics);
-        memcpy(&reply_metrics, itterator, size);
-        if(debug) {
-          printf("Reply_metrics: %i\t%i\n", reply_metrics.update_id, reply_metrics.time_diff);
-        }
-        *data->metric_update_id = reply_metrics.update_id;
-        *data->metric_time_diff = reply_metrics.time_diff;
-        *data->metric_rp_update_len = reply_metrics.rp_update_len;
-        itterator += size;
-        break;
-      case REPLY_AXIS_CONFIG:
-        size = sizeof(struct Reply_axis_config);
-        memcpy(&reply_axis_config, itterator, size);
-        if(debug) {
-          printf("Reply_axis_config\n"
-              "  type: %u\n  axis: %u\n  abs_pos_acheived: %u\n  min_step_len_ticks: %u\n"
-              "  max_accel_ticks: %u\n  velocity: %i\n",
-              msg_type,
-              reply_axis_config.axis,
-              reply_axis_config.abs_pos_acheived,
-              reply_axis_config.max_velocity,
-              reply_axis_config.max_accel_ticks,
-              reply_axis_config.velocity_acheived);
-        }
-        *data->joint_pos_feedback[reply_axis_config.axis] =
-          ((double)reply_axis_config.abs_pos_acheived)
-          / *data->joint_scale[reply_axis_config.axis];
-
-        *data->joint_step_len_ticks[reply_axis_config.axis] =
-          reply_axis_config.step_len_ticks;
-
-        *data->joint_velocity_cmd[reply_axis_config.axis] =
-          (float)reply_axis_config.velocity_requested;
-
-        *data->joint_velocity_feedback[reply_axis_config.axis] =
-          (float)reply_axis_config.velocity_acheived;
-
-        itterator += size;
-
-        break;
-      default:
-        printf("ERROR: Unexpected reply type: %u  msg_count: %u  update_id: %u\n",
-            msg_type, msg_count, *data->metric_update_id);
-        return;
-    }
-    msg_count++;
-  }
-  if(msg_count != 5) {
-    printf("msg_count: %u  %u\n", msg_count, *data->metric_update_id);
-  }
-  */
 }
 

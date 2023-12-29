@@ -59,6 +59,8 @@ size_t append_message(struct NWBuffer* rx_buf, union MessageAny message) {
         case MSG_SET_AXIS_IO_STEP:
         case MSG_SET_AXIS_IO_DIR:
             return pack_nw_buff(rx_buf, &message.joint_gpio, sizeof(message.joint_gpio));
+        case MSG_SET_AXIS_CONFIG:
+            return pack_nw_buff(rx_buf, &message.joint_gpio, sizeof(message.joint_config));
         default:
             printf("TEST HELPER ERROR: Invalid message type: %u\n", message.header.type);
             break;
@@ -165,9 +167,9 @@ static void test_unpack_timing_message(void **state) {
     assert_int_equal(config.last_update_id, 1234);
     assert_int_equal(config.last_update_time, 5678);
 
-    // The serialise_metrics(...) method has not been mocked
+    // The serialise_timing(...) method has not been mocked
     // so there will be data on the tx_buf.
-    assert_int_equal(tx_buf.length, sizeof(struct Reply_metrics));
+    assert_int_equal(tx_buf.length, sizeof(struct Reply_timing));
 }
 
 /* Test unpacking the struct Message_set_abs_pos works as intended. */
@@ -304,7 +306,6 @@ static void test_unpack_joint_gpio_step_message(void **state) {
 
     struct NWBuffer rx_buf = {0};
     struct NWBuffer tx_buf = {0};
-    //uint8_t tx_buf[DATA_BUF_SIZE] = {0};
     uint8_t received_msg_count = 0;
     uint16_t expected_length = sizeof(rx_buf.length) + sizeof(rx_buf.checksum);
 
@@ -337,7 +338,6 @@ static void test_unpack_joint_gpio_dir_message(void **state) {
 
     struct NWBuffer rx_buf = {0};
     struct NWBuffer tx_buf = {0};
-    //uint8_t tx_buf[DATA_BUF_SIZE] = {0};
     uint8_t received_msg_count = 0;
     uint16_t expected_length = sizeof(rx_buf.length) + sizeof(rx_buf.checksum);
 
@@ -364,12 +364,52 @@ static void test_unpack_joint_gpio_dir_message(void **state) {
     assert_int_equal(config.axis[2].io_pos_dir, 3);
 }
 
+/* Test unpacking the struct Message_joint_gpio works as intended. */
+static void test_unpack_joint_config_message(void **state) {
+    (void) state; /* unused */
+
+    struct NWBuffer rx_buf = {0};
+    struct NWBuffer tx_buf = {0};
+    uint8_t received_msg_count = 0;
+    uint16_t expected_length = sizeof(rx_buf.length) + sizeof(rx_buf.checksum);
+
+    struct Message_joint_config joint_config = {
+        .type = MSG_SET_AXIS_CONFIG,
+        .axis = 2,
+        .enable = 1,
+        .gpio_step = 1,
+        .gpio_dir = 2,
+        .max_velocity = 12.34,
+        .max_accel = 56.78
+    };
+
+    union MessageAny message;
+    message.joint_config = joint_config;
+
+    expected_length += append_message(&rx_buf, message);
+    assert_memory_equal(&rx_buf.payload, &message, sizeof(struct Message_joint_config));
+
+    process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, expected_length);
+
+    // The MSG_SET_AXIS_CONFIG populates tx_buf.
+    assert_int_equal(tx_buf.length, sizeof(struct Reply_axis_config));
+    // 1 message processed.
+    assert_int_equal(received_msg_count, 1);
+
+    // The update_axis_config(...) method has not been mocked
+    // so this will result in the config actually changing.
+    assert_int_equal(config.axis[2].enabled, 1);
+    assert_int_equal(config.axis[2].io_pos_step, 1);
+    assert_int_equal(config.axis[2].io_pos_dir, 2);
+    assert_double_equal(config.axis[2].max_velocity, 12.34, 0.01);
+    assert_double_equal(config.axis[2].max_accel_ticks, 56.78, 0.01);
+}
+
 static void test_unpack_one_of_each(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer rx_buf = {0};
     struct NWBuffer tx_buf = {0};
-    //uint8_t tx_buf[DATA_BUF_SIZE] = {0};
     uint8_t received_msg_count = 0;
     uint16_t expected_length = sizeof(rx_buf.length) + sizeof(rx_buf.checksum);
 
@@ -429,14 +469,25 @@ static void test_unpack_one_of_each(void **state) {
     };
     expected_length += append_message(&rx_buf, (union MessageAny)joint_gpio_dir);
 
+    struct Message_joint_config joint_config = {
+        .type = MSG_SET_AXIS_CONFIG,
+        .axis = 2,
+        .enable = 1,
+        .gpio_step = 1,
+        .gpio_dir = 2,
+        .max_velocity = 12.34,
+        .max_accel = 56.78
+    };
+    expected_length += append_message(&rx_buf, (union MessageAny)joint_config);
+
 
     process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, expected_length);
 
     // 8 messages processed.
-    assert_int_equal(received_msg_count, 8);
+    assert_int_equal(received_msg_count, 9);
 
-    // The MSG_TIMING populates tx_buf.
-    assert_int_equal(tx_buf.length, sizeof(struct Reply_metrics));
+    // The MSG_TIMING and MSG_SET_AXIS_CONFIG populates tx_buf.
+    assert_int_equal(tx_buf.length, sizeof(struct Reply_timing) + sizeof(struct Reply_axis_config));
 
     // Should have reset the rx_buf.
     assert_int_equal(rx_buf.length, 0);
@@ -455,6 +506,7 @@ int main(void) {
         cmocka_unit_test(test_unpack_set_max_accel_message),
         cmocka_unit_test(test_unpack_joint_gpio_step_message),
         cmocka_unit_test(test_unpack_joint_gpio_dir_message),
+        cmocka_unit_test(test_unpack_joint_config_message),
         cmocka_unit_test(test_unpack_one_of_each)
     };
 

@@ -46,7 +46,7 @@ typedef struct {
   hal_float_t* joint_velocity_feedback[JOINTS];
   hal_bit_t* pin_out[IO];
   hal_bit_t* pin_in[IO];
-  bool reset_joint[JOINTS];
+  //bool reset_joint[JOINTS];
   uint8_t joints_enabled_this_cycle;
 } skeleton_t;
 
@@ -74,8 +74,8 @@ static void write_port(void *arg, long period);
 void on_eth_up(skeleton_t *data, uint count);
 void on_eth_down(skeleton_t *data, uint count);
 
-void enable_joint(struct NWBuffer* buffer, bool* pack_success, int joint, skeleton_t *data);
-void enable_io(struct NWBuffer* buffer, bool* pack_success, int joint, skeleton_t *data);
+//void enable_joint(struct NWBuffer* buffer, bool* pack_success, int joint, skeleton_t *data);
+//void enable_io(struct NWBuffer* buffer, bool* pack_success, int joint, skeleton_t *data);
 
 /***********************************************************************
  *                       INIT AND EXIT CODE                             *
@@ -365,10 +365,9 @@ static void write_port(void *arg, long period)
   int num_device = 0;
 
   static uint count = 0;
-  static double last_kp[JOINTS] = {0, 0, 0, 0};
-  static double last_max_velocity[JOINTS] = {0, 0, 0, 0};
-  static double last_max_accel[JOINTS] = {0, 0, 0, 0};
-  static double last_command[JOINTS];
+  //static double last_max_velocity[JOINTS] = {0, 0, 0, 0};
+  //static double last_max_accel[JOINTS] = {0, 0, 0, 0};
+  static struct Message_joint_config last_joint_config[JOINTS] = {0};
   static uint32_t last_update_id = 0;
 
   skeleton_t *data = arg;
@@ -402,6 +401,7 @@ static void write_port(void *arg, long period)
       pack_success = pack_success && serialize_joint_velocity(&buffer, joint, velocity);
     }
 
+    /*
     if(last_max_velocity[joint] != *data->joint_max_velocity[joint]) {
       last_max_velocity[joint] = *data->joint_max_velocity[joint];
       pack_success = pack_success && serialize_joint_max_velocity(
@@ -413,11 +413,36 @@ static void write_port(void *arg, long period)
       pack_success = pack_success && serialize_joint_max_accel(
           &buffer, joint, last_max_accel[joint]);
     }
+    */
 
-    enable_joint(&buffer, &pack_success, joint, data);
+    if(
+        last_joint_config[joint].enable != *data->joint_enable[joint]
+        ||
+        last_joint_config[joint].gpio_step != *data->joint_gpio_step[joint]
+        ||
+        last_joint_config[joint].gpio_dir != *data->joint_gpio_dir[joint]
+        ||
+        last_joint_config[joint].max_velocity != *data->joint_max_velocity[joint]
+        ||
+        last_joint_config[joint].max_accel != *data->joint_max_accel[joint]
+    ) {
+      pack_success = pack_success && serialize_joint_config(
+          &buffer,
+          joint,
+          *data->joint_enable[joint],
+          *data->joint_gpio_step[joint],
+          *data->joint_gpio_dir[joint],
+          *data->joint_max_velocity[joint],
+          *data->joint_max_accel[joint]
+          );
+    }
+
+    //enable_joint(&buffer, &pack_success, joint, data);
   }
 
-  send_data(num_device, &buffer);
+  if(pack_success) {
+    send_data(num_device, &buffer);
+  }
 
   // Receive data and check packets all completed round trip.
   reset_nw_buf(&buffer);
@@ -455,9 +480,9 @@ void on_eth_up(skeleton_t *data, uint count) {
   *data->metric_eth_state = true;
 
   // Iterate through joints.
-  for(int joint = 0; joint < JOINTS; joint++) {
-    data->reset_joint[joint] = true;
-  }
+  //for(int joint = 0; joint < JOINTS; joint++) {
+  //  data->reset_joint[joint] = true;
+  //}
 }
 
 void on_eth_down(skeleton_t *data, uint count) {
@@ -474,6 +499,7 @@ void on_eth_down(skeleton_t *data, uint count) {
   }
 }
 
+/*
 void enable_io(struct NWBuffer* buffer, bool* pack_success, int joint, skeleton_t *data) {
   static int last_io_pos_step[JOINTS] = {-2, -2, -2, -2};
   static int last_io_pos_dir[JOINTS] = {-2, -2, -2, -2};
@@ -525,4 +551,5 @@ void enable_joint(struct NWBuffer* buffer, bool* pack_success, int joint, skelet
         buffer, joint, *data->joint_enable[joint]);
   }
 }
+*/
 

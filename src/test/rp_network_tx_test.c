@@ -18,7 +18,7 @@
 extern volatile struct ConfigGlobal config;
 
 
-static void test_serialise_metrics(void **state) {
+static void test_serialise_timing(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer tx_buf = {0};
@@ -31,10 +31,10 @@ static void test_serialise_metrics(void **state) {
 
     assert_int_equal(tx_buf.checksum, 0);
 
-    bool result = serialise_metrics(&tx_buf, update_id, time_diff);
+    bool result = serialise_timing(&tx_buf, update_id, time_diff);
     
-    struct Reply_metrics reply = {
-        .type = REPLY_METRICS,
+    struct Reply_timing reply = {
+        .type = REPLY_TIMING,
         .update_id = update_id,
         .time_diff = time_diff,
         .rp_update_len = config.update_time_us
@@ -47,26 +47,26 @@ static void test_serialise_metrics(void **state) {
 }
 
 /* Out of space in the buffer causes error. */
-static void test_serialise_metrics_overflow(void **state) {
+static void test_serialise_timing_overflow(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer tx_buf = {0};
     uint16_t initial_tx_buf_len =
-        NW_BUF_LEN - sizeof(struct Reply_metrics) + 1;
+        NW_BUF_LEN - sizeof(struct Reply_timing) + 1;
     tx_buf.length = initial_tx_buf_len;
     uint32_t update_id = 1234;
     uint32_t time_diff = 5678;
 
     assert_int_equal(tx_buf.checksum, 0);
     
-    bool result = serialise_metrics(&tx_buf, update_id, time_diff);
+    bool result = serialise_timing(&tx_buf, update_id, time_diff);
     
     assert_int_equal(tx_buf.length, initial_tx_buf_len);
     assert_int_equal(tx_buf.checksum, 0);
     assert_int_equal(result, false);
 }
 
-static void test_serialise_axis_config(void **state) {
+static void test_serialise_axis_movement(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer tx_buf = {0};
@@ -87,17 +87,17 @@ static void test_serialise_axis_config(void **state) {
     assert_int_equal(tx_buf.length, initial_tx_buf_len);
     assert_int_equal(tx_buf.checksum, 0);
 
-    axis_count += serialise_axis_config(axis, &tx_buf, true);
+    axis_count += serialise_axis_movement(axis, &tx_buf, true);
 
-    struct Reply_axis_config reply = {
-        .type = REPLY_AXIS_CONFIG,
+    struct Reply_axis_movement reply = {
+        .type = REPLY_AXIS_MOVEMENT,
         .axis = 0,
         .abs_pos_acheived = config.axis[0].abs_pos_acheived,
-        .max_velocity = config.axis[0].max_velocity,
-        .max_accel_ticks = config.axis[0].max_accel_ticks,
-        .velocity_requested = config.axis[0].velocity_requested,
+        //.max_velocity = config.axis[0].max_velocity,
+        //.max_accel_ticks = config.axis[0].max_accel_ticks,
+        //.velocity_requested = config.axis[0].velocity_requested,
         .velocity_acheived = config.axis[0].velocity_acheived,
-        .step_len_ticks = config.axis[0].step_len_ticks,
+        //.step_len_ticks = config.axis[0].step_len_ticks,
     };
 
     assert_memory_equal(tx_buf.payload + initial_tx_buf_len, &reply, sizeof(reply));
@@ -106,7 +106,7 @@ static void test_serialise_axis_config(void **state) {
     assert_int_not_equal(tx_buf.checksum, 0);
 }
 
-static void test_serialise_axis_config_multi(void **state) {
+static void test_serialise_axis_movement_multi(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer tx_buf = {0};
@@ -114,7 +114,7 @@ static void test_serialise_axis_config_multi(void **state) {
     tx_buf.length = initial_tx_buf_len;
     size_t axis_count = 0;
 
-    struct Reply_axis_config replies[4];
+    struct Reply_axis_movement replies[4];
 
     for(size_t axis = 0; axis < 4; axis++) {
         config.axis[axis].abs_pos_acheived = 123;
@@ -126,21 +126,21 @@ static void test_serialise_axis_config_multi(void **state) {
         config.axis[axis].step_len_ticks = 246;
         config.axis[axis].updated_from_c1 = 1;
 
-        replies[axis].type = REPLY_AXIS_CONFIG;
+        replies[axis].type = REPLY_AXIS_MOVEMENT;
         replies[axis].axis = axis;
         replies[axis].abs_pos_acheived = config.axis[axis].abs_pos_acheived;
-        replies[axis].max_velocity = config.axis[axis].max_velocity;
-        replies[axis].max_accel_ticks = config.axis[axis].max_accel_ticks;
-        replies[axis].velocity_requested = config.axis[axis].velocity_requested;
+        //replies[axis].max_velocity = config.axis[axis].max_velocity;
+        //replies[axis].max_accel_ticks = config.axis[axis].max_accel_ticks;
+        //replies[axis].velocity_requested = config.axis[axis].velocity_requested;
         replies[axis].velocity_acheived = config.axis[axis].velocity_acheived;
-        replies[axis].step_len_ticks = config.axis[axis].step_len_ticks;
+        //replies[axis].step_len_ticks = config.axis[axis].step_len_ticks;
     }
 
     assert_int_equal(tx_buf.length, initial_tx_buf_len);
     assert_int_equal(tx_buf.checksum, 0);
 
     for(size_t axis = 0; axis < 4; axis++) {
-        axis_count += serialise_axis_config(axis, &tx_buf, true);
+        axis_count += serialise_axis_movement(axis, &tx_buf, true);
 
         assert_memory_equal(
                 tx_buf.payload + initial_tx_buf_len + (axis * sizeof(replies[axis])),
@@ -152,19 +152,19 @@ static void test_serialise_axis_config_multi(void **state) {
 }
 
 /* Out of space in the buffer causes error. */
-static void test_serialise_axis_config_overflow(void **state) {
+static void test_serialise_overflow(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer tx_buf = {0};
     uint16_t initial_tx_buf_len =
-        DATA_BUF_SIZE - sizeof(struct Reply_axis_config) - sizeof(uint32_t) + 1;
+        NW_BUF_LEN - sizeof(struct Reply_axis_movement) + 1;
     tx_buf.length = initial_tx_buf_len;
 
     config.axis[0].updated_from_c1 = 1;
 
     assert_int_equal(tx_buf.checksum, 0);
     
-    size_t axis_count = serialise_axis_config(0, &tx_buf, true);
+    size_t axis_count = serialise_axis_movement(0, &tx_buf, true);
 
     assert_int_equal(tx_buf.length, initial_tx_buf_len);
     assert_int_equal(tx_buf.checksum, 0);
@@ -173,11 +173,11 @@ static void test_serialise_axis_config_overflow(void **state) {
 
 int main(void) {
     const struct CMUnitTest tests[] = {
-        cmocka_unit_test(test_serialise_metrics),
-        cmocka_unit_test(test_serialise_metrics_overflow),
-        cmocka_unit_test(test_serialise_axis_config),
-        cmocka_unit_test(test_serialise_axis_config_multi),
-        cmocka_unit_test(test_serialise_axis_config_overflow)
+        cmocka_unit_test(test_serialise_timing),
+        cmocka_unit_test(test_serialise_timing_overflow),
+        cmocka_unit_test(test_serialise_axis_movement),
+        cmocka_unit_test(test_serialise_axis_movement_multi),
+        cmocka_unit_test(test_serialise_overflow)
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);

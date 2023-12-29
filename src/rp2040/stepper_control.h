@@ -16,8 +16,6 @@
 #define NW_PORT 5002
 
 
-#define DATA_BUF_SIZE 1024
-
 #define LED_PIN 25
 
 #endif  // SENDER__H

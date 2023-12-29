@@ -104,12 +104,17 @@ uint32_t get_axis_config(
     );
 
 /* Serialise metrics stored in global config in a format for sending over UDP. */
-bool serialise_metrics(struct NWBuffer* tx_buf, int32_t update_id, int32_t time_diff);
+bool serialise_timing(struct NWBuffer* tx_buf, int32_t update_id, int32_t time_diff);
+
+/* Serialise data stored in global config in a format for sending over UDP. */
+bool serialise_axis_movement(
+    const uint32_t axis,
+    struct NWBuffer* tx_buf,
+    uint8_t wait_for_data);
 
 /* Serialise data stored in global config in a format for sending over UDP. */
 bool serialise_axis_config(
     const uint32_t axis,
-    struct NWBuffer* tx_buf,
-    uint8_t wait_for_data);
+    struct NWBuffer* tx_buf);
 
 #endif  // CONFIG__H

@@ -18,6 +18,7 @@
 #define MSG_SET_AXIS_MAX_ACCEL       7  // Not yet implemented.
 #define MSG_SET_AXIS_IO_STEP         8  // Set GPIO step pin.
 #define MSG_SET_AXIS_IO_DIR          9  // Set GPIO direction pin.
+#define MSG_SET_AXIS_CONFIG          10 // Set all config for a joint.
 
 struct Message_header {
   uint32_t type;
@@ -62,7 +63,17 @@ struct Message_joint_enable {
 struct Message_joint_gpio {
   uint32_t type;
   uint32_t axis;
-  uint8_t value;
+  int8_t value;
+};
+
+struct Message_joint_config {
+  uint32_t type;
+  uint32_t axis;
+  uint8_t enable;
+  int8_t gpio_step;
+  int8_t gpio_dir;
+  double max_velocity;
+  double max_accel;
 };
 
 union MessageAny {
@@ -74,38 +85,51 @@ union MessageAny {
   struct Message_set_velocity set_velocity;
   struct Message_joint_enable joint_enable;
   struct Message_joint_gpio joint_gpio;
+  struct Message_joint_config joint_config;
 };
 
 
 #define REPLY_NONE                   0
-#define REPLY_METRICS                1
-#define REPLY_AXIS_CONFIG            2
+#define REPLY_TIMING                 1
+#define REPLY_AXIS_MOVEMENT          2
+#define REPLY_AXIS_CONFIG            3
 
 struct Reply_header {
   uint32_t type;
 };
 
-struct Reply_metrics {
+struct Reply_timing {
   uint32_t type;
   uint32_t update_id;
   int32_t time_diff;
   uint32_t rp_update_len;
 };
 
-struct Reply_axis_config {
+struct Reply_axis_movement {
   uint32_t type;
   uint32_t axis;
   int32_t abs_pos_acheived;
-  uint32_t max_velocity;
-  uint32_t max_accel_ticks;
-  int32_t velocity_requested;
   int32_t velocity_acheived;
-  int32_t step_len_ticks;
+};
+
+struct Reply_axis_config {
+  uint32_t type;
+  uint32_t axis;
+  uint8_t enable;
+  int8_t gpio_step;
+  int8_t gpio_dir;
+  double max_velocity;
+  double max_accel;
+  //int32_t abs_pos_acheived;
+  //int32_t velocity_requested;
+  //int32_t velocity_acheived;
+  //int32_t step_len_ticks;
 };
 
 union ReplyAny {
   struct Reply_header header;
-  struct Reply_metrics metrics;
+  struct Reply_timing timing;
+  struct Reply_axis_movement joint_movement;
   struct Reply_axis_config joint_config;
 };
 
