@@ -415,26 +415,29 @@ static void write_port(void *arg, long period)
     }
     */
 
-    if(
-        last_joint_config[joint].enable != *data->joint_enable[joint]
-        ||
-        last_joint_config[joint].gpio_step != *data->joint_gpio_step[joint]
-        ||
-        last_joint_config[joint].gpio_dir != *data->joint_gpio_dir[joint]
-        ||
-        last_joint_config[joint].max_velocity != *data->joint_max_velocity[joint]
-        ||
-        last_joint_config[joint].max_accel != *data->joint_max_accel[joint]
-    ) {
-      pack_success = pack_success && serialize_joint_config(
-          &buffer,
-          joint,
-          *data->joint_enable[joint],
-          *data->joint_gpio_step[joint],
-          *data->joint_gpio_dir[joint],
-          *data->joint_max_velocity[joint],
-          *data->joint_max_accel[joint]
-          );
+    if(count % JOINTS == joint) {
+      // Only configure 1 joint per cycle to avoid filling NW buffer.
+      if(
+          last_joint_config[joint].enable != *data->joint_enable[joint]
+          ||
+          last_joint_config[joint].gpio_step != *data->joint_gpio_step[joint]
+          ||
+          last_joint_config[joint].gpio_dir != *data->joint_gpio_dir[joint]
+          ||
+          last_joint_config[joint].max_velocity != *data->joint_max_velocity[joint]
+          ||
+          last_joint_config[joint].max_accel != *data->joint_max_accel[joint]
+        ) {
+        pack_success = pack_success && serialize_joint_config(
+            &buffer,
+            joint,
+            *data->joint_enable[joint],
+            *data->joint_gpio_step[joint],
+            *data->joint_gpio_dir[joint],
+            *data->joint_max_velocity[joint],
+            *data->joint_max_accel[joint]
+            );
+      }
     }
 
     //enable_joint(&buffer, &pack_success, joint, data);
@@ -449,7 +452,7 @@ static void write_port(void *arg, long period)
   size_t data_length = get_reply_non_block(num_device, &buffer);
   if(data_length > 0) {
     uint16_t mess_received_count = 0;
-    process_data(&buffer, data, &mess_received_count, data_length);
+    process_data(&buffer, data, &mess_received_count, data_length, last_joint_config);
 
     if(! *data->metric_eth_state) {
       // Network connection just came up after being down.

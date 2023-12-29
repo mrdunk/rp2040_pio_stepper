@@ -231,7 +231,8 @@ size_t serialize_joint_config(
   return pack_nw_buff(buffer, &message, sizeof(struct Message_joint_config));
 }
 
-bool unpack_metrics(
+/* Process received update documenting current the last packet received by the RP. */
+bool unpack_timing(
     struct NWBuffer* rx_buf,
     uint16_t* rx_offset,
     uint16_t* received_count,
@@ -253,6 +254,7 @@ bool unpack_metrics(
   return true;
 }
 
+/* Process received update documenting current joint position and velocity. */
 bool unpack_joint_movement(
     struct NWBuffer* rx_buf,
     uint16_t* rx_offset,
@@ -280,11 +282,12 @@ bool unpack_joint_movement(
   return true;
 }
 
+/* Process received update documenting current config settings. */
 bool unpack_joint_config(
     struct NWBuffer* rx_buf,
     uint16_t* rx_offset,
     uint16_t* received_count,
-    skeleton_t* data
+    struct Message_joint_config* last_joint_config
 ) {
   void* data_p = unpack_nw_buff(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_axis_config));
@@ -296,11 +299,18 @@ bool unpack_joint_config(
   struct Reply_axis_config* reply = data_p;
   uint32_t joint = reply->axis;
 
-  *data->joint_enable[joint] = reply->enable;
-  *data->joint_gpio_step[joint] = reply->gpio_step;
-  *data->joint_gpio_dir[joint] = reply->gpio_dir;
-  *data->joint_max_velocity[joint] = reply->max_velocity;
-  *data->joint_max_accel[joint] = reply->max_accel;
+  printf("INFO: Received confirmation of config received by RP for joint: %u\n", joint);
+  printf("      enable:       %u\n", reply->enable);
+  printf("      gpio_step:    %i\n", reply->gpio_step);
+  printf("      gpio_dir:     %i\n", reply->gpio_dir);
+  printf("      max_velocity: %d\n", reply->max_velocity);
+  printf("      max_accel:    %d\n", reply->max_accel);
+
+  last_joint_config[joint].enable = reply->enable;
+  last_joint_config[joint].gpio_step = reply->gpio_step;
+  last_joint_config[joint].gpio_dir = reply->gpio_dir;
+  last_joint_config[joint].max_velocity = reply->max_velocity;
+  last_joint_config[joint].max_accel = reply->max_accel;
 
   //*data->joint_step_len_ticks[joint] =
   //        reply->step_len_ticks;
@@ -316,7 +326,8 @@ void process_data(
     struct NWBuffer* rx_buf,
     skeleton_t* data,
     uint16_t* received_count,
-    uint16_t expected_length
+    uint16_t expected_length,
+    struct Message_joint_config* last_joint_config
 ) {
   // TODO: Pass in receive_count.
   uint16_t rx_offset = 0;
@@ -349,7 +360,7 @@ void process_data(
     switch(header->type) {
       case REPLY_TIMING:
         ;
-        unpack_success = unpack_success && unpack_metrics(
+        unpack_success = unpack_success && unpack_timing(
             rx_buf, &rx_offset, received_count, data);
         break;
       case REPLY_AXIS_MOVEMENT:
@@ -358,7 +369,7 @@ void process_data(
         break;
       case REPLY_AXIS_CONFIG:
         unpack_success = unpack_success && unpack_joint_config(
-            rx_buf, &rx_offset, received_count, data);
+            rx_buf, &rx_offset, received_count, last_joint_config);
         break;
       default:
         printf("WARN: Invalid message type: %u\t%lu\n", *received_count, header->type);

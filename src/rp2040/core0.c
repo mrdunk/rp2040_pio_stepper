@@ -296,8 +296,8 @@ bool unpack_joint_config(
   update_axis_config(
       joint,
       CORE0,
-      &enabled, 
-      &io_step, 
+      &enabled,
+      &io_step,
       &io_dir,
       NULL,
       NULL,
