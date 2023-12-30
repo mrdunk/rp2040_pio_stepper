@@ -68,18 +68,17 @@ int init_eth(int device) {
 }
 
 /* Send data via UDP.*/
-uint8_t send_data(int device, struct NWBuffer* buffer) {
+int send_data(int device, struct NWBuffer* buffer) {
   int addr_len = sizeof(remote_addr[device]);
   int n = sendto(
       sockfd[device],
       (void*)buffer,
       sizeof(buffer->length) + sizeof(buffer->checksum) + buffer->length,
-      0,
+      MSG_DONTROUTE,
       (struct sockaddr *)&remote_addr[device],
       addr_len);
   if (n < 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, "ERROR sending on network port %i\n ", sockfd[device]);
-    return 1;
+    return errno;
   }
   return 0;
 }
@@ -87,7 +86,7 @@ uint8_t send_data(int device, struct NWBuffer* buffer) {
 /* Get data via UDP. */
 size_t get_reply_non_block(int device, void* receive_buffer) {
   int addr_len;
-  int flags = MSG_DONTWAIT;
+  int flags = MSG_DONTWAIT | MSG_DONTROUTE;
   ssize_t receive_count = recvfrom(
       sockfd[device],
       receive_buffer,
@@ -96,9 +95,6 @@ size_t get_reply_non_block(int device, void* receive_buffer) {
       (struct sockaddr *)&remote_addr[device],
       (socklen_t *)&addr_len);
   if (receive_count < 0) {
-    if(errno != EAGAIN) {
-      rtapi_print_msg(RTAPI_MSG_ERR, "ERROR receiving on network port %i\n ", sockfd[device]);
-    }
     return 0;
   }
   return receive_count;
