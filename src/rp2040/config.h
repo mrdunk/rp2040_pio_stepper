@@ -23,7 +23,7 @@ struct ConfigAxis {
   uint8_t updated_from_c0;      // Data was updated on core 0.
   uint8_t updated_from_c1;      // Data was updated on core 1.
   int8_t enabled;
-  int8_t io_pos_step;           // Physical step IO pin. 
+  int8_t io_pos_step;           // Physical step IO pin.
   int8_t io_pos_dir;            // Physical direction IO pin.
   double rel_pos_requested;     // In steps. Default value is UINT_MAX / 2.
   double abs_pos_requested;     // In steps. Default value is UINT_MAX / 2.
@@ -37,6 +37,13 @@ struct ConfigAxis {
   float kp;                     // Proportional position tuning. <= 1.0
 };
 
+/* Configuration object for a single GPIO. */
+struct ConfigGPIO {
+  uint8_t type;                 // See GPIO_TYPE_XXXX in messages.h.
+  uint8_t index;                // IP pin number.
+  uint8_t address;              // i2c address if applicable.
+};
+
 /* Configuration object for global settings.
  * This is the format for the global config that is shared between cores. */
 struct ConfigGlobal {
@@ -46,16 +53,17 @@ struct ConfigGlobal {
   bool pio_io_configured;     // PIO IO pins set.
 
   struct ConfigAxis axis[MAX_AXIS];
+  struct ConfigGPIO gpio[MAX_GPIO];
 };
 
 
 void init_config();
 
-/* Update the period of the main timing loop. 
+/* Update the period of the main timing loop.
  * This should closely match the rate at which we receive axis position data. */
 void update_period(uint32_t update_time_us);
 
-/* Get the period of the main timing loop. 
+/* Get the period of the main timing loop.
  * This should closely match the rate at which we receive axis position data. */
 uint32_t get_period();
 
