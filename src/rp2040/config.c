@@ -2,14 +2,14 @@
 #include <string.h>
 
 
-#ifndef BUILD_TESTS
+#ifdef BUILD_TESTS
 
-#include "pico/mutex.h"
-#include "port_common.h"
+#include "../test/mocks/rp_mocks.h"
 
 #else  // BUILD_TESTS
 
-#include "../test/mocks/rp_mocks.h"
+#include "pico/mutex.h"
+#include "port_common.h"
 
 #endif  // BUILD_TESTS
 
@@ -98,9 +98,20 @@ volatile struct ConfigGlobal config = {
 };
 
 
+void init_gpio() {
+  for(uint16_t gpio = 0; gpio < MAX_GPIO; gpio++) {
+    config.gpio[gpio].type = GPIO_TYPE_NOT_SET;
+    config.gpio[gpio].index = 0;
+    config.gpio[gpio].address = 0;
+  }
+}
+
 void init_config()
 {
+  init_gpio();
+
   mutex_init(&mtx_top);
+
   for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
     mutex_init(&mtx_axis[axis]);
   }
@@ -343,7 +354,7 @@ uint32_t get_axis_config(
 /* Serialise metrics stored in global config in a format for sending over UDP. */
 bool serialise_timing(struct NWBuffer* tx_buf, int32_t update_id, int32_t time_diff) {
   struct Reply_timing reply;
-  reply.type = REPLY_TIMING; 
+  reply.type = REPLY_TIMING;
   reply.time_diff = time_diff;
   reply.rp_update_len = get_period();
 

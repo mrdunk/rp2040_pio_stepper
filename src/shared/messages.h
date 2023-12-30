@@ -4,9 +4,11 @@
 #include <sys/types.h>
 
 /* This file contains objects that are passed over Ethernet UDP between host and RP2040.
- * Multiple structs can be packed in an array.
- * The array should be null terminated; The last entry in the array should be a
- * uint32_t of zero value. */
+ * Multiple structs can be packed in an array. */
+
+#define MAX_AXIS 4
+#define MAX_GPIO 64
+#define MAX_I2C_MCP 4
 
 
 #define MSG_NONE                     0
@@ -19,6 +21,7 @@
 #define MSG_SET_AXIS_IO_STEP         8  // Set GPIO step pin.
 #define MSG_SET_AXIS_IO_DIR          9  // Set GPIO direction pin.
 #define MSG_SET_AXIS_CONFIG          10 // Set all config for a joint.
+#define MSG_SET_GPIO                 11
 
 struct Message_header {
   uint32_t type;
@@ -66,6 +69,12 @@ struct Message_joint_gpio {
   int8_t value;
 };
 
+struct Message_gpio {
+  uint32_t type;      // MSG_SET_GPIO
+  uint8_t bank;       // A bank of 32 IO pins.
+  uint32_t values;    // Values to be sent to any of the IO pins that are outputs.
+};
+
 struct Message_joint_config {
   uint32_t type;
   uint32_t axis;
@@ -85,6 +94,7 @@ union MessageAny {
   struct Message_set_velocity set_velocity;
   struct Message_joint_enable joint_enable;
   struct Message_joint_gpio joint_gpio;
+  struct Message_gpio gpio;
   struct Message_joint_config joint_config;
 };
 
@@ -94,6 +104,7 @@ union MessageAny {
 #define REPLY_AXIS_MOVEMENT          2
 #define REPLY_AXIS_CONFIG            3
 #define REPLY_AXIS_METRICS           4
+#define REPLY_GPIO                   5
 
 struct Reply_header {
   uint32_t type;
@@ -130,6 +141,18 @@ struct Reply_axis_metrics {
   int32_t step_len_ticks;
   //int32_t pos_error;
 };
+
+struct Reply_gpio {
+  uint32_t type;
+  uint8_t bank;
+  uint32_t values;
+};
+
+#define GPIO_TYPE_NOT_SET      0
+#define GPIO_TYPE_NATIVE_IN    1
+#define GPIO_TYPE_NATIVE_OUT   2
+#define GPIO_TYPE_I2C_MCP_IN   3
+#define GPIO_TYPE_I2C_MCP_OUT  4
 
 union ReplyAny {
   struct Reply_header header;

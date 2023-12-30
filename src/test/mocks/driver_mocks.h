@@ -6,6 +6,7 @@
 #include <limits.h>
 #include <stdint.h>
 #include "../../driver/rp2040_defines.h"
+#include "../../shared/messages.h"
 
 #define JOINTS 4
 
@@ -37,8 +38,11 @@ typedef struct {
   hal_s32_t* joint_step_len_ticks[JOINTS];
   hal_float_t* joint_velocity_cmd[JOINTS];
   hal_float_t* joint_velocity_feedback[JOINTS];
-  hal_bit_t* pin_out[IO];
-  hal_bit_t* pin_in[IO];
+  hal_bit_t* pin_out[MAX_GPIO];
+  hal_bit_t* pin_in[MAX_GPIO];
+  hal_bit_t* gpio_data[MAX_GPIO];
+  hal_bit_t* gpio_data_received[MAX_GPIO];
+
   bool reset_joint[JOINTS];
   uint8_t joints_enabled_this_cycle;
 } skeleton_t;

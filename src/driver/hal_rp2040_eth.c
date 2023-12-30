@@ -8,6 +8,7 @@
 #include <limits.h>
 
 #include "rp2040_defines.h"
+#include "../shared/messages.h"
 
 /* module information */
 MODULE_AUTHOR("Duncan Law");
@@ -44,9 +45,17 @@ typedef struct {
   hal_s32_t* joint_step_len_ticks[JOINTS];
   hal_float_t* joint_velocity_cmd[JOINTS];   // TODO: why a joint_vel_cmd and a joint_velocity_cmd?
   hal_float_t* joint_velocity_feedback[JOINTS];
-  hal_bit_t* pin_out[IO];
-  hal_bit_t* pin_in[IO];
-  //bool reset_joint[JOINTS];
+  
+  // For IN pins, HAL sets this to the the value we want the IO pin set to on the RP.
+  // For OUT pins, this is the value the RP pin is reported via the network update.
+  hal_bit_t* gpio_data[MAX_GPIO];
+  hal_bit_t* gpio_data_received[MAX_GPIO];
+
+  //hal_u32_t* gpio_type[MAX_GPIO];
+  //hal_u32_t* gpio_index[MAX_GPIO];
+  //hal_u32_t* gpio_address[MAX_GPIO];
+  //hal_u32_t* gpio_i2c_address[MAX_I2C_MCP];
+  
   uint8_t joints_enabled_this_cycle;
 } skeleton_t;
 
@@ -73,9 +82,6 @@ static void write_port(void *arg, long period);
 
 void on_eth_up(skeleton_t *data, uint count);
 void on_eth_down(skeleton_t *data, uint count);
-
-//void enable_joint(struct NWBuffer* buffer, bool* pack_success, int joint, skeleton_t *data);
-//void enable_io(struct NWBuffer* buffer, bool* pack_success, int joint, skeleton_t *data);
 
 /***********************************************************************
  *                       INIT AND EXIT CODE                             *
@@ -107,10 +113,11 @@ int rtapi_app_main(void)
     return -1;
   }
 
-  for(int num_io = 0; num_io < IO; num_io++) {
-    /* Export the IO(s) */
-    retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->pin_in[num_io]),
-                              comp_id, "rp2040_eth.%d.pin-%d-in", num_device, num_io);
+  for(int gpio = 0; gpio < MAX_GPIO; gpio++) {
+    /* Export the GPIO */
+    // From PC to RP.
+    retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->gpio_data[gpio]),
+                              comp_id, "rp2040_eth.%d.pin-%d-in", num_device, gpio);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -119,8 +126,9 @@ int rtapi_app_main(void)
       return -1;
     }
 
-    retval = hal_pin_bit_newf(HAL_OUT, &(port_data_array->pin_out[num_io]), comp_id,
-                              "rp2040_eth.%d.pin-%d-out", num_device, num_io);
+    // From RP to PC.
+    retval = hal_pin_bit_newf(HAL_OUT, &(port_data_array->gpio_data[gpio]), comp_id,
+                              "rp2040_eth.%d.pin-%d-out", num_device, gpio);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -374,8 +382,6 @@ static void write_port(void *arg, long period)
   int num_device = 0;
 
   static uint count = 0;
-  //static double last_max_velocity[JOINTS] = {0, 0, 0, 0};
-  //static double last_max_accel[JOINTS] = {0, 0, 0, 0};
   static struct Message_joint_config last_joint_config[JOINTS] = {0};
   static uint32_t last_update_id = 0;
   static int last_errno = 0;
@@ -397,11 +403,9 @@ static void write_port(void *arg, long period)
 
   pack_success = pack_success && serialize_timing(&buffer, count, rtapi_get_time());
 
-  // Put GPIO values in buffer.
-  // TODO: Not yet implemented.
-  for(int num_io = 0; num_io < IO; num_io++) {
-    *data->pin_in[num_io] = ((count / 1000) % 2 == 0);
-  }
+  // Put GPIO IN values in network buffer.
+  pack_success = pack_success && serialize_gpio(
+      &buffer, *data->gpio_data, *data->gpio_data_received);
 
   // Iterate through joints.
   for(int joint = 0; joint < JOINTS; joint++) {
@@ -417,20 +421,6 @@ static void write_port(void *arg, long period)
       pack_success = pack_success && serialize_joint_pos(&buffer, joint, position);
       pack_success = pack_success && serialize_joint_velocity(&buffer, joint, velocity);
     }
-
-    /*
-    if(last_max_velocity[joint] != *data->joint_max_velocity[joint]) {
-      last_max_velocity[joint] = *data->joint_max_velocity[joint];
-      pack_success = pack_success && serialize_joint_max_velocity(
-          &buffer, joint, last_max_velocity[joint]);
-    }
-
-    if(last_max_accel[joint] != *data->joint_max_accel[joint]) {
-      last_max_accel[joint] = *data->joint_max_accel[joint];;
-      pack_success = pack_success && serialize_joint_max_accel(
-          &buffer, joint, last_max_accel[joint]);
-    }
-    */
 
     if(count % JOINTS == joint) {
       // Only configure 1 joint per cycle to avoid filling NW buffer.
@@ -456,8 +446,6 @@ static void write_port(void *arg, long period)
             );
       }
     }
-
-    //enable_joint(&buffer, &pack_success, joint, data);
   }
 
   if(pack_success) {
@@ -517,11 +505,6 @@ static void write_port(void *arg, long period)
 void on_eth_up(skeleton_t *data, uint count) {
   printf("Ethernet up. Packet count: %u\n", count);
   *data->metric_eth_state = true;
-
-  // Iterate through joints.
-  //for(int joint = 0; joint < JOINTS; joint++) {
-  //  data->reset_joint[joint] = true;
-  //}
 }
 
 void on_eth_down(skeleton_t *data, uint count) {
@@ -537,58 +520,4 @@ void on_eth_down(skeleton_t *data, uint count) {
       *data->joint_enable[joint] = false;
   }
 }
-
-/*
-void enable_io(struct NWBuffer* buffer, bool* pack_success, int joint, skeleton_t *data) {
-  static int last_io_pos_step[JOINTS] = {-2, -2, -2, -2};
-  static int last_io_pos_dir[JOINTS] = {-2, -2, -2, -2};
-
-  if(last_io_pos_step[joint] != *data->joint_gpio_step[joint] ||
-      data->reset_joint[joint]
-  ) {
-    union MessageAny message;
-
-    last_io_pos_step[joint] = *data->joint_gpio_step[joint];
-    rtapi_print_msg(RTAPI_MSG_INFO, "Configure joint: %u  step io: %u\n",
-        joint, *data->joint_gpio_step[joint]);
-    printf("Configure joint: %u  step io: %u\n", joint, *data->joint_gpio_step[joint]);
-    *pack_success = *pack_success && serialize_joint_io_step(
-        buffer, joint, *data->joint_gpio_step[joint]);
-
-    last_io_pos_dir[joint] = *data->joint_gpio_dir[joint];
-    rtapi_print_msg(RTAPI_MSG_INFO, "Configure joint: %u  dir io: %u\n",
-        joint, *data->joint_gpio_dir[joint]);
-    printf("Configure joint: %u  dir io: %u\n", joint, *data->joint_gpio_dir[joint]);
-    *pack_success = *pack_success && serialize_joint_io_dir(
-        buffer, joint, *data->joint_gpio_dir[joint]);
-
-    data->reset_joint[joint] = false;
-  }
-}
-
-void enable_joint(struct NWBuffer* buffer, bool* pack_success, int joint, skeleton_t *data) {
-  static int last_enabled[JOINTS] = {-1, -1, -1, -1};
-  union MessageAny message = {0};
-
-  if(last_enabled[joint] != *data->joint_enable[joint]) {
-    if(data->joints_enabled_this_cycle > 0) {
-      return;
-    }
-
-    data->joints_enabled_this_cycle++;
-
-    if(*data->joint_enable[joint]) {
-      printf("enable joint: %u\n", joint);
-      enable_io(buffer, pack_success, joint, data);
-    } else {
-      printf("disable joint: %u\n", joint);
-    }
-
-    last_enabled[joint] = *data->joint_enable[joint];
-
-    *pack_success = *pack_success && serialize_joint_enable(
-        buffer, joint, *data->joint_enable[joint]);
-  }
-}
-*/
 

@@ -28,6 +28,7 @@ target_sources(
   core1.c
   pio.c
   ring_buffer.c
+  gpio.c
   ../shared/buffer.c
   ../shared/checksum.c
 )

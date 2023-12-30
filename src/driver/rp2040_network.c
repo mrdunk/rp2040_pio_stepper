@@ -139,34 +139,6 @@ size_t serialize_joint_velocity(
   return pack_nw_buff(buffer, &message, sizeof(struct Message_set_velocity));
 }
 
-/*
-size_t serialize_joint_max_velocity(
-    struct NWBuffer* buffer,
-    uint32_t joint,
-    double velocity
-) {
-  union MessageAny message;
-  message.set_max_velocity.type = MSG_SET_AXIS_MAX_VELOCITY;
-  message.set_max_velocity.axis = joint;
-  message.set_max_velocity.value = velocity;
-
-  return pack_nw_buff(buffer, &message, sizeof(struct Message_set_max_velocity));
-}
-
-size_t serialize_joint_max_accel(
-    struct NWBuffer* buffer,
-    uint32_t joint,
-    double accel
-) {
-  union MessageAny message;
-  message.set_max_accel.type = MSG_SET_AXIS_MAX_ACCEL;
-  message.set_max_accel.axis = joint;
-  message.set_max_accel.value = accel;
-
-  return pack_nw_buff(buffer, &message, sizeof(struct Message_set_max_accel));
-}
-*/
-
 size_t serialize_joint_io_step(
     struct NWBuffer* buffer,
     uint32_t joint,
@@ -225,6 +197,46 @@ size_t serialize_joint_config(
   message.joint_config.max_accel = max_accel;
 
   return pack_nw_buff(buffer, &message, sizeof(struct Message_joint_config));
+}
+
+size_t serialize_gpio(
+    struct NWBuffer* buffer,
+    hal_bit_t* gpio_data,
+    hal_bit_t* gpio_data_received
+) {
+  uint32_t last_values[MAX_GPIO / 32];
+  uint32_t current_values[MAX_GPIO / 32];
+  memset(last_values, 0, sizeof(uint32_t) * MAX_GPIO / 32);
+  memset(current_values, 0, sizeof(uint32_t) * MAX_GPIO / 32);
+
+  size_t return_val = 0;
+
+  for(int gpio = 0; gpio < MAX_GPIO; gpio++) {
+    int bank = gpio / 32;
+    int gpio_per_bank = (gpio % 32);
+    if(gpio_data[gpio]) {
+      current_values[bank] |= (0x1 << gpio_per_bank);
+    }
+    if(gpio_data_received[gpio]) {
+      last_values[bank] |= (0x1 << gpio_per_bank);
+    }
+  }
+
+  for(int bank = 0; bank < MAX_GPIO / 32; bank++) {
+    if(last_values[bank] != current_values[bank]) {
+      struct Message_gpio message = {
+        .type = MSG_SET_GPIO,
+        .bank = bank,
+        .values = current_values[bank]
+      };
+      return_val += pack_nw_buff(buffer, &message, sizeof(message));
+
+      // TODO: Eventually this will be populated when receiving NW data.
+      last_values[bank] = current_values[bank];
+    }
+  }
+
+  return return_val;
 }
 
 /* Process received update documenting current the last packet received by the RP. */
@@ -339,7 +351,36 @@ bool unpack_joint_metrics(
   return true;
 }
 
+/* Process received update containing GPIO values. */
+bool unpack_gpio(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    uint16_t* received_count,
+    skeleton_t* data
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_gpio));
 
+  if(! data_p) {
+    return false;
+  }
+
+  struct Reply_gpio* reply = data_p;
+  uint8_t bank = reply->bank;
+  uint8_t values = reply->values;
+
+  for(uint8_t gpio = 0; gpio < 32; gpio++) {
+    uint8_t index = (bank * 32) + gpio;
+    bool value = values & (0x1 << gpio);
+
+    *(data->gpio_data_received[index]) = value;
+  }
+
+  (*received_count)++;
+  return true;
+}
+
+/* Extract structs from data received over network. */
 void process_data(
     struct NWBuffer* rx_buf,
     skeleton_t* data,
@@ -391,6 +432,10 @@ void process_data(
         break;
       case REPLY_AXIS_METRICS:
         unpack_success = unpack_success && unpack_joint_metrics(
+            rx_buf, &rx_offset, received_count, data);
+        break;
+      case REPLY_GPIO:
+        unpack_success = unpack_success && unpack_gpio(
             rx_buf, &rx_offset, received_count, data);
         break;
       default:
