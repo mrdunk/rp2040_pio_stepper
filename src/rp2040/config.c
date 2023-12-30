@@ -463,3 +463,50 @@ bool serialise_axis_config(const uint32_t axis, struct NWBuffer* tx_buf) {
 
   return true;
 }
+
+/* Serialise data stored in global config in a format for sending over UDP. */
+bool serialise_axis_metrics(const uint32_t axis, struct NWBuffer* tx_buf) {
+  if(axis >= MAX_AXIS) {
+    printf("ERROR: Invalid axis: %u\n", axis);
+    return false;
+  }
+
+  int32_t velocity_requested;
+  //int32_t pos_error;
+  int32_t step_len_ticks;
+
+  get_axis_config(
+        axis,
+        CORE0,
+        NULL, //&enabled,
+        NULL, //&io_pos_step,
+        NULL, //&io_pos_dir,
+        NULL, //&rel_pos_requested,
+        NULL, //&abs_pos_requested,
+        NULL, //&abs_pos_acheived,
+        NULL, //&max_velocity,
+        NULL, //&max_accel,
+        &velocity_requested,
+        NULL, //&velocity_acheived,
+        NULL, //&pos_error,
+        &step_len_ticks,
+        NULL //&kp
+        );
+
+  struct Reply_axis_metrics reply;
+  reply.type = REPLY_AXIS_METRICS;
+  reply.axis = axis;
+  reply.velocity_requested = velocity_requested;
+  //reply.pos_error = pos_error;
+  reply.step_len_ticks = step_len_ticks;
+
+  uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
+
+  if(!tx_buf_len) {
+    printf("WARN: TX length greater than buffer size.\n");
+    return false;
+  }
+
+  return true;
+}
+

@@ -447,10 +447,10 @@ void core0_main() {
       gpio_put(LED_PIN, (time_now / 1000000) % 2);
       received_msg_count = 0;
 
-      size_t axis_count = 0;
       for(size_t axis = 0; axis < MAX_AXIS; axis++) {
         // Get data from config and put in TX buffer.
-        axis_count += serialise_axis_movement(axis, &tx_buf, true);
+        serialise_axis_movement(axis, &tx_buf, true);
+        serialise_axis_metrics(axis, &tx_buf);
       }
 
       put_UDP(

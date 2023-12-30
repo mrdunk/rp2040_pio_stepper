@@ -308,15 +308,37 @@ bool unpack_joint_config(
   last_joint_config[joint].max_velocity = reply->max_velocity;
   last_joint_config[joint].max_accel = reply->max_accel;
 
-  //*data->joint_step_len_ticks[joint] =
-  //        reply->step_len_ticks;
+  (*received_count)++;
+  return true;
+}
 
-  //*data->joint_velocity_cmd[joint] =
-  //        (float)reply->velocity_requested;
+/* Process received update containing metrics data. */
+bool unpack_joint_metrics(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    uint16_t* received_count,
+    skeleton_t* data
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_axis_metrics));
+
+  if(! data_p) {
+    return false;
+  }
+
+  struct Reply_axis_metrics* reply = data_p;
+  uint32_t joint = reply->axis;
+
+  *data->joint_step_len_ticks[joint] =
+          (double)reply->step_len_ticks;
+
+  *data->joint_velocity_cmd[joint] =
+          (double)reply->velocity_requested;
 
   (*received_count)++;
   return true;
 }
+
 
 void process_data(
     struct NWBuffer* rx_buf,
@@ -366,6 +388,10 @@ void process_data(
       case REPLY_AXIS_CONFIG:
         unpack_success = unpack_success && unpack_joint_config(
             rx_buf, &rx_offset, received_count, last_joint_config);
+        break;
+      case REPLY_AXIS_METRICS:
+        unpack_success = unpack_success && unpack_joint_metrics(
+            rx_buf, &rx_offset, received_count, data);
         break;
       default:
         printf("WARN: Invalid message type: %u\t%lu\n", *received_count, header->type);

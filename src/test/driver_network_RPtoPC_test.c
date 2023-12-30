@@ -67,7 +67,9 @@ static void test_timing(void **state) {
             &buffer,
             &data,
             &mess_received_count,
-            sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum));
+            sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum),
+            NULL
+            );
 
 
     assert_int_equal(*(data.metric_update_id), message.update_id);
@@ -99,7 +101,9 @@ static void test_axis_movement(void **state) {
             &buffer,
             &data,
             &mess_received_count,
-            sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum));
+            sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum),
+            NULL
+            );
 
     assert_double_equal(
             *(data.joint_pos_feedback[axis]),
@@ -130,6 +134,8 @@ static void test_axis_config(void **state) {
         //.step_len_ticks = 1357
     };
 
+    struct Message_joint_config last_joint_config;
+
     memcpy(buffer.payload, &message, sizeof(message));
     buffer.length = sizeof(message);
 
@@ -137,24 +143,60 @@ static void test_axis_config(void **state) {
             &buffer,
             &data,
             &mess_received_count,
-            sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum));
+            sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum),
+            &last_joint_config
+            );
 
-    assert_int_equal(*(data.joint_enable[axis]), message.enable);
-    assert_int_equal(*(data.joint_gpio_step[axis]), message.gpio_step);
-    assert_int_equal(*(data.joint_gpio_dir[axis]), message.gpio_dir);
-    assert_double_equal(*(data.joint_max_velocity[axis]), message.max_velocity, 0.0001);
-    assert_double_equal(*(data.joint_max_accel[axis]), message.max_accel, 0.0001);
+    assert_int_equal(last_joint_config.enable, message.enable);
+    assert_int_equal(last_joint_config.gpio_step, message.gpio_step);
+    assert_int_equal(last_joint_config.gpio_dir, message.gpio_dir);
+    assert_double_equal(last_joint_config.max_velocity, message.max_velocity, 0.0001);
+    assert_double_equal(last_joint_config.max_accel, message.max_accel, 0.0001);
     //assert_int_equal(*(data.joint_step_len_ticks[axis]), message.step_len_ticks);
     //assert_int_equal(*(data.joint_velocity_cmd[axis]), message.velocity_requested);
 }
 
+static void test_axis_metrics(void **state) {
+    (void) state; /* unused */
+
+    struct NWBuffer buffer = {0};
+    uint16_t mess_received_count = 0;
+
+    skeleton_t data = {0};
+    setup_data(&data);
+   
+    uint32_t axis = 0;
+    struct Reply_axis_metrics message = {
+        .type = REPLY_AXIS_METRICS,
+        .axis = axis,
+        .velocity_requested = 3456,
+        .step_len_ticks = 1357,
+        //.pos_error = 9135
+    };
+
+    memcpy(buffer.payload, &message, sizeof(message));
+    buffer.length = sizeof(message);
+
+    process_data(
+            &buffer,
+            &data,
+            &mess_received_count,
+            sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum),
+            NULL
+            );
+
+    assert_int_equal(*(data.joint_step_len_ticks[axis]), message.step_len_ticks);
+    assert_int_equal(*(data.joint_velocity_cmd[axis]), message.velocity_requested);
+    //assert_int_equal(*(data.joint_pos_error[axis]), message.pos_error);
+}
 
 
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_timing),
         cmocka_unit_test(test_axis_movement),
-        cmocka_unit_test(test_axis_config)
+        cmocka_unit_test(test_axis_config),
+        cmocka_unit_test(test_axis_metrics)
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);

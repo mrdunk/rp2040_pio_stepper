@@ -93,6 +93,7 @@ union MessageAny {
 #define REPLY_TIMING                 1
 #define REPLY_AXIS_MOVEMENT          2
 #define REPLY_AXIS_CONFIG            3
+#define REPLY_AXIS_METRICS           4
 
 struct Reply_header {
   uint32_t type;
@@ -120,10 +121,14 @@ struct Reply_axis_config {
   int8_t gpio_dir;
   double max_velocity;
   double max_accel;
-  //int32_t abs_pos_acheived;
-  //int32_t velocity_requested;
-  //int32_t velocity_acheived;
-  //int32_t step_len_ticks;
+};
+
+struct Reply_axis_metrics {
+  uint32_t type;
+  uint32_t axis;
+  int32_t velocity_requested;
+  int32_t step_len_ticks;
+  //int32_t pos_error;
 };
 
 union ReplyAny {
@@ -131,6 +136,7 @@ union ReplyAny {
   struct Reply_timing timing;
   struct Reply_axis_movement joint_movement;
   struct Reply_axis_config joint_config;
+  struct Reply_axis_metrics joint_metrics;
 };
 
 #endif  // UPDATE_TYPES__H
