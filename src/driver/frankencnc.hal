@@ -110,3 +110,6 @@ net spindle-speed-out spindle.0.speed-out => rp2040_eth.0.spindle-speed-in
 net spindle-speed-in spindle.0.speed-in <= rp2040_eth.0.spindle-speed-out
 net spindle-at-speed spindle.0.at-speed <= rp2040_eth.0.spindle-at-speed
 
+setp rp2040_eth.0.spindle-address 1
+setp rp2040_eth.0.spindle-poles 4
+setp rp2040_eth.0.spindle-bitrate 9600

@@ -168,6 +168,32 @@ size_t serialize_joint_max_accel(
 }
 */
 
+bool serialise_spindle_config(
+    struct NWBuffer* tx_buf,
+    uint8_t address,
+    uint16_t bitrate
+)
+{
+  struct Message_spindle_config message;
+  message.type = MSG_SET_SPINDLE_CONFIG;
+  message.modbus_address = address;
+  message.bitrate = bitrate;
+
+  return pack_nw_buff(tx_buf, &message, sizeof(message));
+}
+
+bool serialise_spindle_speed_in(
+    struct NWBuffer* tx_buf,
+    float speed
+)
+{
+  struct Message_spindle_speed message;
+  message.type = MSG_SET_SPINDLE_SPEED;
+  message.speed = speed;
+
+  return pack_nw_buff(tx_buf, &message, sizeof(message));
+}
+
 size_t serialize_joint_io_step(
     struct NWBuffer* buffer,
     uint32_t joint,
@@ -356,7 +382,7 @@ bool unpack_spindle_speed(
 
   struct Reply_spindle_speed *reply = data_p;
 
-  float rpm = reply->speed * 30.0;
+  float rpm = reply->speed * 120.0 / data->spindle_poles;
   float expected_rpm = *data->spindle_speed_in;
   *data->spindle_speed_out = rpm;
   *data->spindle_at_speed = fabs(rpm - expected_rpm) < 1.0;

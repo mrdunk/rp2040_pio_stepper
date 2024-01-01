@@ -53,6 +53,10 @@ typedef struct {
   hal_float_t* spindle_speed_out;
   hal_float_t* spindle_speed_in;
   hal_bit_t* spindle_at_speed;
+
+  hal_u32_t spindle_address;
+  hal_float_t spindle_poles;
+  hal_u32_t spindle_bitrate;
 } skeleton_t;
 
 
@@ -307,6 +311,27 @@ int rtapi_app_main(void)
     goto port_error;
   }
 
+  retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_address),
+      comp_id, "rp2040_eth.%d.spindle-address", num_device);
+  if (retval < 0) {
+    goto port_error;
+  }
+  port_data_array->spindle_address = 1;
+
+  retval = hal_param_float_newf(HAL_RW, &(port_data_array->spindle_poles),
+      comp_id, "rp2040_eth.%d.spindle-poles", num_device);
+  if (retval < 0) {
+    goto port_error;
+  }
+  port_data_array->spindle_poles = 2;
+
+  retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_bitrate),
+      comp_id, "rp2040_eth.%d.spindle-bitrate", num_device);
+  if (retval < 0) {
+    goto port_error;
+  }
+  port_data_array->spindle_bitrate = 9600;
+
   /* Export metrics pins, */
   retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->metric_update_id),
       comp_id, "rp2040_eth.%d.metrics-update-id", num_device);
@@ -506,9 +531,12 @@ static void write_port(void *arg, long period)
   }
 
   if (!has_configs) {
-    float speed = 0;
-    speed = *data->spindle_speed_in / 30;
-    pack_success = pack_success && serialize_joint_velocity(&buffer, 0xFF, speed);
+    if (count % 100 == 0) {
+      pack_success = pack_success && serialise_spindle_config(&buffer, data->spindle_address, data->spindle_bitrate);
+    } else {
+      float speed = *data->spindle_speed_in / (120.0 / data->spindle_poles);
+      pack_success = pack_success && serialise_spindle_speed_in(&buffer, speed);
+    }
   }
 
   if(pack_success) {

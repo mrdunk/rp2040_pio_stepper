@@ -425,7 +425,7 @@ bool serialise_axis_movement(
   return true;
 }
 
-bool serialise_spindle_speed(struct NWBuffer* tx_buf, float speed)
+bool serialise_spindle_speed_out(struct NWBuffer* tx_buf, float speed)
 {
   struct Reply_spindle_speed reply;
   reply.type = REPLY_SPINDLE_SPEED;

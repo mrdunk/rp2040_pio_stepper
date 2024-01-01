@@ -22,6 +22,8 @@
 
 float req_spindle_frequency = 0;
 float act_spindle_frequency = -1000000;
+extern uint8_t modbus_address;
+extern uint16_t modbus_bitrate;
 
 /* Called after receiving network packet.
  * Takes the average time delay over the previous 1000 packet receive events and
@@ -166,14 +168,46 @@ bool unpack_joint_velocity(
   uint32_t joint = message->axis;
   double vel_reques = message->value;
 
-  if (joint == 0xFF) {
-    // XXXKF hack
-    req_spindle_frequency = vel_reques;
-  } else {
-    update_axis_config(
-      joint, CORE0,
-      NULL, NULL, NULL, &vel_reques, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+  update_axis_config(
+    joint, CORE0,
+    NULL, NULL, NULL, &vel_reques, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+  (*received_count)++;
+  return true;
+}
+
+bool unpack_spindle_config(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    uint8_t* received_count
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_spindle_config));
+
+  if(! data_p) {
+    return false;
   }
+
+  struct Message_spindle_config* message = data_p;
+  modbus_address = message->modbus_address;
+  modbus_bitrate = message->bitrate;
+  (*received_count)++;
+  return true;
+}
+
+bool unpack_spindle_speed(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    uint8_t* received_count
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_spindle_speed));
+
+  if(! data_p) {
+    return false;
+  }
+
+  struct Message_spindle_speed* message = data_p;
+  req_spindle_frequency = message->speed;
   (*received_count)++;
   return true;
 }
@@ -393,6 +427,14 @@ void process_received_buffer(
         unpack_success = unpack_success && unpack_joint_config(
             rx_buf, &rx_offset, tx_buf, received_count);
         break;
+      case MSG_SET_SPINDLE_CONFIG:
+        unpack_success = unpack_success && unpack_spindle_config(
+            rx_buf, &rx_offset, received_count);
+        break;
+      case MSG_SET_SPINDLE_SPEED:
+        unpack_success = unpack_success && unpack_spindle_speed(
+            rx_buf, &rx_offset, received_count);
+        break;
       default:
         printf("WARN: Invalid message type: %u\t%lu\n", *received_count, header->type);
         // Implies data corruption.
@@ -465,7 +507,7 @@ void core0_main() {
         serialise_axis_movement(axis, &tx_buf, true);
         serialise_axis_metrics(axis, &tx_buf);
       }
-      serialise_spindle_speed(&tx_buf, act_spindle_frequency);
+      serialise_spindle_speed_out(&tx_buf, act_spindle_frequency);
       count++;
 
       put_UDP(

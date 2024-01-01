@@ -9,8 +9,10 @@
 #define MODBUS_DIR_PIN 10
 
 uint8_t modbus_command[16];
-uint8_t modbus_address = 1;
+uint8_t modbus_address;
 uint8_t modbus_length;
+uint16_t modbus_bitrate;
+uint16_t modbus_cur_bitrate;
 int modbus_pause;
 int modbus_cycle;
 int modbus_last_control;
@@ -111,7 +113,6 @@ struct vfd_status {
 
 void modbus_init(void) {
   precompute_crc16();
-  uart_init(MODBUS_UART, 9600);
   gpio_set_function(MODBUS_TX_PIN, GPIO_FUNC_UART);
   gpio_set_function(MODBUS_RX_PIN, GPIO_FUNC_UART);
   gpio_init(MODBUS_DIR_PIN);
@@ -119,6 +120,7 @@ void modbus_init(void) {
   vfd.cycle = 10000;
   vfd.command_run = 0;
   vfd.req_freq_x100 = 0;
+  modbus_cur_bitrate = modbus_bitrate;
 }
 
 // #define modbus_printf printf
@@ -188,6 +190,14 @@ void modbus_huanyang_receive(void) {
 }
 
 float modbus_loop(float frequency) {
+  if (modbus_cur_bitrate != modbus_bitrate) {
+    if (modbus_cur_bitrate)
+      uart_deinit(MODBUS_UART);
+    uart_init(MODBUS_UART, modbus_bitrate);
+    modbus_cur_bitrate = modbus_bitrate;
+  }
+  if (!modbus_cur_bitrate || !modbus_address)
+    return 2000000.0;
   vfd.cycle++;
   vfd.command_run = frequency != 0;
   vfd.command_reverse = frequency < 0;

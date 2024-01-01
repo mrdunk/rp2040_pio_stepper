@@ -22,6 +22,8 @@
 #define MSG_SET_AXIS_IO_DIR          9  // Set GPIO direction pin.
 #define MSG_SET_AXIS_CONFIG          10 // Set all config for a joint.
 #define MSG_SET_GPIO_VALUES          11
+#define MSG_SET_SPINDLE_CONFIG       12 // Set spindle configuration
+#define MSG_SET_SPINDLE_SPEED        13 // Set spindle speed
 
 struct Message_header {
   uint32_t type;
@@ -79,6 +81,17 @@ struct Message_joint_config {
   double max_accel;
 };
 
+struct Message_spindle_config {
+  uint32_t type;
+  uint16_t bitrate;
+  uint8_t modbus_address;
+};
+
+struct Message_spindle_speed {
+  uint32_t type;
+  float speed;
+};
+
 union MessageAny {
   struct Message_header header;
   struct Message_timing timing;
@@ -89,6 +102,8 @@ union MessageAny {
   struct Message_joint_enable joint_enable;
   struct Message_joint_gpio joint_gpio;
   struct Message_joint_config joint_config;
+  struct Message_spindle_config spindle_config;
+  struct Message_spindle_speed spindle_speed;
 };
 
 
