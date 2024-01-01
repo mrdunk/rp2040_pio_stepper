@@ -13,6 +13,7 @@ uint8_t modbus_address = 1;
 uint8_t modbus_length;
 int modbus_pause;
 int modbus_cycle;
+int modbus_last_control;
 
 static uint16_t crc16_table[256];
 
@@ -61,19 +62,20 @@ void huanyang_control(uint8_t control) {
   modbus_command[3] = control;
   modbus_pause = 50;
   modbus_length = 4;
+  modbus_last_control = control;
 }
 
 void huanyang_poll_control_status(void) {
-  huanyang_control(0);
+  huanyang_control(modbus_last_control);
 }
 
 void huanyang_start_forward(void) {
-  huanyang_control(1 | 2);
+  huanyang_control(1);
 }
 
 void huanyang_start_reverse(void) {
   // XXXKF doesn't work!
-  huanyang_control(1 | 4);
+  huanyang_control(1 | 16);
 }
 
 void huanyang_stop(void) {
@@ -177,10 +179,10 @@ void modbus_huanyang_receive(void) {
         }
         break;
       default:
-        modbus_printf("Unrecognized response %02x\n", modbus_command[1]);
+        printf("Unrecognized response %02x\n", modbus_command[1]);
       }
     } else {
-      modbus_printf("Response CRC error\n");
+      printf("Response CRC error\n");
     }
   }
 }
