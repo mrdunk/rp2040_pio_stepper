@@ -48,6 +48,11 @@ typedef struct {
   hal_bit_t* pin_in[IO];
   //bool reset_joint[JOINTS];
   uint8_t joints_enabled_this_cycle;
+  hal_bit_t* spindle_fwd;
+  hal_bit_t* spindle_rev;
+  hal_float_t* spindle_speed_out;
+  hal_float_t* spindle_speed_in;
+  hal_bit_t* spindle_at_speed;
 } skeleton_t;
 
 
@@ -271,6 +276,37 @@ int rtapi_app_main(void)
     }
   }
 
+  /* Export spindle pins, */
+  retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->spindle_fwd),
+      comp_id, "rp2040_eth.%d.spindle-fwd", num_device);
+  if (retval < 0) {
+    goto port_error;
+  }
+
+  retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->spindle_rev),
+      comp_id, "rp2040_eth.%d.spindle-rev", num_device);
+  if (retval < 0) {
+    goto port_error;
+  }
+
+  retval = hal_pin_float_newf(HAL_IN, &(port_data_array->spindle_speed_in),
+      comp_id, "rp2040_eth.%d.spindle-speed-in", num_device);
+  if (retval < 0) {
+    goto port_error;
+  }
+
+  retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->spindle_speed_out),
+      comp_id, "rp2040_eth.%d.spindle-speed-out", num_device);
+  if (retval < 0) {
+    goto port_error;
+  }
+
+  retval = hal_pin_bit_newf(HAL_OUT, &(port_data_array->spindle_at_speed),
+      comp_id, "rp2040_eth.%d.spindle-at-speed", num_device);
+  if (retval < 0) {
+    goto port_error;
+  }
+
   /* Export metrics pins, */
   retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->metric_update_id),
       comp_id, "rp2040_eth.%d.metrics-update-id", num_device);
@@ -349,6 +385,13 @@ int rtapi_app_main(void)
       "SKELETON: installed driver for %d ports\n", num_devices);
   hal_ready(comp_id);
   return 0;
+
+port_error:
+    rtapi_print_msg(RTAPI_MSG_ERR,
+        "SKELETON: ERROR: port %d var export failed with err=%i\n",
+        num_device, retval);
+    hal_exit(comp_id);
+    return -1;
 }
 
 void rtapi_app_exit(void)
@@ -403,6 +446,7 @@ static void write_port(void *arg, long period)
     *data->pin_in[num_io] = ((count / 1000) % 2 == 0);
   }
 
+  int has_configs = 0;
   // Iterate through joints.
   for(int joint = 0; joint < JOINTS; joint++) {
     // Put joint positions packet in buffer.
@@ -454,10 +498,17 @@ static void write_port(void *arg, long period)
             *data->joint_max_velocity[joint],
             *data->joint_max_accel[joint]
             );
+        has_configs = 1;
       }
     }
 
     //enable_joint(&buffer, &pack_success, joint, data);
+  }
+
+  if (!has_configs) {
+    float speed = 0;
+    speed = *data->spindle_speed_in / 30;
+    pack_success = pack_success && serialize_joint_velocity(&buffer, 0xFF, speed);
   }
 
   if(pack_success) {

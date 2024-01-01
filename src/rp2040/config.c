@@ -425,6 +425,22 @@ bool serialise_axis_movement(
   return true;
 }
 
+bool serialise_spindle_speed(struct NWBuffer* tx_buf, float speed)
+{
+  struct Reply_spindle_speed reply;
+  reply.type = REPLY_SPINDLE_SPEED;
+  reply.speed = speed;
+
+  uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
+
+  if(!tx_buf_len) {
+    //printf("WARN: TX length greater than buffer size. %u\n", update_id);
+    return false;
+  }
+
+  return true;
+}
+
 /* Serialise data stored in global config in a format for sending over UDP. */
 bool serialise_axis_config(const uint32_t axis, struct NWBuffer* tx_buf) {
   if(axis >= MAX_AXIS) {

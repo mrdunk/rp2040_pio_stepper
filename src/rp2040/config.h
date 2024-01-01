@@ -128,4 +128,6 @@ bool serialise_axis_config(
 /* Serialise data stored in global config in a format for sending over UDP. */
 bool serialise_axis_metrics(const uint32_t axis, struct NWBuffer* tx_buf);
 
+bool serialise_spindle_speed(struct NWBuffer* tx_buf, float speed);
+
 #endif  // CONFIG__H

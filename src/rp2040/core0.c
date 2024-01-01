@@ -20,6 +20,9 @@
 
 #endif  // BUILD_TESTS
 
+float req_spindle_frequency = 0;
+float act_spindle_frequency = -1000000;
+
 /* Called after receiving network packet.
  * Takes the average time delay over the previous 1000 packet receive events and
  * blocks long enough to normalize any network time jitter. */
@@ -163,10 +166,14 @@ bool unpack_joint_velocity(
   uint32_t joint = message->axis;
   double vel_reques = message->value;
 
-  update_axis_config(
+  if (joint == 0xFF) {
+    // XXXKF hack
+    req_spindle_frequency = vel_reques;
+  } else {
+    update_axis_config(
       joint, CORE0,
       NULL, NULL, NULL, &vel_reques, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-
+  }
   (*received_count)++;
   return true;
 }
@@ -406,6 +413,9 @@ void process_received_buffer(
   return;
 }
 
+extern void modbus_init(void);
+extern float modbus_loop(float);
+
 void core0_main() {
   int retval = 0;
   struct NWBuffer rx_buf = {0};
@@ -420,6 +430,9 @@ void core0_main() {
   uint8_t  destip_machine[4] = {0, 0, 0, 0};
   uint16_t destport_machine = 0;
 
+  modbus_init();
+
+  int count = 0;
   while (1) {
     data_received = 0;
 
@@ -434,7 +447,7 @@ void core0_main() {
     }
 
     process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, data_received);
-    if(received_msg_count != 9) {
+    if(received_msg_count != 9 && received_msg_count != 10) {
       // Not the standard number of received packets.
       // This likely was a config update.
       printf("Received msgs: %u\t%u\n", received_msg_count, data_received);
@@ -452,6 +465,8 @@ void core0_main() {
         serialise_axis_movement(axis, &tx_buf, true);
         serialise_axis_metrics(axis, &tx_buf);
       }
+      serialise_spindle_speed(&tx_buf, act_spindle_frequency);
+      count++;
 
       put_UDP(
           SOCKET_NUMBER,
@@ -460,6 +475,7 @@ void core0_main() {
           tx_buf.length + sizeof(tx_buf.length) + sizeof(tx_buf.checksum),
           destip_machine,
           &destport_machine);
+      act_spindle_frequency = modbus_loop(req_spindle_frequency);
     }
     reset_nw_buf(&tx_buf);
   }

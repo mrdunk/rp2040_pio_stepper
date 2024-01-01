@@ -98,6 +98,7 @@ union MessageAny {
 #define REPLY_AXIS_CONFIG            3
 #define REPLY_AXIS_METRICS           4
 #define REPLY_GPIO_VALUES            5
+#define REPLY_SPINDLE_SPEED          6
 
 struct Reply_header {
   uint32_t type;
@@ -141,6 +142,11 @@ struct Reply_gpio_values {
   uint32_t values;
 };
 
+struct Reply_spindle_speed {
+  uint32_t type;
+  double speed;
+};
+
 #define GPIO_TYPE_NOT_SET      0
 #define GPIO_TYPE_NATIVE_IN    1
 #define GPIO_TYPE_NATIVE_OUT   2
@@ -153,6 +159,7 @@ union ReplyAny {
   struct Reply_axis_movement joint_movement;
   struct Reply_axis_config joint_config;
   struct Reply_axis_metrics joint_metrics;
+  struct Reply_spindle_speed spindle_speed;
 };
 
 #endif  // UPDATE_TYPES__H

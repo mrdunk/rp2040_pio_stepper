@@ -104,3 +104,9 @@ net metrics-rp-update-len   rp2040_eth.0.metrics-rp-update-len
 net metrics-missed-packets  rp2040_eth.0.metrics-missed-packets
 net metrics-eth-state       rp2040_eth.0.metrics-eth-state
 
+net spindle-fwd spindle.0.forward => rp2040_eth.0.spindle-fwd
+net spindle-rev spindle.0.reverse => rp2040_eth.0.spindle-rev
+net spindle-speed-out spindle.0.speed-out => rp2040_eth.0.spindle-speed-in
+net spindle-speed-in spindle.0.speed-in <= rp2040_eth.0.spindle-speed-out
+net spindle-at-speed spindle.0.at-speed <= rp2040_eth.0.spindle-at-speed
+

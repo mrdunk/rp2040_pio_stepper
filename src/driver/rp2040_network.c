@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 #include <netdb.h>
 #include <string.h>
@@ -339,6 +340,31 @@ bool unpack_joint_metrics(
   return true;
 }
 
+/* Process received update containing metrics data. */
+bool unpack_spindle_speed(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    uint16_t* received_count,
+    skeleton_t* data
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_axis_metrics));
+
+  if(! data_p) {
+    return false;
+  }
+
+  struct Reply_spindle_speed *reply = data_p;
+
+  float rpm = reply->speed * 30.0;
+  float expected_rpm = *data->spindle_speed_in;
+  *data->spindle_speed_out = rpm;
+  *data->spindle_at_speed = fabs(rpm - expected_rpm) < 1.0;
+
+  (*received_count)++;
+  return true;
+}
+
 
 void process_data(
     struct NWBuffer* rx_buf,
@@ -391,6 +417,10 @@ void process_data(
         break;
       case REPLY_AXIS_METRICS:
         unpack_success = unpack_success && unpack_joint_metrics(
+            rx_buf, &rx_offset, received_count, data);
+        break;
+      case REPLY_SPINDLE_SPEED:
+        unpack_success = unpack_success && unpack_spindle_speed(
             rx_buf, &rx_offset, received_count, data);
         break;
       default:
