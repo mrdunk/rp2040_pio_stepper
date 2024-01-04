@@ -202,7 +202,7 @@ size_t serialize_joint_config(
 size_t serialize_gpio(
     struct NWBuffer* buffer,
     hal_bit_t* gpio_data,
-    hal_bit_t* gpio_data_received
+    volatile bool* gpio_data_received
 ) {
   uint32_t last_values[MAX_GPIO / 32];
   uint32_t current_values[MAX_GPIO / 32];
@@ -373,7 +373,7 @@ bool unpack_gpio(
     uint8_t index = (bank * 32) + gpio;
     bool value = values & (0x1 << gpio);
 
-    *(data->gpio_data_received[index]) = value;
+    data->gpio_data_received[index] = value;
   }
 
   (*received_count)++;

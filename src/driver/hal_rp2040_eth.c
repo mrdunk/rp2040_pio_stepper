@@ -45,17 +45,17 @@ typedef struct {
   hal_s32_t* joint_step_len_ticks[JOINTS];
   hal_float_t* joint_velocity_cmd[JOINTS];   // TODO: why a joint_vel_cmd and a joint_velocity_cmd?
   hal_float_t* joint_velocity_feedback[JOINTS];
-  
+
   // For IN pins, HAL sets this to the the value we want the IO pin set to on the RP.
   // For OUT pins, this is the value the RP pin is reported via the network update.
   hal_bit_t* gpio_data[MAX_GPIO];
-  hal_bit_t* gpio_data_received[MAX_GPIO];
+  volatile bool gpio_data_received[MAX_GPIO];
 
   //hal_u32_t* gpio_type[MAX_GPIO];
   //hal_u32_t* gpio_index[MAX_GPIO];
   //hal_u32_t* gpio_address[MAX_GPIO];
   //hal_u32_t* gpio_i2c_address[MAX_I2C_MCP];
-  
+
   uint8_t joints_enabled_this_cycle;
 } skeleton_t;
 
@@ -127,8 +127,8 @@ int rtapi_app_main(void)
     }
 
     // From RP to PC.
-    retval = hal_pin_bit_newf(HAL_OUT, &(port_data_array->gpio_data[gpio]), comp_id,
-                              "rp2040_eth.%d.pin-%d-out", num_device, gpio);
+    //retval = hal_pin_bit_newf(HAL_OUT, &(port_data_array->gpio_data[gpio]), comp_id,
+    //                          "rp2040_eth.%d.pin-%d-out", num_device, gpio);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -405,7 +405,7 @@ static void write_port(void *arg, long period)
 
   // Put GPIO IN values in network buffer.
   pack_success = pack_success && serialize_gpio(
-      &buffer, *data->gpio_data, *data->gpio_data_received);
+      &buffer, *data->gpio_data, data->gpio_data_received);
 
   // Iterate through joints.
   for(int joint = 0; joint < JOINTS; joint++) {
