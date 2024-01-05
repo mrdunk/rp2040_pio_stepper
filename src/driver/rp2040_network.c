@@ -367,13 +367,13 @@ bool unpack_gpio(
 
   struct Reply_gpio* reply = data_p;
   uint8_t bank = reply->bank;
-  uint8_t values = reply->values;
+  uint32_t values = reply->values;
 
   for(uint8_t gpio = 0; gpio < 32; gpio++) {
     uint8_t index = (bank * 32) + gpio;
     bool value = values & (0x1 << gpio);
 
-    data->gpio_data_received[index] = value;
+    (*data->gpio_data_received)[index] = value;
   }
 
   (*received_count)++;

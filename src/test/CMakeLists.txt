@@ -38,6 +38,7 @@ add_executable(
     ${CMAKE_CURRENT_SOURCE_DIR}/rp_network_test.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
+    ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
     ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
     ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
     ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
@@ -60,6 +61,7 @@ add_executable(
     ${CMAKE_CURRENT_SOURCE_DIR}/rp_network_tx_test.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
+    ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
     ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
     ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
     ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c

@@ -109,7 +109,7 @@ bool gpio_local_get_pin(uint32_t index) {
  * Do any i2c required operations here. */
 void gpio_i2c_mcp_prepare() {
   for(uint8_t i2c_bucket = 0; i2c_bucket < MAX_I2C_MCP; i2c_bucket++) {
-    uint8_t i2c_address = gpio_i2c_mcp_addresses[i2c_bucket];
+    // uint8_t i2c_address = gpio_i2c_mcp_addresses[i2c_bucket];
     // TODO: Any other MCP implementation here.
   }
 }

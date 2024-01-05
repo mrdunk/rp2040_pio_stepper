@@ -5,6 +5,7 @@
 #include "config.h"
 #include "messages.h"
 #include "buffer.h"
+#include "gpio.h"
 
 
 #ifdef BUILD_TESTS
@@ -312,6 +313,28 @@ bool unpack_joint_config(
   return true;
 }
 
+bool unpack_gpio(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    uint8_t* received_count
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_gpio));
+
+  if(! data_p) {
+    return false;
+  }
+
+  struct Message_gpio* message = data_p;
+  const uint8_t bank = message->bank;
+  uint32_t values = message->values;
+
+  gpio_set_values(bank, values);
+
+  (*received_count)++;
+  return true;
+}
+
 /* Process data received over the network.
  * This consists of serialised structs as defined in src/shared/massages.h
  */
@@ -348,6 +371,7 @@ void process_received_buffer(
       // End of data.
       break;
     }
+
     switch(header->type) {
       case MSG_TIMING:
         ;
@@ -385,6 +409,10 @@ void process_received_buffer(
       case MSG_SET_AXIS_CONFIG:
         unpack_success = unpack_success && unpack_joint_config(
             rx_buf, &rx_offset, tx_buf, received_count);
+        break;
+      case MSG_SET_GPIO:
+        unpack_success = unpack_success && unpack_gpio(
+            rx_buf, &rx_offset, received_count);
         break;
       default:
         printf("WARN: Invalid message type: %u\t%lu\n", *received_count, header->type);
