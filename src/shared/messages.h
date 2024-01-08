@@ -73,6 +73,7 @@ struct Message_gpio {
   uint32_t type;      // MSG_SET_GPIO
   uint8_t bank;       // A bank of 32 IO pins.
   uint32_t values;    // Values to be sent to any of the IO pins that are outputs.
+  uint32_t values_confirmed;
 };
 
 struct Message_joint_config {
@@ -148,12 +149,6 @@ struct Reply_gpio {
   uint32_t values;
 };
 
-#define GPIO_TYPE_NOT_SET      0
-#define GPIO_TYPE_NATIVE_IN    1
-#define GPIO_TYPE_NATIVE_OUT   2
-#define GPIO_TYPE_I2C_MCP_IN   3
-#define GPIO_TYPE_I2C_MCP_OUT  4
-
 union ReplyAny {
   struct Reply_header header;
   struct Reply_timing timing;
@@ -161,5 +156,11 @@ union ReplyAny {
   struct Reply_axis_config joint_config;
   struct Reply_axis_metrics joint_metrics;
 };
+
+#define GPIO_TYPE_NOT_SET      0
+#define GPIO_TYPE_NATIVE_IN    1
+#define GPIO_TYPE_NATIVE_OUT   2
+#define GPIO_TYPE_I2C_MCP_IN   3
+#define GPIO_TYPE_I2C_MCP_OUT  4
 
 #endif  // UPDATE_TYPES__H

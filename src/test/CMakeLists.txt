@@ -83,13 +83,13 @@ add_executable(
   rpGpioTest
     ${CMAKE_CURRENT_SOURCE_DIR}/rp_gpio_test.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
-    #${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
+    ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
     ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
     ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
     ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
-    #${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
-    #${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c
     )
 target_link_libraries(
     rpGpioTest
