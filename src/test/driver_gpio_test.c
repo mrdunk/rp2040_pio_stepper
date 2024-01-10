@@ -26,7 +26,9 @@ hal_float_t joint_velocity_cmd[4];
 hal_float_t joint_velocity_feedback[4];
 
 hal_bit_t gpio_data[MAX_GPIO];
-bool gpio_data_received[MAX_GPIO];
+hal_u32_t gpio_data_received[MAX_GPIO / 32];
+hal_u32_t gpio_type[MAX_GPIO];
+hal_bit_t gpio_confirmation_pending[MAX_GPIO / 32];
 
 
 void setup_data(skeleton_t* data) {
@@ -46,6 +48,8 @@ void setup_data(skeleton_t* data) {
 
     *data->gpio_data = gpio_data;
     *data->gpio_data_received = gpio_data_received;
+    *data->gpio_type = gpio_type;
+    *data->gpio_confirmation_pending = gpio_confirmation_pending;
 }
 
 /* Turn a 32 bit value into an array of bool. */
@@ -68,8 +72,124 @@ bool helper_compare_gpio_data(hal_bit_t** gpio_data, uint32_t values, uint8_t ba
     return return_val;
 }
 
+/* When a HAL OUT pin (an input on the RP) changes value, the HAL data should
+ * change in response. */
+static void test_serialize_gpio_out_change(void **state) {
+    (void) state; /* unused */
 
-static void test_serialize_gpio(void **state) {
+    skeleton_t data = {0};
+    setup_data(&data);
+
+    struct NWBuffer buffer = {0};
+    assert_int_equal(buffer.checksum, 0);
+    assert_int_equal(buffer.length, 0);
+
+    // Set values.
+    // These represent values set on the HAL pins.
+    uint32_t values_b0 = 0b10101010110011001111000011111101;
+    uint32_t values_b1 = 0b01010101001100110000111100000000;
+    helper_set_gpio_data(data.gpio_data, values_b0, 0);
+    helper_set_gpio_data(data.gpio_data, values_b1, 1);
+
+    uint32_t values_b0_last_received = values_b0 + 1;
+    uint32_t values_b1_last_received = values_b1 + 0x10000;
+    (*data.gpio_data_received)[0] = values_b0_last_received;
+    (*data.gpio_data_received)[1] = values_b1_last_received;
+
+    // GPIO pin is of output type on a bit with changed data.
+    // This will case a bank 0 transmission.
+    (*data.gpio_type)[0] = GPIO_TYPE_NATIVE_OUT;
+    (*data.gpio_type)[1] = GPIO_TYPE_NATIVE_OUT;
+
+    // GPIO pins on a bits without changed data.
+    // This will not case a bank 1 transmission.
+    (*data.gpio_type)[33] = GPIO_TYPE_NATIVE_IN;
+    (*data.gpio_type)[34] = GPIO_TYPE_NATIVE_OUT;
+
+    // Last incoming message did not have confirmation_pending set.
+    (*data.gpio_confirmation_pending)[0] = false;
+    (*data.gpio_confirmation_pending)[1] = false;
+
+    // Serialize any data that needs sent.
+    size_t data_size = serialize_gpio(&buffer, &data);
+
+    struct Message_gpio* message_b0_p = (void*)buffer.payload;
+
+    // Only one message:
+    assert_int_equal(data_size, sizeof(struct Message_gpio) * 1);
+
+    assert_int_not_equal(buffer.checksum, 0);
+    assert_int_equal(buffer.length, data_size);
+    
+    assert_int_equal(message_b0_p->type, MSG_SET_GPIO);
+    assert_int_equal(message_b0_p->bank, 0);
+    assert_int_equal(message_b0_p->values, values_b0_last_received);
+    assert_int_equal(message_b0_p->confirmation_pending, true);
+    // Has set the HAL state to reflect the received data.
+    assert_int_equal((*data.gpio_data)[0], false);
+    assert_int_equal((*data.gpio_data)[1], true);
+}
+
+/* When a HAL IN pin (an output on the RP) changes value in HAL, the
+ * transmitted data should reflect HAL. */
+static void test_serialize_gpio_in_change(void **state) {
+    (void) state; /* unused */
+
+    skeleton_t data = {0};
+    setup_data(&data);
+
+    struct NWBuffer buffer = {0};
+    assert_int_equal(buffer.checksum, 0);
+    assert_int_equal(buffer.length, 0);
+
+    // Set values.
+    // These represent values set on the HAL pins.
+    uint32_t values_b0 = 0b01010101001100110000111100000000;
+    uint32_t values_b1 = 0b10101010110011001111000011111101;
+    helper_set_gpio_data(data.gpio_data, values_b0, 0);
+    helper_set_gpio_data(data.gpio_data, values_b1, 1);
+
+    uint32_t values_b0_last_received = values_b0 + 0x10000;
+    uint32_t values_b1_last_received = values_b1 + 0x1;
+    (*data.gpio_data_received)[0] = values_b0_last_received;
+    (*data.gpio_data_received)[1] = values_b1_last_received;
+
+    // GPIO pin is of input type on a bit with changed data.
+    // This will case a bank 1 transmission.
+    (*data.gpio_type)[32] = GPIO_TYPE_NATIVE_IN;
+    (*data.gpio_type)[33] = GPIO_TYPE_NATIVE_IN;
+
+    // GPIO pins on a bits without changed data.
+    // This will not case a bank 0 transmission.
+    (*data.gpio_type)[0] = GPIO_TYPE_NATIVE_IN;
+    (*data.gpio_type)[1] = GPIO_TYPE_NATIVE_OUT;
+
+    // Last incoming message did not have confirmation_pending set.
+    (*data.gpio_confirmation_pending)[0] = false;
+    (*data.gpio_confirmation_pending)[1] = false;
+
+    // Serialize any data that needs sent.
+    size_t data_size = serialize_gpio(&buffer, &data);
+
+    struct Message_gpio* message_b0_p = (void*)buffer.payload;
+
+    // Only one message:
+    assert_int_equal(data_size, sizeof(struct Message_gpio) * 1);
+    assert_int_not_equal(buffer.checksum, 0);
+    assert_int_equal(buffer.length, data_size);
+    
+    assert_int_equal(message_b0_p->type, MSG_SET_GPIO);
+    assert_int_equal(message_b0_p->bank, 1);
+    assert_int_equal(message_b0_p->values, values_b1);
+    assert_int_equal(message_b0_p->confirmation_pending, true);
+    // HAL state has not changed.
+    assert_int_equal((*data.gpio_data)[32], true);
+    assert_int_equal((*data.gpio_data)[33], false);
+}
+
+/* No change in data or gpio values since last time but last incoming Reply_gpio
+ * has set the confirmation_pending flag. */
+static void test_serialize_gpio_confirmation_pending(void **state) {
     (void) state; /* unused */
 
     skeleton_t data;
@@ -81,42 +201,40 @@ static void test_serialize_gpio(void **state) {
 
     // Set values.
     // These represent values set on the HAL pins.
-    uint32_t values_b0 = 0b10101010110011001111000011111111;
-    uint32_t values_b0_last_received = values_b0 - 1;
+    uint32_t values_b0 = 0b10101010110011001111000011111101;
+    uint32_t values_b0_last_received = values_b0;
     uint32_t values_b1 = 0b01010101001100110000111100000000;
-    uint32_t values_b1_last_received = values_b1 + 0x10000;
+    uint32_t values_b1_last_received = values_b1;
     helper_set_gpio_data(data.gpio_data, values_b0, 0);
     helper_set_gpio_data(data.gpio_data, values_b1, 1);
-    helper_set_gpio_data(data.gpio_data_received, values_b0_last_received, 0);
-    helper_set_gpio_data(data.gpio_data_received, values_b1_last_received, 1);
+    (*data.gpio_data_received)[0] = values_b0_last_received;
+    (*data.gpio_data_received)[1] = values_b1_last_received;
+
+    // GPIO pins on a bits without changed data.
+    // This will not case a bank 0 transmission.
+    (*data.gpio_type)[0] = GPIO_TYPE_NATIVE_IN;
+    (*data.gpio_type)[1] = GPIO_TYPE_NATIVE_OUT;
+
+    // Last incoming message had confirmation_pending set on bank 0.
+    (*data.gpio_confirmation_pending)[0] = true;
+    (*data.gpio_confirmation_pending)[1] = false;
 
     // Serialize any data that needs sent.
-    size_t data_size = serialize_gpio(&buffer, *data.gpio_data, *data.gpio_data_received);
+    size_t data_size = serialize_gpio(&buffer, &data);
 
-    struct Message_gpio message_b0 = {
-        .type = MSG_SET_GPIO,
-        .bank = 0,
-        .values = values_b0
-    };
-
-    struct Message_gpio message_b1 = {
-        .type = MSG_SET_GPIO,
-        .bank = 1,
-        .values = values_b1
-    };
-
-    struct Message_gpio* message_b0_p = (void*)buffer.payload;
-    struct Message_gpio* message_b1_p = (void*)(buffer.payload + sizeof(struct Message_gpio));
-
-    assert_int_equal(data_size, sizeof(struct Message_gpio) * 2);
+    // Only one message:
+    assert_int_equal(data_size, sizeof(struct Message_gpio));
     assert_int_not_equal(buffer.checksum, 0);
     assert_int_equal(buffer.length, data_size);
-    assert_int_equal(message_b0.type, message_b0_p->type);
-    assert_int_equal(message_b0.bank, message_b0_p->bank);
-    assert_int_equal(message_b0.values, message_b0_p->values);
-    assert_int_equal(message_b1.type, message_b1_p->type);
-    assert_int_equal(message_b1.bank, message_b1_p->bank);
-    assert_int_equal(message_b1.values, message_b1_p->values);
+    
+    struct Message_gpio* message_b0_p = (void*)buffer.payload;
+    assert_int_equal(message_b0_p->type, MSG_SET_GPIO);
+    assert_int_equal(message_b0_p->bank, 0);
+    assert_int_equal(message_b0_p->values, values_b0);
+    assert_int_equal(message_b0_p->confirmation_pending, false);
+    // HAL state has not changed.
+    assert_int_equal((*data.gpio_data)[0], true);
+    assert_int_equal((*data.gpio_data)[1], false);
 }
 
 /* No change in data since last time so nothing enqueued on the buffer. */
@@ -132,28 +250,40 @@ static void test_serialize_gpio_nothing_to_do(void **state) {
 
     // Set values.
     // These represent values set on the HAL pins.
-    uint32_t values_b0 = 0b10101010110011001111000011111111;
+    uint32_t values_b0 = 0b10101010110011001111000011111101;
     uint32_t values_b0_last_received = values_b0;
     uint32_t values_b1 = 0b01010101001100110000111100000000;
     uint32_t values_b1_last_received = values_b1;
     helper_set_gpio_data(data.gpio_data, values_b0, 0);
     helper_set_gpio_data(data.gpio_data, values_b1, 1);
-    helper_set_gpio_data(data.gpio_data_received, values_b0_last_received, 0);
-    helper_set_gpio_data(data.gpio_data_received, values_b1_last_received, 1);
+    (*data.gpio_data_received)[0] = values_b0_last_received;
+    (*data.gpio_data_received)[1] = values_b1_last_received;
+
+    // GPIO pins on a bits without changed data.
+    // This will not case a bank 0 transmission.
+    (*data.gpio_type)[0] = GPIO_TYPE_NATIVE_IN;
+    (*data.gpio_type)[1] = GPIO_TYPE_NATIVE_OUT;
+
+    // Last incoming message did not have confirmation_pending set.
+    (*data.gpio_confirmation_pending)[0] = false;
+    (*data.gpio_confirmation_pending)[1] = false;
 
     // Serialize any data that needs sent.
     // This is a no-op since no data has changed.
-    size_t data_size = serialize_gpio(&buffer, *data.gpio_data, *data.gpio_data_received);
+    size_t data_size = serialize_gpio(&buffer, &data);
 
     assert_int_equal(data_size, 0);
     assert_int_equal(buffer.checksum, 0);
     assert_int_equal(buffer.length, 0);
+    // HAL state has not changed.
+    assert_int_equal((*data.gpio_data)[0], true);
+    assert_int_equal((*data.gpio_data)[1], false);
 }
 
 static void test_unpack_gpio(void **state) {
     (void) state; /* unused */
 
-    skeleton_t data;
+    skeleton_t data = {0};
     setup_data(&data);
 
     uint16_t original_rx_offset = 0;
@@ -176,9 +306,7 @@ static void test_unpack_gpio(void **state) {
 
     bool result = unpack_gpio(&buffer, &rx_offset, &received_count, &data);
 
-    assert_int_equal(
-            helper_compare_gpio_data(data.gpio_data_received, reply.values, reply.bank),
-            true);
+    assert_int_equal((*data.gpio_data_received)[reply.bank], reply.values);
     assert_int_equal(result, true);
     assert_int_equal(received_count, original_received_count + 1);
     assert_int_equal(rx_offset, original_rx_offset += sizeof(reply));
@@ -186,7 +314,9 @@ static void test_unpack_gpio(void **state) {
 
 int main(void) {
     const struct CMUnitTest tests[] = {
-        cmocka_unit_test(test_serialize_gpio),
+        cmocka_unit_test(test_serialize_gpio_out_change),
+        cmocka_unit_test(test_serialize_gpio_in_change),
+        cmocka_unit_test(test_serialize_gpio_confirmation_pending),
         cmocka_unit_test(test_serialize_gpio_nothing_to_do),
         cmocka_unit_test(test_unpack_gpio)
     };

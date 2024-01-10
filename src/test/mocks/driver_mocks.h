@@ -41,7 +41,9 @@ typedef struct {
   hal_bit_t* pin_out[MAX_GPIO];
   hal_bit_t* pin_in[MAX_GPIO];
   hal_bit_t* gpio_data[MAX_GPIO];
-  bool* gpio_data_received[MAX_GPIO];
+  hal_u32_t* gpio_data_received[MAX_GPIO / 32];
+  hal_u32_t* gpio_type[MAX_GPIO];
+  hal_bit_t* gpio_confirmation_pending[MAX_GPIO / 32];
 
   bool reset_joint[JOINTS];
   uint8_t joints_enabled_this_cycle;

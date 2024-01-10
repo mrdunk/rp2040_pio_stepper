@@ -99,10 +99,10 @@ void gpio_set_values(const uint8_t bank, uint32_t values, uint32_t values_confir
     }
 
     switch(config.gpio[gpio].type) {
-      case GPIO_TYPE_NATIVE_OUT:
+      case GPIO_TYPE_NATIVE_IN:
         gpio_local_set_out_pin(index, new_value);
         break;
-      case GPIO_TYPE_I2C_MCP_OUT:
+      case GPIO_TYPE_I2C_MCP_IN:
         gpio_i2c_mcp_set_out_pin(index, address, new_value);
         break;
       default:
@@ -211,11 +211,11 @@ void gpio_serialize(struct NWBuffer* tx_buf, size_t* tx_buf_len) {
     get_gpio_config(gpio, &type, &index, &address, &previous_value);
 
     switch(config.gpio[gpio].type) {
-      case GPIO_TYPE_NATIVE_IN:
+      case GPIO_TYPE_NATIVE_OUT:
         new_value = gpio_local_get_pin(index);
         update_gpio_config(gpio, NULL, NULL, NULL, &new_value);
         break;
-      case GPIO_TYPE_I2C_MCP_IN:
+      case GPIO_TYPE_I2C_MCP_OUT:
         new_value = gpio_i2c_mcp_get_pin(index, address);
         update_gpio_config(gpio, NULL, NULL, NULL, &new_value);
         break;

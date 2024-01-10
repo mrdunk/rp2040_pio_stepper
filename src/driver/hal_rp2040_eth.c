@@ -49,9 +49,11 @@ typedef struct {
   // For IN pins, HAL sets this to the the value we want the IO pin set to on the RP.
   // For OUT pins, this is the value the RP pin is reported via the network update.
   hal_bit_t* gpio_data[MAX_GPIO];
-  bool* gpio_data_received[MAX_GPIO];
+  //bool* gpio_data_received[MAX_GPIO];
+  hal_u32_t* gpio_data_received[MAX_GPIO / 32];
+  hal_bit_t* gpio_confirmation_pending;
 
-  //hal_u32_t* gpio_type[MAX_GPIO];
+  hal_u32_t* gpio_type[MAX_GPIO];
   //hal_u32_t* gpio_index[MAX_GPIO];
   //hal_u32_t* gpio_address[MAX_GPIO];
   //hal_u32_t* gpio_i2c_address[MAX_I2C_MCP];
@@ -403,9 +405,8 @@ static void write_port(void *arg, long period)
 
   pack_success = pack_success && serialize_timing(&buffer, count, rtapi_get_time());
 
-  // Put GPIO IN values in network buffer.
-  pack_success = pack_success && serialize_gpio(
-      &buffer, *data->gpio_data, data->gpio_data_received);
+  // Put GPIO values in network buffer.
+  pack_success = pack_success && serialize_gpio(&buffer, data);
 
   // Iterate through joints.
   for(int joint = 0; joint < JOINTS; joint++) {

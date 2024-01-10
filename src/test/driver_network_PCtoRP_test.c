@@ -13,9 +13,11 @@
 static void test_serialize_timing(void **state) {
     (void) state; /* unused */
 
-    struct NWBuffer buffer = {0};
-    assert_int_equal(buffer.checksum, 0);
-    assert_int_equal(buffer.length, 0);
+    struct NWBuffer buffer = {
+        .payload={0},
+        .checksum=0,
+        .length=0
+    };
 
     struct Message_timing message = {
         .type = MSG_TIMING,
@@ -38,9 +40,11 @@ static void test_serialize_timing(void **state) {
 static void test_serialize_jont_pos(void **state) {
     (void) state; /* unused */
     
-    struct NWBuffer buffer = {0};
-    assert_int_equal(buffer.checksum, 0);
-    assert_int_equal(buffer.length, 0);
+    struct NWBuffer buffer = {
+        .payload={0},
+        .checksum=0,
+        .length=0
+    };
 
     struct Message_set_abs_pos message = {
         .type = MSG_SET_AXIS_ABS_POS,
@@ -63,9 +67,11 @@ static void test_serialize_jont_pos(void **state) {
 static void test_serialize_joint_velocity(void **state) {
     (void) state; /* unused */
 
-    struct NWBuffer buffer = {0};
-    assert_int_equal(buffer.checksum, 0);
-    assert_int_equal(buffer.length, 0);
+    struct NWBuffer buffer = {
+        .payload={0},
+        .checksum=0,
+        .length=0
+    };
 
     struct Message_set_velocity message = {
         .type = MSG_SET_AXIS_VELOCITY,
@@ -89,9 +95,11 @@ static void test_serialize_joint_velocity(void **state) {
 static void test_serialize_joint_io_step(void **state) {
     (void) state; /* unused */
 
-    struct NWBuffer buffer = {0};
-    assert_int_equal(buffer.checksum, 0);
-    assert_int_equal(buffer.length, 0);
+    struct NWBuffer buffer = {
+        .payload={0},
+        .checksum=0,
+        .length=0
+    };
 
     struct Message_joint_gpio message = {
         .type = MSG_SET_AXIS_IO_STEP,
@@ -114,9 +122,11 @@ static void test_serialize_joint_io_step(void **state) {
 static void test_serialize_joint_io_dir(void **state) {
     (void) state; /* unused */
 
-    struct NWBuffer buffer = {0};
-    assert_int_equal(buffer.checksum, 0);
-    assert_int_equal(buffer.length, 0);
+    struct NWBuffer buffer = {
+        .payload={0},
+        .checksum=0,
+        .length=0
+    };
 
     struct Message_joint_gpio message = {
         .type = MSG_SET_AXIS_IO_DIR,
@@ -139,9 +149,11 @@ static void test_serialize_joint_io_dir(void **state) {
 static void test_serialize_joint_enable(void **state) {
     (void) state; /* unused */
 
-    struct NWBuffer buffer = {0};
-    assert_int_equal(buffer.checksum, 0);
-    assert_int_equal(buffer.length, 0);
+    struct NWBuffer buffer = {
+        .payload={0},
+        .checksum=0,
+        .length=0
+    };
 
     struct Message_joint_enable message = {
         .type = MSG_SET_AXIS_ENABLED,
@@ -165,9 +177,11 @@ static void test_serialize_joint_enable(void **state) {
 static void test_serialize_joint_config(void **state) {
     (void) state; /* unused */
 
-    struct NWBuffer buffer = {0};
-    assert_int_equal(buffer.checksum, 0);
-    assert_int_equal(buffer.length, 0);
+    struct NWBuffer buffer = {
+        .payload={0},
+        .checksum=0,
+        .length=0
+    };
 
     struct Message_joint_config message = {
         .type = MSG_SET_AXIS_CONFIG,
