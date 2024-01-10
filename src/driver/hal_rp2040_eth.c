@@ -49,9 +49,8 @@ typedef struct {
   // For IN pins, HAL sets this to the the value we want the IO pin set to on the RP.
   // For OUT pins, this is the value the RP pin is reported via the network update.
   hal_bit_t* gpio_data[MAX_GPIO];
-  //bool* gpio_data_received[MAX_GPIO];
-  hal_u32_t* gpio_data_received[MAX_GPIO / 32];
-  hal_bit_t* gpio_confirmation_pending;
+  uint32_t gpio_data_received[MAX_GPIO / 32];
+  bool gpio_confirmation_pending[MAX_GPIO / 32];
 
   hal_u32_t* gpio_type[MAX_GPIO];
   //hal_u32_t* gpio_index[MAX_GPIO];
@@ -115,6 +114,10 @@ int rtapi_app_main(void)
     return -1;
   }
 
+  for(int gpio_bank = 0; gpio_bank < MAX_GPIO / 32; gpio_bank++) {
+    port_data_array->gpio_data_received[gpio_bank] = 0;
+  }
+
   for(int gpio = 0; gpio < MAX_GPIO; gpio++) {
     /* Export the GPIO */
     // From PC to RP.
@@ -131,6 +134,16 @@ int rtapi_app_main(void)
     // From RP to PC.
     //retval = hal_pin_bit_newf(HAL_OUT, &(port_data_array->gpio_data[gpio]), comp_id,
     //                          "rp2040_eth.%d.pin-%d-out", num_device, gpio);
+    if (retval < 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR,
+                      "SKELETON: ERROR: port %d var export failed with err=%i\n",
+                      num_device, retval);
+      hal_exit(comp_id);
+      return -1;
+    }
+
+    retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->gpio_type[gpio]),
+                              comp_id, "rp2040_eth.%d.gpio-type-%d-in", num_device, gpio);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -406,7 +419,7 @@ static void write_port(void *arg, long period)
   pack_success = pack_success && serialize_timing(&buffer, count, rtapi_get_time());
 
   // Put GPIO values in network buffer.
-  pack_success = pack_success && serialize_gpio(&buffer, data);
+  pack_success &= serialize_gpio(&buffer, data);
 
   // Iterate through joints.
   for(int joint = 0; joint < JOINTS; joint++) {

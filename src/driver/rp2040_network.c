@@ -199,8 +199,8 @@ size_t serialize_joint_config(
   return pack_nw_buff(buffer, &message, sizeof(struct Message_joint_config));
 }
 
-size_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
-  size_t return_val = 0;
+bool serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
+  bool return_val = true;
   bool confirmation_pending[MAX_GPIO / 32];
   uint32_t to_send[MAX_GPIO / 32];
 
@@ -209,20 +209,20 @@ size_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
     confirmation_pending[bank] = false;
   }
 
-  for(int gpio = 0; gpio < MAX_GPIO; gpio++) {
+  for(size_t gpio = 0; gpio < MAX_GPIO; gpio++) {
     int bank = gpio / 32;
     int gpio_per_bank = (gpio % 32);
 
-    bool current_value = (*data->gpio_data)[gpio];
-    bool received_value = (*data->gpio_data_received)[bank] & (0x1 << gpio_per_bank);
+    bool current_value = *data->gpio_data[gpio];
+    bool received_value = data->gpio_data_received[bank] & (0x1 << gpio_per_bank);
 
     if(current_value != received_value) {
-      switch((*data->gpio_type)[gpio]) {
+      switch(*data->gpio_type[gpio]) {
         case GPIO_TYPE_NATIVE_OUT:
         case GPIO_TYPE_I2C_MCP_OUT:
           // Network update to apply and send network confirmation for.
           confirmation_pending[bank] = true;
-          (*data->gpio_data)[gpio] = received_value;
+          *data->gpio_data[gpio] = received_value;
           break;
         case GPIO_TYPE_NATIVE_IN:
         case GPIO_TYPE_I2C_MCP_IN:
@@ -234,12 +234,12 @@ size_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
       }
     }
 
-    current_value = (*data->gpio_data)[gpio];
+    current_value = *data->gpio_data[gpio];
     to_send[bank] |= (current_value << gpio_per_bank);
   }
 
   for(int bank = 0; bank < MAX_GPIO / 32; bank++) {
-    if(confirmation_pending[bank] || (*data->gpio_confirmation_pending)[bank]) {
+    if(confirmation_pending[bank] || data->gpio_confirmation_pending[bank]) {
       // Values differ from those received in the last NW update
       // or the last network update requested confirmation.
       struct Message_gpio message = {
@@ -248,7 +248,7 @@ size_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
         .values = to_send[bank],
         .confirmation_pending=confirmation_pending[bank]
       };
-      return_val += pack_nw_buff(buffer, &message, sizeof(message));
+      return_val = return_val & pack_nw_buff(buffer, &message, sizeof(struct Message_gpio));
     }
   }
 
@@ -386,7 +386,7 @@ bool unpack_gpio(
   uint32_t values = reply->values;
 
   for(uint8_t gpio_per_bank = 0; gpio_per_bank < 32; gpio_per_bank++) {
-    (*data->gpio_data_received)[bank] = values;
+    (data->gpio_data_received)[bank] = values;
   }
 
   (*received_count)++;
