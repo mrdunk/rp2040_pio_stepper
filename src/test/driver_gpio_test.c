@@ -26,30 +26,36 @@ hal_float_t joint_velocity_cmd[4];
 hal_float_t joint_velocity_feedback[4];
 
 hal_bit_t gpio_data[MAX_GPIO];
-hal_u32_t gpio_data_received[MAX_GPIO / 32];
 hal_u32_t gpio_type[MAX_GPIO];
-hal_bit_t gpio_confirmation_pending[MAX_GPIO / 32];
 
 
 void setup_data(skeleton_t* data) {
     data->metric_update_id = &metric_update_id;
     data->metric_time_diff = &metric_time_diff;
     data->metric_rp_update_len = &metric_rp_update_len;
-    *data->joint_enable = joint_enable;
-    *data->joint_gpio_step = joint_gpio_step;
-    *data->joint_gpio_dir = joint_gpio_dir;
-    *data->joint_max_velocity = joint_max_velocity;
-    *data->joint_max_accel = joint_max_accel;
-    *data->joint_pos_feedback = joint_pos_feedback;
-    *data->joint_scale = joint_scale;
-    *data->joint_step_len_ticks = joint_step_len_ticks;
-    *data->joint_velocity_cmd = joint_velocity_cmd;
-    *data->joint_velocity_feedback = joint_velocity_feedback;
 
-    *data->gpio_data = gpio_data;
-    *data->gpio_data_received = gpio_data_received;
-    *data->gpio_type = gpio_type;
-    *data->gpio_confirmation_pending = gpio_confirmation_pending;
+    for(size_t joint = 0; joint < JOINTS; joint++) {
+        data->joint_enable[joint] =            &joint_enable[joint];
+        data->joint_gpio_step[joint] =         &joint_gpio_step[joint];
+        data->joint_gpio_dir[joint] =          &joint_gpio_dir[joint];
+        data->joint_max_velocity[joint] =      &joint_max_velocity[joint];
+        data->joint_max_accel[joint] =         &joint_max_accel[joint];
+        data->joint_pos_feedback[joint] =      &joint_pos_feedback[joint];
+        data->joint_scale[joint] =             &joint_scale[joint];
+        data->joint_step_len_ticks[joint] =    &joint_step_len_ticks[joint];
+        data->joint_velocity_cmd[joint] =      &joint_velocity_cmd[joint];
+        data->joint_velocity_feedback[joint] = &joint_velocity_feedback[joint];
+    }
+
+    for(size_t gpio = 0; gpio < MAX_GPIO; gpio++) {
+        data->gpio_data[gpio] = &gpio_data[gpio];
+        data->gpio_type[gpio] = &gpio_type[gpio];
+    }
+
+    for(size_t bank = 0; bank < MAX_GPIO / 32; bank++) {
+        data->gpio_data_received[bank] = 0;
+        data->gpio_confirmation_pending[bank] = 0;
+    }
 }
 
 /* Turn a 32 bit value into an array of bool. */
@@ -93,22 +99,22 @@ static void test_serialize_gpio_out_change(void **state) {
 
     uint32_t values_b0_last_received = values_b0 + 1;
     uint32_t values_b1_last_received = values_b1 + 0x10000;
-    (*data.gpio_data_received)[0] = values_b0_last_received;
-    (*data.gpio_data_received)[1] = values_b1_last_received;
+    data.gpio_data_received[0] = values_b0_last_received;
+    data.gpio_data_received[1] = values_b1_last_received;
 
     // GPIO pin is of output type on a bit with changed data.
     // This will case a bank 0 transmission.
-    (*data.gpio_type)[0] = GPIO_TYPE_NATIVE_OUT;
-    (*data.gpio_type)[1] = GPIO_TYPE_NATIVE_OUT;
+    *data.gpio_type[0] = GPIO_TYPE_NATIVE_OUT;
+    *data.gpio_type[1] = GPIO_TYPE_NATIVE_OUT;
 
     // GPIO pins on a bits without changed data.
     // This will not case a bank 1 transmission.
-    (*data.gpio_type)[33] = GPIO_TYPE_NATIVE_IN;
-    (*data.gpio_type)[34] = GPIO_TYPE_NATIVE_OUT;
+    *data.gpio_type[33] = GPIO_TYPE_NATIVE_IN;
+    *data.gpio_type[34] = GPIO_TYPE_NATIVE_OUT;
 
     // Last incoming message did not have confirmation_pending set.
-    (*data.gpio_confirmation_pending)[0] = false;
-    (*data.gpio_confirmation_pending)[1] = false;
+    data.gpio_confirmation_pending[0] = false;
+    data.gpio_confirmation_pending[1] = false;
 
     // Serialize any data that needs sent.
     size_t data_size = serialize_gpio(&buffer, &data);
@@ -151,22 +157,22 @@ static void test_serialize_gpio_in_change(void **state) {
 
     uint32_t values_b0_last_received = values_b0 + 0x10000;
     uint32_t values_b1_last_received = values_b1 + 0x1;
-    (*data.gpio_data_received)[0] = values_b0_last_received;
-    (*data.gpio_data_received)[1] = values_b1_last_received;
+    data.gpio_data_received[0] = values_b0_last_received;
+    data.gpio_data_received[1] = values_b1_last_received;
 
     // GPIO pin is of input type on a bit with changed data.
     // This will case a bank 1 transmission.
-    (*data.gpio_type)[32] = GPIO_TYPE_NATIVE_IN;
-    (*data.gpio_type)[33] = GPIO_TYPE_NATIVE_IN;
+    *data.gpio_type[32] = GPIO_TYPE_NATIVE_IN;
+    *data.gpio_type[33] = GPIO_TYPE_NATIVE_IN;
 
     // GPIO pins on a bits without changed data.
     // This will not case a bank 0 transmission.
-    (*data.gpio_type)[0] = GPIO_TYPE_NATIVE_IN;
-    (*data.gpio_type)[1] = GPIO_TYPE_NATIVE_OUT;
+    *data.gpio_type[0] = GPIO_TYPE_NATIVE_IN;
+    *data.gpio_type[1] = GPIO_TYPE_NATIVE_OUT;
 
     // Last incoming message did not have confirmation_pending set.
-    (*data.gpio_confirmation_pending)[0] = false;
-    (*data.gpio_confirmation_pending)[1] = false;
+    data.gpio_confirmation_pending[0] = false;
+    data.gpio_confirmation_pending[1] = false;
 
     // Serialize any data that needs sent.
     size_t data_size = serialize_gpio(&buffer, &data);
@@ -183,8 +189,8 @@ static void test_serialize_gpio_in_change(void **state) {
     assert_int_equal(message_b0_p->values, values_b1);
     assert_int_equal(message_b0_p->confirmation_pending, true);
     // HAL state has not changed.
-    assert_int_equal((*data.gpio_data)[32], true);
-    assert_int_equal((*data.gpio_data)[33], false);
+    assert_int_equal(*data.gpio_data[32], true);
+    assert_int_equal(*data.gpio_data[33], false);
 }
 
 /* No change in data or gpio values since last time but last incoming Reply_gpio
@@ -207,17 +213,17 @@ static void test_serialize_gpio_confirmation_pending(void **state) {
     uint32_t values_b1_last_received = values_b1;
     helper_set_gpio_data(data.gpio_data, values_b0, 0);
     helper_set_gpio_data(data.gpio_data, values_b1, 1);
-    (*data.gpio_data_received)[0] = values_b0_last_received;
-    (*data.gpio_data_received)[1] = values_b1_last_received;
+    data.gpio_data_received[0] = values_b0_last_received;
+    data.gpio_data_received[1] = values_b1_last_received;
 
     // GPIO pins on a bits without changed data.
     // This will not case a bank 0 transmission.
-    (*data.gpio_type)[0] = GPIO_TYPE_NATIVE_IN;
-    (*data.gpio_type)[1] = GPIO_TYPE_NATIVE_OUT;
+    *data.gpio_type[0] = GPIO_TYPE_NATIVE_IN;
+    *data.gpio_type[1] = GPIO_TYPE_NATIVE_OUT;
 
     // Last incoming message had confirmation_pending set on bank 0.
-    (*data.gpio_confirmation_pending)[0] = true;
-    (*data.gpio_confirmation_pending)[1] = false;
+    data.gpio_confirmation_pending[0] = true;
+    data.gpio_confirmation_pending[1] = false;
 
     // Serialize any data that needs sent.
     size_t data_size = serialize_gpio(&buffer, &data);
@@ -233,8 +239,8 @@ static void test_serialize_gpio_confirmation_pending(void **state) {
     assert_int_equal(message_b0_p->values, values_b0);
     assert_int_equal(message_b0_p->confirmation_pending, false);
     // HAL state has not changed.
-    assert_int_equal((*data.gpio_data)[0], true);
-    assert_int_equal((*data.gpio_data)[1], false);
+    assert_int_equal(*data.gpio_data[0], true);
+    assert_int_equal(*data.gpio_data[1], false);
 }
 
 /* No change in data since last time so nothing enqueued on the buffer. */
@@ -256,17 +262,17 @@ static void test_serialize_gpio_nothing_to_do(void **state) {
     uint32_t values_b1_last_received = values_b1;
     helper_set_gpio_data(data.gpio_data, values_b0, 0);
     helper_set_gpio_data(data.gpio_data, values_b1, 1);
-    (*data.gpio_data_received)[0] = values_b0_last_received;
-    (*data.gpio_data_received)[1] = values_b1_last_received;
+    data.gpio_data_received[0] = values_b0_last_received;
+    data.gpio_data_received[1] = values_b1_last_received;
 
     // GPIO pins on a bits without changed data.
     // This will not case a bank 0 transmission.
-    (*data.gpio_type)[0] = GPIO_TYPE_NATIVE_IN;
-    (*data.gpio_type)[1] = GPIO_TYPE_NATIVE_OUT;
+    *data.gpio_type[0] = GPIO_TYPE_NATIVE_IN;
+    *data.gpio_type[1] = GPIO_TYPE_NATIVE_OUT;
 
     // Last incoming message did not have confirmation_pending set.
-    (*data.gpio_confirmation_pending)[0] = false;
-    (*data.gpio_confirmation_pending)[1] = false;
+    data.gpio_confirmation_pending[0] = false;
+    data.gpio_confirmation_pending[1] = false;
 
     // Serialize any data that needs sent.
     // This is a no-op since no data has changed.
@@ -276,8 +282,8 @@ static void test_serialize_gpio_nothing_to_do(void **state) {
     assert_int_equal(buffer.checksum, 0);
     assert_int_equal(buffer.length, 0);
     // HAL state has not changed.
-    assert_int_equal((*data.gpio_data)[0], true);
-    assert_int_equal((*data.gpio_data)[1], false);
+    assert_int_equal(*data.gpio_data[0], true);
+    assert_int_equal(*data.gpio_data[1], false);
 }
 
 static void test_unpack_gpio(void **state) {
@@ -306,7 +312,7 @@ static void test_unpack_gpio(void **state) {
 
     bool result = unpack_gpio(&buffer, &rx_offset, &received_count, &data);
 
-    assert_int_equal((*data.gpio_data_received)[reply.bank], reply.values);
+    assert_int_equal(data.gpio_data_received[reply.bank], reply.values);
     assert_int_equal(result, true);
     assert_int_equal(received_count, original_received_count + 1);
     assert_int_equal(rx_offset, original_rx_offset += sizeof(reply));

@@ -199,8 +199,8 @@ size_t serialize_joint_config(
   return pack_nw_buff(buffer, &message, sizeof(struct Message_joint_config));
 }
 
-bool serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
-  bool return_val = true;
+uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
+  uint16_t return_val = 0;
   bool confirmation_pending[MAX_GPIO / 32];
   uint32_t to_send[MAX_GPIO / 32];
 
@@ -248,7 +248,7 @@ bool serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
         .values = to_send[bank],
         .confirmation_pending=confirmation_pending[bank]
       };
-      return_val = return_val & pack_nw_buff(buffer, &message, sizeof(struct Message_gpio));
+      return_val += pack_nw_buff(buffer, &message, sizeof(struct Message_gpio));
     }
   }
 
