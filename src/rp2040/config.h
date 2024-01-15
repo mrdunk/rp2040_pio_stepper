@@ -63,7 +63,7 @@ struct ConfigGlobal {
   struct ConfigAxis axis[MAX_AXIS];
   struct ConfigGPIO gpio[MAX_GPIO];
   struct ConfigI2c i2c[MAX_I2C_MCP];
-  uint32_t gpio_values_confirmed[MAX_GPIO / 32];
+  bool gpio_confirmation_pending[MAX_GPIO / 32];
 };
 
 

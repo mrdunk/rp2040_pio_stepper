@@ -74,7 +74,6 @@ struct Message_gpio {
   uint8_t bank;       // A bank of 32 IO pins.
   uint8_t confirmation_pending;
   uint32_t values;    // Values to be sent to any of the IO pins that are outputs.
-  uint32_t values_confirmed;
 };
 
 struct Message_joint_config {

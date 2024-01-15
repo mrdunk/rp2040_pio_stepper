@@ -385,8 +385,10 @@ bool unpack_gpio(
   uint8_t bank = reply->bank;
   uint32_t values = reply->values;
 
+  data->gpio_confirmation_pending[bank] = reply->confirmation_pending;
+
   for(uint8_t gpio_per_bank = 0; gpio_per_bank < 32; gpio_per_bank++) {
-    (data->gpio_data_received)[bank] = values;
+    data->gpio_data_received[bank] = values;
   }
 
   (*received_count)++;

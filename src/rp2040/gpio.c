@@ -78,12 +78,7 @@ void get_gpio_config(
   }
 }
 
-void gpio_set_values(const uint8_t bank, uint32_t values, uint32_t values_confirmed) {
-  config.gpio_values_confirmed[bank] = values_confirmed;
-  if(values == values_confirmed) {
-    return;
-  }
-
+void gpio_set_values(const uint8_t bank, uint32_t values) {
   for(uint8_t gpio = bank * 32; gpio < (bank + 1) * 32; gpio++) {
     uint8_t type;
     uint8_t index;
@@ -97,6 +92,7 @@ void gpio_set_values(const uint8_t bank, uint32_t values, uint32_t values_confir
     if(new_value == current_value) {
       continue;
     }
+    config.gpio_confirmation_pending[bank] = true;
 
     switch(config.gpio[gpio].type) {
       case GPIO_TYPE_NATIVE_IN:
@@ -206,39 +202,48 @@ void gpio_serialize(struct NWBuffer* tx_buf, size_t* tx_buf_len) {
     uint8_t address;
     bool previous_value;
     bool new_value;
-    bool confirmed_value = config.gpio_values_confirmed[bank] & (0x1 << (gpio % 32));
 
     get_gpio_config(gpio, &type, &index, &address, &previous_value);
 
     switch(config.gpio[gpio].type) {
       case GPIO_TYPE_NATIVE_OUT:
         new_value = gpio_local_get_pin(index);
-        update_gpio_config(gpio, NULL, NULL, NULL, &new_value);
+        if(previous_value != new_value) {
+          to_send[bank] = true;
+          config.gpio_confirmation_pending[bank] = true;
+          // Do not update config here.
+          // Config gets updated on incoming Message_gpio.
+        }
         break;
       case GPIO_TYPE_I2C_MCP_OUT:
         new_value = gpio_i2c_mcp_get_pin(index, address);
-        update_gpio_config(gpio, NULL, NULL, NULL, &new_value);
+        if(previous_value != new_value) {
+          to_send[bank] = true;
+          config.gpio_confirmation_pending[bank] = true;
+          // Do not update config here.
+          // Config gets updated on incoming Message_gpio.
+        }
         break;
       default:
-        // Output GPIO.
+        // GPIO_TYPE_*_IN.
         new_value = previous_value;
         break;
     }
 
     values[bank] |= (new_value << (gpio % 32));
-    to_send[bank] |= (new_value != confirmed_value);
   }
 
   struct Reply_gpio reply;
   reply.type = REPLY_GPIO;
 
   for(uint8_t bank = 0; bank < MAX_GPIO / 32; bank++) {
-      if(! to_send[bank]) {
+      if(! config.gpio_confirmation_pending[bank]) {
         continue;
       }
 
       reply.bank = bank;
       reply.values = values[bank];
+      reply.confirmation_pending = to_send[bank];
 
       *tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
 

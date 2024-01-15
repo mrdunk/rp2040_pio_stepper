@@ -328,9 +328,11 @@ bool unpack_gpio(
   struct Message_gpio* message = data_p;
   const uint8_t bank = message->bank;
   uint32_t values = message->values;
-  uint32_t values_confirmed = message->values_confirmed;
+  bool confirmation_pending = message->confirmation_pending;
 
-  gpio_set_values(bank, values, values_confirmed);
+  config.gpio_confirmation_pending[bank] = confirmation_pending;
+
+  gpio_set_values(bank, values);
 
   (*received_count)++;
   return true;

@@ -109,7 +109,7 @@ void init_gpio() {
 
   for(uint16_t bank = 0; bank < MAX_GPIO / 32; bank++) {
     // Set confirmation to force an initial Reply_gpio to be sent.
-    config.gpio_values_confirmed[bank] = 0;
+    config.gpio_confirmation_pending[bank] = false;
   }
 }
 

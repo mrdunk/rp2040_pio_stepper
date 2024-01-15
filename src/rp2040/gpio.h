@@ -26,7 +26,7 @@ void get_gpio_config(
 /* Calls handler for all 32 IO pins in the specified bank.
  * Each bit in values represents the value of a pin.
  * Multiple sets of 32 can be set by increasing bank. */
-void gpio_set_values(const uint8_t bank, uint32_t values, uint32_t values_confirmed);
+void gpio_set_values(const uint8_t bank, uint32_t values);
 
 void gpio_local_set_out_pin(uint8_t index, bool new_value);
 
