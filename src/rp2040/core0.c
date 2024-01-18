@@ -16,14 +16,13 @@
 
 #include "pico/stdlib.h"
 #include "stepper_control.h"
+#include "modbus.h"
 #include "network.h"
 
 #endif  // BUILD_TESTS
 
 float req_spindle_frequency = 0;
 float act_spindle_frequency = -1000000;
-extern uint8_t modbus_address;
-extern uint16_t modbus_bitrate;
 
 /* Called after receiving network packet.
  * Takes the average time delay over the previous 1000 packet receive events and
@@ -188,8 +187,8 @@ bool unpack_spindle_config(
   }
 
   struct Message_spindle_config* message = data_p;
-  modbus_address = message->modbus_address;
-  modbus_bitrate = message->bitrate;
+  vfd_config.address = message->modbus_address;
+  vfd_config.bitrate = message->bitrate;
   (*received_count)++;
   return true;
 }
@@ -454,9 +453,6 @@ void process_received_buffer(
   reset_nw_buf(rx_buf);
   return;
 }
-
-extern void modbus_init(void);
-extern float modbus_loop(float);
 
 void core0_main() {
   int retval = 0;
