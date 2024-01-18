@@ -189,6 +189,7 @@ bool unpack_spindle_config(
   struct Message_spindle_config* message = data_p;
   vfd_config.address = message->modbus_address;
   vfd_config.bitrate = message->bitrate;
+  vfd_config.type = message->vfd_type;
   (*received_count)++;
   return true;
 }

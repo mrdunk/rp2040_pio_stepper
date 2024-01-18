@@ -170,12 +170,14 @@ size_t serialize_joint_max_accel(
 
 bool serialise_spindle_config(
     struct NWBuffer* tx_buf,
+    uint8_t vfd_type,
     uint8_t address,
     uint16_t bitrate
 )
 {
   struct Message_spindle_config message;
   message.type = MSG_SET_SPINDLE_CONFIG;
+  message.vfd_type = vfd_type;
   message.modbus_address = address;
   message.bitrate = bitrate;
 

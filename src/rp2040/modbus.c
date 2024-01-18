@@ -269,5 +269,12 @@ do_pause:
 }
 
 float modbus_loop(float frequency) {
-  return modbus_loop_fuling(frequency);
+  switch(vfd_config.type) {
+    case MODBUS_TYPE_HUANYANG:
+      return modbus_loop_huanyang(frequency);
+    case MODBUS_TYPE_FULING:
+      return modbus_loop_fuling(frequency);
+    default:
+      return 0.f;
+  }
 }

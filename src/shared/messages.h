@@ -85,6 +85,7 @@ struct Message_spindle_config {
   uint32_t type;
   uint16_t bitrate;
   uint8_t modbus_address;
+  uint8_t vfd_type;
 };
 
 struct Message_spindle_speed {

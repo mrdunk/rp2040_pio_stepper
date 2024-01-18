@@ -113,3 +113,5 @@ net spindle-at-speed spindle.0.at-speed <= rp2040_eth.0.spindle-at-speed
 setp rp2040_eth.0.spindle-address 1
 setp rp2040_eth.0.spindle-poles 4
 setp rp2040_eth.0.spindle-bitrate 9600
+# 1 = Huanyang, 2 = Fuling
+setp rp2040_eth.0.spindle-vfd-type 1

@@ -17,8 +17,12 @@ extern int modbus_pause;
 extern int modbus_cycle;
 extern int modbus_last_control;
 
+#define MODBUS_TYPE_HUANYANG 1
+#define MODBUS_TYPE_FULING 2
+
 struct vfd_config {
   uint8_t address;
+  uint8_t type;
   uint16_t bitrate;
 };
 

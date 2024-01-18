@@ -54,6 +54,7 @@ typedef struct {
   hal_float_t* spindle_speed_in;
   hal_bit_t* spindle_at_speed;
 
+  hal_u32_t spindle_vfd_type;
   hal_u32_t spindle_address;
   hal_float_t spindle_poles;
   hal_u32_t spindle_bitrate;
@@ -312,6 +313,13 @@ int rtapi_app_main(void)
   }
 
   retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_address),
+      comp_id, "rp2040_eth.%d.spindle-vfd-type", num_device);
+  if (retval < 0) {
+    goto port_error;
+  }
+  port_data_array->spindle_vfd_type = 2;
+
+  retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_address),
       comp_id, "rp2040_eth.%d.spindle-address", num_device);
   if (retval < 0) {
     goto port_error;
@@ -532,7 +540,7 @@ static void write_port(void *arg, long period)
 
   if (!has_configs) {
     if (count % 100 == 0) {
-      pack_success = pack_success && serialise_spindle_config(&buffer, data->spindle_address, data->spindle_bitrate);
+      pack_success = pack_success && serialise_spindle_config(&buffer, data->spindle_vfd_type, data->spindle_address, data->spindle_bitrate);
     } else {
       float speed = *data->spindle_speed_in / (120.0 / data->spindle_poles);
       pack_success = pack_success && serialise_spindle_speed_in(&buffer, speed);
