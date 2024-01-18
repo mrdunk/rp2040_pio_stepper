@@ -8,7 +8,7 @@
 #define MODBUS_RX_PIN 9
 #define MODBUS_DIR_PIN 10
 
-uint8_t modbus_command[64];
+uint8_t modbus_command[128];
 uint8_t modbus_address;
 uint8_t modbus_length;
 uint16_t modbus_bitrate;
@@ -85,8 +85,8 @@ void huanyang_stop(void) {
 }
 
 void modbus_transmit(void) {
-  uint16_t crc16 = modbus_crc16((const uint8_t *)modbus_command, modbus_length);
   gpio_put(MODBUS_DIR_PIN, 1);
+  uint16_t crc16 = modbus_crc16((const uint8_t *)modbus_command, modbus_length);
   uart_tx_wait_blocking(MODBUS_UART);
   modbus_command[modbus_length++] = crc16 & 0xFF;
   modbus_command[modbus_length++] = crc16 >> 8;
@@ -98,8 +98,18 @@ struct vfd_status {
   uint32_t last_status_update;
   uint32_t last_set_freq_update;
   uint32_t last_act_freq_update;
-  int16_t set_freq_x100;
-  int16_t act_freq_x100;
+  union {
+    struct { // Huanyang
+      int16_t set_freq_x100;
+      int16_t act_freq_x100;
+      int16_t req_freq_x100;
+    };
+    struct { // Fuling
+      int16_t set_freq_x10;
+      int16_t act_freq_x10;
+      int16_t req_freq_x10;
+    };
+  };
   uint16_t amps_x10;
   uint16_t rpm;
   uint16_t status_run:1;
@@ -108,7 +118,6 @@ struct vfd_status {
   uint16_t spindle_at_speed:1;
   uint16_t command_run:1;
   uint16_t command_reverse:1;
-  int16_t req_freq_x100;
 } vfd;
 
 void modbus_init(void) {
@@ -119,7 +128,7 @@ void modbus_init(void) {
   gpio_set_dir(MODBUS_DIR_PIN, GPIO_OUT);
   vfd.cycle = 10000;
   vfd.command_run = 0;
-  vfd.req_freq_x100 = 0;
+  vfd.req_freq_x10 = 0;
   modbus_cur_bitrate = modbus_bitrate;
 }
 
@@ -150,7 +159,7 @@ void modbus_huanyang_receive(void) {
         break;
       case 4:
         if (len >= 6) {
-          int value = modbus_command[4] * 256  + modbus_command[5];
+          int value = modbus_command[4] * 256 + modbus_command[5];
           modbus_printf("Status type %02x, value %d\n", modbus_command[3], value);
           switch(modbus_command[3]) {
           case 0:
@@ -200,12 +209,12 @@ int modbus_rtu_encode(uint8_t address, uint8_t function_code, uint16_t v1, uint1
   *wrptr++ = (uint8_t)v2;
   if (data && size) {
     *wrptr++ = size;
-    while(size > 0)
+    while(size > 0) {
       *wrptr++ = *data++;
+      size--;
+    }
   }
-  uint16_t crc16 = modbus_crc16(modbus_command, wrptr - modbus_command);
-  *wrptr++ = (uint8_t)crc16;
-  *wrptr++ = (uint8_t)(crc16 >> 8);
+  modbus_pause = 200;
   return wrptr - modbus_command;
 }
 
@@ -218,55 +227,19 @@ int modbus_rtu_check(const uint8_t *data, uint8_t size) {
   return 1;
 }
 
-static inline int modbus_encode_twoints(uint8_t address, uint8_t command, uint16_t v1, uint16_t v2)
+static inline void modbus_encode_twoints(uint8_t address, uint8_t command, uint16_t v1, uint16_t v2)
 {
-    return modbus_rtu_encode(address, command, v1, v2, NULL, 0);
+  modbus_length = modbus_rtu_encode(address, command, v1, v2, NULL, 0);
 }
 
-int modbus_read_coils(uint8_t address, uint16_t coil_to_read, uint16_t num_coils)
+void modbus_read_holding_registers(uint8_t address, uint16_t reg_to_read, uint16_t num_regs)
 {
-  return modbus_encode_twoints(address, 1, coil_to_read, num_coils);
+  modbus_encode_twoints(address, 3, reg_to_read, num_regs);
 }
 
-int modbus_read_discrete_inputs(uint8_t address, uint16_t reg_to_read, uint16_t num_regs)
+void modbus_write_holding_register(uint8_t address, uint16_t reg_to_write, uint16_t value)
 {
-  return modbus_encode_twoints(address, 2, reg_to_read, num_regs);
-}
-
-int modbus_read_holding_registers(uint8_t address, uint16_t reg_to_read, uint16_t num_regs)
-{
-  return modbus_encode_twoints(address, 3, reg_to_read, num_regs);
-}
-
-int modbus_read_input_registers(uint8_t address, uint16_t reg_to_read, uint16_t num_regs)
-{
-  return modbus_encode_twoints(address, 4, reg_to_read, num_regs);
-}
-
-int modbus_write_coil(uint8_t address, uint16_t coil_address, uint8_t value)
-{
-  return modbus_encode_twoints(address, 5, coil_address, (value ? 0xFF : 0));
-}
-
-int modbus_write_holding_register(uint8_t address, uint16_t reg_to_write, uint16_t value)
-{
-  return modbus_encode_twoints(address, 6, reg_to_write, value);
-}
-
-int modbus_write_multiple_coils(uint8_t address, uint16_t coil_to_write, uint16_t num_coils, const uint8_t *values)
-{
-  return modbus_rtu_encode(address, 15, coil_to_write, num_coils, values, (num_coils + 7) >> 3);
-}
-
-int modbus_write_multiple_holding_registers(uint8_t address, uint16_t reg_to_write, uint16_t num_regs, const uint16_t *values)
-{
-  uint8_t encoded[2 * num_regs];
-  uint8_t *wrptr = encoded;
-  for (int i = 0; i < num_regs; ++i) {
-    *wrptr++ = (uint8_t)(values[i] >> 8);
-    *wrptr++ = (uint8_t)values[i];
-  }
-  return modbus_rtu_encode(address, 16, reg_to_write, num_regs, encoded, wrptr - encoded);
+  modbus_encode_twoints(address, 6, reg_to_write, value);
 }
 
 void dump_buffer(const char *name, const uint8_t *buffer, int bytes)
@@ -341,17 +314,26 @@ void modbus_fuling_receive(void) {
       case 3:
         switch(modbus_command[2]) { // tell by byte count, 2 = status, 4 = data
         case 2:
+          modbus_printf("Status %x\n", modbus_command[4]);
+          vfd.last_status_update = vfd.cycle;
           vfd.status_run = modbus_command[4] == FULING_DZB_CMD_STATE_RUN_FWD || modbus_command[4] == FULING_DZB_CMD_STATE_RUN_REV;
           vfd.status_reverse = modbus_command[4] == FULING_DZB_CMD_STATE_RUN_REV;
           vfd.status_running = vfd.status_run;
           break;
         case 4:
-          vfd.set_freq_x100 = modbus_command[4] * 256  + modbus_command[5];
-          vfd.act_freq_x100 = modbus_command[6] * 256  + modbus_command[7];
+          vfd.last_set_freq_update = vfd.cycle;
+          vfd.set_freq_x10 = modbus_command[3] * 256U + modbus_command[4];
+          vfd.act_freq_x10 = modbus_command[5] * 256U + modbus_command[6];
+          modbus_printf("Freqs %d %d (%d)\n", (int)vfd.set_freq_x10, (int)vfd.act_freq_x10, (int)(vfd.req_freq_x10));
           break;
         }
         break;
       case 6: // write
+        if (modbus_command[2] == 0x50 && modbus_command[3] == 0x01) {
+          modbus_printf("Fault %x\n", modbus_command[4] * 256 + modbus_command[5]);
+        } else {
+          modbus_printf("Write\n");
+        }
         break;
       default:
         printf("Unrecognized response %02x\n", modbus_command[1]);
@@ -374,7 +356,7 @@ float modbus_loop_fuling(float frequency) {
   vfd.cycle++;
   vfd.command_run = frequency != 0;
   vfd.command_reverse = frequency < 0;
-  vfd.req_freq_x100 = abs((int16_t)(frequency * 100));
+  vfd.req_freq_x10 = abs((int16_t)(frequency * 10));
   if (modbus_pause > 0) {
     if ((uart_get_hw(MODBUS_UART)->fr & UART_UARTFR_BUSY_BITS)) {
       goto do_pause;
@@ -394,8 +376,14 @@ float modbus_loop_fuling(float frequency) {
     modbus_read_holding_registers(modbus_address, FULING_DZB_CMD_STATUS_SET_FREQ, 2);
     modbus_transmit();
   } else {
-    if (vfd.req_freq_x100 != vfd.set_freq_x100) {
-      modbus_write_holding_register(modbus_address, FULING_DZB_CMD_SPEED, vfd.req_freq_x100 * 10000 / 800);
+    // This assumes top frequency of 800 Hz (4-pole motor with max RPM of 24000).
+    // Long term, it should either ask the inverter (P0.04 or 4) or get it from the configuration.
+    // 5 / 4 because of the rate range of -10000..10000 and the frequency being in 0.1 Hz
+    // units.
+    int rate = vfd.req_freq_x10 * 5 / 4;
+    // Value received is not always exactly the value sent.
+    if (abs(rate * 4 / 5 - vfd.set_freq_x10) > 2) {
+      modbus_write_holding_register(modbus_address, FULING_DZB_CMD_SPEED, rate);
       modbus_transmit();
     } else if (vfd.command_run != vfd.status_run || vfd.command_reverse != vfd.status_reverse) {
       if (vfd.status_run && !vfd.command_run) {
@@ -418,7 +406,7 @@ do_pause:
 
   if (!vfd.status_running)
     return 0;
-  return (vfd.status_reverse ? -1 : 1) * vfd.act_freq_x100 / 100.0;
+  return (vfd.status_reverse ? -1 : 1) * vfd.act_freq_x10 / 10.0;
 }
 
 float modbus_loop_huanyang(float frequency) {
