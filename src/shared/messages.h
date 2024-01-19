@@ -161,6 +161,12 @@ struct Reply_gpio_values {
 struct Reply_spindle_speed {
   uint32_t type;
   double speed;
+  uint16_t crc_errors;
+  uint16_t unanswered;
+  uint16_t unknown;
+  uint16_t got_status:1;
+  uint16_t got_set_frequency:1;
+  uint16_t got_act_frequency:1;
 };
 
 #define GPIO_TYPE_NOT_SET      0

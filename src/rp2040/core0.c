@@ -504,7 +504,7 @@ void core0_main() {
         serialise_axis_movement(axis, &tx_buf, true);
         serialise_axis_metrics(axis, &tx_buf);
       }
-      serialise_spindle_speed_out(&tx_buf, act_spindle_frequency);
+      serialise_spindle_speed_out(&tx_buf, act_spindle_frequency, &vfd.stats);
       count++;
 
       put_UDP(

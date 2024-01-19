@@ -425,11 +425,17 @@ bool serialise_axis_movement(
   return true;
 }
 
-bool serialise_spindle_speed_out(struct NWBuffer* tx_buf, float speed)
+bool serialise_spindle_speed_out(struct NWBuffer* tx_buf, float speed, struct vfd_stats *vfd_stats)
 {
   struct Reply_spindle_speed reply;
   reply.type = REPLY_SPINDLE_SPEED;
   reply.speed = speed;
+  reply.crc_errors = vfd_stats->crc_errors;
+  reply.unanswered = vfd_stats->unanswered;
+  reply.unknown = vfd_stats->unknown;
+  reply.got_status = vfd_stats->got_status;
+  reply.got_set_frequency = vfd_stats->got_set_frequency;
+  reply.got_act_frequency = vfd_stats->got_act_frequency;
 
   uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
 
