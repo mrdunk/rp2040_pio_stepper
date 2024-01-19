@@ -13,17 +13,29 @@ extern uint16_t crc16_table[256];
 extern uint8_t modbus_command[128];
 extern uint8_t modbus_length;
 extern uint16_t modbus_cur_bitrate;
-extern int modbus_pause;
-extern int modbus_cycle;
-extern int modbus_last_control;
+extern uint16_t modbus_pause;
+extern uint8_t modbus_last_control;
+extern uint8_t modbus_outstanding;
 
 #define MODBUS_TYPE_HUANYANG 1
 #define MODBUS_TYPE_FULING 2
+
+#define MODBUS_RESULT_NOT_READY (1000000.f)
+#define MODBUS_RESULT_NOT_CONFIGURED (2000000.f)
 
 struct vfd_config {
   uint8_t address;
   uint8_t type;
   uint16_t bitrate;
+};
+
+struct vfd_stats {
+  uint16_t crc_errors;
+  uint16_t unanswered;
+  uint16_t unknown;
+  uint16_t got_status:1;
+  uint16_t got_set_frequency:1;
+  uint16_t got_act_frequency:1;
 };
 
 struct vfd_status {
@@ -51,6 +63,8 @@ struct vfd_status {
   uint16_t spindle_at_speed:1;
   uint16_t command_run:1;
   uint16_t command_reverse:1;
+
+  struct vfd_stats stats;
 };
 
 extern struct vfd_config vfd_config;

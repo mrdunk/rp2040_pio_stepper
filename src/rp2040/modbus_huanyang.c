@@ -4,6 +4,8 @@
 
 #include "modbus.h"
 
+uint8_t modbus_last_control;
+
 void huanyang_setfreq(unsigned hertz_x100) {
   modbus_command[0] = vfd_config.address;
   modbus_command[1] = 5;
@@ -92,6 +94,7 @@ void modbus_huanyang_receive(void) {
             vfd.rpm = value;
             break;
           default:
+            ++vfd.stats.unknown;
             break;
           }
         }
@@ -105,11 +108,15 @@ void modbus_huanyang_receive(void) {
         }
         break;
       default:
+        ++vfd.stats.unknown;
         printf("Unrecognized response %02x\n", modbus_command[1]);
       }
     } else {
       printf("Response CRC error\n");
+      ++vfd.stats.crc_errors;
     }
+  } else if (modbus_outstanding) {
+    ++vfd.stats.unanswered;
   }
 }
 
@@ -119,9 +126,10 @@ float modbus_loop_huanyang(float frequency) {
       uart_deinit(MODBUS_UART);
     uart_init(MODBUS_UART, vfd_config.bitrate);
     modbus_cur_bitrate = vfd_config.bitrate;
+    modbus_outstanding = 0;
   }
   if (!modbus_cur_bitrate || !vfd_config.address)
-    return 2000000.0;
+    return MODBUS_RESULT_NOT_CONFIGURED;
   vfd.cycle++;
   vfd.command_run = frequency != 0;
   vfd.command_reverse = frequency < 0;
@@ -165,10 +173,11 @@ float modbus_loop_huanyang(float frequency) {
     }
   }
 do_pause:
-  if (!((vfd.cycle - vfd.last_status_update < freshness_limit) &&
-    (vfd.cycle - vfd.last_set_freq_update < freshness_limit) &&
-    (vfd.cycle - vfd.last_act_freq_update < freshness_limit))) {
-    return 1000000.0;
+  vfd.stats.got_status = (vfd.cycle - vfd.last_status_update < freshness_limit);
+  vfd.stats.got_set_frequency = (vfd.cycle - vfd.last_set_freq_update < freshness_limit);
+  vfd.stats.got_act_frequency = (vfd.cycle - vfd.last_act_freq_update < freshness_limit);
+  if (!(vfd.stats.got_status && vfd.stats.got_set_frequency && vfd.stats.got_act_frequency)) {
+    return MODBUS_RESULT_NOT_READY;
   }
 
   if (!vfd.status_running)

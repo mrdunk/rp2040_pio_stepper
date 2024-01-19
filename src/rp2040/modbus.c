@@ -1,6 +1,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "pico/stdlib.h"
 
 #include "modbus.h"
@@ -10,9 +11,8 @@ uint16_t crc16_table[256];
 uint8_t modbus_command[128];
 uint8_t modbus_length;
 uint16_t modbus_cur_bitrate;
-int modbus_pause;
-int modbus_cycle;
-int modbus_last_control;
+uint16_t modbus_pause;
+uint8_t modbus_outstanding;
 
 struct vfd_config vfd_config;
 struct vfd_status vfd;
@@ -43,6 +43,7 @@ void modbus_transmit(void) {
   modbus_command[modbus_length++] = crc16 & 0xFF;
   modbus_command[modbus_length++] = crc16 >> 8;
   uart_write_blocking(MODBUS_UART, (const uint8_t *)modbus_command, modbus_length);
+  modbus_outstanding = 1;
 }
 
 void modbus_init(void) {
@@ -54,6 +55,7 @@ void modbus_init(void) {
   vfd.cycle = 10000;
   vfd.command_run = 0;
   vfd.req_freq_x10 = 0;
+  memset(&vfd.stats, 0, sizeof(vfd.stats));
   modbus_cur_bitrate = 0;
 }
 
@@ -185,6 +187,9 @@ void modbus_fuling_receive(void) {
           vfd.act_freq_x10 = modbus_command[5] * 256U + modbus_command[6];
           modbus_printf("Freqs %d %d (%d)\n", (int)vfd.set_freq_x10, (int)vfd.act_freq_x10, (int)(vfd.req_freq_x10));
           break;
+        default:
+          ++vfd.stats.unknown;
+          break;
         }
         break;
       case 6: // write
@@ -195,12 +200,16 @@ void modbus_fuling_receive(void) {
         }
         break;
       default:
-        printf("Unrecognized response %02x\n", modbus_command[1]);
+        ++vfd.stats.unknown;
+        modbus_printf("Unrecognized response %02x\n", modbus_command[1]);
       }
     } else {
-      printf("Response CRC error\n");
+      ++vfd.stats.crc_errors;
     }
+  } else if (modbus_outstanding) {
+    ++vfd.stats.unanswered;
   }
+  modbus_outstanding = 0;
 }
 
 float modbus_loop_fuling(float frequency) {
@@ -209,9 +218,10 @@ float modbus_loop_fuling(float frequency) {
       uart_deinit(MODBUS_UART);
     uart_init(MODBUS_UART, vfd_config.bitrate);
     modbus_cur_bitrate = vfd_config.bitrate;
+    modbus_outstanding = 0;
   }
   if (!modbus_cur_bitrate || !vfd_config.address)
-    return 2000000.0;
+    return MODBUS_RESULT_NOT_CONFIGURED;
   vfd.cycle++;
   vfd.command_run = frequency != 0;
   vfd.command_reverse = frequency < 0;
@@ -258,9 +268,11 @@ float modbus_loop_fuling(float frequency) {
     }
   }
 do_pause:
-  if (!((vfd.cycle - vfd.last_status_update < freshness_limit) &&
-    (vfd.cycle - vfd.last_set_freq_update < freshness_limit))) {
-    return 1000000.0;
+  vfd.stats.got_status = (vfd.cycle - vfd.last_status_update < freshness_limit);
+  vfd.stats.got_set_frequency = (vfd.cycle - vfd.last_set_freq_update < freshness_limit);
+  vfd.stats.got_act_frequency = vfd.stats.got_set_frequency; // a single update does both
+  if (!(vfd.stats.got_status && vfd.stats.got_set_frequency && vfd.stats.got_act_frequency)) {
+    return MODBUS_RESULT_NOT_READY;
   }
 
   if (!vfd.status_running)
