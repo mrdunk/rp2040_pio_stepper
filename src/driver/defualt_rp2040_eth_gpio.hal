@@ -1,0 +1,109 @@
+# The full config for a GPIO pin is as folows:
+# rp2040_eth.0.gpio-0-type
+#   Sets the GPIO type.
+#   Valid values are:
+#     GPIO_TYPE_NOT_SET
+#     GPIO_TYPE_NATIVE_IN
+#     GPIO_TYPE_NATIVE_OUT
+#     GPIO_TYPE_I2C_MCP_IN
+#     GPIO_TYPE_I2C_MCP_OUT
+#   eg:
+#     setp rp2040_eth.0.gpio-0-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_IN
+#
+# rp2040_eth.0.gpio-0-index
+#   The GPIO index on the RP for this GPIO type.
+#   For RP native GPIO this is the RP pin number.
+#   For i2c expanders, it is the expander GPIO index.
+#   eg:
+#     setp rp2040_eth.0.gpio-0-in        0
+#
+# rp2040_eth.0.gpio-0-address
+#   Only valid for i2c types.
+#   Ignored for other types.
+#   The i2c address of the GPIO i2c expander.
+#   eg:
+#     setp rp2040_eth.0.gpio-0-address   0
+#
+# rp2040_eth.0.gpio-0-in
+#   The boolen value (0 or 1) to set a GPIO IN pin.
+#   Ignored for OUT types.
+#   eg:
+#     setp rp2040_eth.0.gpio-0-in        0
+
+# From here on, all GPIO pins are disabled.
+# Source this file early in your .hal file and override specific values later
+# in your .hal file.
+# Use the "source" hal command to source this file.
+# eg:
+#   source defualt_rp2040_eth_gpio.hal
+
+setp rp2040_eth.0.gpio-0-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-0-index     0
+setp rp2040_eth.0.gpio-0-address   0
+setp rp2040_eth.0.gpio-0-in        0
+
+setp rp2040_eth.0.gpio-1-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-2-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-3-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-4-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-5-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-6-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-7-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-8-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-9-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-10-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-11-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-12-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-13-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-14-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-15-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-16-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-17-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-18-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-19-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-20-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-21-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-22-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-23-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-24-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-25-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-26-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-27-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-28-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-29-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-30-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-31-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-32-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-33-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-34-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-35-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-36-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-37-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-38-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-39-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-40-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-41-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-42-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-43-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-44-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-45-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-46-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-47-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-48-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-49-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-50-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-51-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-52-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-53-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-54-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-55-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-56-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-57-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-58-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-59-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-60-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-61-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-62-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio-63-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+
+

@@ -405,6 +405,55 @@ static void test_unpack_joint_config_message(void **state) {
     assert_double_equal(config.axis[2].max_accel_ticks, 56.78, 0.01);
 }
 
+static void test_unpack_unknown_message_type(void **state) {
+    (void) state; /* unused */
+
+    struct NWBuffer rx_buf = {0};
+    struct NWBuffer tx_buf = {0};
+    uint8_t received_msg_count = 0;
+    uint16_t expected_length = sizeof(rx_buf.length) + sizeof(rx_buf.checksum);
+
+    struct Message_joint_config joint_config = {
+        .type = MSG_SET_AXIS_CONFIG,
+        .axis = 3,
+        .enable = 1,
+        .gpio_step = 2,
+        .gpio_dir = 3,
+        .max_velocity = 13.34,
+        .max_accel = 57.78
+    };
+
+    union MessageAny message;
+    message.joint_config = joint_config;
+
+    // Append 2 messages.
+    expected_length += append_message(&rx_buf, message);
+    expected_length += append_message(&rx_buf, message);
+    assert_memory_equal(&rx_buf.payload, &message, sizeof(struct Message_joint_config) * 2);
+
+    // Everything normal so far.
+    // Now let's break the first message type.
+    ((struct Message_joint_config*)(rx_buf.payload))->type = 12345;
+
+    process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, expected_length);
+
+    // No messages processed.
+    assert_int_equal(received_msg_count, 0);
+
+    // The update_axis_config(...) method has not been mocked
+    // so this would result in the config actually changing if we had processed the
+    // 2nd message.
+    assert_int_not_equal(config.axis[3].enabled, 1);
+    assert_int_not_equal(config.axis[3].io_pos_step, 2);
+    assert_int_not_equal(config.axis[3].io_pos_dir, 3);
+    assert_double_not_equal(config.axis[3].max_velocity, 13.34, 0.01);
+    assert_double_not_equal(config.axis[3].max_accel_ticks, 57.78, 0.01);
+
+    // Should have reset the rx_buf.
+    assert_int_equal(rx_buf.length, 0);
+    assert_int_equal(rx_buf.checksum, 0);
+}
+
 static void test_unpack_one_of_each(void **state) {
     (void) state; /* unused */
 
@@ -507,6 +556,7 @@ int main(void) {
         cmocka_unit_test(test_unpack_joint_gpio_step_message),
         cmocka_unit_test(test_unpack_joint_gpio_dir_message),
         cmocka_unit_test(test_unpack_joint_config_message),
+        cmocka_unit_test(test_unpack_unknown_message_type),
         cmocka_unit_test(test_unpack_one_of_each)
     };
 

@@ -21,7 +21,9 @@
 #define MSG_SET_AXIS_IO_STEP         8  // Set GPIO step pin.
 #define MSG_SET_AXIS_IO_DIR          9  // Set GPIO direction pin.
 #define MSG_SET_AXIS_CONFIG          10 // Set all config for a joint.
-#define MSG_SET_GPIO                 11
+#define MSG_SET_GPIO                 11 // Set values for a bank (32) of GPIO.
+#define MSG_SET_GPIO_CONFIG          12 // Set config for a single GPIO.
+
 
 struct Message_header {
   uint32_t type;
@@ -86,6 +88,13 @@ struct Message_joint_config {
   double max_accel;
 };
 
+struct Message_gpio_config {
+  uint32_t type;
+  uint8_t gpio_type;
+  uint8_t index;
+  uint8_t address;
+};
+
 union MessageAny {
   struct Message_header header;
   struct Message_timing timing;
@@ -97,6 +106,7 @@ union MessageAny {
   struct Message_joint_gpio joint_gpio;
   struct Message_gpio gpio;
   struct Message_joint_config joint_config;
+  struct Message_gpio_config gpio_config;
 };
 
 
@@ -135,6 +145,13 @@ struct Reply_axis_config {
   double max_accel;
 };
 
+struct Reply_gpio_config {
+  uint32_t type;
+  uint8_t gpio_type;
+  uint8_t index;
+  uint8_t address;
+};
+
 struct Reply_axis_metrics {
   uint32_t type;
   uint32_t axis;
@@ -154,6 +171,7 @@ union ReplyAny {
   struct Reply_timing timing;
   struct Reply_axis_movement joint_movement;
   struct Reply_axis_config joint_config;
+  struct Reply_gpio_config gpio_config;
   struct Reply_axis_metrics joint_metrics;
 };
 

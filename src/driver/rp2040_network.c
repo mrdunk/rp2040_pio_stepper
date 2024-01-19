@@ -199,6 +199,22 @@ size_t serialize_joint_config(
   return pack_nw_buff(buffer, &message, sizeof(struct Message_joint_config));
 }
 
+size_t serialize_gpio_config(
+    struct NWBuffer* buffer,
+    uint8_t gpio,
+    uint8_t gpio_type,
+    uint8_t gpio_index,
+    uint8_t gpio_address
+) {
+  union MessageAny message;
+  message.gpio_config.type = MSG_SET_GPIO_CONFIG;
+  message.gpio_config.gpio_type = gpio_type;
+  message.gpio_config.index = gpio_index;
+  message.gpio_config.address = gpio_address;
+
+  return pack_nw_buff(buffer, &message, sizeof(struct Message_gpio_config));
+}
+
 uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
   uint16_t return_val = 0;
   bool confirmation_pending[MAX_GPIO / 32];

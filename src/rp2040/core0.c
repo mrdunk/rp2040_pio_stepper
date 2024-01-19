@@ -418,7 +418,7 @@ void process_received_buffer(
             rx_buf, &rx_offset, received_count);
         break;
       default:
-        printf("WARN: Invalid message type: %u\t%lu\n", *received_count, header->type);
+        printf("WARN: Invalid message type: %u\t%lu\n", header->type, *received_count);
         // Implies data corruption.
         unpack_success = false;
         break;

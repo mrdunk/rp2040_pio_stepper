@@ -50,9 +50,8 @@ typedef struct {
   hal_bit_t* gpio_data_in[MAX_GPIO];
   hal_bit_t* gpio_data_out[MAX_GPIO];
   hal_u32_t* gpio_type[MAX_GPIO];
-  //hal_u32_t* gpio_index[MAX_GPIO];
-  //hal_u32_t* gpio_address[MAX_GPIO];
-  //hal_u32_t* gpio_i2c_address[MAX_I2C_MCP];
+  hal_u32_t* gpio_index[MAX_GPIO];
+  hal_u32_t* gpio_address[MAX_I2C_MCP];
 
   uint32_t gpio_data_received[MAX_GPIO / 32];
   bool gpio_confirmation_pending[MAX_GPIO / 32];
@@ -131,10 +130,7 @@ int rtapi_app_main(void)
   /* Set some default values. */
   for(int gpio_bank = 0; gpio_bank < MAX_GPIO / 32; gpio_bank++) {
     port_data_array->gpio_data_received[gpio_bank] = 0;
-  }
-
-  for(int gpio = 0; gpio < MAX_GPIO; gpio++) {
-    port_data_array->gpio_type[gpio] = GPIO_TYPE_NOT_SET;
+    port_data_array->gpio_confirmation_pending[gpio_bank] = true;
   }
 
 
@@ -144,7 +140,7 @@ int rtapi_app_main(void)
     /* Export the GPIO */
     // From PC to RP.
     retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->gpio_data_in[gpio]),
-                              component_id, "rp2040_eth.%d.pin-%d-in", num_device, gpio);
+                              component_id, "rp2040_eth.%d.gpio-%d-in", num_device, gpio);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -155,7 +151,7 @@ int rtapi_app_main(void)
 
     // From RP to PC.
     retval = hal_pin_bit_newf(HAL_OUT, &(port_data_array->gpio_data_out[gpio]), component_id,
-                              "rp2040_eth.%d.pin-%d-out", num_device, gpio);
+                              "rp2040_eth.%d.gpio-%d-out", num_device, gpio);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -166,6 +162,26 @@ int rtapi_app_main(void)
 
     retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->gpio_type[gpio]),
                               component_id, "rp2040_eth.%d.gpio-type-%d-in", num_device, gpio);
+    if (retval < 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR,
+                      "SKELETON: ERROR: port %d var export failed with err=%i\n",
+                      num_device, retval);
+      hal_exit(component_id);
+      return -1;
+    }
+
+    retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->gpio_index[gpio]),
+                              component_id, "rp2040_eth.%d.gpio-index-%d-in", num_device, gpio);
+    if (retval < 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR,
+                      "SKELETON: ERROR: port %d var export failed with err=%i\n",
+                      num_device, retval);
+      hal_exit(component_id);
+      return -1;
+    }
+
+    retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->gpio_address[gpio]),
+                              component_id, "rp2040_eth.%d.gpio-address-%d-in", num_device, gpio);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -409,6 +425,7 @@ static void write_port(void *arg, long period)
 
   static uint count = 0;
   static struct Message_joint_config last_joint_config[JOINTS] = {0};
+  static struct Message_gpio_config last_gpio_config[MAX_GPIO] = {0};
   static uint32_t last_update_id = 0;
   static int last_errno = 0;
   static int cooloff = 0;
@@ -430,7 +447,8 @@ static void write_port(void *arg, long period)
   pack_success = pack_success && serialize_timing(&buffer, count, rtapi_get_time());
 
   // Put GPIO values in network buffer.
-  pack_success &= serialize_gpio(&buffer, data);
+  //pack_success &= serialize_gpio(&buffer, data);
+  serialize_gpio(&buffer, data);
 
   // Iterate through joints.
   for(int joint = 0; joint < JOINTS; joint++) {
@@ -441,6 +459,7 @@ static void write_port(void *arg, long period)
       printf("ERROR: Not implemented velocity mode. joint: %u\n", joint);
     } else {
       // Absolute position mode.
+      // TODO: Put both position and velocity in same update.
       double position = *data->joint_scale[joint] * *data->joint_pos_cmd[joint];
       double velocity = *data->joint_scale[joint] * *data->joint_vel_cmd[joint];
       pack_success = pack_success && serialize_joint_pos(&buffer, joint, position);
@@ -469,6 +488,28 @@ static void write_port(void *arg, long period)
             *data->joint_max_velocity[joint],
             *data->joint_max_accel[joint]
             );
+      }
+    }
+  }
+
+  // Iterate through GPIO.
+  for(uint8_t gpio = 0; gpio < MAX_GPIO; gpio++) {
+    if(count % MAX_GPIO == gpio) {
+      // Only configure 1 gpio per cycle to avoid filling NW buffer.
+      if(
+          last_gpio_config[gpio].gpio_type != *data.gpio_type[gpio]
+          ||
+          last_gpio_config[gpio].gpio_index != *data.gpio_index[gpio]
+          ||
+          last_gpio_config[gpio].gpio_address != *data.gpio_address[gpio]
+        ) {
+        pack_success = pack_success && serialize_gpio_config(
+            &buffer,
+            gpio,
+            *data.gpio_type[gpio],
+            *data.gpio_index[gpio],
+            *data.gpio_address[gpio]
+          );
       }
     }
   }
