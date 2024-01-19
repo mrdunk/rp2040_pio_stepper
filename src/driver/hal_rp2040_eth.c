@@ -466,8 +466,8 @@ static void write_port(void *arg, long period)
       pack_success = pack_success && serialize_joint_velocity(&buffer, joint, velocity);
     }
 
-    if(count % JOINTS == joint) {
-      // Only configure 1 joint per cycle to avoid filling NW buffer.
+    if(count % (JOINTS + MAX_GPIO) == joint) {
+      // Only configure 1 joint or gpio per cycle to avoid filling NW buffer.
       if(
           last_joint_config[joint].enable != *data->joint_enable[joint]
           ||
@@ -494,8 +494,8 @@ static void write_port(void *arg, long period)
 
   // Iterate through GPIO.
   for(uint8_t gpio = 0; gpio < MAX_GPIO; gpio++) {
-    if(count % MAX_GPIO == gpio) {
-      // Only configure 1 gpio per cycle to avoid filling NW buffer.
+    if(count % (JOINTS + MAX_GPIO) == JOINTS + gpio) {
+      // Only configure 1 joint or gpio per cycle to avoid filling NW buffer.
       if(
           last_gpio_config[gpio].gpio_type != *data.gpio_type[gpio]
           ||
