@@ -38,7 +38,8 @@ typedef struct {
   hal_s32_t* joint_step_len_ticks[JOINTS];
   hal_float_t* joint_velocity_cmd[JOINTS];
   hal_float_t* joint_velocity_feedback[JOINTS];
-  hal_bit_t* gpio_data[MAX_GPIO];
+  hal_bit_t* gpio_data_in[MAX_GPIO];
+  hal_bit_t* gpio_data_out[MAX_GPIO];
   hal_u32_t* gpio_type[MAX_GPIO];
   hal_u32_t gpio_data_received[MAX_GPIO / 32];
   hal_bit_t gpio_confirmation_pending[MAX_GPIO / 32];

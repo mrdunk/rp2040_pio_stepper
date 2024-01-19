@@ -70,10 +70,10 @@ struct Message_joint_gpio {
 };
 
 struct Message_gpio {
-  uint32_t type;      // MSG_SET_GPIO
-  uint8_t bank;       // A bank of 32 IO pins.
-  uint8_t confirmation_pending;
-  uint32_t values;    // Values to be sent to any of the IO pins that are outputs.
+  uint32_t type;                  // MSG_SET_GPIO
+  uint8_t bank;                   // A bank of 32 IO pins.
+  uint8_t confirmation_pending;   // If set the RP should always send a Reply_gpio in response.
+  uint32_t values;                // Values to be sent to any of the IO pins that are outputs.
 };
 
 struct Message_joint_config {
@@ -140,7 +140,6 @@ struct Reply_axis_metrics {
   uint32_t axis;
   int32_t velocity_requested;
   int32_t step_len_ticks;
-  //int32_t pos_error;
 };
 
 struct Reply_gpio {

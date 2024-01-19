@@ -213,16 +213,32 @@ uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
     int bank = gpio / 32;
     int gpio_per_bank = (gpio % 32);
 
-    bool current_value = *data->gpio_data[gpio];
+    bool current_value = false;
+    switch(*data->gpio_type[gpio]) {
+      case GPIO_TYPE_NATIVE_OUT:
+      case GPIO_TYPE_I2C_MCP_OUT:
+        current_value = *data->gpio_data_out[gpio];
+        break;
+      case GPIO_TYPE_NATIVE_IN:
+      case GPIO_TYPE_I2C_MCP_IN:
+        current_value = *data->gpio_data_in[gpio];
+        break;
+      default:
+        break;
+    }
+
+    // The value last received over the network.
     bool received_value = data->gpio_data_received[bank] & (0x1 << gpio_per_bank);
 
     if(current_value != received_value) {
       switch(*data->gpio_type[gpio]) {
         case GPIO_TYPE_NATIVE_OUT:
         case GPIO_TYPE_I2C_MCP_OUT:
-          // Network update to apply and send network confirmation for.
+          // Network update to apply.
+          *data->gpio_data_out[gpio] = received_value;
+          current_value = received_value;
+          // Confirmation of HAL update to send on network.
           confirmation_pending[bank] = true;
-          *data->gpio_data[gpio] = received_value;
           break;
         case GPIO_TYPE_NATIVE_IN:
         case GPIO_TYPE_I2C_MCP_IN:
@@ -230,11 +246,11 @@ uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
           confirmation_pending[bank] = true;
           break;
         default:
+          current_value = received_value;
           break;
       }
     }
 
-    current_value = *data->gpio_data[gpio];
     to_send[bank] |= (current_value << gpio_per_bank);
   }
 
