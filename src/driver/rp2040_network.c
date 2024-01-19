@@ -387,7 +387,7 @@ bool unpack_spindle_speed(
   float rpm = reply->speed * 120.0 / data->spindle_poles;
   float expected_rpm = *data->spindle_speed_in;
   *data->spindle_speed_out = rpm;
-  *data->spindle_at_speed = fabs(rpm - expected_rpm) < 1.0;
+  *data->spindle_at_speed = fabs(rpm - expected_rpm) < 10.0;
 
   (*received_count)++;
   return true;

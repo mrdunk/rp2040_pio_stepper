@@ -239,9 +239,9 @@ float modbus_loop_fuling(float frequency) {
     // Long term, it should either ask the inverter (P0.04 or 4) or get it from the configuration.
     // 5 / 4 because of the rate range of -10000..10000 and the frequency being in 0.1 Hz
     // units.
-    int rate = vfd.req_freq_x10 * 5 / 4;
+    int rate = (vfd.req_freq_x10 * 5 + 2) / 4;
     // Value received is not always exactly the value sent.
-    if (abs(rate * 4 / 5 - vfd.set_freq_x10) > 2) {
+    if (abs((rate * 4 + 2) / 5 - vfd.set_freq_x10) > 1) {
       modbus_write_holding_register(vfd_config.address, FULING_DZB_CMD_SPEED, rate);
       modbus_transmit();
     } else if (vfd.command_run != vfd.status_run || vfd.command_reverse != vfd.status_reverse) {
