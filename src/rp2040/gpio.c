@@ -97,7 +97,7 @@ void gpio_set_values(const uint8_t bank, uint32_t values) {
 
     switch(config.gpio[gpio].type) {
       case GPIO_TYPE_NATIVE_IN_DEBUG:
-        printf("DBG GPIO: %u  val: %u\n", gpio, new_value);
+        printf("DBG GPIO: %u  IO: %u  val: %u\n", gpio, index, new_value);
         // Note: no break.
       case GPIO_TYPE_NATIVE_IN:
         gpio_local_set_out_pin(index, new_value);
@@ -115,6 +115,7 @@ void gpio_set_values(const uint8_t bank, uint32_t values) {
 
 void gpio_local_set_out_pin(uint8_t index, bool new_value) {
   // TODO: Filter on valid native GPIO indexes.
+  printf("gpio_put(%u, %u)\n", index, new_value);
   gpio_put(index, new_value);
 }
 

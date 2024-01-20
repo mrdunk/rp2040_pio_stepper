@@ -431,7 +431,6 @@ bool unpack_gpio(
   for(uint8_t gpio_per_bank = 0; gpio_per_bank < 32; gpio_per_bank++) {
     data->gpio_data_received[bank] = values;
   }
-
   (*received_count)++;
   return true;
 }

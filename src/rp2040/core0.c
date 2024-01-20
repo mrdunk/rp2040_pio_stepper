@@ -362,6 +362,27 @@ bool unpack_gpio_config(
 
   printf("%u Configuring gpio: %u\t%u\n", *received_count, gpio_type, gpio_count);
 
+    switch(gpio_type) {
+      case GPIO_TYPE_NATIVE_IN:
+      case GPIO_TYPE_NATIVE_IN_DEBUG:
+        ;
+        // Remember HAL's definition of IN and OUT are opposite of RPs.
+        printf("Setting RP native IO to RP OUT: %u\n", index);
+        gpio_init(index);
+        gpio_set_dir(index, GPIO_OUT);
+        break;
+      case GPIO_TYPE_NATIVE_OUT:
+      case GPIO_TYPE_NATIVE_OUT_DEBUG:
+        // Remember HAL's definition of IN and OUT are opposite of RPs.
+        printf("Setting RP native IO to RP IN: %u\n", index);
+        gpio_init(index);
+        gpio_set_dir(index, GPIO_IN);
+        break;
+      default:
+        break;
+    }
+  
+
   //serialise_gpio_config(gpio_count, tx_buf);
 
   (*received_count)++;
@@ -517,6 +538,9 @@ void core0_main() {
         serialise_axis_movement(axis, &tx_buf, true);
         serialise_axis_metrics(axis, &tx_buf);
       }
+
+      size_t tx_buf_len = 0;
+      gpio_serialize(&tx_buf, &tx_buf_len);
 
       put_UDP(
           SOCKET_NUMBER,
