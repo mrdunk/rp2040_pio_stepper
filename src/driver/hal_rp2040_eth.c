@@ -51,7 +51,7 @@ typedef struct {
   hal_bit_t* gpio_data_out[MAX_GPIO];
   hal_u32_t* gpio_type[MAX_GPIO];
   hal_u32_t* gpio_index[MAX_GPIO];
-  hal_u32_t* gpio_address[MAX_I2C_MCP];
+  hal_u32_t* gpio_address[MAX_GPIO];
 
   uint32_t gpio_data_received[MAX_GPIO / 32];
   bool gpio_confirmation_pending[MAX_GPIO / 32];
@@ -161,7 +161,7 @@ int rtapi_app_main(void)
     }
 
     retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->gpio_type[gpio]),
-                              component_id, "rp2040_eth.%d.gpio-type-%d-in", num_device, gpio);
+                              component_id, "rp2040_eth.%d.gpio-%d-type", num_device, gpio);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -171,7 +171,7 @@ int rtapi_app_main(void)
     }
 
     retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->gpio_index[gpio]),
-                              component_id, "rp2040_eth.%d.gpio-index-%d-in", num_device, gpio);
+                              component_id, "rp2040_eth.%d.gpio-%d-index", num_device, gpio);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -181,7 +181,7 @@ int rtapi_app_main(void)
     }
 
     retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->gpio_address[gpio]),
-                              component_id, "rp2040_eth.%d.gpio-address-%d-in", num_device, gpio);
+                              component_id, "rp2040_eth.%d.gpio-%d-address", num_device, gpio);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -494,21 +494,24 @@ static void write_port(void *arg, long period)
 
   // Iterate through GPIO.
   for(uint8_t gpio = 0; gpio < MAX_GPIO; gpio++) {
-    if(count % (JOINTS + MAX_GPIO) == JOINTS + gpio) {
+    if(count % (JOINTS + MAX_GPIO) == JOINTS + gpio
+        && count < 2000
+      ) {
       // Only configure 1 joint or gpio per cycle to avoid filling NW buffer.
       if(
-          last_gpio_config[gpio].gpio_type != *data.gpio_type[gpio]
+          last_gpio_config[gpio].gpio_type != *data->gpio_type[gpio]
           ||
-          last_gpio_config[gpio].gpio_index != *data.gpio_index[gpio]
+          last_gpio_config[gpio].index != *data->gpio_index[gpio]
           ||
-          last_gpio_config[gpio].gpio_address != *data.gpio_address[gpio]
+          last_gpio_config[gpio].address != *data->gpio_address[gpio]
         ) {
+        //printf("%u\n", gpio);
         pack_success = pack_success && serialize_gpio_config(
             &buffer,
             gpio,
-            *data.gpio_type[gpio],
-            *data.gpio_index[gpio],
-            *data.gpio_address[gpio]
+            *data->gpio_type[gpio],
+            *data->gpio_index[gpio],
+            *data->gpio_address[gpio]
           );
       }
     }

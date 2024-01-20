@@ -338,6 +338,36 @@ bool unpack_gpio(
   return true;
 }
 
+bool unpack_gpio_config(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    struct NWBuffer* tx_buf,
+    uint8_t* received_count
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_gpio_config));
+
+  if(! data_p) {
+    return false;
+  }
+  struct Message_gpio_config* message = data_p;
+  uint8_t gpio_type = message->gpio_type;
+  uint8_t gpio_count = message->gpio_count;
+  uint8_t index = message->index;
+  uint8_t address = message->address;
+
+  config.gpio[gpio_count].type = gpio_type;
+  config.gpio[gpio_count].index = index;
+  config.gpio[gpio_count].address = address;
+
+  printf("%u Configuring gpio: %u\t%u\n", *received_count, gpio_type, gpio_count);
+
+  //serialise_gpio_config(gpio_count, tx_buf);
+
+  (*received_count)++;
+  return true;
+}
+
 /* Process data received over the network.
  * This consists of serialised structs as defined in src/shared/massages.h
  */
@@ -417,6 +447,10 @@ void process_received_buffer(
         unpack_success = unpack_success && unpack_gpio(
             rx_buf, &rx_offset, received_count);
         break;
+      case MSG_SET_GPIO_CONFIG:
+        unpack_success = unpack_success && unpack_gpio_config(
+            rx_buf, &rx_offset, tx_buf, received_count);
+        break;
       default:
         printf("WARN: Invalid message type: %u\t%lu\n", header->type, *received_count);
         // Implies data corruption.
@@ -465,11 +499,11 @@ void core0_main() {
     }
 
     process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, data_received);
-    if(received_msg_count != 9) {
+    //if(received_msg_count != 9) {
       // Not the standard number of received packets.
       // This likely was a config update.
-      printf("Received msgs: %u\t%u\n", received_msg_count, data_received);
-    }
+    //  printf("Received msgs: %u\t%u\n", received_msg_count, data_received);
+    //}
 
     if(received_msg_count > 0) {
       recover_clock();

@@ -91,8 +91,9 @@ struct Message_joint_config {
 struct Message_gpio_config {
   uint32_t type;
   uint8_t gpio_type;
-  uint8_t index;
-  uint8_t address;
+  uint8_t gpio_count;  // The HAL side index of which gpio this is. 
+  uint8_t index;       // The RP side component index. IO pin number for RP native.
+  uint8_t address;     // The i2c address if applicable.
 };
 
 union MessageAny {
@@ -148,6 +149,7 @@ struct Reply_axis_config {
 struct Reply_gpio_config {
   uint32_t type;
   uint8_t gpio_type;
+  uint8_t gpio_count;
   uint8_t index;
   uint8_t address;
 };
@@ -175,10 +177,12 @@ union ReplyAny {
   struct Reply_axis_metrics joint_metrics;
 };
 
-#define GPIO_TYPE_NOT_SET      0
-#define GPIO_TYPE_NATIVE_IN    1
-#define GPIO_TYPE_NATIVE_OUT   2
-#define GPIO_TYPE_I2C_MCP_IN   3
-#define GPIO_TYPE_I2C_MCP_OUT  4
+#define GPIO_TYPE_NOT_SET            0
+#define GPIO_TYPE_NATIVE_IN          1
+#define GPIO_TYPE_NATIVE_OUT         2
+#define GPIO_TYPE_NATIVE_IN_DEBUG    3
+#define GPIO_TYPE_NATIVE_OUT_DEBUG   4
+#define GPIO_TYPE_I2C_MCP_IN         5
+#define GPIO_TYPE_I2C_MCP_OUT        6
 
 #endif  // UPDATE_TYPES__H

@@ -209,6 +209,7 @@ size_t serialize_gpio_config(
   union MessageAny message;
   message.gpio_config.type = MSG_SET_GPIO_CONFIG;
   message.gpio_config.gpio_type = gpio_type;
+  message.gpio_config.gpio_count = gpio;
   message.gpio_config.index = gpio_index;
   message.gpio_config.address = gpio_address;
 
@@ -231,11 +232,13 @@ uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
 
     bool current_value = false;
     switch(*data->gpio_type[gpio]) {
+      case GPIO_TYPE_NATIVE_OUT_DEBUG:
       case GPIO_TYPE_NATIVE_OUT:
       case GPIO_TYPE_I2C_MCP_OUT:
         current_value = *data->gpio_data_out[gpio];
         break;
       case GPIO_TYPE_NATIVE_IN:
+      case GPIO_TYPE_NATIVE_IN_DEBUG:
       case GPIO_TYPE_I2C_MCP_IN:
         current_value = *data->gpio_data_in[gpio];
         break;
@@ -248,6 +251,9 @@ uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
 
     if(current_value != received_value) {
       switch(*data->gpio_type[gpio]) {
+        case GPIO_TYPE_NATIVE_OUT_DEBUG:
+          printf("DBG: GPIO OUT: %u  val: %u\n", gpio, current_value);
+          // Note: no break here.
         case GPIO_TYPE_NATIVE_OUT:
         case GPIO_TYPE_I2C_MCP_OUT:
           // Network update to apply.
@@ -256,6 +262,9 @@ uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
           // Confirmation of HAL update to send on network.
           confirmation_pending[bank] = true;
           break;
+        case GPIO_TYPE_NATIVE_IN_DEBUG:
+          printf("DBG: GPIO IN: %u  val: %u\n", gpio, current_value);
+          // Note: no break here.
         case GPIO_TYPE_NATIVE_IN:
         case GPIO_TYPE_I2C_MCP_IN:
           // HAL update to send on network.

@@ -85,6 +85,7 @@ void gpio_set_values(const uint8_t bank, uint32_t values) {
     uint8_t address;
     bool current_value;
     get_gpio_config(gpio, &type, &index, &address, &current_value);
+    //printf("%u\t%#10x\t%u\t%u\n", bank, values, &type, &index);
 
     // Parsed from Message_gpio.
     bool new_value = values & (0x1 << (gpio % 32));
@@ -95,6 +96,9 @@ void gpio_set_values(const uint8_t bank, uint32_t values) {
     config.gpio_confirmation_pending[bank] = true;
 
     switch(config.gpio[gpio].type) {
+      case GPIO_TYPE_NATIVE_IN_DEBUG:
+        printf("DBG GPIO: %u  val: %u\n", gpio, new_value);
+        // Note: no break.
       case GPIO_TYPE_NATIVE_IN:
         gpio_local_set_out_pin(index, new_value);
         break;
@@ -206,6 +210,7 @@ void gpio_serialize(struct NWBuffer* tx_buf, size_t* tx_buf_len) {
     get_gpio_config(gpio, &type, &index, &address, &previous_value);
 
     switch(config.gpio[gpio].type) {
+      case GPIO_TYPE_NATIVE_OUT_DEBUG:
       case GPIO_TYPE_NATIVE_OUT:
         new_value = gpio_local_get_pin(index);
         if(previous_value != new_value) {
