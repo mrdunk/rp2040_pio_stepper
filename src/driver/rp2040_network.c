@@ -376,7 +376,7 @@ bool unpack_spindle_speed(
     skeleton_t* data
 ) {
   void* data_p = unpack_nw_buff(
-      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_axis_metrics));
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_spindle_speed));
 
   if(! data_p) {
     return false;
