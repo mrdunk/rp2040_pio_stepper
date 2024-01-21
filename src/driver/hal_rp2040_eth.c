@@ -312,7 +312,7 @@ int rtapi_app_main(void)
     goto port_error;
   }
 
-  retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_address),
+  retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_vfd_type),
       comp_id, "rp2040_eth.%d.spindle-vfd-type", num_device);
   if (retval < 0) {
     goto port_error;
