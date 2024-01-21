@@ -624,3 +624,17 @@ void on_eth_down(skeleton_t *data, uint count) {
   }
 }
 
+/* Reset HAL's opinion of the RP config. This will force an update. */
+void reset_rp_config(
+    struct Message_joint_config* last_joint_config,
+    struct Message_gpio_config* last_gpio_config
+) {
+  for(uint8_t joint = 0; joint < JOINTS; joint++) {
+    last_joint_config[joint].gpio_step = -1;
+    last_joint_config[joint].gpio_dir = -1;
+  }
+  for(uint8_t gpio = 0; gpio < MAX_GPIO; gpio++) {
+    last_gpio_config[gpio].gpio_type = GPIO_TYPE_NOT_SET;
+  }
+}
+
