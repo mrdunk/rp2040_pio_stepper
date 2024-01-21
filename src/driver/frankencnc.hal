@@ -3,7 +3,7 @@ loadrt [EMCMOT]EMCMOT base_period_nsec=[EMCMOT]BASE_PERIOD servo_period_nsec=[EM
 loadrt hal_rp2040_eth
 
 # Default GPIO values.
-#source defualt_rp2040_eth_gpio.hal
+source defualt_rp2040_eth_gpio.hal
 
 addf motion-command-handler servo-thread
 addf motion-controller servo-thread
@@ -47,7 +47,6 @@ setp rp2040_eth.0.joint-kp-1             [JOINT_1]KP
 setp rp2040_eth.0.joint-scale-1          [JOINT_1]SCALE
 setp rp2040_eth.0.joint-io-pos-step-1    2
 setp rp2040_eth.0.joint-io-pos-dir-1     3
-setp rp2040_eth.0.joint-velocity-mode-1  0
 
 # Send desired position.
 net ypos-cmd joint.1.motor-pos-cmd => rp2040_eth.0.pos-cmd-1
@@ -75,7 +74,6 @@ setp rp2040_eth.0.joint-kp-2             [JOINT_2]KP
 setp rp2040_eth.0.joint-scale-2          [JOINT_2]SCALE
 setp rp2040_eth.0.joint-io-pos-step-2    4
 setp rp2040_eth.0.joint-io-pos-dir-2     5
-setp rp2040_eth.0.joint-velocity-mode-2 0
 
 # Send desired position.
 net zpos-cmd joint.2.motor-pos-cmd => rp2040_eth.0.pos-cmd-2

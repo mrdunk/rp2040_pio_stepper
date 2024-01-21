@@ -31,7 +31,6 @@ typedef struct {
   hal_u32_t* metric_missed_packets;
   hal_bit_t* metric_eth_state;
   hal_bit_t* joint_enable[JOINTS];
-  hal_bit_t* joint_velocity_mode[JOINTS];
   hal_s32_t* joint_gpio_step[JOINTS];
   hal_s32_t* joint_gpio_dir[JOINTS];
   hal_float_t* joint_kp[JOINTS];
@@ -207,15 +206,6 @@ int rtapi_app_main(void)
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n",
                       num_device, retval);
-      hal_exit(component_id);
-      return -1;
-    }
-
-    retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->joint_velocity_mode[num_joint]),
-                              component_id, "rp2040_eth.%d.joint-velocity-mode-%d", num_device, num_joint);
-    if (retval < 0) {
-      rtapi_print_msg(RTAPI_MSG_ERR,
-                      "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
       hal_exit(component_id);
       return -1;
     }
@@ -543,18 +533,11 @@ static void write_port(void *arg, long period)
   // Iterate through joints.
   for(int joint = 0; joint < JOINTS; joint++) {
     // Put joint positions packet in buffer.
-    if(*data->joint_velocity_mode[joint] == 1) {
-      // Velocity mode.
-      // TODO: Not tested.
-      printf("ERROR: Not implemented velocity mode. joint: %u\n", joint);
-    } else {
-      // Absolute position mode.
-      // TODO: Put both position and velocity in same update.
-      double position = *data->joint_scale[joint] * *data->joint_pos_cmd[joint];
-      double velocity = *data->joint_scale[joint] * *data->joint_vel_cmd[joint];
-      pack_success = pack_success && serialize_joint_pos(&buffer, joint, position);
-      pack_success = pack_success && serialize_joint_velocity(&buffer, joint, velocity);
-    }
+    // TODO: Put both position and velocity in same update.
+    double position = *data->joint_scale[joint] * *data->joint_pos_cmd[joint];
+    double velocity = *data->joint_scale[joint] * *data->joint_vel_cmd[joint];
+    pack_success = pack_success && serialize_joint_pos(&buffer, joint, position);
+    pack_success = pack_success && serialize_joint_velocity(&buffer, joint, velocity);
   }
 
   // Send the tx_data if valid.
