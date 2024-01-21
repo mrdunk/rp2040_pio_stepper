@@ -3,7 +3,7 @@ loadrt [EMCMOT]EMCMOT base_period_nsec=[EMCMOT]BASE_PERIOD servo_period_nsec=[EM
 loadrt hal_rp2040_eth
 
 # Default GPIO values.
-source defualt_rp2040_eth_gpio.hal
+#source defualt_rp2040_eth_gpio.hal
 
 addf motion-command-handler servo-thread
 addf motion-controller servo-thread
@@ -108,17 +108,17 @@ net metrics-missed-packets  rp2040_eth.0.metrics-missed-packets
 net metrics-eth-state       rp2040_eth.0.metrics-eth-state
 
 # GPIO
-setp rp2040_eth.0.gpio-0-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_IN
+setp rp2040_eth.0.gpio-0-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_IN_DEBUG
 setp rp2040_eth.0.gpio-0-index     6
 setp rp2040_eth.0.gpio-0-in        0
 
-setp rp2040_eth.0.gpio-1-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_IN
+setp rp2040_eth.0.gpio-1-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_IN_DEBUG
 setp rp2040_eth.0.gpio-1-index     7
 setp rp2040_eth.0.gpio-1-in        0
 
-setp rp2040_eth.0.gpio-2-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_OUT
+setp rp2040_eth.0.gpio-2-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_OUT_DEBUG
 setp rp2040_eth.0.gpio-2-index     8
 
-setp rp2040_eth.0.gpio-3-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_OUT
+setp rp2040_eth.0.gpio-3-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_OUT_DEBUG
 setp rp2040_eth.0.gpio-3-index     9
 

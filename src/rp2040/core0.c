@@ -377,6 +377,7 @@ bool unpack_gpio_config(
         printf("Setting RP native IO to RP IN: %u\n", index);
         gpio_init(index);
         gpio_set_dir(index, GPIO_IN);
+        gpio_pull_up(index);
         break;
       default:
         break;
