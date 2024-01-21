@@ -2,6 +2,9 @@ loadrt [KINS]KINEMATICS
 loadrt [EMCMOT]EMCMOT base_period_nsec=[EMCMOT]BASE_PERIOD servo_period_nsec=[EMCMOT]SERVO_PERIOD num_joints=[KINS]JOINTS
 loadrt hal_rp2040_eth
 
+# Default GPIO values.
+source defualt_rp2040_eth_gpio.hal
+
 addf motion-command-handler servo-thread
 addf motion-controller servo-thread
 addf rp2040_eth.0.write servo-thread
@@ -12,51 +15,79 @@ net estop-out => iocontrol.0.emc-enable-in
 
 
 # Joint 0
+# Configuration.
 setp rp2040_eth.0.joint-kp-0             [JOINT_0]KP
 setp rp2040_eth.0.joint-scale-0          [JOINT_0]SCALE
 setp rp2040_eth.0.joint-io-pos-step-0    0
 setp rp2040_eth.0.joint-io-pos-dir-0     1
 
-net xpos-cmd joint.0.motor-pos-cmd => rp2040_eth.0.pos-cmd-0 => joint.0.motor-pos-fb
+# Send desired position.
+net xpos-cmd joint.0.motor-pos-cmd => rp2040_eth.0.pos-cmd-0
+net xvel-cmd joint.0.vel-cmd => rp2040_eth.0.vel-cmd-0
+
+# Receive achieved position feedback.
+net xpos-fb rp2040_eth.0.pos-fb-0 => joint.0.motor-pos-fb
+
+# Alternative to the previous 2 lines, ignoring RP feedabck.
+#net xpos-cmd joint.0.motor-pos-cmd => rp2040_eth.0.pos-cmd-0 => joint.0.motor-pos-fb
+
+# Estop
 net estop-out => rp2040_eth.0.joint-enable-0
 
 # For debugging.
-net xpos-fb rp2040_eth.0.pos-fb-0
-net xpos-error rp2040_eth.0.pos-error-0
+#net xpos-error rp2040_eth.0.pos-error-0
+net xpos-step-len rp2040_eth.0.step-len-ticks-0
 net xvelocity-calc rp2040_eth.0.velocity-calc-0
 net xvelocity-fb rp2040_eth.0.velocity-fb-0
 
 
 # Joint 1
+# Configuration.
 setp rp2040_eth.0.joint-kp-1             [JOINT_1]KP
 setp rp2040_eth.0.joint-scale-1          [JOINT_1]SCALE
 setp rp2040_eth.0.joint-io-pos-step-1    2
 setp rp2040_eth.0.joint-io-pos-dir-1     3
-setp rp2040_eth.0.joint-velocity-mode-1 0
 
-net ypos-cmd joint.1.motor-pos-cmd => rp2040_eth.0.pos-cmd-1 => joint.1.motor-pos-fb
+# Send desired position.
+net ypos-cmd joint.1.motor-pos-cmd => rp2040_eth.0.pos-cmd-1
+net yvel-cmd joint.1.vel-cmd => rp2040_eth.0.vel-cmd-1
+
+# Receive achieved position feedback.
+net ypos-fb rp2040_eth.0.pos-fb-1 => joint.1.motor-pos-fb
+
+# Alternative to the previous 2 lines, ignoring RP feedabck.
+#net ypos-cmd joint.1.motor-pos-cmd => rp2040_eth.0.pos-cmd-1 => joint.1.motor-pos-fb
+
+# Estop
 net estop-out => rp2040_eth.0.joint-enable-1
 
 # For debugging.
-net ypos-fb rp2040_eth.0.pos-fb-1
-net ypos-error rp2040_eth.0.pos-error-1
+#net ypos-error rp2040_eth.0.pos-error-1
+net ypos-step-len rp2040_eth.0.step-len-ticks-1
 net yvelocity-calc rp2040_eth.0.velocity-calc-1
 net yvelocity-fb rp2040_eth.0.velocity-fb-1
 
 
 # Joint 2
+# Configuration.
 setp rp2040_eth.0.joint-kp-2             [JOINT_2]KP
 setp rp2040_eth.0.joint-scale-2          [JOINT_2]SCALE
 setp rp2040_eth.0.joint-io-pos-step-2    4
 setp rp2040_eth.0.joint-io-pos-dir-2     5
-setp rp2040_eth.0.joint-velocity-mode-2 0
 
-net zpos-cmd joint.2.motor-pos-cmd => rp2040_eth.0.pos-cmd-2 => joint.2.motor-pos-fb
+# Send desired position.
+net zpos-cmd joint.2.motor-pos-cmd => rp2040_eth.0.pos-cmd-2
+net zvel-cmd joint.2.vel-cmd => rp2040_eth.0.vel-cmd-2
+
+# Receive achieved position feedback.
+net zpos-fb rp2040_eth.0.pos-fb-2 => joint.2.motor-pos-fb
+
+# Estop
 net estop-out => rp2040_eth.0.joint-enable-2
 
 # For debugging.
-net zpos-fb rp2040_eth.0.pos-fb-2
-net zpos-error rp2040_eth.0.pos-error-2
+#net zpos-error rp2040_eth.0.pos-error-2
+net zpos-step-len rp2040_eth.0.step-len-ticks-2
 net zvelocity-calc rp2040_eth.0.velocity-calc-2
 net zvelocity-fb rp2040_eth.0.velocity-fb-2
 
@@ -73,4 +104,19 @@ net metrics-update-id       rp2040_eth.0.metrics-update-id
 net metrics-rp-update-len   rp2040_eth.0.metrics-rp-update-len
 net metrics-missed-packets  rp2040_eth.0.metrics-missed-packets
 net metrics-eth-state       rp2040_eth.0.metrics-eth-state
+
+# GPIO
+setp rp2040_eth.0.gpio-0-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_IN_DEBUG
+setp rp2040_eth.0.gpio-0-index     6
+setp rp2040_eth.0.gpio-0-in        0
+
+setp rp2040_eth.0.gpio-1-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_IN_DEBUG
+setp rp2040_eth.0.gpio-1-index     7
+setp rp2040_eth.0.gpio-1-in        0
+
+setp rp2040_eth.0.gpio-2-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_OUT_DEBUG
+setp rp2040_eth.0.gpio-2-index     8
+
+setp rp2040_eth.0.gpio-3-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_OUT_DEBUG
+setp rp2040_eth.0.gpio-3-index     9
 

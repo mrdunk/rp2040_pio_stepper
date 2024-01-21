@@ -4,32 +4,17 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <limits.h>
+#include <stdbool.h>
 
+#include "messages.h"
+#include "buffer.h"
 #include "stepper_control.h"
+#include "ring_buffer.h"
 
 #define CORE0 0
 #define CORE1 1
 
-/* A ring buffer that returns the average value of it's contents.
- * Used for calculating average period between incoming network updates. */
-#define RING_BUF_AVE_LEN 1000
-struct Ring_buf_uint_ave {
-  uint32_t buf[RING_BUF_AVE_LEN];
-  size_t head;
-  uint32_t total;
-  size_t count;
-};
-
-struct Ring_buf_int_ave {
-  int32_t buf[RING_BUF_AVE_LEN];
-  size_t head;
-  int32_t total;
-  size_t count;
-};
-
-uint32_t ring_buf_uint_ave(struct Ring_buf_uint_ave* data, const uint32_t new_val);
-int32_t ring_buf_int_ave(struct Ring_buf_int_ave* data, const int32_t new_val);
-
+// Semaphore for synchronizing cores.
 extern volatile uint32_t tick;
 
 /* Configuration object for an axis.
@@ -38,17 +23,33 @@ struct ConfigAxis {
   uint8_t updated_from_c0;      // Data was updated on core 0.
   uint8_t updated_from_c1;      // Data was updated on core 1.
   int8_t enabled;
-  int8_t io_pos_step;           // Physical step IO pin. 
+  int8_t io_pos_step;           // Physical step IO pin.
   int8_t io_pos_dir;            // Physical direction IO pin.
-  double rel_pos_requested;   // In steps. Default value is UINT_MAX / 2.
-  double abs_pos_requested;   // In steps. Default value is UINT_MAX / 2.
-  uint32_t abs_pos_acheived;    // In steps. Default value is UINT_MAX / 2.
+  double rel_pos_requested;     // In steps. Default value is UINT_MAX / 2.
+  double abs_pos_requested;     // In steps. Default value is UINT_MAX / 2.
+  int32_t abs_pos_acheived;     // In steps. Default value is UINT_MAX / 2.
   double max_velocity;
   double max_accel_ticks;       // ticks / update_time_ticks ^ 2
   int32_t velocity_requested;   // Calculated steps per update_time_us.
   int32_t velocity_acheived;    // Steps per update_time_us.
   int32_t pos_error;            // Difference between requested position and that reported by PIO.
+  int32_t step_len_ticks;       // Length of steps requested from the PIO.
   float kp;                     // Proportional position tuning. <= 1.0
+};
+
+/* Configuration object for a single GPIO. */
+struct ConfigGPIO {
+  uint8_t type;                 // See GPIO_TYPE_XXXX in messages.h.
+  uint8_t index;                // IP pin number.
+  uint8_t address;              // i2c address if applicable.
+  bool value;                   // Last set value for output pins.
+};
+
+/* Configuration object for an i2c interface. */
+struct ConfigI2c {
+  int8_t io_scl;                // 
+  int8_t io_sda;                // 
+  uint8_t address;              // i2c address.
 };
 
 /* Configuration object for global settings.
@@ -57,24 +58,30 @@ struct ConfigGlobal {
   uint32_t last_update_id;    // Sequence number of last packet received.
   int32_t last_update_time;   // Sequence number of last packet received.
   uint32_t update_time_us;    // Driven by how often we get axis updates from controlling host.
+  bool pio_io_configured;     // PIO IO pins set.
 
   struct ConfigAxis axis[MAX_AXIS];
+  struct ConfigGPIO gpio[MAX_GPIO];
+  struct ConfigI2c i2c[MAX_I2C_MCP];
+  bool gpio_confirmation_pending[MAX_GPIO / 32];
 };
 
 
 void init_config();
 
-/* Update the period of the main timing loop. 
+/* Update the period of the main timing loop.
  * This should closely match the rate at which we receive axis position data. */
 void update_period(uint32_t update_time_us);
 
-/* Get the period of the main timing loop. 
+/* Get the period of the main timing loop.
  * This should closely match the rate at which we receive axis position data. */
 uint32_t get_period();
 
 /* Set metrics for tracking successful update transmission and jitter. */
-uint32_t update_packet_metrics(
-    uint32_t update_id, uint32_t time, int32_t* id_dif, int32_t* time_dif);
+void update_packet_metrics(
+    struct Message_timing* message,
+    int32_t* id_diff,
+    int32_t* time_diff);
 
 uint8_t has_new_c0_data(const uint8_t axis);
 
@@ -86,12 +93,13 @@ void update_axis_config(
     const int8_t* io_pos_dir,
     const double* rel_pos_requested,
     const double* abs_pos_requested,
-    const uint32_t* abs_pos_acheived,
+    const int32_t* abs_pos_acheived,
     const double* max_velocity,
     const double* max_accel_ticks,
     const int32_t* velocity_requested,
     const int32_t* velocity_acheived,
     const int32_t* pos_error,
+    const int32_t* step_len_ticks,
     const float* kp
 );
 
@@ -103,23 +111,31 @@ uint32_t get_axis_config(
     int8_t* io_pos_dir,
     double* rel_pos_requested,
     double* abs_pos_requested,
-    uint32_t* abs_pos_acheived,
+    int32_t* abs_pos_acheived,
     double* max_velocity,
     double* max_accel_ticks,
     int32_t* velocity_requested,
     int32_t* velocity_acheived,
     int32_t* pos_error,
+    int32_t* step_len_ticks,
     float* kp
     );
 
 /* Serialise metrics stored in global config in a format for sending over UDP. */
-size_t serialise_metrics(uint8_t* tx_buf, size_t* tx_buf_len, int32_t update_id, int32_t time_diff);
+bool serialise_timing(struct NWBuffer* tx_buf, int32_t update_id, int32_t time_diff);
 
 /* Serialise data stored in global config in a format for sending over UDP. */
-size_t serialise_axis_config(
+bool serialise_axis_movement(
     const uint32_t axis,
-    uint8_t* tx_buf,
-    size_t* tx_buf_len,
+    struct NWBuffer* tx_buf,
     uint8_t wait_for_data);
+
+/* Serialise data stored in global config in a format for sending over UDP. */
+bool serialise_axis_config(
+    const uint32_t axis,
+    struct NWBuffer* tx_buf);
+
+/* Serialise data stored in global config in a format for sending over UDP. */
+bool serialise_axis_metrics(const uint32_t axis, struct NWBuffer* tx_buf);
 
 #endif  // CONFIG__H
