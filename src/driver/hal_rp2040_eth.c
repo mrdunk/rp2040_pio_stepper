@@ -333,58 +333,58 @@ int rtapi_app_main(void)
 
   /* Export spindle pins, */
   retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->spindle_fwd),
-      comp_id, "rp2040_eth.%d.spindle-fwd", num_device);
+      component_id, "rp2040_eth.%d.spindle-fwd", num_device);
   if (retval < 0) {
     goto port_error;
   }
 
   retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->spindle_rev),
-      comp_id, "rp2040_eth.%d.spindle-rev", num_device);
+      component_id, "rp2040_eth.%d.spindle-rev", num_device);
   if (retval < 0) {
     goto port_error;
   }
 
   retval = hal_pin_float_newf(HAL_IN, &(port_data_array->spindle_speed_in),
-      comp_id, "rp2040_eth.%d.spindle-speed-in", num_device);
+      component_id, "rp2040_eth.%d.spindle-speed-in", num_device);
   if (retval < 0) {
     goto port_error;
   }
 
   retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->spindle_speed_out),
-      comp_id, "rp2040_eth.%d.spindle-speed-out", num_device);
+      component_id, "rp2040_eth.%d.spindle-speed-out", num_device);
   if (retval < 0) {
     goto port_error;
   }
 
   retval = hal_pin_bit_newf(HAL_OUT, &(port_data_array->spindle_at_speed),
-      comp_id, "rp2040_eth.%d.spindle-at-speed", num_device);
+      component_id, "rp2040_eth.%d.spindle-at-speed", num_device);
   if (retval < 0) {
     goto port_error;
   }
 
   retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_vfd_type),
-      comp_id, "rp2040_eth.%d.spindle-vfd-type", num_device);
+      component_id, "rp2040_eth.%d.spindle-vfd-type", num_device);
   if (retval < 0) {
     goto port_error;
   }
   port_data_array->spindle_vfd_type = 2;
 
   retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_address),
-      comp_id, "rp2040_eth.%d.spindle-address", num_device);
+      component_id, "rp2040_eth.%d.spindle-address", num_device);
   if (retval < 0) {
     goto port_error;
   }
   port_data_array->spindle_address = 1;
 
   retval = hal_param_float_newf(HAL_RW, &(port_data_array->spindle_poles),
-      comp_id, "rp2040_eth.%d.spindle-poles", num_device);
+      component_id, "rp2040_eth.%d.spindle-poles", num_device);
   if (retval < 0) {
     goto port_error;
   }
   port_data_array->spindle_poles = 2;
 
   retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_bitrate),
-      comp_id, "rp2040_eth.%d.spindle-bitrate", num_device);
+      component_id, "rp2040_eth.%d.spindle-bitrate", num_device);
   if (retval < 0) {
     goto port_error;
   }
@@ -473,7 +473,7 @@ port_error:
     rtapi_print_msg(RTAPI_MSG_ERR,
         "SKELETON: ERROR: port %d var export failed with err=%i\n",
         num_device, retval);
-    hal_exit(comp_id);
+    hal_exit(component_id);
     return -1;
 }
 
