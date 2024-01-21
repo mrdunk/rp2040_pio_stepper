@@ -80,7 +80,6 @@ static void test_serialise_axis_movement(void **state) {
     config.axis[0].max_accel_ticks = 789;
     config.axis[0].velocity_requested = 135;
     config.axis[0].velocity_acheived = 791;
-    config.axis[0].pos_error = 357;
     config.axis[0].step_len_ticks = 246;
     config.axis[0].updated_from_c1 = 1;
 
@@ -122,7 +121,6 @@ static void test_serialise_axis_movement_multi(void **state) {
         config.axis[axis].max_accel_ticks = 789;
         config.axis[axis].velocity_requested = 135;
         config.axis[axis].velocity_acheived = 791;
-        config.axis[axis].pos_error = 357;
         config.axis[axis].step_len_ticks = 246;
         config.axis[axis].updated_from_c1 = 1;
 

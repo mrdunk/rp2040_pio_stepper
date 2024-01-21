@@ -6,9 +6,19 @@
 /* This file contains objects that are passed over Ethernet UDP between host and RP2040.
  * Multiple structs can be packed in an array. */
 
+#ifdef BUILD_TESTS
+
+#define MAX_AXIS 4
+#define MAX_GPIO 64
+#define MAX_I2C_MCP 4
+
+#else // BUILD_TESTS
+
 #define MAX_AXIS 4
 #define MAX_GPIO 32
 #define MAX_I2C_MCP 4
+
+#endif  // BUILD_TESTS
 
 
 #define MSG_NONE                     0

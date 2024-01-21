@@ -5,6 +5,7 @@
 
 void gpio_init (uint8_t gpio);
 void gpio_set_dir (uint8_t gpio, uint8_t out);
+void gpio_pull_up (uint8_t gpio);
 
 void tight_loop_contents();
 
