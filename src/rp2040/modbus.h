@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 #define MODBUS_UART uart1
 #define MODBUS_TX_PIN 8
 #define MODBUS_RX_PIN 9
@@ -70,10 +72,17 @@ struct vfd_status {
 extern struct vfd_config vfd_config;
 extern struct vfd_status vfd;
 
-uint16_t modbus_crc16(const uint8_t *data, uint8_t size);
-void modbus_transmit(void);
+extern uint16_t modbus_crc16(const uint8_t *data, uint8_t size);
+extern void modbus_transmit(void);
+extern int modbus_check_config(void);
+extern int modbus_get_data(void);
+
+extern void modbus_read_holding_registers(uint8_t address, uint16_t reg_to_read, uint16_t num_regs);
+extern void modbus_write_holding_register(uint8_t address, uint16_t reg_to_write, uint16_t value);
+
+extern float modbus_loop_fuling(float frequency);
+extern float modbus_loop_huanyang(float frequency);
 
 extern void modbus_init(void);
 extern float modbus_loop(float);
 
-float modbus_loop_huanyang(float frequency);

@@ -53,11 +53,7 @@ void huanyang_stop(void) {
 }
 
 void modbus_huanyang_receive(void) {
-  int len = 0;
-  for (len = 0; len < sizeof(modbus_command) && uart_is_readable(MODBUS_UART); ++len)
-    modbus_command[len] = uart_getc(MODBUS_UART);
-  while(uart_is_readable(MODBUS_UART))
-    uart_getc(MODBUS_UART);
+  int len = modbus_get_data();
   if (len) {
     uint16_t crc16 = modbus_crc16(modbus_command, len - 2);
     for (int i = 0; i < len; ++i) {
@@ -121,14 +117,7 @@ void modbus_huanyang_receive(void) {
 }
 
 float modbus_loop_huanyang(float frequency) {
-  if (modbus_cur_bitrate != vfd_config.bitrate) {
-    if (modbus_cur_bitrate)
-      uart_deinit(MODBUS_UART);
-    uart_init(MODBUS_UART, vfd_config.bitrate);
-    modbus_cur_bitrate = vfd_config.bitrate;
-    modbus_outstanding = 0;
-  }
-  if (!modbus_cur_bitrate || !vfd_config.address)
+  if (!modbus_check_config())
     return MODBUS_RESULT_NOT_CONFIGURED;
   vfd.cycle++;
   vfd.command_run = frequency != 0;
