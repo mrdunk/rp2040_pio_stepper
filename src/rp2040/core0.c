@@ -382,8 +382,7 @@ bool unpack_gpio_config(
         break;
     }
   
-
-  //serialise_gpio_config(gpio_count, tx_buf);
+  serialise_gpio_config(gpio_count, tx_buf);
 
   (*received_count)++;
   return true;

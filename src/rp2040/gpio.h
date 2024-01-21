@@ -42,4 +42,7 @@ void gpio_i2c_mcp_tranceive();
 /* Pack GPIO inputs in buffer for UDP transmission. */
 void gpio_serialize(struct NWBuffer* tx_buf, size_t* tx_buf_len);
 
+/* Serialise data stored in gpio config in a format for sending over UDP. */
+bool serialise_gpio_config(const uint8_t gpio, struct NWBuffer* tx_buf);
+
 #endif  // GPIO__H

@@ -259,3 +259,28 @@ void gpio_serialize(struct NWBuffer* tx_buf, size_t* tx_buf_len) {
       }
   }
 }
+
+/* Serialise data stored in gpio config in a format for sending over UDP. */
+bool serialise_gpio_config(const uint8_t gpio, struct NWBuffer* tx_buf) {
+  if(gpio >= MAX_GPIO) {
+    printf("ERROR: Invalid gpio: %u\n", gpio);
+    return false;
+  }
+
+  struct Reply_gpio_config reply;
+  reply.type = REPLY_GPIO_CONFIG;
+  reply.gpio_type = config.gpio[gpio].type;
+  reply.gpio_count = gpio;
+  reply.index = config.gpio[gpio].index;
+  reply.address = config.gpio[gpio].address;
+
+  uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
+
+  if(!tx_buf_len) {
+    printf("WARN: TX length greater than buffer size.\n");
+    return false;
+  }
+
+  return true;
+}
+

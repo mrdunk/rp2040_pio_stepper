@@ -420,7 +420,10 @@ void log_network_error(const char *operation, int device, int error)
 }
 
 bool configure_joint(
-    uint8_t joint, struct Message_joint_config* last_joint_config, skeleton_t *data
+    struct NWBuffer* tx_buffer,
+    uint8_t joint,
+    struct Message_joint_config* last_joint_config,
+    skeleton_t *data
 ) {
     bool pack_success = true;
     if(
@@ -435,7 +438,7 @@ bool configure_joint(
         last_joint_config[joint].max_accel != *data->joint_max_accel[joint]
       ) {
       pack_success = pack_success && serialize_joint_config(
-          &buffer,
+          tx_buffer,
           joint,
           *data->joint_enable[joint],
           *data->joint_gpio_step[joint],
@@ -447,7 +450,12 @@ bool configure_joint(
     return pack_success;
 }
 
-bool configure_gpio(uint8_t gpio, struct Message_gpio_config* last_gpio_config, skeleton_t *data) {
+bool configure_gpio(
+    struct NWBuffer* tx_buffer,
+    uint8_t gpio,
+    struct Message_gpio_config* last_gpio_config,
+    skeleton_t *data
+) {
     bool pack_success = true;
     if(
         last_gpio_config[gpio].gpio_type != *data->gpio_type[gpio]
@@ -457,7 +465,7 @@ bool configure_gpio(uint8_t gpio, struct Message_gpio_config* last_gpio_config, 
         last_gpio_config[gpio].address != *data->gpio_address[gpio]
       ) {
       pack_success = pack_success && serialize_gpio_config(
-          &buffer,
+          tx_buffer,
           gpio,
           *data->gpio_type[gpio],
           *data->gpio_index[gpio],
@@ -470,6 +478,7 @@ bool configure_gpio(uint8_t gpio, struct Message_gpio_config* last_gpio_config, 
 /* Only try to configure one parameter per 1ms cycle since they change infrequently
  * and don't need low latency when they do. */
 bool configure(
+    struct NWBuffer* tx_buffer,
     size_t count,
     struct Message_joint_config* last_joint_config,
     struct Message_gpio_config* last_gpio_config,
@@ -480,10 +489,10 @@ bool configure(
   size_t joint_or_gpio = count % total_things;
   if(joint_or_gpio < JOINTS) {
     uint8_t joint = joint_or_gpio;
-    return configure_joint(joint, last_joint_config, data);
+    return configure_joint(tx_buffer, joint, last_joint_config, data);
   } else if(joint_or_gpio < total_things) {
     uint8_t gpio = joint_or_gpio - JOINTS;
-    return configure_gpio(gpio, last_gpio_config, data);
+    return configure_gpio(tx_buffer, gpio, last_gpio_config, data);
   }
   return true;
 }
@@ -520,9 +529,9 @@ static void write_port(void *arg, long period)
   // TODO: Use feedback of serialize_gpio.
   serialize_gpio(&buffer, data);
 
-  pack_success = pack_success && configure(count, last_joint_config, last_gpio_config, data);
+  pack_success = pack_success && configure(
+      &buffer, count, last_joint_config, last_gpio_config, data);
 
-  /*
   // Iterate through joints.
   for(int joint = 0; joint < JOINTS; joint++) {
     // Put joint positions packet in buffer.
@@ -538,59 +547,9 @@ static void write_port(void *arg, long period)
       pack_success = pack_success && serialize_joint_pos(&buffer, joint, position);
       pack_success = pack_success && serialize_joint_velocity(&buffer, joint, velocity);
     }
-
-    if(count % (JOINTS + MAX_GPIO) == joint) {
-      // Only configure 1 joint or gpio per cycle to avoid filling NW buffer.
-      if(
-          last_joint_config[joint].enable != *data->joint_enable[joint]
-          ||
-          last_joint_config[joint].gpio_step != *data->joint_gpio_step[joint]
-          ||
-          last_joint_config[joint].gpio_dir != *data->joint_gpio_dir[joint]
-          ||
-          last_joint_config[joint].max_velocity != *data->joint_max_velocity[joint]
-          ||
-          last_joint_config[joint].max_accel != *data->joint_max_accel[joint]
-        ) {
-        pack_success = pack_success && serialize_joint_config(
-            &buffer,
-            joint,
-            *data->joint_enable[joint],
-            *data->joint_gpio_step[joint],
-            *data->joint_gpio_dir[joint],
-            *data->joint_max_velocity[joint],
-            *data->joint_max_accel[joint]
-            );
-      }
-    }
   }
 
-  // Iterate through GPIO.
-  for(uint8_t gpio = 0; gpio < MAX_GPIO; gpio++) {
-    if(count % (JOINTS + MAX_GPIO) == JOINTS + gpio
-        && count < 2000
-      ) {
-      // Only configure 1 joint or gpio per cycle to avoid filling NW buffer.
-      if(
-          last_gpio_config[gpio].gpio_type != *data->gpio_type[gpio]
-          ||
-          last_gpio_config[gpio].index != *data->gpio_index[gpio]
-          ||
-          last_gpio_config[gpio].address != *data->gpio_address[gpio]
-        ) {
-        //printf("%u\n", gpio);
-        pack_success = pack_success && serialize_gpio_config(
-            &buffer,
-            gpio,
-            *data->gpio_type[gpio],
-            *data->gpio_index[gpio],
-            *data->gpio_address[gpio]
-          );
-      }
-    }
-  }
-  */
-
+  // Send the tx_data if valid.
   if(pack_success) {
     if (send_data(num_device, &buffer) != 0) {
       cooloff = 2000;
