@@ -80,7 +80,15 @@ static int component_id;    /* component ID */
 static void write_port(void *arg, long period);
 
 void on_eth_up(skeleton_t *data, uint count);
-void on_eth_down(skeleton_t *data, uint count);
+void on_eth_down(
+    skeleton_t *data,
+    struct Message_joint_config* last_joint_config,
+    struct Message_gpio_config* last_gpio_config,
+    uint count);
+void reset_rp_config(
+    skeleton_t *data,
+    struct Message_joint_config* last_joint_config,
+    struct Message_gpio_config* last_gpio_config);
 
 /***********************************************************************
  *                       INIT AND EXIT CODE                             *
@@ -592,7 +600,7 @@ static void write_port(void *arg, long period)
     }
     if(*data->metric_eth_state) {
       // Network connection just went down after being up.
-      on_eth_down(data, count);
+      on_eth_down(data, last_joint_config, last_gpio_config, count);
     }
     (*data->metric_missed_packets)++;
     if (*data->metric_missed_packets == 5000 || !(*data->metric_missed_packets % 10000)) {
@@ -610,7 +618,11 @@ void on_eth_up(skeleton_t *data, uint count) {
   *data->metric_eth_state = true;
 }
 
-void on_eth_down(skeleton_t *data, uint count) {
+void on_eth_down(
+    skeleton_t *data,
+    struct Message_joint_config* last_joint_config,
+    struct Message_gpio_config* last_gpio_config,
+    uint count) {
   if(*data->metric_missed_packets < MAX_SKIPPED_PACKETS) {
     return;
   }
@@ -618,21 +630,21 @@ void on_eth_down(skeleton_t *data, uint count) {
   printf("WARN: Ethernet down. Packet count: %u\n", count);
   *data->metric_eth_state = false;
 
-  // Iterate through joints, disabling them in the config.
-  for(int joint = 0; joint < JOINTS; joint++) {
-      *data->joint_enable[joint] = false;
-  }
+  reset_rp_config(data, last_joint_config, last_gpio_config);
 }
 
 /* Reset HAL's opinion of the RP config. This will force an update. */
 void reset_rp_config(
+    skeleton_t *data,
     struct Message_joint_config* last_joint_config,
     struct Message_gpio_config* last_gpio_config
 ) {
   for(uint8_t joint = 0; joint < JOINTS; joint++) {
+    *data->joint_enable[joint] = false;
     last_joint_config[joint].gpio_step = -1;
     last_joint_config[joint].gpio_dir = -1;
   }
+
   for(uint8_t gpio = 0; gpio < MAX_GPIO; gpio++) {
     last_gpio_config[gpio].gpio_type = GPIO_TYPE_NOT_SET;
   }
