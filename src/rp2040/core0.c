@@ -118,7 +118,7 @@ bool unpack_joint_enable(
   printf("%u Enabling joint: %u\t%i\n", *received_count, joint, enabled);
   update_axis_config(
       joint, CORE0,
-      &enabled, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+      &enabled, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
   (*received_count)++;
   return true;
@@ -142,7 +142,7 @@ bool unpack_joint_abs_pos(
 
   update_axis_config(
       joint, CORE0,
-      NULL, NULL, NULL, NULL, &abs_pos, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+      NULL, NULL, NULL, NULL, &abs_pos, NULL, NULL, NULL, NULL, NULL, NULL);
 
   (*received_count)++;
   return true;
@@ -166,7 +166,7 @@ bool unpack_joint_velocity(
 
   update_axis_config(
       joint, CORE0,
-      NULL, NULL, NULL, &vel_reques, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+      NULL, NULL, NULL, &vel_reques, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
   (*received_count)++;
   return true;
@@ -190,7 +190,7 @@ bool unpack_joint_max_velocity(
 
   update_axis_config(
       joint, CORE0,
-      NULL, NULL, NULL, NULL, NULL, NULL, &max_velocity, NULL, NULL, NULL, NULL, NULL, NULL);
+      NULL, NULL, NULL, NULL, NULL, NULL, &max_velocity, NULL, NULL, NULL, NULL);
 
   (*received_count)++;
   return true;
@@ -214,7 +214,7 @@ bool unpack_joint_max_accel(
 
   update_axis_config(
       joint, CORE0,
-      NULL, NULL, NULL, NULL, NULL, NULL, NULL, &max_accel, NULL, NULL, NULL, NULL, NULL);
+      NULL, NULL, NULL, NULL, NULL, NULL, NULL, &max_accel, NULL, NULL, NULL);
 
   (*received_count)++;
   return true;
@@ -239,7 +239,7 @@ bool unpack_joint_io_step(
   printf("%u Setting axis: %u\tstep-io: %i\n", *received_count, joint, io_step);
   update_axis_config(
       joint, CORE0,
-            NULL, &io_step, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+            NULL, &io_step, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
 
   (*received_count)++;
@@ -265,7 +265,7 @@ bool unpack_joint_io_dir(
   printf("%u Setting axis: %u\tdir-io:  %i\n", *received_count, joint, io_dir);
   update_axis_config(
       joint, CORE0,
-      NULL, NULL, &io_dir, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+      NULL, NULL, &io_dir, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
   (*received_count)++;
   return true;
@@ -305,7 +305,7 @@ bool unpack_joint_config(
       NULL,
       &max_velocity,
       &max_accel,
-      NULL, NULL, NULL, NULL, NULL);
+      NULL, NULL, NULL);
 
   serialise_axis_config(joint, tx_buf);
 

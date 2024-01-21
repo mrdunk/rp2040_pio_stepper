@@ -16,7 +16,6 @@ net estop-out => iocontrol.0.emc-enable-in
 
 # Joint 0
 # Configuration.
-setp rp2040_eth.0.joint-kp-0             [JOINT_0]KP
 setp rp2040_eth.0.joint-scale-0          [JOINT_0]SCALE
 setp rp2040_eth.0.joint-io-pos-step-0    0
 setp rp2040_eth.0.joint-io-pos-dir-0     1
@@ -43,7 +42,6 @@ net xvelocity-fb rp2040_eth.0.velocity-fb-0
 
 # Joint 1
 # Configuration.
-setp rp2040_eth.0.joint-kp-1             [JOINT_1]KP
 setp rp2040_eth.0.joint-scale-1          [JOINT_1]SCALE
 setp rp2040_eth.0.joint-io-pos-step-1    2
 setp rp2040_eth.0.joint-io-pos-dir-1     3
@@ -70,7 +68,6 @@ net yvelocity-fb rp2040_eth.0.velocity-fb-1
 
 # Joint 2
 # Configuration.
-setp rp2040_eth.0.joint-kp-2             [JOINT_2]KP
 setp rp2040_eth.0.joint-scale-2          [JOINT_2]SCALE
 setp rp2040_eth.0.joint-io-pos-step-2    4
 setp rp2040_eth.0.joint-io-pos-dir-2     5

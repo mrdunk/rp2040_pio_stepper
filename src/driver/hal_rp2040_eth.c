@@ -33,7 +33,6 @@ typedef struct {
   hal_bit_t* joint_enable[JOINTS];
   hal_s32_t* joint_gpio_step[JOINTS];
   hal_s32_t* joint_gpio_dir[JOINTS];
-  hal_float_t* joint_kp[JOINTS];
   hal_float_t* joint_max_velocity[JOINTS];
   hal_float_t* joint_max_accel[JOINTS];
   hal_float_t* joint_scale[JOINTS];
@@ -221,15 +220,6 @@ int rtapi_app_main(void)
 
     retval = hal_pin_s32_newf(HAL_IN, &(port_data_array->joint_gpio_dir[num_joint]),
                               component_id, "rp2040_eth.%d.joint-io-pos-dir-%d", num_device, num_joint);
-    if (retval < 0) {
-      rtapi_print_msg(RTAPI_MSG_ERR,
-                      "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
-      hal_exit(component_id);
-      return -1;
-    }
-
-    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->joint_kp[num_joint]), component_id,
-                                "rp2040_eth.%d.joint-kp-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);

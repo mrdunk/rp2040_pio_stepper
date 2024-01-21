@@ -44,8 +44,7 @@ volatile struct ConfigGlobal config = {
       .max_velocity = 50,
       .max_accel_ticks = 2.0,
       .velocity_requested = 0,
-      .velocity_acheived = 0,
-      .kp = 0.2f,
+      .velocity_acheived = 0
     },
     {
       // Axis 1.
@@ -60,8 +59,7 @@ volatile struct ConfigGlobal config = {
       .max_velocity = 50,
       .max_accel_ticks = 10.0,
       .velocity_requested = 0,
-      .velocity_acheived = 0,
-      .kp = 0.2f,
+      .velocity_acheived = 0
     },
     {
       // Axis 2.
@@ -76,8 +74,7 @@ volatile struct ConfigGlobal config = {
       .max_velocity = 50,
       .max_accel_ticks = 200.0,
       .velocity_requested = 0,
-      .velocity_acheived = 0,
-      .kp = 0.2f,
+      .velocity_acheived = 0
     },
     {
       // Axis 3.
@@ -92,8 +89,7 @@ volatile struct ConfigGlobal config = {
       .max_velocity = 50,
       .max_accel_ticks = 200.0,
       .velocity_requested = 0,
-      .velocity_acheived = 0,
-      .kp = 0.2f,
+      .velocity_acheived = 0
     },
   }
 };
@@ -210,9 +206,7 @@ void update_axis_config(
     const double* max_accel_ticks,
     const int32_t* velocity_requested,
     const int32_t* velocity_acheived,
-    const int32_t* pos_error,
-    const int32_t* step_len_ticks,
-    const float* kp
+    const int32_t* step_len_ticks
 )
 {
   if(axis >= MAX_AXIS) {
@@ -252,14 +246,8 @@ void update_axis_config(
   if(velocity_acheived != NULL) {
     config.axis[axis].velocity_acheived = *velocity_acheived;
   }
-  if(pos_error != NULL) {
-    config.axis[axis].pos_error = *pos_error;
-  }
   if(step_len_ticks != NULL) {
     config.axis[axis].step_len_ticks = *step_len_ticks;
-  }
-  if(kp != NULL) {
-    config.axis[axis].kp = *kp;
   }
 
   switch(core) {
@@ -288,9 +276,7 @@ uint32_t get_axis_config(
     double* max_accel_ticks,
     int32_t* velocity_requested,
     int32_t* velocity_acheived,
-    int32_t* pos_error,
-    int32_t* step_len_ticks,
-    float* kp)
+    int32_t* step_len_ticks)
 {
   if(axis >= MAX_AXIS) {
     return 0;
@@ -343,14 +329,8 @@ uint32_t get_axis_config(
   if(velocity_acheived != NULL) {
     *velocity_acheived = config.axis[axis].velocity_acheived;
   }
-  if(pos_error != NULL) {
-    *pos_error = config.axis[axis].pos_error;
-  }
   if(step_len_ticks != NULL) {
     *step_len_ticks = config.axis[axis].step_len_ticks;
-  }
-  if(kp != NULL) {
-    *kp = config.axis[axis].kp;
   }
 
   mutex_exit(&mtx_axis[axis]);
@@ -406,9 +386,7 @@ bool serialise_axis_movement(
         NULL, //&max_accel_ticks,
         NULL, //&velocity_requested,
         &velocity_acheived,
-        NULL, //&pos_error,
-        NULL, //&step_len_ticks,
-        NULL //&kp
+        NULL //&step_len_ticks,
         );
   } while(updated == 0 && wait_for_data);
 
@@ -458,9 +436,7 @@ bool serialise_axis_config(const uint32_t axis, struct NWBuffer* tx_buf) {
         &max_accel,
         NULL, //&velocity_requested,
         NULL, //&velocity_acheived,
-        NULL, //&pos_error,
-        NULL, //&step_len_ticks,
-        NULL //&kp
+        NULL  //&step_len_ticks,
         );
 
   struct Reply_axis_config reply;
@@ -506,9 +482,7 @@ bool serialise_axis_metrics(const uint32_t axis, struct NWBuffer* tx_buf) {
         NULL, //&max_accel,
         &velocity_requested,
         NULL, //&velocity_acheived,
-        NULL, //&pos_error,
-        &step_len_ticks,
-        NULL //&kp
+        &step_len_ticks
         );
 
   struct Reply_axis_metrics reply;

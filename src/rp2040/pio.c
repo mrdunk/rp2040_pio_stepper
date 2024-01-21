@@ -45,8 +45,6 @@ void init_pio(const uint32_t axis)
       NULL,
       NULL,
       NULL,
-      NULL,
-      NULL,
       NULL
       );
 
@@ -168,9 +166,7 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
       &max_accel_ticks,
       NULL, // &velocity_requested,
       NULL, // &velocity_acheived,
-      NULL, // &step_len_ticks,
-      NULL, // &pos_error,
-      NULL  // &kp
+      NULL  // &step_len_ticks,
       );
 
   if(updated <= 0) {
@@ -259,9 +255,7 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
       NULL,
       &velocity_requested,
       &velocity_acheived,
-      NULL, //&pos_error,
-      &step_len_ticks,
-      NULL);
+      &step_len_ticks);
 
   last_pos[axis] = abs_pos_acheived;
 

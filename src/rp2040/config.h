@@ -32,9 +32,7 @@ struct ConfigAxis {
   double max_accel_ticks;       // ticks / update_time_ticks ^ 2
   int32_t velocity_requested;   // Calculated steps per update_time_us.
   int32_t velocity_acheived;    // Steps per update_time_us.
-  int32_t pos_error;            // Difference between requested position and that reported by PIO.
   int32_t step_len_ticks;       // Length of steps requested from the PIO.
-  float kp;                     // Proportional position tuning. <= 1.0
 };
 
 /* Configuration object for a single GPIO. */
@@ -98,9 +96,7 @@ void update_axis_config(
     const double* max_accel_ticks,
     const int32_t* velocity_requested,
     const int32_t* velocity_acheived,
-    const int32_t* pos_error,
-    const int32_t* step_len_ticks,
-    const float* kp
+    const int32_t* step_len_ticks
 );
 
 uint32_t get_axis_config(
@@ -116,9 +112,7 @@ uint32_t get_axis_config(
     double* max_accel_ticks,
     int32_t* velocity_requested,
     int32_t* velocity_acheived,
-    int32_t* pos_error,
-    int32_t* step_len_ticks,
-    float* kp
+    int32_t* step_len_ticks
     );
 
 /* Serialise metrics stored in global config in a format for sending over UDP. */
