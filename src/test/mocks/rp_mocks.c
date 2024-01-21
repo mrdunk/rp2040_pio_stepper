@@ -23,3 +23,10 @@ void mutex_exit(mutex_t *mtx) {
 
 void mutex_init(mutex_t *mtx) {
 }
+
+void gpio_init (uint8_t gpio) {
+}
+
+void gpio_set_dir (uint8_t gpio, uint8_t out) {
+}
+

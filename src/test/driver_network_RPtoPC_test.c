@@ -68,6 +68,7 @@ static void test_timing(void **state) {
             &data,
             &mess_received_count,
             sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum),
+            NULL,
             NULL
             );
 
@@ -102,6 +103,7 @@ static void test_axis_movement(void **state) {
             &data,
             &mess_received_count,
             sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum),
+            NULL,
             NULL
             );
 
@@ -144,7 +146,8 @@ static void test_axis_config(void **state) {
             &data,
             &mess_received_count,
             sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum),
-            &last_joint_config
+            &last_joint_config,
+            NULL
             );
 
     assert_int_equal(last_joint_config.enable, message.enable);
@@ -180,6 +183,7 @@ static void test_axis_metrics(void **state) {
             &data,
             &mess_received_count,
             sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum),
+            NULL,
             NULL
             );
 

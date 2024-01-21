@@ -381,6 +381,36 @@ bool unpack_joint_config(
   return true;
 }
 
+/* Process received update documenting current GPIO config settings. */
+bool unpack_gpio_config(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    uint16_t* received_count,
+    struct Message_gpio_config* last_gpio_config
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_gpio_config));
+
+  if(! data_p) {
+    return false;
+  }
+
+  struct Reply_gpio_config* reply = data_p;
+  uint32_t gpio = reply->gpio_count;
+
+  printf("INFO: Received confirmation of config received by RP for gpio: %u\n", gpio);
+  printf("      gpio_type:   %i\n", reply->gpio_type);
+  printf("      index:       %i\n", reply->index);
+  printf("      address:     %i\n", reply->address);
+
+  last_gpio_config[gpio].gpio_type = reply->gpio_type;
+  last_gpio_config[gpio].index = reply->index;
+  last_gpio_config[gpio].address = reply->address;
+
+  (*received_count)++;
+  return true;
+}
+
 /* Process received update containing metrics data. */
 bool unpack_joint_metrics(
     struct NWBuffer* rx_buf,
@@ -441,7 +471,8 @@ void process_data(
     skeleton_t* data,
     uint16_t* received_count,
     uint16_t expected_length,
-    struct Message_joint_config* last_joint_config
+    struct Message_joint_config* last_joint_config,
+    struct Message_gpio_config* last_gpio_config
 ) {
   // TODO: Pass in receive_count.
   uint16_t rx_offset = 0;
@@ -484,6 +515,10 @@ void process_data(
       case REPLY_AXIS_CONFIG:
         unpack_success = unpack_success && unpack_joint_config(
             rx_buf, &rx_offset, received_count, last_joint_config);
+        break;
+      case REPLY_GPIO_CONFIG:
+        unpack_success = unpack_success && unpack_gpio_config(
+            rx_buf, &rx_offset, received_count, last_gpio_config);
         break;
       case REPLY_AXIS_METRICS:
         unpack_success = unpack_success && unpack_joint_metrics(

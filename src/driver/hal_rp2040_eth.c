@@ -419,11 +419,80 @@ void log_network_error(const char *operation, int device, int error)
   rtapi_print_msg(RTAPI_MSG_ERR, "ERROR: failed to %s on network address %s:%s (%s)\n", operation, addr, port, strerror_r(error, errormsg, sizeof(errormsg)));
 }
 
+bool configure_joint(
+    uint8_t joint, struct Message_joint_config* last_joint_config, skeleton_t *data
+) {
+    bool pack_success = true;
+    if(
+        last_joint_config[joint].enable != *data->joint_enable[joint]
+        ||
+        last_joint_config[joint].gpio_step != *data->joint_gpio_step[joint]
+        ||
+        last_joint_config[joint].gpio_dir != *data->joint_gpio_dir[joint]
+        ||
+        last_joint_config[joint].max_velocity != *data->joint_max_velocity[joint]
+        ||
+        last_joint_config[joint].max_accel != *data->joint_max_accel[joint]
+      ) {
+      pack_success = pack_success && serialize_joint_config(
+          &buffer,
+          joint,
+          *data->joint_enable[joint],
+          *data->joint_gpio_step[joint],
+          *data->joint_gpio_dir[joint],
+          *data->joint_max_velocity[joint],
+          *data->joint_max_accel[joint]
+          );
+    }
+    return pack_success;
+}
+
+bool configure_gpio(uint8_t gpio, struct Message_gpio_config* last_gpio_config, skeleton_t *data) {
+    bool pack_success = true;
+    if(
+        last_gpio_config[gpio].gpio_type != *data->gpio_type[gpio]
+        ||
+        last_gpio_config[gpio].index != *data->gpio_index[gpio]
+        ||
+        last_gpio_config[gpio].address != *data->gpio_address[gpio]
+      ) {
+      pack_success = pack_success && serialize_gpio_config(
+          &buffer,
+          gpio,
+          *data->gpio_type[gpio],
+          *data->gpio_index[gpio],
+          *data->gpio_address[gpio]
+        );
+    }
+    return pack_success;
+}
+
+/* Only try to configure one parameter per 1ms cycle since they change infrequently
+ * and don't need low latency when they do. */
+bool configure(
+    size_t count,
+    struct Message_joint_config* last_joint_config,
+    struct Message_gpio_config* last_gpio_config,
+    skeleton_t *data
+) {
+  size_t total_things = JOINTS + MAX_GPIO;
+
+  size_t joint_or_gpio = count % total_things;
+  if(joint_or_gpio < JOINTS) {
+    uint8_t joint = joint_or_gpio;
+    return configure_joint(joint, last_joint_config, data);
+  } else if(joint_or_gpio < total_things) {
+    uint8_t gpio = joint_or_gpio - JOINTS;
+    return configure_gpio(gpio, last_gpio_config, data);
+  }
+  return true;
+}
+
 static void write_port(void *arg, long period)
 {
   int num_device = 0;
 
-  static uint count = 0;
+  static size_t count = 0;
   static struct Message_joint_config last_joint_config[JOINTS] = {0};
   static struct Message_gpio_config last_gpio_config[MAX_GPIO] = {0};
   static uint32_t last_update_id = 0;
@@ -448,8 +517,12 @@ static void write_port(void *arg, long period)
 
   // Put GPIO values in network buffer.
   //pack_success &= serialize_gpio(&buffer, data);
+  // TODO: Use feedback of serialize_gpio.
   serialize_gpio(&buffer, data);
 
+  pack_success = pack_success && configure(count, last_joint_config, last_gpio_config, data);
+
+  /*
   // Iterate through joints.
   for(int joint = 0; joint < JOINTS; joint++) {
     // Put joint positions packet in buffer.
@@ -516,6 +589,7 @@ static void write_port(void *arg, long period)
       }
     }
   }
+  */
 
   if(pack_success) {
     if (send_data(num_device, &buffer) != 0) {
@@ -538,7 +612,8 @@ static void write_port(void *arg, long period)
   size_t data_length = get_reply_non_block(num_device, &buffer);
   if(data_length > 0) {
     uint16_t mess_received_count = 0;
-    process_data(&buffer, data, &mess_received_count, data_length, last_joint_config);
+    process_data(
+        &buffer, data, &mess_received_count, data_length, last_joint_config, last_gpio_config);
 
     if(! *data->metric_eth_state) {
       // Network connection just came up after being down.

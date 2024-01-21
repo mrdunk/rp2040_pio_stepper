@@ -1,5 +1,11 @@
 #include <stdint.h>
 
+#define GPIO_IN 0
+#define GPIO_OUT 0
+
+void gpio_init (uint8_t gpio);
+void gpio_set_dir (uint8_t gpio, uint8_t out);
+
 void tight_loop_contents();
 
 uint64_t time_us_64();

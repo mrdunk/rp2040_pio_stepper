@@ -117,6 +117,7 @@ union MessageAny {
 #define REPLY_AXIS_CONFIG            3
 #define REPLY_AXIS_METRICS           4
 #define REPLY_GPIO                   5
+#define REPLY_GPIO_CONFIG            6
 
 struct Reply_header {
   uint32_t type;
