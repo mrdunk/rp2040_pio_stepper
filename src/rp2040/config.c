@@ -16,6 +16,7 @@
 #include "config.h"
 #include "messages.h"
 #include "buffer.h"
+#include "gpio.h"
 
 // Mutexes for locking the main config which is shared between cores.
 mutex_t mtx_top;
@@ -103,6 +104,12 @@ void init_gpio() {
     config.gpio[gpio].type = GPIO_TYPE_NOT_SET;
     config.gpio[gpio].index = 0;
     config.gpio[gpio].address = 0;
+    config.gpio[gpio].value = false;
+  }
+
+  for(uint16_t bank = 0; bank < MAX_GPIO / 32; bank++) {
+    // Set confirmation to force an initial Reply_gpio to be sent.
+    config.gpio_confirmation_pending[bank] = false;
   }
 }
 

@@ -38,6 +38,7 @@ add_executable(
     ${CMAKE_CURRENT_SOURCE_DIR}/rp_network_test.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
+    ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
     ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
     ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
     ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
@@ -60,6 +61,7 @@ add_executable(
     ${CMAKE_CURRENT_SOURCE_DIR}/rp_network_tx_test.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
+    ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
     ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
     ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
     ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
@@ -81,13 +83,13 @@ add_executable(
   rpGpioTest
     ${CMAKE_CURRENT_SOURCE_DIR}/rp_gpio_test.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
-    #${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
+    ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
     ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
     ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
     ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
-    #${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
-    #${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c
     )
 target_link_libraries(
     rpGpioTest
@@ -120,7 +122,6 @@ add_test(
 add_executable(
     driverNetworkRPtoPCTest
     ${CMAKE_CURRENT_SOURCE_DIR}/driver_network_RPtoPC_test.c
-    #${CMAKE_SOURCE_DIR}/src/driver/rp2040_network.c
     ${CMAKE_CURRENT_SOURCE_DIR}/mocks/driver_mocks.c
     )
 target_link_libraries(
@@ -130,6 +131,21 @@ target_link_libraries(
 add_test(
     driverNetworkRPtoPCTest
     driverNetworkRPtoPCTest
+    )
+
+
+add_executable(
+    driverGpioTest
+    ${CMAKE_CURRENT_SOURCE_DIR}/driver_gpio_test.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/driver_mocks.c
+    )
+target_link_libraries(
+    driverGpioTest
+    cmocka
+    )
+add_test(
+    driverGpioTest
+    driverGpioTest
     )
 
 

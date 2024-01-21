@@ -8,6 +8,7 @@
 #include <limits.h>
 
 #include "rp2040_defines.h"
+#include "../shared/messages.h"
 
 /* module information */
 MODULE_AUTHOR("Duncan Law");
@@ -40,13 +41,21 @@ typedef struct {
   hal_float_t* joint_pos_cmd[JOINTS];
   hal_float_t* joint_vel_cmd[JOINTS];
   hal_float_t* joint_pos_feedback[JOINTS];
-  //hal_s32_t* joint_pos_error[JOINTS];
   hal_s32_t* joint_step_len_ticks[JOINTS];
   hal_float_t* joint_velocity_cmd[JOINTS];   // TODO: why a joint_vel_cmd and a joint_velocity_cmd?
   hal_float_t* joint_velocity_feedback[JOINTS];
-  hal_bit_t* pin_out[IO];
-  hal_bit_t* pin_in[IO];
-  //bool reset_joint[JOINTS];
+
+  // For IN pins, HAL sets this to the value we want the IO pin set to on the RP.
+  // For OUT pins, this is the value the RP pin is reported via the network update.
+  hal_bit_t* gpio_data_in[MAX_GPIO];
+  hal_bit_t* gpio_data_out[MAX_GPIO];
+  hal_u32_t* gpio_type[MAX_GPIO];
+  hal_u32_t* gpio_index[MAX_GPIO];
+  hal_u32_t* gpio_address[MAX_GPIO];
+
+  uint32_t gpio_data_received[MAX_GPIO / 32];
+  bool gpio_confirmation_pending[MAX_GPIO / 32];
+
   uint8_t joints_enabled_this_cycle;
   hal_bit_t* spindle_fwd;
   hal_bit_t* spindle_rev;
@@ -67,8 +76,7 @@ typedef struct {
 static skeleton_t *port_data_array;
 
 /* other globals */
-static int comp_id;    /* component ID */
-static int num_devices;    /* number of devices configured */
+static int component_id;    /* component ID */
 
 #define MAX_SKIPPED_PACKETS 100
 
@@ -84,58 +92,111 @@ static void write_port(void *arg, long period);
 void on_eth_up(skeleton_t *data, uint count);
 void on_eth_down(skeleton_t *data, uint count);
 
-//void enable_joint(struct NWBuffer* buffer, bool* pack_success, int joint, skeleton_t *data);
-//void enable_io(struct NWBuffer* buffer, bool* pack_success, int joint, skeleton_t *data);
-
 /***********************************************************************
  *                       INIT AND EXIT CODE                             *
  ************************************************************************/
 
+/*
+bool init_hal_pin_float(
+    hal_pin_dir_t hal_pin_dir, void* data_p, int component_id, const char* identifier, int index
+) {
+    int retval = hal_pin_bit_newf(hal_pin_dir, data_p, component_id, identifier, index);
+    if (retval < 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR,
+                      "SKELETON: ERROR: var export failed with err=%i\n",
+                      retval);
+      hal_exit(component_id);
+      return false;
+    }
+    return true;
+}
+*/
+
 int rtapi_app_main(void)
 {
   char name[HAL_NAME_LEN + 1];
-  int num_device, retval;
+  int retval;
 
   /* only one device at the moment */
-  num_devices = 1;
-  num_device = 0;
+  int num_device = 0;
 
   /* STEP 1: initialise the driver */
-  comp_id = hal_init("hal_rp2040_eth");
-  if (comp_id < 0) {
+  component_id = hal_init("hal_rp2040_eth");
+  if (component_id < 0) {
     rtapi_print_msg(RTAPI_MSG_ERR,
         "SKELETON: ERROR: hal_init() failed\n");
     return -1;
   }
 
   /* STEP 2: allocate shared memory for skeleton data */
-  port_data_array = hal_malloc(num_devices * sizeof(skeleton_t));
+  port_data_array = hal_malloc(sizeof(skeleton_t));
   if (port_data_array == 0) {
     rtapi_print_msg(RTAPI_MSG_ERR,
         "SKELETON: ERROR: hal_malloc() failed\n");
-    hal_exit(comp_id);
+    hal_exit(component_id);
     return -1;
   }
 
-  for(int num_io = 0; num_io < IO; num_io++) {
-    /* Export the IO(s) */
-    retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->pin_in[num_io]),
-                              comp_id, "rp2040_eth.%d.pin-%d-in", num_device, num_io);
+  /* Set some default values. */
+  for(int gpio_bank = 0; gpio_bank < MAX_GPIO / 32; gpio_bank++) {
+    port_data_array->gpio_data_received[gpio_bank] = 0;
+    port_data_array->gpio_confirmation_pending[gpio_bank] = true;
+  }
+
+
+  /* Set up the HAL pins. */
+
+  for(int gpio = 0; gpio < MAX_GPIO; gpio++) {
+    /* Export the GPIO */
+    // From PC to RP.
+    retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->gpio_data_in[gpio]),
+                              component_id, "rp2040_eth.%d.gpio-%d-in", num_device, gpio);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n",
                       num_device, retval);
-      hal_exit(comp_id);
+      hal_exit(component_id);
       return -1;
     }
 
-    retval = hal_pin_bit_newf(HAL_OUT, &(port_data_array->pin_out[num_io]), comp_id,
-                              "rp2040_eth.%d.pin-%d-out", num_device, num_io);
+    // From RP to PC.
+    retval = hal_pin_bit_newf(HAL_OUT, &(port_data_array->gpio_data_out[gpio]), component_id,
+                              "rp2040_eth.%d.gpio-%d-out", num_device, gpio);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n",
                       num_device, retval);
-      hal_exit(comp_id);
+      hal_exit(component_id);
+      return -1;
+    }
+
+    retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->gpio_type[gpio]),
+                              component_id, "rp2040_eth.%d.gpio-%d-type", num_device, gpio);
+    if (retval < 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR,
+                      "SKELETON: ERROR: port %d var export failed with err=%i\n",
+                      num_device, retval);
+      hal_exit(component_id);
+      return -1;
+    }
+
+    retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->gpio_index[gpio]),
+                              component_id, "rp2040_eth.%d.gpio-%d-index", num_device, gpio);
+    if (retval < 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR,
+                      "SKELETON: ERROR: port %d var export failed with err=%i\n",
+                      num_device, retval);
+      hal_exit(component_id);
+      return -1;
+    }
+
+    retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->gpio_address[gpio]),
+                              component_id, "rp2040_eth.%d.gpio-%d-address", num_device, gpio);
+    if (retval < 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR,
+                      "SKELETON: ERROR: port %d var export failed with err=%i\n",
+                      num_device, retval);
+      hal_exit(component_id);
       return -1;
     }
   }
@@ -143,140 +204,129 @@ int rtapi_app_main(void)
   for(int num_joint = 0; num_joint < JOINTS; num_joint++) {
     /* Export the joint position pin(s) */
     retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->joint_enable[num_joint]),
-                              comp_id, "rp2040_eth.%d.joint-enable-%d", num_device, num_joint);
+                              component_id, "rp2040_eth.%d.joint-enable-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n",
                       num_device, retval);
-      hal_exit(comp_id);
+      hal_exit(component_id);
       return -1;
     }
 
     retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->joint_velocity_mode[num_joint]),
-                              comp_id, "rp2040_eth.%d.joint-velocity-mode-%d", num_device, num_joint);
+                              component_id, "rp2040_eth.%d.joint-velocity-mode-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
-      hal_exit(comp_id);
+      hal_exit(component_id);
       return -1;
     }
 
-    retval = hal_pin_s32_newf(HAL_IN, &(port_data_array->joint_gpio_step[num_joint]), comp_id,
+    retval = hal_pin_s32_newf(HAL_IN, &(port_data_array->joint_gpio_step[num_joint]), component_id,
                               "rp2040_eth.%d.joint-io-pos-step-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
-      hal_exit(comp_id);
+      hal_exit(component_id);
       return -1;
     }
 
     retval = hal_pin_s32_newf(HAL_IN, &(port_data_array->joint_gpio_dir[num_joint]),
-                              comp_id, "rp2040_eth.%d.joint-io-pos-dir-%d", num_device, num_joint);
+                              component_id, "rp2040_eth.%d.joint-io-pos-dir-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
-      hal_exit(comp_id);
+      hal_exit(component_id);
       return -1;
     }
 
-    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->joint_kp[num_joint]), comp_id,
+    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->joint_kp[num_joint]), component_id,
                                 "rp2040_eth.%d.joint-kp-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
-      hal_exit(comp_id);
+      hal_exit(component_id);
       return -1;
     }
 
-    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->joint_max_velocity[num_joint]), comp_id,
+    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->joint_max_velocity[num_joint]), component_id,
                                 "rp2040_eth.%d.joint-max-velocity-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
-      hal_exit(comp_id);
+      hal_exit(component_id);
       return -1;
     }
 
-    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->joint_max_accel[num_joint]), comp_id,
+    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->joint_max_accel[num_joint]), component_id,
                                 "rp2040_eth.%d.joint-max-accel-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
-      hal_exit(comp_id);
+      hal_exit(component_id);
       return -1;
     }
 
     retval = hal_pin_float_newf(HAL_IN, &(port_data_array->joint_scale[num_joint]),
-                                comp_id, "rp2040_eth.%d.joint-scale-%d", num_device, num_joint);
+                                component_id, "rp2040_eth.%d.joint-scale-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
-      hal_exit(comp_id);
+      hal_exit(component_id);
       return -1;
     }
 
     retval = hal_pin_float_newf(HAL_IN, &(port_data_array->joint_pos_cmd[num_joint]),
-                                comp_id, "rp2040_eth.%d.pos-cmd-%d", num_device, num_joint);
+                                component_id, "rp2040_eth.%d.pos-cmd-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
-      hal_exit(comp_id);
+      hal_exit(component_id);
       return -1;
     }
 
     retval = hal_pin_float_newf(HAL_IN, &(port_data_array->joint_vel_cmd[num_joint]),
-                                comp_id, "rp2040_eth.%d.vel-cmd-%d", num_device, num_joint);
+                                component_id, "rp2040_eth.%d.vel-cmd-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
-      hal_exit(comp_id);
+      hal_exit(component_id);
       return -1;
     }
 
     retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->joint_pos_feedback[num_joint]),
-                                comp_id, "rp2040_eth.%d.pos-fb-%d", num_device, num_joint);
+                                component_id, "rp2040_eth.%d.pos-fb-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
-      hal_exit(comp_id);
+      hal_exit(component_id);
       return -1;
     }
-
-    /*
-    retval = hal_pin_s32_newf(HAL_OUT, &(port_data_array->joint_pos_error[num_joint]),
-                                comp_id, "rp2040_eth.%d.pos-error-%d", num_device, num_joint);
-    if (retval < 0) {
-      rtapi_print_msg(RTAPI_MSG_ERR,
-                      "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
-      hal_exit(comp_id);
-      return -1;
-    }
-    */
 
     retval = hal_pin_s32_newf(HAL_OUT, &(port_data_array->joint_step_len_ticks[num_joint]),
-                                comp_id, "rp2040_eth.%d.step-len-ticks-%d", num_device, num_joint);
+                                component_id, "rp2040_eth.%d.step-len-ticks-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
-      hal_exit(comp_id);
+      hal_exit(component_id);
       return -1;
     }
 
     retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->joint_velocity_cmd[num_joint]),
-                                comp_id, "rp2040_eth.%d.velocity-calc-%d", num_device, num_joint);
+                                component_id, "rp2040_eth.%d.velocity-calc-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
-      hal_exit(comp_id);
+      hal_exit(component_id);
       return -1;
     }
 
     retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->joint_velocity_feedback[num_joint]),
-                                comp_id, "rp2040_eth.%d.velocity-fb-%d", num_device, num_joint);
+                                component_id, "rp2040_eth.%d.velocity-fb-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
-      hal_exit(comp_id);
+      hal_exit(component_id);
       return -1;
     }
   }
@@ -342,65 +392,65 @@ int rtapi_app_main(void)
 
   /* Export metrics pins, */
   retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->metric_update_id),
-      comp_id, "rp2040_eth.%d.metrics-update-id", num_device);
+      component_id, "rp2040_eth.%d.metrics-update-id", num_device);
   if (retval < 0) {
     rtapi_print_msg(RTAPI_MSG_ERR,
         "SKELETON: ERROR: port %d var export failed with err=%i\n",
         num_device, retval);
-    hal_exit(comp_id);
+    hal_exit(component_id);
     return -1;
   }
 
   retval = hal_pin_s32_newf(HAL_IN, &(port_data_array->metric_time_diff),
-      comp_id, "rp2040_eth.%d.metrics-time-diff", num_device);
+      component_id, "rp2040_eth.%d.metrics-time-diff", num_device);
   if (retval < 0) {
     rtapi_print_msg(RTAPI_MSG_ERR,
         "SKELETON: ERROR: port %d var export failed with err=%i\n",
         num_device, retval);
-    hal_exit(comp_id);
+    hal_exit(component_id);
     return -1;
   }
 
   retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->metric_rp_update_len),
-      comp_id, "rp2040_eth.%d.metrics-rp-update-len", num_device);
+      component_id, "rp2040_eth.%d.metrics-rp-update-len", num_device);
   if (retval < 0) {
     rtapi_print_msg(RTAPI_MSG_ERR,
         "SKELETON: ERROR: port %d var export failed with err=%i\n",
         num_device, retval);
-    hal_exit(comp_id);
+    hal_exit(component_id);
     return -1;
   }
 
   retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->metric_missed_packets),
-      comp_id, "rp2040_eth.%d.metrics-missed-packets", num_device);
+      component_id, "rp2040_eth.%d.metrics-missed-packets", num_device);
   if (retval < 0) {
     rtapi_print_msg(RTAPI_MSG_ERR,
         "SKELETON: ERROR: port %d var export failed with err=%i\n",
         num_device, retval);
-    hal_exit(comp_id);
+    hal_exit(component_id);
     return -1;
   }
 
   retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->metric_eth_state),
-      comp_id, "rp2040_eth.%d.metrics-eth-state", num_device);
+      component_id, "rp2040_eth.%d.metrics-eth-state", num_device);
   port_data_array->metric_eth_state = false;
   if (retval < 0) {
     rtapi_print_msg(RTAPI_MSG_ERR,
         "SKELETON: ERROR: port %d var export failed with err=%i\n",
         num_device, retval);
-    hal_exit(comp_id);
+    hal_exit(component_id);
     return -1;
   }
 
   /* STEP 4: export write function */
   rtapi_snprintf(name, sizeof(name), "rp2040_eth.%d.write", num_device);
   retval = hal_export_funct(name, write_port, &(port_data_array[num_device]), 1, 0,
-      comp_id);
+      component_id);
   if (retval < 0) {
     rtapi_print_msg(RTAPI_MSG_ERR,
         "SKELETON: ERROR: port %d write funct export failed\n",
         num_device);
-    hal_exit(comp_id);
+    hal_exit(component_id);
     return -1;
   }
 
@@ -410,13 +460,13 @@ int rtapi_app_main(void)
     rtapi_print_msg(RTAPI_MSG_ERR,
         "SKELETON: ERROR: Failed to find device %d on the network.\n",
         num_device);
-    hal_exit(comp_id);
+    hal_exit(component_id);
     return -1;
   }
 
   rtapi_print_msg(RTAPI_MSG_INFO,
-      "SKELETON: installed driver for %d ports\n", num_devices);
-  hal_ready(comp_id);
+      "SKELETON: installed driver.\n");
+  hal_ready(component_id);
   return 0;
 
 port_error:
@@ -429,7 +479,7 @@ port_error:
 
 void rtapi_app_exit(void)
 {
-  hal_exit(comp_id);
+  hal_exit(component_id);
 }
 
 /**************************************************************
@@ -450,9 +500,8 @@ static void write_port(void *arg, long period)
   int num_device = 0;
 
   static uint count = 0;
-  //static double last_max_velocity[JOINTS] = {0, 0, 0, 0};
-  //static double last_max_accel[JOINTS] = {0, 0, 0, 0};
   static struct Message_joint_config last_joint_config[JOINTS] = {0};
+  static struct Message_gpio_config last_gpio_config[MAX_GPIO] = {0};
   static uint32_t last_update_id = 0;
   static int last_errno = 0;
   static int cooloff = 0;
@@ -473,11 +522,9 @@ static void write_port(void *arg, long period)
 
   pack_success = pack_success && serialize_timing(&buffer, count, rtapi_get_time());
 
-  // Put GPIO values in buffer.
-  // TODO: Not yet implemented.
-  for(int num_io = 0; num_io < IO; num_io++) {
-    *data->pin_in[num_io] = ((count / 1000) % 2 == 0);
-  }
+  // Put GPIO values in network buffer.
+  //pack_success &= serialize_gpio(&buffer, data);
+  serialize_gpio(&buffer, data);
 
   int has_configs = 0;
   // Iterate through joints.
@@ -489,28 +536,15 @@ static void write_port(void *arg, long period)
       printf("ERROR: Not implemented velocity mode. joint: %u\n", joint);
     } else {
       // Absolute position mode.
+      // TODO: Put both position and velocity in same update.
       double position = *data->joint_scale[joint] * *data->joint_pos_cmd[joint];
       double velocity = *data->joint_scale[joint] * *data->joint_vel_cmd[joint];
       pack_success = pack_success && serialize_joint_pos(&buffer, joint, position);
       pack_success = pack_success && serialize_joint_velocity(&buffer, joint, velocity);
     }
 
-    /*
-    if(last_max_velocity[joint] != *data->joint_max_velocity[joint]) {
-      last_max_velocity[joint] = *data->joint_max_velocity[joint];
-      pack_success = pack_success && serialize_joint_max_velocity(
-          &buffer, joint, last_max_velocity[joint]);
-    }
-
-    if(last_max_accel[joint] != *data->joint_max_accel[joint]) {
-      last_max_accel[joint] = *data->joint_max_accel[joint];;
-      pack_success = pack_success && serialize_joint_max_accel(
-          &buffer, joint, last_max_accel[joint]);
-    }
-    */
-
-    if(count % JOINTS == joint) {
-      // Only configure 1 joint per cycle to avoid filling NW buffer.
+    if(count % (JOINTS + MAX_GPIO) == joint) {
+      // Only configure 1 joint or gpio per cycle to avoid filling NW buffer.
       if(
           last_joint_config[joint].enable != *data->joint_enable[joint]
           ||
@@ -534,8 +568,31 @@ static void write_port(void *arg, long period)
         has_configs = 1;
       }
     }
+  }
 
-    //enable_joint(&buffer, &pack_success, joint, data);
+  // Iterate through GPIO.
+  for(uint8_t gpio = 0; gpio < MAX_GPIO; gpio++) {
+    if(count % (JOINTS + MAX_GPIO) == JOINTS + gpio
+        && count < 2000
+      ) {
+      // Only configure 1 joint or gpio per cycle to avoid filling NW buffer.
+      if(
+          last_gpio_config[gpio].gpio_type != *data->gpio_type[gpio]
+          ||
+          last_gpio_config[gpio].index != *data->gpio_index[gpio]
+          ||
+          last_gpio_config[gpio].address != *data->gpio_address[gpio]
+        ) {
+        //printf("%u\n", gpio);
+        pack_success = pack_success && serialize_gpio_config(
+            &buffer,
+            gpio,
+            *data->gpio_type[gpio],
+            *data->gpio_index[gpio],
+            *data->gpio_address[gpio]
+          );
+      }
+    }
   }
 
   if (!has_configs) {
@@ -604,11 +661,6 @@ static void write_port(void *arg, long period)
 void on_eth_up(skeleton_t *data, uint count) {
   printf("Ethernet up. Packet count: %u\n", count);
   *data->metric_eth_state = true;
-
-  // Iterate through joints.
-  //for(int joint = 0; joint < JOINTS; joint++) {
-  //  data->reset_joint[joint] = true;
-  //}
 }
 
 void on_eth_down(skeleton_t *data, uint count) {
@@ -624,58 +676,4 @@ void on_eth_down(skeleton_t *data, uint count) {
       *data->joint_enable[joint] = false;
   }
 }
-
-/*
-void enable_io(struct NWBuffer* buffer, bool* pack_success, int joint, skeleton_t *data) {
-  static int last_io_pos_step[JOINTS] = {-2, -2, -2, -2};
-  static int last_io_pos_dir[JOINTS] = {-2, -2, -2, -2};
-
-  if(last_io_pos_step[joint] != *data->joint_gpio_step[joint] ||
-      data->reset_joint[joint]
-  ) {
-    union MessageAny message;
-
-    last_io_pos_step[joint] = *data->joint_gpio_step[joint];
-    rtapi_print_msg(RTAPI_MSG_INFO, "Configure joint: %u  step io: %u\n",
-        joint, *data->joint_gpio_step[joint]);
-    printf("Configure joint: %u  step io: %u\n", joint, *data->joint_gpio_step[joint]);
-    *pack_success = *pack_success && serialize_joint_io_step(
-        buffer, joint, *data->joint_gpio_step[joint]);
-
-    last_io_pos_dir[joint] = *data->joint_gpio_dir[joint];
-    rtapi_print_msg(RTAPI_MSG_INFO, "Configure joint: %u  dir io: %u\n",
-        joint, *data->joint_gpio_dir[joint]);
-    printf("Configure joint: %u  dir io: %u\n", joint, *data->joint_gpio_dir[joint]);
-    *pack_success = *pack_success && serialize_joint_io_dir(
-        buffer, joint, *data->joint_gpio_dir[joint]);
-
-    data->reset_joint[joint] = false;
-  }
-}
-
-void enable_joint(struct NWBuffer* buffer, bool* pack_success, int joint, skeleton_t *data) {
-  static int last_enabled[JOINTS] = {-1, -1, -1, -1};
-  union MessageAny message = {0};
-
-  if(last_enabled[joint] != *data->joint_enable[joint]) {
-    if(data->joints_enabled_this_cycle > 0) {
-      return;
-    }
-
-    data->joints_enabled_this_cycle++;
-
-    if(*data->joint_enable[joint]) {
-      printf("enable joint: %u\n", joint);
-      enable_io(buffer, pack_success, joint, data);
-    } else {
-      printf("disable joint: %u\n", joint);
-    }
-
-    last_enabled[joint] = *data->joint_enable[joint];
-
-    *pack_success = *pack_success && serialize_joint_enable(
-        buffer, joint, *data->joint_enable[joint]);
-  }
-}
-*/
 

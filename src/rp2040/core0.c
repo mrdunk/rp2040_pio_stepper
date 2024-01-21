@@ -5,6 +5,7 @@
 #include "config.h"
 #include "messages.h"
 #include "buffer.h"
+#include "gpio.h"
 
 
 #ifdef BUILD_TESTS
@@ -353,6 +354,82 @@ bool unpack_joint_config(
   return true;
 }
 
+bool unpack_gpio(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    uint8_t* received_count
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_gpio));
+
+  if(! data_p) {
+    return false;
+  }
+
+  struct Message_gpio* message = data_p;
+  const uint8_t bank = message->bank;
+  uint32_t values = message->values;
+  bool confirmation_pending = message->confirmation_pending;
+
+  config.gpio_confirmation_pending[bank] = confirmation_pending;
+
+  gpio_set_values(bank, values);
+
+  (*received_count)++;
+  return true;
+}
+
+bool unpack_gpio_config(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    struct NWBuffer* tx_buf,
+    uint8_t* received_count
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_gpio_config));
+
+  if(! data_p) {
+    return false;
+  }
+  struct Message_gpio_config* message = data_p;
+  uint8_t gpio_type = message->gpio_type;
+  uint8_t gpio_count = message->gpio_count;
+  uint8_t index = message->index;
+  uint8_t address = message->address;
+
+  config.gpio[gpio_count].type = gpio_type;
+  config.gpio[gpio_count].index = index;
+  config.gpio[gpio_count].address = address;
+
+  printf("%u Configuring gpio: %u\t%u\n", *received_count, gpio_type, gpio_count);
+
+    switch(gpio_type) {
+      case GPIO_TYPE_NATIVE_IN:
+      case GPIO_TYPE_NATIVE_IN_DEBUG:
+        ;
+        // Remember HAL's definition of IN and OUT are opposite of RPs.
+        printf("Setting RP native IO to RP OUT: %u\n", index);
+        gpio_init(index);
+        gpio_set_dir(index, GPIO_OUT);
+        break;
+      case GPIO_TYPE_NATIVE_OUT:
+      case GPIO_TYPE_NATIVE_OUT_DEBUG:
+        // Remember HAL's definition of IN and OUT are opposite of RPs.
+        printf("Setting RP native IO to RP IN: %u\n", index);
+        gpio_init(index);
+        gpio_set_dir(index, GPIO_IN);
+        break;
+      default:
+        break;
+    }
+  
+
+  //serialise_gpio_config(gpio_count, tx_buf);
+
+  (*received_count)++;
+  return true;
+}
+
 /* Process data received over the network.
  * This consists of serialised structs as defined in src/shared/massages.h
  */
@@ -389,6 +466,7 @@ void process_received_buffer(
       // End of data.
       break;
     }
+
     switch(header->type) {
       case MSG_TIMING:
         ;
@@ -434,9 +512,16 @@ void process_received_buffer(
       case MSG_SET_SPINDLE_SPEED:
         unpack_success = unpack_success && unpack_spindle_speed(
             rx_buf, &rx_offset, received_count);
+      case MSG_SET_GPIO:
+        unpack_success = unpack_success && unpack_gpio(
+            rx_buf, &rx_offset, received_count);
+        break;
+      case MSG_SET_GPIO_CONFIG:
+        unpack_success = unpack_success && unpack_gpio_config(
+            rx_buf, &rx_offset, tx_buf, received_count);
         break;
       default:
-        printf("WARN: Invalid message type: %u\t%lu\n", *received_count, header->type);
+        printf("WARN: Invalid message type: %u\t%lu\n", header->type, *received_count);
         // Implies data corruption.
         unpack_success = false;
         break;
@@ -486,11 +571,11 @@ void core0_main() {
     }
 
     process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, data_received);
-    if(received_msg_count != 9 && received_msg_count != 10) {
+    //if(received_msg_count != 9) {
       // Not the standard number of received packets.
       // This likely was a config update.
-      printf("Received msgs: %u\t%u\n", received_msg_count, data_received);
-    }
+    //  printf("Received msgs: %u\t%u\n", received_msg_count, data_received);
+    //}
 
     if(received_msg_count > 0) {
       recover_clock();
@@ -506,6 +591,9 @@ void core0_main() {
       }
       serialise_spindle_speed_out(&tx_buf, act_spindle_frequency, &vfd.stats);
       count++;
+
+      size_t tx_buf_len = 0;
+      gpio_serialize(&tx_buf, &tx_buf_len);
 
       put_UDP(
           SOCKET_NUMBER,

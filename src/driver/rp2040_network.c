@@ -140,34 +140,6 @@ size_t serialize_joint_velocity(
   return pack_nw_buff(buffer, &message, sizeof(struct Message_set_velocity));
 }
 
-/*
-size_t serialize_joint_max_velocity(
-    struct NWBuffer* buffer,
-    uint32_t joint,
-    double velocity
-) {
-  union MessageAny message;
-  message.set_max_velocity.type = MSG_SET_AXIS_MAX_VELOCITY;
-  message.set_max_velocity.axis = joint;
-  message.set_max_velocity.value = velocity;
-
-  return pack_nw_buff(buffer, &message, sizeof(struct Message_set_max_velocity));
-}
-
-size_t serialize_joint_max_accel(
-    struct NWBuffer* buffer,
-    uint32_t joint,
-    double accel
-) {
-  union MessageAny message;
-  message.set_max_accel.type = MSG_SET_AXIS_MAX_ACCEL;
-  message.set_max_accel.axis = joint;
-  message.set_max_accel.value = accel;
-
-  return pack_nw_buff(buffer, &message, sizeof(struct Message_set_max_accel));
-}
-*/
-
 bool serialise_spindle_config(
     struct NWBuffer* tx_buf,
     uint8_t vfd_type,
@@ -254,6 +226,103 @@ size_t serialize_joint_config(
   message.joint_config.max_accel = max_accel;
 
   return pack_nw_buff(buffer, &message, sizeof(struct Message_joint_config));
+}
+
+size_t serialize_gpio_config(
+    struct NWBuffer* buffer,
+    uint8_t gpio,
+    uint8_t gpio_type,
+    uint8_t gpio_index,
+    uint8_t gpio_address
+) {
+  union MessageAny message;
+  message.gpio_config.type = MSG_SET_GPIO_CONFIG;
+  message.gpio_config.gpio_type = gpio_type;
+  message.gpio_config.gpio_count = gpio;
+  message.gpio_config.index = gpio_index;
+  message.gpio_config.address = gpio_address;
+
+  return pack_nw_buff(buffer, &message, sizeof(struct Message_gpio_config));
+}
+
+uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
+  uint16_t return_val = 0;
+  bool confirmation_pending[MAX_GPIO / 32];
+  uint32_t to_send[MAX_GPIO / 32];
+
+  for(int bank = 0; bank < MAX_GPIO / 32; bank++) {
+    to_send[bank] = 0;
+    confirmation_pending[bank] = false;
+  }
+
+  for(size_t gpio = 0; gpio < MAX_GPIO; gpio++) {
+    int bank = gpio / 32;
+    int gpio_per_bank = (gpio % 32);
+
+    bool current_value = false;
+    switch(*data->gpio_type[gpio]) {
+      case GPIO_TYPE_NATIVE_OUT_DEBUG:
+      case GPIO_TYPE_NATIVE_OUT:
+      case GPIO_TYPE_I2C_MCP_OUT:
+        current_value = *data->gpio_data_out[gpio];
+        break;
+      case GPIO_TYPE_NATIVE_IN:
+      case GPIO_TYPE_NATIVE_IN_DEBUG:
+      case GPIO_TYPE_I2C_MCP_IN:
+        current_value = *data->gpio_data_in[gpio];
+        break;
+      default:
+        break;
+    }
+
+    // The value last received over the network.
+    bool received_value = data->gpio_data_received[bank] & (0x1 << gpio_per_bank);
+
+    if(current_value != received_value) {
+      switch(*data->gpio_type[gpio]) {
+        case GPIO_TYPE_NATIVE_OUT_DEBUG:
+          printf("DBG: GPIO OUT: %u  val: %u\n", gpio, current_value);
+          // Note: no break here.
+        case GPIO_TYPE_NATIVE_OUT:
+        case GPIO_TYPE_I2C_MCP_OUT:
+          // Network update to apply.
+          *data->gpio_data_out[gpio] = received_value;
+          current_value = received_value;
+          // Confirmation of HAL update to send on network.
+          confirmation_pending[bank] = true;
+          break;
+        case GPIO_TYPE_NATIVE_IN_DEBUG:
+          printf("DBG: GPIO IN: %u  val: %u\n", gpio, current_value);
+          // Note: no break here.
+        case GPIO_TYPE_NATIVE_IN:
+        case GPIO_TYPE_I2C_MCP_IN:
+          // HAL update to send on network.
+          confirmation_pending[bank] = true;
+          break;
+        default:
+          current_value = received_value;
+          break;
+      }
+    }
+
+    to_send[bank] |= (current_value << gpio_per_bank);
+  }
+
+  for(int bank = 0; bank < MAX_GPIO / 32; bank++) {
+    if(confirmation_pending[bank] || data->gpio_confirmation_pending[bank]) {
+      // Values differ from those received in the last NW update
+      // or the last network update requested confirmation.
+      struct Message_gpio message = {
+        .type = MSG_SET_GPIO,
+        .bank = bank,
+        .values = to_send[bank],
+        .confirmation_pending=confirmation_pending[bank]
+      };
+      return_val += pack_nw_buff(buffer, &message, sizeof(struct Message_gpio));
+    }
+  }
+
+  return return_val;
 }
 
 /* Process received update documenting current the last packet received by the RP. */
@@ -368,7 +437,7 @@ bool unpack_joint_metrics(
   return true;
 }
 
-/* Process received update containing metrics data. */
+/* Process received update containing spindle data. */
 bool unpack_spindle_speed(
     struct NWBuffer* rx_buf,
     uint16_t* rx_offset,
@@ -393,7 +462,34 @@ bool unpack_spindle_speed(
   return true;
 }
 
+/* Process received update containing GPIO values. */
+bool unpack_gpio(
+    struct NWBuffer* rx_buf,
+    uint16_t* rx_offset,
+    uint16_t* received_count,
+    skeleton_t* data
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_gpio));
 
+  if(! data_p) {
+    return false;
+  }
+
+  struct Reply_gpio* reply = data_p;
+  uint8_t bank = reply->bank;
+  uint32_t values = reply->values;
+
+  data->gpio_confirmation_pending[bank] = reply->confirmation_pending;
+
+  for(uint8_t gpio_per_bank = 0; gpio_per_bank < 32; gpio_per_bank++) {
+    data->gpio_data_received[bank] = values;
+  }
+  (*received_count)++;
+  return true;
+}
+
+/* Extract structs from data received over network. */
 void process_data(
     struct NWBuffer* rx_buf,
     skeleton_t* data,
@@ -449,6 +545,8 @@ void process_data(
         break;
       case REPLY_SPINDLE_SPEED:
         unpack_success = unpack_success && unpack_spindle_speed(
+      case REPLY_GPIO:
+        unpack_success = unpack_success && unpack_gpio(
             rx_buf, &rx_offset, received_count, data);
         break;
       default:

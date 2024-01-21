@@ -152,8 +152,6 @@ static void test_axis_config(void **state) {
     assert_int_equal(last_joint_config.gpio_dir, message.gpio_dir);
     assert_double_equal(last_joint_config.max_velocity, message.max_velocity, 0.0001);
     assert_double_equal(last_joint_config.max_accel, message.max_accel, 0.0001);
-    //assert_int_equal(*(data.joint_step_len_ticks[axis]), message.step_len_ticks);
-    //assert_int_equal(*(data.joint_velocity_cmd[axis]), message.velocity_requested);
 }
 
 static void test_axis_metrics(void **state) {

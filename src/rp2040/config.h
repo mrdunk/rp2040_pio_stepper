@@ -43,6 +43,14 @@ struct ConfigGPIO {
   uint8_t type;                 // See GPIO_TYPE_XXXX in messages.h.
   uint8_t index;                // IP pin number.
   uint8_t address;              // i2c address if applicable.
+  bool value;                   // Last set value for output pins.
+};
+
+/* Configuration object for an i2c interface. */
+struct ConfigI2c {
+  int8_t io_scl;                // 
+  int8_t io_sda;                // 
+  uint8_t address;              // i2c address.
 };
 
 /* Configuration object for global settings.
@@ -55,6 +63,8 @@ struct ConfigGlobal {
 
   struct ConfigAxis axis[MAX_AXIS];
   struct ConfigGPIO gpio[MAX_GPIO];
+  struct ConfigI2c i2c[MAX_I2C_MCP];
+  bool gpio_confirmation_pending[MAX_GPIO / 32];
 };
 
 
