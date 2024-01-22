@@ -202,7 +202,7 @@ static void test_unpack_one(void **state) {
         .payload = {0}
     };
 
-    uint16_t accumilator = 0;
+    size_t accumilator = 0;
 
     memcpy(&(buffer.payload), &test_message_sent, sizeof(test_message_sent));
 
@@ -309,7 +309,7 @@ static void test_unpack_multi(void **state) {
           );
     
 
-    uint16_t accumilator = 0;
+    size_t accumilator = 0;
     void* data_p;
 
     // Unpack first message.
@@ -413,7 +413,7 @@ static void test_unpack_multi_accumilating(void **state) {
           );
     
 
-    uint16_t accumilator = 0;
+    size_t accumilator = 0;
     void* data_p;
 
     // Unpack first message.

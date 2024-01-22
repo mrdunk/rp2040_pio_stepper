@@ -53,8 +53,6 @@ typedef struct {
 
   uint32_t gpio_data_received[MAX_GPIO / 32];
   bool gpio_confirmation_pending[MAX_GPIO / 32];
-
-  uint8_t joints_enabled_this_cycle;
 } skeleton_t;
 
 
@@ -503,31 +501,27 @@ static void write_port(void *arg, long period)
   }
 
   skeleton_t *data = arg;
-  data->joints_enabled_this_cycle = 0;
-
   struct NWBuffer buffer;
   reset_nw_buf(&buffer);
-  union MessageAny message;
   bool pack_success = true;
 
   pack_success = pack_success && serialize_timing(&buffer, count, rtapi_get_time());
 
   // Put GPIO values in network buffer.
   //pack_success &= serialize_gpio(&buffer, data);
-  // TODO: Use feedback of serialize_gpio.
+  // TODO: Fix feedback of serialize_gpio.
   serialize_gpio(&buffer, data);
 
+  // Send configuration data to RP.
   pack_success = pack_success && configure(
       &buffer, count, last_joint_config, last_gpio_config, data);
 
   // Iterate through joints.
   for(int joint = 0; joint < JOINTS; joint++) {
     // Put joint positions packet in buffer.
-    // TODO: Put both position and velocity in same update.
     double position = *data->joint_scale[joint] * *data->joint_pos_cmd[joint];
     double velocity = *data->joint_scale[joint] * *data->joint_vel_cmd[joint];
-    pack_success = pack_success && serialize_joint_pos(&buffer, joint, position);
-    pack_success = pack_success && serialize_joint_velocity(&buffer, joint, velocity);
+    pack_success = pack_success && serialize_joint_pos(&buffer, joint, position, velocity);
   }
 
   // Send the tx_data if valid.
@@ -603,6 +597,7 @@ void on_eth_down(
   printf("WARN: Ethernet down. Packet count: %u\n", count);
   *data->metric_eth_state = false;
 
+  // Force reconfiguration when network comes back up.
   reset_rp_config(data, last_joint_config, last_gpio_config);
 }
 
@@ -612,13 +607,13 @@ void reset_rp_config(
     struct Message_joint_config* last_joint_config,
     struct Message_gpio_config* last_gpio_config
 ) {
-  for(uint8_t joint = 0; joint < JOINTS; joint++) {
+  for(size_t joint = 0; joint < JOINTS; joint++) {
     *data->joint_enable[joint] = false;
     last_joint_config[joint].gpio_step = -1;
     last_joint_config[joint].gpio_dir = -1;
   }
 
-  for(uint8_t gpio = 0; gpio < MAX_GPIO; gpio++) {
+  for(size_t gpio = 0; gpio < MAX_GPIO; gpio++) {
     last_gpio_config[gpio].gpio_type = GPIO_TYPE_NOT_SET;
   }
 }

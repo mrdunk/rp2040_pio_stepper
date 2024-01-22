@@ -466,7 +466,6 @@ bool serialise_axis_metrics(const uint32_t axis, struct NWBuffer* tx_buf) {
   }
 
   int32_t velocity_requested;
-  //int32_t pos_error;
   int32_t step_len_ticks;
 
   get_axis_config(
@@ -489,7 +488,6 @@ bool serialise_axis_metrics(const uint32_t axis, struct NWBuffer* tx_buf) {
   reply.type = REPLY_AXIS_METRICS;
   reply.axis = axis;
   reply.velocity_requested = velocity_requested;
-  //reply.pos_error = pos_error;
   reply.step_len_ticks = step_len_ticks;
 
   uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));

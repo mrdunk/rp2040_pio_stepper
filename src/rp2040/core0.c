@@ -78,9 +78,9 @@ void recover_clock() {
 
 bool unpack_timing(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
+    size_t* rx_offset,
     struct NWBuffer* tx_buf,
-    uint8_t* received_count
+    size_t* received_count
 ) {
   void* data_p = unpack_nw_buff(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_timing));
@@ -101,8 +101,8 @@ bool unpack_timing(
 
 bool unpack_joint_enable(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
-    uint8_t* received_count
+    size_t* rx_offset,
+    size_t* received_count
 ) {
   void* data_p = unpack_nw_buff(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_joint_enable));
@@ -112,7 +112,7 @@ bool unpack_joint_enable(
   }
 
   struct Message_joint_enable* message = data_p;
-  uint32_t joint = message->axis;
+  uint8_t joint = message->axis;
   uint8_t enabled = message->value;
 
   printf("%u Enabling joint: %u\t%i\n", *received_count, joint, enabled);
@@ -126,8 +126,8 @@ bool unpack_joint_enable(
 
 bool unpack_joint_abs_pos(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
-    uint8_t* received_count
+    size_t* rx_offset,
+    size_t* received_count
 ) {
   void* data_p = unpack_nw_buff(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_set_abs_pos));
@@ -137,36 +137,13 @@ bool unpack_joint_abs_pos(
   }
 
   struct Message_set_abs_pos* message = data_p;
-  uint32_t joint = message->axis;
-  double abs_pos = message->value;
+  uint8_t joint = message->axis;
+  double abs_pos = message->position;
+  double vel_reques = message->velocity;
 
   update_axis_config(
       joint, CORE0,
-      NULL, NULL, NULL, NULL, &abs_pos, NULL, NULL, NULL, NULL, NULL, NULL);
-
-  (*received_count)++;
-  return true;
-}
-
-bool unpack_joint_velocity(
-    struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
-    uint8_t* received_count
-) {
-  void* data_p = unpack_nw_buff(
-      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_set_velocity));
-
-  if(! data_p) {
-    return false;
-  }
-
-  struct Message_set_velocity* message = data_p;
-  uint32_t joint = message->axis;
-  double vel_reques = message->value;
-
-  update_axis_config(
-      joint, CORE0,
-      NULL, NULL, NULL, &vel_reques, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+      NULL, NULL, NULL, &vel_reques, &abs_pos, NULL, NULL, NULL, NULL, NULL, NULL);
 
   (*received_count)++;
   return true;
@@ -174,8 +151,8 @@ bool unpack_joint_velocity(
 
 bool unpack_joint_max_velocity(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
-    uint8_t* received_count
+    size_t* rx_offset,
+    size_t* received_count
 ) {
   void* data_p = unpack_nw_buff(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_set_max_velocity));
@@ -185,7 +162,7 @@ bool unpack_joint_max_velocity(
   }
 
   struct Message_set_max_velocity* message = data_p;
-  uint32_t joint = message->axis;
+  uint8_t joint = message->axis;
   double max_velocity = message->value;
 
   update_axis_config(
@@ -198,8 +175,8 @@ bool unpack_joint_max_velocity(
 
 bool unpack_joint_max_accel(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
-    uint8_t* received_count
+    size_t* rx_offset,
+    size_t* received_count
 ) {
   void* data_p = unpack_nw_buff(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_set_max_accel));
@@ -209,7 +186,7 @@ bool unpack_joint_max_accel(
   }
 
   struct Message_set_max_accel* message = data_p;
-  uint32_t joint = message->axis;
+  uint8_t joint = message->axis;
   double max_accel = message->value;
 
   update_axis_config(
@@ -222,8 +199,8 @@ bool unpack_joint_max_accel(
 
 bool unpack_joint_io_step(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
-    uint8_t* received_count
+    size_t* rx_offset,
+    size_t* received_count
 ) {
   void* data_p = unpack_nw_buff(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_joint_gpio));
@@ -233,7 +210,7 @@ bool unpack_joint_io_step(
   }
 
   struct Message_joint_gpio* message = data_p;
-  uint32_t joint = message->axis;
+  uint8_t joint = message->axis;
   int8_t io_step = message->value;
 
   printf("%u Setting axis: %u\tstep-io: %i\n", *received_count, joint, io_step);
@@ -248,8 +225,8 @@ bool unpack_joint_io_step(
 
 bool unpack_joint_io_dir(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
-    uint8_t* received_count
+    size_t* rx_offset,
+    size_t* received_count
 ) {
   void* data_p = unpack_nw_buff(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_joint_gpio));
@@ -259,7 +236,7 @@ bool unpack_joint_io_dir(
   }
 
   struct Message_joint_gpio* message = data_p;
-  uint32_t joint = message->axis;
+  uint8_t joint = message->axis;
   int8_t io_dir = message->value;
 
   printf("%u Setting axis: %u\tdir-io:  %i\n", *received_count, joint, io_dir);
@@ -273,9 +250,9 @@ bool unpack_joint_io_dir(
 
 bool unpack_joint_config(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
+    size_t* rx_offset,
     struct NWBuffer* tx_buf,
-    uint8_t* received_count
+    size_t* received_count
 ) {
   void* data_p = unpack_nw_buff(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_joint_config));
@@ -285,7 +262,7 @@ bool unpack_joint_config(
   }
 
   struct Message_joint_config* message = data_p;
-  uint32_t joint = message->axis;
+  uint8_t joint = message->axis;
   uint8_t enabled = message->enable;
   int8_t io_step = message->gpio_step;
   int8_t io_dir = message->gpio_dir;
@@ -315,8 +292,8 @@ bool unpack_joint_config(
 
 bool unpack_gpio(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
-    uint8_t* received_count
+    size_t* rx_offset,
+    size_t* received_count
 ) {
   void* data_p = unpack_nw_buff(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_gpio));
@@ -340,9 +317,9 @@ bool unpack_gpio(
 
 bool unpack_gpio_config(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
+    size_t* rx_offset,
     struct NWBuffer* tx_buf,
-    uint8_t* received_count
+    size_t* received_count
 ) {
   void* data_p = unpack_nw_buff(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_gpio_config));
@@ -395,10 +372,10 @@ bool unpack_gpio_config(
 void process_received_buffer(
     struct NWBuffer* rx_buf,
     struct NWBuffer* tx_buf,
-    uint8_t* received_count,
-    uint16_t expected_length
+    size_t* received_count,
+    size_t expected_length
 ) {
-  uint16_t rx_offset = 0;
+  size_t rx_offset = 0;
 
   if(rx_buf->length + sizeof(rx_buf->length) + sizeof(rx_buf->checksum) != expected_length) {
     printf("WARN: RX length not equal to expected. %u\n", *received_count);
@@ -438,10 +415,6 @@ void process_received_buffer(
         break;
       case MSG_SET_AXIS_ABS_POS:
         unpack_success = unpack_success && unpack_joint_abs_pos(
-            rx_buf, &rx_offset, received_count);
-        break;
-      case MSG_SET_AXIS_VELOCITY:
-        unpack_success = unpack_success && unpack_joint_velocity(
             rx_buf, &rx_offset, received_count);
         break;
       case MSG_SET_AXIS_MAX_VELOCITY:
@@ -496,8 +469,8 @@ void core0_main() {
   int retval = 0;
   struct NWBuffer rx_buf = {0};
   struct NWBuffer tx_buf = {0};
-  uint8_t received_msg_count = 0;
-  uint16_t data_received = 0;
+  size_t received_msg_count = 0;
+  size_t data_received = 0;
   size_t time_now;
 
   // Need these to store the IP and port.

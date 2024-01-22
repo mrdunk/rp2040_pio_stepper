@@ -14,9 +14,7 @@ void update_axis_config(
     const double* max_accel_ticks,
     const int32_t* velocity_requested,
     const int32_t* velocity_acheived,
-    const int32_t* pos_error,
-    const int32_t* step_len_ticks,
-    const float* kp
+    const int32_t* step_len_ticks
 )
 {
 }

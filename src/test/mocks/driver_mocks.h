@@ -27,14 +27,12 @@ typedef struct {
   hal_bit_t* joint_velocity_mode[JOINTS];
   hal_s32_t* joint_gpio_step[JOINTS];
   hal_s32_t* joint_gpio_dir[JOINTS];
-  hal_float_t* joint_kp[JOINTS];
   hal_float_t* joint_max_velocity[JOINTS];
   hal_float_t* joint_max_accel[JOINTS];
   hal_float_t* joint_scale[JOINTS];
   hal_float_t* joint_pos_cmd[JOINTS];
   hal_float_t* joint_vel_cmd[JOINTS];
   hal_float_t* joint_pos_feedback[JOINTS];
-  //hal_s32_t* joint_pos_error[JOINTS];
   hal_s32_t* joint_step_len_ticks[JOINTS];
   hal_float_t* joint_velocity_cmd[JOINTS];
   hal_float_t* joint_velocity_feedback[JOINTS];
@@ -43,8 +41,6 @@ typedef struct {
   hal_u32_t* gpio_type[MAX_GPIO];
   hal_u32_t gpio_data_received[MAX_GPIO / 32];
   hal_bit_t gpio_confirmation_pending[MAX_GPIO / 32];
-
-  uint8_t joints_enabled_this_cycle;
 } skeleton_t;
 
 

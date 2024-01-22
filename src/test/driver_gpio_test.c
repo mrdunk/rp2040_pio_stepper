@@ -311,10 +311,10 @@ static void test_unpack_gpio(void **state) {
     skeleton_t data = {0};
     setup_data(&data);
 
-    uint16_t original_rx_offset = 0;
-    uint16_t rx_offset = original_rx_offset;
-    uint16_t original_received_count = 0;
-    uint16_t received_count = original_received_count;
+    size_t original_rx_offset = 0;
+    size_t rx_offset = original_rx_offset;
+    size_t original_received_count = 0;
+    size_t received_count = original_received_count;
 
     struct NWBuffer buffer = {0};
     assert_int_equal(buffer.checksum, 0);

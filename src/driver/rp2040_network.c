@@ -115,33 +115,22 @@ size_t serialize_timing(
 
 size_t serialize_joint_pos(
     struct NWBuffer* buffer,
-    uint32_t joint,
-    double position
+    uint8_t joint,
+    double position,
+    double velocity
 ) {
   union MessageAny message;
   message.set_abs_pos.type = MSG_SET_AXIS_ABS_POS;
   message.set_abs_pos.axis = joint;
-  message.set_abs_pos.value = position;
+  message.set_abs_pos.position = position;
+  message.set_abs_pos.velocity = velocity;
 
   return pack_nw_buff(buffer, &message, sizeof(struct Message_set_abs_pos));
 }
 
-size_t serialize_joint_velocity(
-    struct NWBuffer* buffer,
-    uint32_t joint,
-    double velocity
-) {
-  union MessageAny message;
-  message.set_velocity.type = MSG_SET_AXIS_VELOCITY;
-  message.set_velocity.axis = joint;
-  message.set_velocity.value = velocity;
-
-  return pack_nw_buff(buffer, &message, sizeof(struct Message_set_velocity));
-}
-
 size_t serialize_joint_io_step(
     struct NWBuffer* buffer,
-    uint32_t joint,
+    uint8_t joint,
     uint8_t value
 ) {
   union MessageAny message;
@@ -154,7 +143,7 @@ size_t serialize_joint_io_step(
 
 size_t serialize_joint_io_dir(
     struct NWBuffer* buffer,
-    uint32_t joint,
+    uint8_t joint,
     uint8_t value
 ) {
   union MessageAny message;
@@ -167,7 +156,7 @@ size_t serialize_joint_io_dir(
 
 size_t serialize_joint_enable(
     struct NWBuffer* buffer,
-    uint32_t joint,
+    uint8_t joint,
     uint8_t value
 ) {
   union MessageAny message;
@@ -180,8 +169,8 @@ size_t serialize_joint_enable(
 
 size_t serialize_joint_config(
     struct NWBuffer* buffer,
-    uint32_t joint,
-    uint32_t enable,
+    uint8_t joint,
+    uint8_t enable,
     uint8_t gpio_step,
     uint8_t gpio_dir,
     double max_velocity,
@@ -217,18 +206,18 @@ size_t serialize_gpio_config(
 }
 
 uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
-  uint16_t return_val = 0;
+  size_t return_val = 0;
   bool confirmation_pending[MAX_GPIO / 32];
   uint32_t to_send[MAX_GPIO / 32];
 
-  for(int bank = 0; bank < MAX_GPIO / 32; bank++) {
+  for(size_t bank = 0; bank < MAX_GPIO / 32; bank++) {
     to_send[bank] = 0;
     confirmation_pending[bank] = false;
   }
 
   for(size_t gpio = 0; gpio < MAX_GPIO; gpio++) {
-    int bank = gpio / 32;
-    int gpio_per_bank = (gpio % 32);
+    size_t bank = gpio / 32;
+    size_t gpio_per_bank = (gpio % 32);
 
     bool current_value = false;
     switch(*data->gpio_type[gpio]) {
@@ -299,8 +288,8 @@ uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
 /* Process received update documenting current the last packet received by the RP. */
 bool unpack_timing(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
-    uint16_t* received_count,
+    size_t* rx_offset,
+    size_t* received_count,
     skeleton_t* data
 ) {
   void* data_p = unpack_nw_buff(
@@ -322,8 +311,8 @@ bool unpack_timing(
 /* Process received update documenting current joint position and velocity. */
 bool unpack_joint_movement(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
-    uint16_t* received_count,
+    size_t* rx_offset,
+    size_t* received_count,
     skeleton_t* data
 ) {
   void* data_p = unpack_nw_buff(
@@ -334,7 +323,7 @@ bool unpack_joint_movement(
   }
 
   struct Reply_axis_movement* reply = data_p;
-  uint32_t joint = reply->axis;
+  size_t joint = reply->axis;
 
   *data->joint_pos_feedback[joint] =
           ((double)reply->abs_pos_acheived)
@@ -350,8 +339,8 @@ bool unpack_joint_movement(
 /* Process received update documenting current config settings. */
 bool unpack_joint_config(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
-    uint16_t* received_count,
+    size_t* rx_offset,
+    size_t* received_count,
     struct Message_joint_config* last_joint_config
 ) {
   void* data_p = unpack_nw_buff(
@@ -362,7 +351,7 @@ bool unpack_joint_config(
   }
 
   struct Reply_axis_config* reply = data_p;
-  uint32_t joint = reply->axis;
+  size_t joint = reply->axis;
 
   printf("INFO: Received confirmation of config received by RP for joint: %u\n", joint);
   printf("      enable:       %u\n", reply->enable);
@@ -384,8 +373,8 @@ bool unpack_joint_config(
 /* Process received update documenting current GPIO config settings. */
 bool unpack_gpio_config(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
-    uint16_t* received_count,
+    size_t* rx_offset,
+    size_t* received_count,
     struct Message_gpio_config* last_gpio_config
 ) {
   void* data_p = unpack_nw_buff(
@@ -396,7 +385,7 @@ bool unpack_gpio_config(
   }
 
   struct Reply_gpio_config* reply = data_p;
-  uint32_t gpio = reply->gpio_count;
+  size_t gpio = reply->gpio_count;
 
   printf("INFO: Received confirmation of config received by RP for gpio: %u\n", gpio);
   printf("      gpio_type:   %i\n", reply->gpio_type);
@@ -414,8 +403,8 @@ bool unpack_gpio_config(
 /* Process received update containing metrics data. */
 bool unpack_joint_metrics(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
-    uint16_t* received_count,
+    size_t* rx_offset,
+    size_t* received_count,
     skeleton_t* data
 ) {
   void* data_p = unpack_nw_buff(
@@ -441,8 +430,8 @@ bool unpack_joint_metrics(
 /* Process received update containing GPIO values. */
 bool unpack_gpio(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
-    uint16_t* received_count,
+    size_t* rx_offset,
+    size_t* received_count,
     skeleton_t* data
 ) {
   void* data_p = unpack_nw_buff(
@@ -453,12 +442,12 @@ bool unpack_gpio(
   }
 
   struct Reply_gpio* reply = data_p;
-  uint8_t bank = reply->bank;
+  size_t bank = reply->bank;
   uint32_t values = reply->values;
 
   data->gpio_confirmation_pending[bank] = reply->confirmation_pending;
 
-  for(uint8_t gpio_per_bank = 0; gpio_per_bank < 32; gpio_per_bank++) {
+  for(size_t gpio_per_bank = 0; gpio_per_bank < 32; gpio_per_bank++) {
     data->gpio_data_received[bank] = values;
   }
   (*received_count)++;
@@ -469,13 +458,13 @@ bool unpack_gpio(
 void process_data(
     struct NWBuffer* rx_buf,
     skeleton_t* data,
-    uint16_t* received_count,
-    uint16_t expected_length,
+    size_t* received_count,
+    size_t expected_length,
     struct Message_joint_config* last_joint_config,
     struct Message_gpio_config* last_gpio_config
 ) {
   // TODO: Pass in receive_count.
-  uint16_t rx_offset = 0;
+  size_t rx_offset = 0;
 
   if(rx_buf->length + sizeof(rx_buf->length) + sizeof(rx_buf->checksum) != expected_length) {
     printf("WARN: RX length not equal to expected. %u\n", *received_count);

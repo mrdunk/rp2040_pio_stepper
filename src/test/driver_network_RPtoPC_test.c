@@ -47,7 +47,7 @@ static void test_timing(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer buffer = {0};
-    uint16_t mess_received_count = 0;
+    size_t mess_received_count = 0;
 
     skeleton_t data;
     setup_data(&data);
@@ -82,7 +82,7 @@ static void test_axis_movement(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer buffer = {0};
-    uint16_t mess_received_count = 0;
+    size_t mess_received_count = 0;
 
     skeleton_t data;
     setup_data(&data);
@@ -118,7 +118,7 @@ static void test_axis_config(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer buffer = {0};
-    uint16_t mess_received_count = 0;
+    size_t mess_received_count = 0;
 
     skeleton_t data = {0};
     setup_data(&data);
@@ -161,7 +161,7 @@ static void test_axis_metrics(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer buffer = {0};
-    uint16_t mess_received_count = 0;
+    size_t mess_received_count = 0;
 
     skeleton_t data = {0};
     setup_data(&data);
@@ -172,7 +172,6 @@ static void test_axis_metrics(void **state) {
         .axis = axis,
         .velocity_requested = 3456,
         .step_len_ticks = 1357,
-        //.pos_error = 9135
     };
 
     memcpy(buffer.payload, &message, sizeof(message));
@@ -189,7 +188,6 @@ static void test_axis_metrics(void **state) {
 
     assert_int_equal(*(data.joint_step_len_ticks[axis]), message.step_len_ticks);
     assert_int_equal(*(data.joint_velocity_cmd[axis]), message.velocity_requested);
-    //assert_int_equal(*(data.joint_pos_error[axis]), message.pos_error);
 }
 
 

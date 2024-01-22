@@ -40,7 +40,12 @@ static void test_serialise_timing(void **state) {
         .rp_update_len = config.update_time_us
     };
 
-    assert_memory_equal(tx_buf.payload + initial_tx_buf_len, &reply, sizeof(reply));
+    struct Reply_timing* reply_p = (void*)tx_buf.payload + initial_tx_buf_len;
+    assert_int_equal(reply_p->type, reply.type);
+    assert_int_equal(reply_p->update_id, reply.update_id);
+    assert_int_equal(reply_p->time_diff, reply.time_diff);
+    assert_int_equal(reply_p->rp_update_len, reply.rp_update_len);
+
     assert_int_equal(tx_buf.length - initial_tx_buf_len, sizeof(reply));
     assert_int_equal(result, true);
     assert_int_not_equal(tx_buf.checksum, 0);
@@ -92,14 +97,15 @@ static void test_serialise_axis_movement(void **state) {
         .type = REPLY_AXIS_MOVEMENT,
         .axis = 0,
         .abs_pos_acheived = config.axis[0].abs_pos_acheived,
-        //.max_velocity = config.axis[0].max_velocity,
-        //.max_accel_ticks = config.axis[0].max_accel_ticks,
-        //.velocity_requested = config.axis[0].velocity_requested,
         .velocity_acheived = config.axis[0].velocity_acheived,
-        //.step_len_ticks = config.axis[0].step_len_ticks,
     };
 
-    assert_memory_equal(tx_buf.payload + initial_tx_buf_len, &reply, sizeof(reply));
+    struct Reply_axis_movement* reply_p = (void*)tx_buf.payload + initial_tx_buf_len;
+    assert_int_equal(reply_p->type, reply.type);
+    assert_int_equal(reply_p->axis, reply.axis);
+    assert_int_equal(reply_p->abs_pos_acheived, reply.abs_pos_acheived);
+    assert_int_equal(reply_p->velocity_acheived, reply.velocity_acheived);
+
     assert_int_equal(tx_buf.length - initial_tx_buf_len, sizeof(reply));
     assert_int_equal(axis_count, 1);
     assert_int_not_equal(tx_buf.checksum, 0);
@@ -127,11 +133,7 @@ static void test_serialise_axis_movement_multi(void **state) {
         replies[axis].type = REPLY_AXIS_MOVEMENT;
         replies[axis].axis = axis;
         replies[axis].abs_pos_acheived = config.axis[axis].abs_pos_acheived;
-        //replies[axis].max_velocity = config.axis[axis].max_velocity;
-        //replies[axis].max_accel_ticks = config.axis[axis].max_accel_ticks;
-        //replies[axis].velocity_requested = config.axis[axis].velocity_requested;
         replies[axis].velocity_acheived = config.axis[axis].velocity_acheived;
-        //replies[axis].step_len_ticks = config.axis[axis].step_len_ticks;
     }
 
     assert_int_equal(tx_buf.length, initial_tx_buf_len);
@@ -140,9 +142,13 @@ static void test_serialise_axis_movement_multi(void **state) {
     for(size_t axis = 0; axis < 4; axis++) {
         axis_count += serialise_axis_movement(axis, &tx_buf, true);
 
-        assert_memory_equal(
-                tx_buf.payload + initial_tx_buf_len + (axis * sizeof(replies[axis])),
-                &replies[axis], sizeof(replies[axis]));
+        struct Reply_axis_movement* reply_p = 
+            (void*)tx_buf.payload + initial_tx_buf_len + (axis * sizeof(replies[axis]));
+        assert_int_equal(reply_p->type, replies[axis].type);
+        assert_int_equal(reply_p->axis, replies[axis].axis);
+        assert_int_equal(reply_p->abs_pos_acheived, replies[axis].abs_pos_acheived);
+        assert_int_equal(reply_p->velocity_acheived, replies[axis].velocity_acheived);
+
         assert_int_equal(tx_buf.length, initial_tx_buf_len + ((axis + 1) * sizeof(replies[axis])));
         assert_int_equal(axis_count, axis + 1);
         assert_int_not_equal(tx_buf.checksum, 0);

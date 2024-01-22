@@ -22,7 +22,7 @@
 
 
 #define MSG_NONE                     0
-#define MSG_TIMING                   0x88888888  // Contains packet count and time sent.
+#define MSG_TIMING                   1  // Contains packet count and time sent.
 #define MSG_SET_AXIS_ENABLED         3  // Set absolute axis position.
 #define MSG_SET_AXIS_ABS_POS         4  // Set absolute axis position.
 #define MSG_SET_AXIS_VELOCITY        5  // Set relative axis position. (Velocity)
@@ -36,61 +36,56 @@
 
 
 struct Message_header {
-  uint32_t type;
+  uint8_t type;
 };
 
 struct Message_timing {
-  uint32_t type;
+  uint8_t type;
   uint32_t update_id;
   uint32_t time;
 };
 
 struct Message_set_max_velocity {
-  uint32_t type;
-  uint32_t axis;
+  uint8_t type;
+  uint8_t axis;
   double value;
 };
 
 struct Message_set_max_accel {
-  uint32_t type;
-  uint32_t axis;
+  uint8_t type;
+  uint8_t axis;
   double value;
 };
 
 struct Message_set_abs_pos {
-  uint32_t type;
-  uint32_t axis;
-  double value;
-};
-
-struct Message_set_velocity {
-  uint32_t type;
-  uint32_t axis;
-  double value;
+  uint8_t type;
+  uint8_t axis;
+  double position;
+  double velocity;
 };
 
 struct Message_joint_enable {
-  uint32_t type;
-  uint32_t axis;
+  uint8_t type;
+  uint8_t axis;
   uint8_t value;
 };
 
 struct Message_joint_gpio {
-  uint32_t type;
-  uint32_t axis;
-  int8_t value;
+  uint8_t type;
+  uint8_t axis;
+  int8_t value;  // Negative if disabled.
 };
 
 struct Message_gpio {
-  uint32_t type;                  // MSG_SET_GPIO
+  uint8_t type;                   // MSG_SET_GPIO
   uint8_t bank;                   // A bank of 32 IO pins.
   uint8_t confirmation_pending;   // If set the RP should always send a Reply_gpio in response.
   uint32_t values;                // Values to be sent to any of the IO pins that are outputs.
 };
 
 struct Message_joint_config {
-  uint32_t type;
-  uint32_t axis;
+  uint8_t type;
+  uint8_t axis;
   uint8_t enable;
   int8_t gpio_step;
   int8_t gpio_dir;
@@ -99,7 +94,7 @@ struct Message_joint_config {
 };
 
 struct Message_gpio_config {
-  uint32_t type;
+  uint8_t type;
   uint8_t gpio_type;
   uint8_t gpio_count;  // The HAL side index of which gpio this is. 
   uint8_t index;       // The RP side component index. IO pin number for RP native.
@@ -112,7 +107,6 @@ union MessageAny {
   struct Message_set_max_velocity set_max_velocity;
   struct Message_set_max_accel set_max_accel;
   struct Message_set_abs_pos set_abs_pos;
-  struct Message_set_velocity set_velocity;
   struct Message_joint_enable joint_enable;
   struct Message_joint_gpio joint_gpio;
   struct Message_gpio gpio;
@@ -130,26 +124,26 @@ union MessageAny {
 #define REPLY_GPIO_CONFIG            6
 
 struct Reply_header {
-  uint32_t type;
+  uint8_t type;
 };
 
 struct Reply_timing {
-  uint32_t type;
+  uint8_t type;
   uint32_t update_id;
   int32_t time_diff;
   uint32_t rp_update_len;
 };
 
 struct Reply_axis_movement {
-  uint32_t type;
-  uint32_t axis;
+  uint8_t type;
+  uint8_t axis;
   int32_t abs_pos_acheived;
   int32_t velocity_acheived;
 };
 
 struct Reply_axis_config {
-  uint32_t type;
-  uint32_t axis;
+  uint8_t type;
+  uint8_t axis;
   uint8_t enable;
   int8_t gpio_step;
   int8_t gpio_dir;
@@ -158,7 +152,7 @@ struct Reply_axis_config {
 };
 
 struct Reply_gpio_config {
-  uint32_t type;
+  uint8_t type;
   uint8_t gpio_type;
   uint8_t gpio_count;
   uint8_t index;
@@ -166,14 +160,14 @@ struct Reply_gpio_config {
 };
 
 struct Reply_axis_metrics {
-  uint32_t type;
-  uint32_t axis;
+  uint8_t type;
+  uint8_t axis;
   int32_t velocity_requested;
   int32_t step_len_ticks;
 };
 
 struct Reply_gpio {
-  uint32_t type;
+  uint8_t type;
   uint8_t bank;
   uint8_t confirmation_pending;
   uint32_t values;

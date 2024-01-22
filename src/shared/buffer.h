@@ -15,14 +15,14 @@ struct NWBuffer {
     uint8_t payload[NW_BUF_LEN];
 };
 
-uint16_t pack_nw_buff(struct NWBuffer* buffer, void* new_data, uint16_t new_data_len);
+uint16_t pack_nw_buff(struct NWBuffer* buffer, void* new_data, size_t new_data_len);
 
 void* unpack_nw_buff(
     struct NWBuffer* buffer,
-    uint16_t payload_offset,
-    uint16_t* new_payload_offset,
+    size_t payload_offset,
+    size_t* new_payload_offset,
     void* dest_container,
-    uint16_t dest_container_len
+    size_t dest_container_len
 );
 
 uint8_t checkNWBuff(struct NWBuffer* buffer);

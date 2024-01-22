@@ -240,8 +240,6 @@ uint8_t do_steps(const uint8_t axis, const uint32_t update_period_us) {
   velocity_acheived = abs_pos_acheived - last_pos[axis];
   int32_t velocity_requested = velocity;
 
-  // int32_t pos_error = abs_pos_requested - abs_pos_acheived;
-
   update_axis_config(
       axis,
       CORE1,
