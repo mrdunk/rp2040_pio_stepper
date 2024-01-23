@@ -404,7 +404,7 @@ void process_received_buffer(
     struct Message_header* header = unpack_nw_buff(
         rx_buf, rx_offset, NULL, NULL, sizeof(struct Message_header));
 
-    if(!header) {
+    if(!header || !header->type) {
       // End of data.
       break;
     }

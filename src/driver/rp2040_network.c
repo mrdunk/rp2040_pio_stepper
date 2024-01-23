@@ -486,7 +486,7 @@ void process_data(
     struct Reply_header* header = unpack_nw_buff(
         rx_buf, rx_offset, NULL, NULL, sizeof(struct Reply_header));
 
-    if(!header) {
+    if(!header || ! header->type) {
       // Legitimate end of data.
       break;
     }
@@ -517,7 +517,7 @@ void process_data(
             rx_buf, &rx_offset, received_count, data);
         break;
       default:
-        printf("WARN: Invalid message type: %u\t%lu\n", *received_count, header->type);
+        printf("WARN: Invalid message type: %u\t%lu\n", header->type, *received_count);
         // Implies data corruption.
         unpack_success = false;
         break;

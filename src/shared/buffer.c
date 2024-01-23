@@ -1,15 +1,17 @@
 #include "buffer.h"
 #include <stdio.h>
 
-uint16_t pack_nw_buff(struct NWBuffer* buffer, void* new_data, size_t new_data_len) {
+size_t pack_nw_buff(struct NWBuffer* buffer, void* new_data, size_t new_data_len) {
   if(buffer->length + new_data_len > NW_BUF_LEN) {
     // Buffer full.
     return 0;
   }
 
-  if(new_data) {
-    memcpy(buffer->payload + buffer->length, new_data, new_data_len);
+  if(! new_data) {
+    return 0;
   }
+
+  memcpy(buffer->payload + buffer->length, new_data, new_data_len);
 
   buffer->checksum = checksum(
       buffer->checksum, buffer->length, buffer->length + new_data_len, buffer->payload);
