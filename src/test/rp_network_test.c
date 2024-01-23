@@ -103,7 +103,7 @@ static void test_unpack_multiple_message_stop_at_length(void **state) {
     // Fix checksum after changing length.
     uint32_t cs = 0;
     rx_buf.checksum = checksum(
-            cs, &rx_buf.payload, sizeof(struct Message_joint_enable) * 3 -1);
+            cs, 0,sizeof(struct Message_joint_enable) * 3 -1, &rx_buf.payload);
 
     process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, expected_length);
 

@@ -449,7 +449,7 @@ bool configure_gpio(
         last_gpio_config[gpio].index != *data->gpio_index[gpio]
         ||
         last_gpio_config[gpio].address != *data->gpio_address[gpio]
-      ) {
+    ) {
       pack_success = pack_success && serialize_gpio_config(
           tx_buffer,
           gpio,
@@ -517,7 +517,7 @@ static void write_port(void *arg, long period)
       &buffer, count, last_joint_config, last_gpio_config, data);
 
   // Iterate through joints.
-  for(int joint = 0; joint < JOINTS; joint++) {
+  for(size_t joint = 0; joint < JOINTS; joint++) {
     // Put joint positions packet in buffer.
     double position = *data->joint_scale[joint] * *data->joint_pos_cmd[joint];
     double velocity = *data->joint_scale[joint] * *data->joint_vel_cmd[joint];
@@ -545,7 +545,7 @@ static void write_port(void *arg, long period)
   reset_nw_buf(&buffer);
   size_t data_length = get_reply_non_block(num_device, &buffer);
   if(data_length > 0) {
-    uint16_t mess_received_count = 0;
+    size_t mess_received_count = 0;
     process_data(
         &buffer, data, &mess_received_count, data_length, last_joint_config, last_gpio_config);
 

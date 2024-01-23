@@ -11,8 +11,9 @@ uint16_t pack_nw_buff(struct NWBuffer* buffer, void* new_data, size_t new_data_l
     memcpy(buffer->payload + buffer->length, new_data, new_data_len);
   }
 
+  buffer->checksum = checksum(
+      buffer->checksum, buffer->length, buffer->length + new_data_len, buffer->payload);
   buffer->length += new_data_len;
-  buffer->checksum = checksum(buffer->checksum, new_data, new_data_len);
 
   return new_data_len;
 }
@@ -52,9 +53,9 @@ void* unpack_nw_buff(
 }
 
 /* Calculate checksum and compare to the checksum stored in the NW data. */
-uint8_t checkNWBuff(struct NWBuffer* buffer) {
+size_t checkNWBuff(struct NWBuffer* buffer) {
   uint16_t cs = 0;
-  if(buffer->checksum != checksum(cs, buffer->payload, buffer->length)) {
+  if(buffer->checksum != checksum(cs, 0, buffer->length, buffer->payload)) {
     // Checksum failure.
     return 0;
   }

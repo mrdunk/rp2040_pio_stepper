@@ -468,17 +468,16 @@ void process_data(
 
   if(rx_buf->length + sizeof(rx_buf->length) + sizeof(rx_buf->checksum) != expected_length) {
     printf("WARN: RX length not equal to expected. %u\n", *received_count);
-    reset_nw_buf(rx_buf);
     return;
   }
   if(rx_buf->length > NW_BUF_LEN) {
     printf("WARN: RX length greater than buffer size. %u\n", *received_count);
-    reset_nw_buf(rx_buf);
     return;
   }
 
   if(!checkNWBuff(rx_buf)) {
     printf("WARN: RX checksum fail.\n");
+    return;
   }
 
   bool unpack_success = true;
@@ -488,7 +487,7 @@ void process_data(
         rx_buf, rx_offset, NULL, NULL, sizeof(struct Reply_header));
 
     if(!header) {
-      // End of data.
+      // Legitimate end of data.
       break;
     }
     switch(header->type) {

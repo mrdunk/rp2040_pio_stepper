@@ -7,6 +7,8 @@
 #include <stdio.h>
 
 #include "buffer.h"
+#include "messages.h"
+
 
 uint8_t mock_checksum = 0;
 uint16_t __real_checksum(uint16_t val_in, void* new_data, uint16_t new_data_len);
@@ -610,7 +612,7 @@ static void test_end_to_end(void **state) {
     };
     // Dirty the buffer before storing.
     for(uint16_t i = 0; i < sizeof(struct TestMessage); i++) {
-        buffer.payload[1] = i;
+        buffer.payload[i] = i;
     }
 
     mock_checksum = 1;
@@ -628,9 +630,147 @@ static void test_end_to_end(void **state) {
     assert_memory_equal(&test_message_send, &test_message_receive, sizeof(struct TestMessage));
     assert_memory_equal(&test_message_send, data_p, sizeof(struct TestMessage));
 
-    uint16_t cs_val_in = 0;
-    assert_int_equal(buffer.checksum, checksum(cs_val_in, buffer.payload, NW_BUF_LEN));
+    assert_int_equal(buffer.checksum, checksum(0, 0, NW_BUF_LEN, buffer.payload));
     mock_checksum = 0;
+}
+
+static void test_end_to_end_multi(void **state) {
+    (void) state; /* unused */
+
+    mock_checksum = 1;
+
+    struct Message_timing m0 = {
+      .type = MSG_TIMING,
+      .update_id = 1234,
+      .time = 5678
+    };
+
+    struct Message_gpio_config m1 = {
+      .type = MSG_SET_GPIO_CONFIG,
+      .gpio_type = GPIO_TYPE_NATIVE_IN,
+      .gpio_count = 0,
+      .index = 6,
+      .address = 0
+    };
+
+    struct Message_set_abs_pos m2 = {
+      .type = MSG_SET_AXIS_ABS_POS,
+      .axis = 0,
+      .position = 12.345,
+      .velocity = 678.901
+    };
+
+    struct NWBuffer buffer = {
+        .length = 0,
+        .checksum = 0,
+        .payload = {0}
+    };
+    // Dirty the buffer before storing.
+    for(size_t i = 0; i < sizeof(buffer.payload); i++) {
+        buffer.payload[i] = i;
+    }
+
+    struct Message_timing* m0_p;
+    struct Message_gpio_config* m1_p;
+    struct Message_set_abs_pos* m2_p;
+
+    
+    // Pack some things.
+    size_t expected_size = 0;
+    size_t buffered_size = 0;
+    size_t total_size = 0;
+
+    // Pack first thing, ( Message_timing)
+    buffered_size = pack_nw_buff(&buffer, &m0, sizeof(m0));
+    expected_size = sizeof(m0);
+    total_size += expected_size;
+    assert_int_equal(buffered_size, expected_size);
+    assert_int_equal(total_size, buffer.length);
+    // Check buffer has correct data.
+    m0_p = (void*)buffer.payload;
+    assert_int_equal(m0_p->type, m0.type);
+    assert_int_equal(m0_p->update_id, m0.update_id);
+    assert_int_equal(m0_p->time, m0.time);
+
+    // Pack next thing. (Message_gpio_config)
+    buffered_size = pack_nw_buff(&buffer, &m1, sizeof(m1));
+    expected_size = sizeof(m1);
+    total_size += expected_size;
+    assert_int_equal(buffered_size, expected_size);
+    assert_int_equal(total_size, buffer.length);
+    // Check buffer has correct data.
+    m1_p = (void*)buffer.payload + sizeof(m0);
+    assert_int_equal(m1_p->type, m1.type);
+    assert_int_equal(m1_p->gpio_type, m1.gpio_type);
+    assert_int_equal(m1_p->gpio_count, m1.gpio_count);
+    assert_int_equal(m1_p->index, m1.index);
+    assert_int_equal(m1_p->address, m1.address);
+
+    // Pack next thing. (Message_set_abs_pos)
+    buffered_size = pack_nw_buff(&buffer, &m2, sizeof(m2));
+    expected_size = sizeof(m2);
+    total_size += expected_size;
+    assert_int_equal(buffered_size, expected_size);
+    assert_int_equal(total_size, buffer.length);
+    // Check buffer has correct data.
+    m2_p = (void*)buffer.payload + sizeof(m0) + sizeof(m1);
+    assert_int_equal(m2_p->type, m2.type);
+    assert_int_equal(m2_p->axis, m2.axis);
+    assert_double_equal(m2_p->position, m2.position, 0.01);
+    assert_double_equal(m2_p->velocity, m2.velocity, 0.01);
+
+    // Pack next thing. (Message_set_abs_pos)
+    // Add this one twice.
+    buffered_size = pack_nw_buff(&buffer, &m2, sizeof(m2));
+    expected_size = sizeof(m2);
+    total_size += expected_size;
+    assert_int_equal(buffered_size, expected_size);
+    assert_int_equal(total_size, buffer.length);
+    // Check buffer has correct data.
+    m2_p = (void*)buffer.payload + sizeof(m0) + sizeof(m1) + sizeof(m2);
+    assert_int_equal(m2_p->type, m2.type);
+    assert_int_equal(m2_p->axis, m2.axis);
+    assert_double_equal(m2_p->position, m2.position, 0.01);
+    assert_double_equal(m2_p->velocity, m2.velocity, 0.01);
+
+    
+    // Checksum on buffer matches.
+    assert_int_equal(checkNWBuff(&buffer), 1);
+
+
+    // Unpack the things.
+    size_t offset = 0;
+    m0_p = unpack_nw_buff(&buffer, offset, &offset, NULL, sizeof(struct Message_timing));
+    assert_int_not_equal(m0_p, NULL);
+    assert_int_equal(m0.type, m0_p->type);
+    assert_int_equal(m0.update_id, m0_p->update_id);
+    assert_int_equal(m0.time, m0_p->time);
+    assert_int_equal(offset, sizeof(m0));
+
+    m1_p = unpack_nw_buff(&buffer, offset, &offset, NULL, sizeof(struct Message_gpio_config));
+    assert_int_not_equal(m1_p, NULL);
+    assert_int_equal(m1.type, m1_p->type);
+    assert_int_equal(m1.gpio_type, m1_p->gpio_type);
+    assert_int_equal(m1.gpio_count, m1_p->gpio_count);
+    assert_int_equal(m1.index, m1_p->index);
+    assert_int_equal(m1.address, m1_p->address);
+    assert_int_equal(offset, sizeof(m0) + sizeof(m1));
+
+    m2_p = unpack_nw_buff(&buffer, offset, &offset, NULL, sizeof(struct Message_set_abs_pos));
+    assert_int_not_equal(m2_p, NULL);
+    assert_int_equal(m2.type, m2_p->type);
+    assert_int_equal(m2.axis, m2_p->axis);
+    assert_double_equal(m2.position, m2_p->position, 0.01);
+    assert_double_equal(m2.velocity, m2_p->velocity, 0.01);
+    assert_int_equal(offset, sizeof(m0) + sizeof(m1) + sizeof(m2));
+
+    m2_p = unpack_nw_buff(&buffer, offset, &offset, NULL, sizeof(struct Message_set_abs_pos));
+    assert_int_not_equal(m2_p, NULL);
+    assert_int_equal(m2.type, m2_p->type);
+    assert_int_equal(m2.axis, m2_p->axis);
+    assert_double_equal(m2.position, m2_p->position, 0.01);
+    assert_double_equal(m2.velocity, m2_p->velocity, 0.01);
+    assert_int_equal(offset, sizeof(m0) + sizeof(m1) + sizeof(m2) + sizeof(m2));
 }
 
 int main(void) {
@@ -647,7 +787,8 @@ int main(void) {
         cmocka_unit_test(test_unpack_invalid_length),
         cmocka_unit_test(test_unpack_invalid_length_off_by_one),
         cmocka_unit_test(test_unpack_overflow),
-        cmocka_unit_test(test_end_to_end)
+        cmocka_unit_test(test_end_to_end),
+        cmocka_unit_test(test_end_to_end_multi)
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);

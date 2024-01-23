@@ -61,7 +61,7 @@ static void test_timing(void **state) {
 
     memcpy(buffer.payload, &message, sizeof(message));
     buffer.length = sizeof(message);
-
+    buffer.checksum = checksum(0, 0, buffer.length, buffer.payload);
 
     process_data(
             &buffer,
@@ -97,6 +97,7 @@ static void test_axis_movement(void **state) {
 
     memcpy(buffer.payload, &message, sizeof(message));
     buffer.length = sizeof(message);
+    buffer.checksum = checksum(0, 0, buffer.length, buffer.payload);
 
     process_data(
             &buffer,
@@ -140,6 +141,7 @@ static void test_axis_config(void **state) {
 
     memcpy(buffer.payload, &message, sizeof(message));
     buffer.length = sizeof(message);
+    buffer.checksum = checksum(0, 0, buffer.length, buffer.payload);
 
     process_data(
             &buffer,
@@ -176,6 +178,7 @@ static void test_axis_metrics(void **state) {
 
     memcpy(buffer.payload, &message, sizeof(message));
     buffer.length = sizeof(message);
+    buffer.checksum = checksum(0, 0, buffer.length, buffer.payload);
 
     process_data(
             &buffer,

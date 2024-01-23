@@ -3,10 +3,15 @@
 /* checksum(...) must go in it's own file rather than where it is called from  to
  * allow it to be mocked for the calling functions. */
 
-uint16_t checksum(uint16_t val_in, void* data, uint16_t data_len) {
-    for(size_t index = 0; index < (data_len / 2); index++) {
-        val_in += ((uint16_t*)data)[index];
+uint16_t checksum(uint16_t checksum_val, size_t pos_in, size_t pos_end, void* data) {
+    uint16_t mod;
+    for(size_t index = pos_in; index < pos_end; index++) {
+        mod = ((uint8_t*)data)[index];
+        if(index % 2) {
+           mod = mod << 8;
+        }
+        checksum_val += mod;
     }
-    return val_in;
-}
 
+    return checksum_val;
+}

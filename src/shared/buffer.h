@@ -25,11 +25,12 @@ void* unpack_nw_buff(
     size_t dest_container_len
 );
 
-uint8_t checkNWBuff(struct NWBuffer* buffer);
+size_t checkNWBuff(struct NWBuffer* buffer);
 
 void reset_nw_buf(struct NWBuffer* buffer);
 
-uint16_t checksum(uint16_t val_in, void* data, uint16_t data_len);
+//uint16_t checksum(uint16_t val_in, void* data, uint16_t data_len);
+uint16_t checksum(uint16_t val_in, size_t pos_in, size_t pos_end, void* data);
 
 
 #endif  // BUFFER__H

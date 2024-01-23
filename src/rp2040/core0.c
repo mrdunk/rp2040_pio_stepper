@@ -327,39 +327,40 @@ bool unpack_gpio_config(
   if(! data_p) {
     return false;
   }
+
   struct Message_gpio_config* message = data_p;
   uint8_t gpio_type = message->gpio_type;
   uint8_t gpio_count = message->gpio_count;
   uint8_t index = message->index;
   uint8_t address = message->address;
 
+  printf("%u Configuring gpio: %u\t%u\n", *received_count, gpio_type, gpio_count);
+
   config.gpio[gpio_count].type = gpio_type;
   config.gpio[gpio_count].index = index;
   config.gpio[gpio_count].address = address;
 
-  printf("%u Configuring gpio: %u\t%u\n", *received_count, gpio_type, gpio_count);
+  switch(gpio_type) {
+    case GPIO_TYPE_NATIVE_IN:
+    case GPIO_TYPE_NATIVE_IN_DEBUG:
+      ;
+      // Remember HAL's definition of IN and OUT are opposite of RPs.
+      printf("Setting RP native IO to RP OUT: %u\n", index);
+      gpio_init(index);
+      gpio_set_dir(index, GPIO_OUT);
+      break;
+    case GPIO_TYPE_NATIVE_OUT:
+    case GPIO_TYPE_NATIVE_OUT_DEBUG:
+      // Remember HAL's definition of IN and OUT are opposite of RPs.
+      printf("Setting RP native IO to RP IN: %u\n", index);
+      gpio_init(index);
+      gpio_set_dir(index, GPIO_IN);
+      gpio_pull_up(index);
+      break;
+    default:
+      break;
+  }
 
-    switch(gpio_type) {
-      case GPIO_TYPE_NATIVE_IN:
-      case GPIO_TYPE_NATIVE_IN_DEBUG:
-        ;
-        // Remember HAL's definition of IN and OUT are opposite of RPs.
-        printf("Setting RP native IO to RP OUT: %u\n", index);
-        gpio_init(index);
-        gpio_set_dir(index, GPIO_OUT);
-        break;
-      case GPIO_TYPE_NATIVE_OUT:
-      case GPIO_TYPE_NATIVE_OUT_DEBUG:
-        // Remember HAL's definition of IN and OUT are opposite of RPs.
-        printf("Setting RP native IO to RP IN: %u\n", index);
-        gpio_init(index);
-        gpio_set_dir(index, GPIO_IN);
-        gpio_pull_up(index);
-        break;
-      default:
-        break;
-    }
-  
   serialise_gpio_config(gpio_count, tx_buf);
 
   (*received_count)++;
@@ -390,6 +391,11 @@ void process_received_buffer(
 
   if(!checkNWBuff(rx_buf)) {
     printf("WARN: RX checksum fail.\n");
+
+    reset_nw_buf(rx_buf);
+    reset_nw_buf(tx_buf);
+    *received_count = 0;
+    return;
   }
 
   bool unpack_success = true;
@@ -449,7 +455,10 @@ void process_received_buffer(
         printf("WARN: Invalid message type: %u\t%lu\n", header->type, *received_count);
         // Implies data corruption.
         unpack_success = false;
-        break;
+        reset_nw_buf(rx_buf);
+        reset_nw_buf(tx_buf);
+        *received_count = 0;
+        return;
     }
   }
 
