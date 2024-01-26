@@ -15,7 +15,7 @@
 #else // BUILD_TESTS
 
 #define MAX_AXIS 4
-#define MAX_GPIO 32
+#define MAX_GPIO 64
 #define MAX_I2C_MCP 4
 
 #endif  // BUILD_TESTS
@@ -37,9 +37,6 @@
 
 struct Message_header {
   uint8_t type;
-  uint8_t pack0;
-  uint8_t pack1;
-  uint8_t pack2;
 };
 
 struct Message_timing {
@@ -71,14 +68,12 @@ struct Message_joint_enable {
   uint8_t type;
   uint8_t axis;
   uint8_t value;
-  uint8_t pack0;
 };
 
 struct Message_joint_gpio {
   uint8_t type;
   uint8_t axis;
   int8_t value;  // Negative if disabled.
-  uint8_t pack0;
 };
 
 struct Message_gpio {
@@ -104,9 +99,6 @@ struct Message_gpio_config {
   uint8_t gpio_count;  // The HAL side index of which gpio this is. 
   uint8_t index;       // The RP side component index. IO pin number for RP native.
   uint8_t address;     // The i2c address if applicable.
-  uint8_t pack0;
-  uint8_t pack1;
-  uint8_t pack2;
 };
 
 union MessageAny {

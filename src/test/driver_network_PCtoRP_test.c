@@ -27,7 +27,7 @@ static void test_serialize_timing(void **state) {
 
     size_t data_size = serialize_timing(&buffer, message.update_id, message.time);
 
-    assert_int_equal(data_size, sizeof(struct Message_timing));
+    assert_int_equal(data_size, alligned32(sizeof(struct Message_timing)));
     assert_int_equal(buffer.length, data_size);
     assert_int_not_equal(buffer.checksum, 0);
 
@@ -56,7 +56,7 @@ static void test_serialize_jont_pos(void **state) {
     size_t data_size = serialize_joint_pos(
             &buffer, message.axis, message.position, message.velocity);
 
-    assert_int_equal(data_size, sizeof(struct Message_set_abs_pos));
+    assert_int_equal(data_size, alligned32(sizeof(struct Message_set_abs_pos)));
     assert_int_equal(buffer.length, data_size);
     assert_int_not_equal(buffer.checksum, 0);
 
@@ -85,7 +85,7 @@ static void test_serialize_joint_io_step(void **state) {
 
     size_t data_size = serialize_joint_io_step(&buffer, message.axis, message.value);
 
-    assert_int_equal(data_size, sizeof(struct Message_joint_gpio));
+    assert_int_equal(data_size, alligned32(sizeof(struct Message_joint_gpio)));
     assert_int_equal(buffer.length, data_size);
     assert_int_not_equal(buffer.checksum, 0);
 
@@ -112,7 +112,7 @@ static void test_serialize_joint_io_dir(void **state) {
 
     size_t data_size = serialize_joint_io_dir(&buffer, message.axis, message.value);
 
-    assert_int_equal(data_size, sizeof(struct Message_joint_gpio));
+    assert_int_equal(data_size, alligned32(sizeof(struct Message_joint_gpio)));
     assert_int_equal(buffer.length, data_size);
     assert_int_not_equal(buffer.checksum, 0);
 
@@ -140,7 +140,7 @@ static void test_serialize_joint_enable(void **state) {
 
     size_t data_size = serialize_joint_enable(&buffer, message.axis, message.value);
 
-    assert_int_equal(data_size, sizeof(struct Message_joint_enable));
+    assert_int_equal(data_size, alligned32(sizeof(struct Message_joint_enable)));
     assert_int_equal(buffer.length, data_size);
     assert_int_not_equal(buffer.checksum, 0);
 
@@ -177,7 +177,7 @@ static void test_serialize_joint_config(void **state) {
             message.max_accel
             );
 
-    assert_int_equal(data_size, sizeof(struct Message_joint_config));
+    assert_int_equal(data_size, alligned32(sizeof(struct Message_joint_config)));
     assert_int_equal(buffer.length, data_size);
     assert_int_not_equal(buffer.checksum, 0);
 
