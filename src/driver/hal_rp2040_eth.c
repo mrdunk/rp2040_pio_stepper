@@ -641,14 +641,12 @@ static void write_port(void *arg, long period)
     pack_success = pack_success && serialize_joint_pos(&buffer, joint, position, velocity);
   }
 
-  //if (!has_configs) {
-  //  if (count % 100 == 0) {
-  //    pack_success = pack_success && serialise_spindle_config(&buffer, data->spindle_vfd_type, data->spindle_address, data->spindle_bitrate);
-  //  } else {
-  //    float speed = *data->spindle_speed_in / (120.0 / data->spindle_poles);
-  //    pack_success = pack_success && serialise_spindle_speed_in(&buffer, speed);
-  //  }
-  //}
+  for(size_t spindle = 0; spindle < MAX_SPINDLE; spindle++) {
+    if(data->spindle_vfd_type[spindle] != MODBUS_TYPE_NOT_SET) {
+      float speed = *data->spindle_speed_in[spindle] / (120.0 / data->spindle_poles[spindle]);
+      pack_success = pack_success && serialise_spindle_speed_in(&buffer, speed);
+    }
+  }
 
   if(pack_success) {
     if (send_data(num_device, &buffer) != 0) {

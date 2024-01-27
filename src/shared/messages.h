@@ -106,6 +106,7 @@ struct Message_spindle_config {
 
 struct Message_spindle_speed {
   uint8_t type;
+  uint8_t spindle_index;
   float speed;
 };
 

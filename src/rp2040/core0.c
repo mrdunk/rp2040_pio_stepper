@@ -196,7 +196,14 @@ bool unpack_spindle_speed(
   }
 
   struct Message_spindle_speed* message = data_p;
+  uint8_t spindle = message->spindle_index;
+  if(spindle > 0) {
+    printf("ERROR: More than one spindle not yet supported.\n");
+    return false;
+  }
+
   req_spindle_frequency = message->speed;
+
   (*received_count)++;
   return true;
 }

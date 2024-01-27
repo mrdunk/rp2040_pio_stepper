@@ -149,11 +149,13 @@ bool serialise_spindle_config(
 
 bool serialise_spindle_speed_in(
     struct NWBuffer* tx_buf,
+    uint8_t spindle,
     float speed
 )
 {
   struct Message_spindle_speed message;
   message.type = MSG_SET_SPINDLE_SPEED;
+  message.spindle_index = spindle;
   message.speed = speed;
 
   return pack_nw_buff(tx_buf, &message, sizeof(message));
