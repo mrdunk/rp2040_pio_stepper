@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 #include <netdb.h>
 #include <string.h>
@@ -126,6 +127,36 @@ size_t serialize_joint_pos(
   message.set_abs_pos.velocity = velocity;
 
   return pack_nw_buff(buffer, &message, sizeof(struct Message_set_abs_pos));
+}
+
+bool serialise_spindle_config(
+    struct NWBuffer* tx_buf,
+    uint8_t spindle,
+    uint8_t vfd_type,
+    uint8_t address,
+    uint16_t bitrate
+)
+{
+  struct Message_spindle_config message;
+  message.type = MSG_SET_SPINDLE_CONFIG;
+  message.spindle_index = spindle;
+  message.vfd_type = vfd_type;
+  message.modbus_address = address;
+  message.bitrate = bitrate;
+
+  return pack_nw_buff(tx_buf, &message, sizeof(message));
+}
+
+bool serialise_spindle_speed_in(
+    struct NWBuffer* tx_buf,
+    float speed
+)
+{
+  struct Message_spindle_speed message;
+  message.type = MSG_SET_SPINDLE_SPEED;
+  message.speed = speed;
+
+  return pack_nw_buff(tx_buf, &message, sizeof(message));
 }
 
 size_t serialize_joint_io_step(
@@ -427,6 +458,61 @@ bool unpack_joint_metrics(
   return true;
 }
 
+/* Process received update containing spindle data. */
+bool unpack_spindle_speed(
+    struct NWBuffer* rx_buf,
+    size_t* rx_offset,
+    size_t* received_count,
+    skeleton_t* data
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_spindle_speed));
+
+  if(! data_p) {
+    return false;
+  }
+
+  struct Reply_spindle_speed *reply = data_p;
+
+  float rpm = reply->speed * 120.0 / data->spindle_poles;
+  float expected_rpm = *data->spindle_speed_in;
+  *data->spindle_speed_out = rpm;
+  *data->spindle_at_speed = fabs(rpm - expected_rpm) < 10.0;
+
+  (*received_count)++;
+  return true;
+}
+
+/* Process received update documenting current spindle config settings. */
+bool unpack_spindle_config(
+    struct NWBuffer* rx_buf,
+    size_t* rx_offset,
+    size_t* received_count,
+    struct Message_spindle_config* last_spindle_config
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_spindle_config));
+
+  if(! data_p) {
+    return false;
+  }
+
+  struct Reply_spindle_config* reply = data_p;
+  size_t spindle_index = reply->spindle_index;
+
+  printf("INFO: Received confirmation of config received by RP for spindle: %u\n", spindle_index);
+  printf("      modbus_address   %i\n", reply->modbus_address);
+  printf("      vfd_type:        %i\n", reply->vfd_type);
+  printf("      bitrate:         %i\n", reply->bitrate);
+
+  last_spindle_config[spindle_index].modbus_address = reply->modbus_address;
+  last_spindle_config[spindle_index].vfd_type = reply->vfd_type;
+  last_spindle_config[spindle_index].bitrate = reply->bitrate;
+
+  (*received_count)++;
+  return true;
+}
+
 /* Process received update containing GPIO values. */
 bool unpack_gpio(
     struct NWBuffer* rx_buf,
@@ -461,7 +547,8 @@ void process_data(
     size_t* received_count,
     size_t expected_length,
     struct Message_joint_config* last_joint_config,
-    struct Message_gpio_config* last_gpio_config
+    struct Message_gpio_config* last_gpio_config,
+    struct Message_spindle_config* last_spindle_config
 ) {
   // TODO: Pass in receive_count.
   size_t rx_offset = 0;
@@ -511,6 +598,14 @@ void process_data(
       case REPLY_AXIS_METRICS:
         unpack_success = unpack_success && unpack_joint_metrics(
             rx_buf, &rx_offset, received_count, data);
+        break;
+      case REPLY_SPINDLE_SPEED:
+        unpack_success = unpack_success && unpack_spindle_speed(
+            rx_buf, &rx_offset, received_count, data);
+        break;
+      case REPLY_SPINDLE_CONFIG:
+        unpack_success = unpack_success && unpack_spindle_config(
+            rx_buf, &rx_offset, received_count, last_spindle_config);
         break;
       case REPLY_GPIO:
         unpack_success = unpack_success && unpack_gpio(

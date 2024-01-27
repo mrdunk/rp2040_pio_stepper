@@ -6,6 +6,7 @@
 #include "messages.h"
 #include "buffer.h"
 #include "gpio.h"
+#include "modbus.h"
 
 
 #ifdef BUILD_TESTS
@@ -20,6 +21,9 @@
 #include "network.h"
 
 #endif  // BUILD_TESTS
+
+float req_spindle_frequency = 0;
+float act_spindle_frequency = -1000000;
 
 /* Called after receiving network packet.
  * Takes the average time delay over the previous 1000 packet receive events and
@@ -145,6 +149,54 @@ bool unpack_joint_abs_pos(
       joint, CORE0,
       NULL, NULL, NULL, &vel_reques, &abs_pos, NULL, NULL, NULL, NULL, NULL, NULL);
 
+  (*received_count)++;
+  return true;
+}
+
+bool unpack_spindle_config(
+    struct NWBuffer* rx_buf,
+    size_t* rx_offset,
+    struct NWBuffer* tx_buf,
+    size_t* received_count
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_spindle_config));
+
+  if(! data_p) {
+    return false;
+  }
+
+  struct Message_spindle_config* message = data_p;
+  uint8_t spindle = message->spindle_index;
+  if(spindle > 0) {
+    printf("ERROR: More than one spindle not yet supported.\n");
+    return false;
+  }
+  vfd_config.address = message->modbus_address;
+  vfd_config.bitrate = message->bitrate;
+  vfd_config.type = message->vfd_type;
+
+
+  serialise_spindle_config(spindle, tx_buf);
+
+  (*received_count)++;
+  return true;
+}
+
+bool unpack_spindle_speed(
+    struct NWBuffer* rx_buf,
+    size_t* rx_offset,
+    size_t* received_count
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_spindle_speed));
+
+  if(! data_p) {
+    return false;
+  }
+
+  struct Message_spindle_speed* message = data_p;
+  req_spindle_frequency = message->speed;
   (*received_count)++;
   return true;
 }
@@ -443,6 +495,13 @@ void process_received_buffer(
         unpack_success = unpack_success && unpack_joint_config(
             rx_buf, &rx_offset, tx_buf, received_count);
         break;
+      case MSG_SET_SPINDLE_CONFIG:
+        unpack_success = unpack_success && unpack_spindle_config(
+            rx_buf, &rx_offset, tx_buf, received_count);
+        break;
+      case MSG_SET_SPINDLE_SPEED:
+        unpack_success = unpack_success && unpack_spindle_speed(
+            rx_buf, &rx_offset, received_count);
       case MSG_SET_GPIO:
         unpack_success = unpack_success && unpack_gpio(
             rx_buf, &rx_offset, received_count);
@@ -488,6 +547,9 @@ void core0_main() {
   uint8_t  destip_machine[4] = {0, 0, 0, 0};
   uint16_t destport_machine = 0;
 
+  modbus_init();
+
+  int count = 0;
   while (1) {
     data_received = 0;
 
@@ -520,6 +582,8 @@ void core0_main() {
         serialise_axis_movement(axis, &tx_buf, true);
         serialise_axis_metrics(axis, &tx_buf);
       }
+      serialise_spindle_speed_out(&tx_buf, act_spindle_frequency, &vfd.stats);
+      count++;
 
       size_t tx_buf_len = 0;
       gpio_serialize(&tx_buf, &tx_buf_len);
@@ -531,6 +595,7 @@ void core0_main() {
           tx_buf.length + sizeof(tx_buf.length) + sizeof(tx_buf.checksum),
           destip_machine,
           &destport_machine);
+      act_spindle_frequency = modbus_loop(req_spindle_frequency);
     }
     reset_nw_buf(&tx_buf);
   }

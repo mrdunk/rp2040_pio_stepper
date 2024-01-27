@@ -53,6 +53,17 @@ typedef struct {
 
   uint32_t gpio_data_received[MAX_GPIO / 32];
   bool gpio_confirmation_pending[MAX_GPIO / 32];
+
+  hal_bit_t* spindle_fwd[MAX_SPINDLE];
+  hal_bit_t* spindle_rev[MAX_SPINDLE];
+  hal_float_t* spindle_speed_out[MAX_SPINDLE];
+  hal_float_t* spindle_speed_in[MAX_SPINDLE];
+  hal_bit_t* spindle_at_speed[MAX_SPINDLE];
+
+  hal_u32_t spindle_vfd_type[MAX_SPINDLE];
+  hal_u32_t spindle_address[MAX_SPINDLE];
+  hal_float_t spindle_poles[MAX_SPINDLE];
+  hal_u32_t spindle_bitrate[MAX_SPINDLE];
 } skeleton_t;
 
 
@@ -80,11 +91,14 @@ void on_eth_down(
     skeleton_t *data,
     struct Message_joint_config* last_joint_config,
     struct Message_gpio_config* last_gpio_config,
+    struct Message_spindle_config* last_spindle_config
     uint count);
 void reset_rp_config(
     skeleton_t *data,
     struct Message_joint_config* last_joint_config,
-    struct Message_gpio_config* last_gpio_config);
+    struct Message_gpio_config* last_gpio_config,
+    struct Message_spindle_config* last_spindle_config
+    );
 
 /***********************************************************************
  *                       INIT AND EXIT CODE                             *
@@ -307,6 +321,67 @@ int rtapi_app_main(void)
     }
   }
 
+  /* Export spindle pins, */
+  for(uint8_t num_spindle = 0; num_spindle < MAX_SPINDLE; num_spindle++) {
+    retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->spindle_fwd[num_spindle]),
+        component_id, "rp2040_eth.%d.spindle-fwd-%d", num_device, num_spindle);
+    if (retval < 0) {
+      goto port_error;
+    }
+
+    retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->spindle_rev[num_spindle]),
+        component_id, "rp2040_eth.%d.spindle-rev-%d", num_device, num_spindle);
+    if (retval < 0) {
+      goto port_error;
+    }
+
+    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->spindle_speed_in[num_spindle]),
+        component_id, "rp2040_eth.%d.spindle-speed-in-%d", num_device, num_spindle);
+    if (retval < 0) {
+      goto port_error;
+    }
+
+    retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->spindle_speed_out[num_spindle]),
+        component_id, "rp2040_eth.%d.spindle-speed-out-%d", num_device, num_spindle);
+    if (retval < 0) {
+      goto port_error;
+    }
+
+    retval = hal_pin_bit_newf(HAL_OUT, &(port_data_array->spindle_at_speed[num_spindle]),
+        component_id, "rp2040_eth.%d.spindle-at-speed-%d", num_device, num_spindle);
+    if (retval < 0) {
+      goto port_error;
+    }
+
+    retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_vfd_type[num_spindle]),
+        component_id, "rp2040_eth.%d.spindle-vfd-type-%d", num_device, num_spindle);
+    if (retval < 0) {
+      goto port_error;
+    }
+    port_data_array->spindle_vfd_type = 2;
+
+    retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_address[num_spindle]),
+        component_id, "rp2040_eth.%d.spindle-address-%d", num_device, num_spindle);
+    if (retval < 0) {
+      goto port_error;
+    }
+    port_data_array->spindle_address = 1;
+
+    retval = hal_param_float_newf(HAL_RW, &(port_data_array->spindle_poles[num_spindle]),
+        component_id, "rp2040_eth.%d.spindle-poles-%d", num_device, num_spindle);
+    if (retval < 0) {
+      goto port_error;
+    }
+    port_data_array->spindle_poles = 2;
+
+    retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_bitrate[num_spindle]),
+        component_id, "rp2040_eth.%d.spindle-bitrate-%d", num_device, num_spindle);
+    if (retval < 0) {
+      goto port_error;
+    }
+    port_data_array->spindle_bitrate = 9600;
+  }
+
   /* Export metrics pins, */
   retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->metric_update_id),
       component_id, "rp2040_eth.%d.metrics-update-id", num_device);
@@ -385,6 +460,13 @@ int rtapi_app_main(void)
       "SKELETON: installed driver.\n");
   hal_ready(component_id);
   return 0;
+
+port_error:
+    rtapi_print_msg(RTAPI_MSG_ERR,
+        "SKELETON: ERROR: port %d var export failed with err=%i\n",
+        num_device, retval);
+    hal_exit(component_id);
+    return -1;
 }
 
 void rtapi_app_exit(void)
@@ -461,6 +543,36 @@ bool configure_gpio(
     return pack_success;
 }
 
+bool configure_spindle(
+    struct NWBuffer* tx_buffer,
+    uint8_t spindle,
+    struct Message_spindle_config* last_spindle_config,
+    skeleton_t *data
+) {
+    if(spindle > 0 && *data->spindle_vfd_type[spindle] > 0) {
+      printf("ERROR: More than one spindle not yet implemented.\n");
+      return false;
+    }
+
+    bool pack_success = true;
+    if(
+        last_spindle_config[spindle].spindle_vfd_type != *data->spindle_vfd_type[spindle]
+        ||
+        last_spindle_config[spindle].spindle_address != *data->spindle_address[spindle]
+        ||
+        last_spindle_config[spindle].spindle_bitrate != *data->spindle_bitrate[spindle]
+    ) {
+      pack_success = pack_success && serialise_spindle_config(
+          tx_buffer,
+          spindle,
+          data->spindle_vfd_type,
+          data->spindle_address,
+          data->spindle_bitrate
+      );
+    }
+    return pack_success;
+}
+
 /* Only try to configure one parameter per 1ms cycle since they change infrequently
  * and don't need low latency when they do. */
 bool configure(
@@ -468,17 +580,21 @@ bool configure(
     size_t count,
     struct Message_joint_config* last_joint_config,
     struct Message_gpio_config* last_gpio_config,
+    struct Message_spindle_config* last_spindle_config,
     skeleton_t *data
 ) {
-  size_t total_things = JOINTS + MAX_GPIO;
+  size_t total_things = JOINTS + MAX_GPIO + MAX_SPINDLE;
+  size_t joint_or_gpio_or_spindle = count % total_things;
 
-  size_t joint_or_gpio = count % total_things;
-  if(joint_or_gpio < JOINTS) {
-    uint8_t joint = joint_or_gpio;
+  if(joint_or_gpio_or_spindle < JOINTS) {
+    uint8_t joint = joint_or_gpio_or_spindle;
     return configure_joint(tx_buffer, joint, last_joint_config, data);
-  } else if(joint_or_gpio < total_things) {
-    uint8_t gpio = joint_or_gpio - JOINTS;
+  } else if(joint_or_gpio_or_spindle < JOINTS + MAX_GPIO) {
+    uint8_t gpio = joint_or_gpio_or_spindle - JOINTS;
     return configure_gpio(tx_buffer, gpio, last_gpio_config, data);
+  } else if(joint_or_gpio_or_spindle < JOINTS + MAX_GPIO + MAX_SPINDLE) {
+    uint8_t spindle = joint_or_gpio_or_spindle - JOINTS - MAX_GPIO;
+    return configure_spindle(tx_buffer, spindle, last_gpio_config, data);
   }
   return true;
 }
@@ -490,6 +606,7 @@ static void write_port(void *arg, long period)
   static size_t count = 0;
   static struct Message_joint_config last_joint_config[JOINTS] = {0};
   static struct Message_gpio_config last_gpio_config[MAX_GPIO] = {0};
+  static struct Message_spindle_config last_spindle_config[MAX_SPINDLE] = {0};
   static uint32_t last_update_id = 0;
   static int last_errno = 0;
   static int cooloff = 0;
@@ -514,7 +631,7 @@ static void write_port(void *arg, long period)
 
   // Send configuration data to RP.
   pack_success = pack_success && configure(
-      &buffer, count, last_joint_config, last_gpio_config, data);
+      &buffer, count, last_joint_config, last_gpio_config, last_spindle_config, data);
 
   // Iterate through joints.
   for(size_t joint = 0; joint < JOINTS; joint++) {
@@ -524,7 +641,15 @@ static void write_port(void *arg, long period)
     pack_success = pack_success && serialize_joint_pos(&buffer, joint, position, velocity);
   }
 
-  // Send the tx_data if valid.
+  //if (!has_configs) {
+  //  if (count % 100 == 0) {
+  //    pack_success = pack_success && serialise_spindle_config(&buffer, data->spindle_vfd_type, data->spindle_address, data->spindle_bitrate);
+  //  } else {
+  //    float speed = *data->spindle_speed_in / (120.0 / data->spindle_poles);
+  //    pack_success = pack_success && serialise_spindle_speed_in(&buffer, speed);
+  //  }
+  //}
+
   if(pack_success) {
     if (send_data(num_device, &buffer) != 0) {
       cooloff = 2000;
@@ -547,7 +672,14 @@ static void write_port(void *arg, long period)
   if(data_length > 0) {
     size_t mess_received_count = 0;
     process_data(
-        &buffer, data, &mess_received_count, data_length, last_joint_config, last_gpio_config);
+        &buffer,
+        data,
+        &mess_received_count,
+        data_length,
+        last_joint_config,
+        last_gpio_config,
+        last_spindle_config
+    );
 
     if(! *data->metric_eth_state) {
       // Network connection just came up after being down.
@@ -567,7 +699,7 @@ static void write_port(void *arg, long period)
     }
     if(*data->metric_eth_state) {
       // Network connection just went down after being up.
-      on_eth_down(data, last_joint_config, last_gpio_config, count);
+      on_eth_down(data, last_joint_config, last_gpio_config, last_spindle_config, count);
     }
     (*data->metric_missed_packets)++;
     if (*data->metric_missed_packets == 5000 || !(*data->metric_missed_packets % 10000)) {
@@ -589,6 +721,7 @@ void on_eth_down(
     skeleton_t *data,
     struct Message_joint_config* last_joint_config,
     struct Message_gpio_config* last_gpio_config,
+    struct Message_spindle_config* last_spindle_config,
     uint count) {
   if(*data->metric_missed_packets < MAX_SKIPPED_PACKETS) {
     return;
@@ -598,14 +731,15 @@ void on_eth_down(
   *data->metric_eth_state = false;
 
   // Force reconfiguration when network comes back up.
-  reset_rp_config(data, last_joint_config, last_gpio_config);
+  reset_rp_config(data, last_joint_config, last_gpio_config, last_spindle_config);
 }
 
 /* Reset HAL's opinion of the RP config. This will force an update. */
 void reset_rp_config(
     skeleton_t *data,
     struct Message_joint_config* last_joint_config,
-    struct Message_gpio_config* last_gpio_config
+    struct Message_gpio_config* last_gpio_config,
+    struct Message_spindle_config* last_spindle_config
 ) {
   for(size_t joint = 0; joint < JOINTS; joint++) {
     *data->joint_enable[joint] = false;
@@ -615,6 +749,10 @@ void reset_rp_config(
 
   for(size_t gpio = 0; gpio < MAX_GPIO; gpio++) {
     last_gpio_config[gpio].gpio_type = GPIO_TYPE_NOT_SET;
+  }
+
+  for(size_t spindle = 0; spindle < MAX_SPINDLE; spindle++) {
+    last_spindle_config[spindle].spindle_type = SPINDLE_TYPE_NOT_SET;
   }
 }
 

@@ -102,6 +102,12 @@ net metrics-rp-update-len   rp2040_eth.0.metrics-rp-update-len
 net metrics-missed-packets  rp2040_eth.0.metrics-missed-packets
 net metrics-eth-state       rp2040_eth.0.metrics-eth-state
 
+net spindle-fwd spindle.0.forward => rp2040_eth.0.spindle-fwd-0
+net spindle-rev spindle.0.reverse => rp2040_eth.0.spindle-rev-0
+net spindle-speed-out spindle.0.speed-out => rp2040_eth.0.spindle-speed-in-0
+net spindle-speed-in spindle.0.speed-in <= rp2040_eth.0.spindle-speed-out-0
+net spindle-at-speed spindle.0.at-speed <= rp2040_eth.0.spindle-at-speed-0
+
 # GPIO
 setp rp2040_eth.0.gpio-0-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_IN_DEBUG
 setp rp2040_eth.0.gpio-0-index     6
@@ -116,4 +122,11 @@ setp rp2040_eth.0.gpio-2-index     8
 
 setp rp2040_eth.0.gpio-3-type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_OUT_DEBUG
 setp rp2040_eth.0.gpio-3-index     9
+
+# Modbus
+setp rp2040_eth.0.spindle-address-0 1
+setp rp2040_eth.0.spindle-poles-0 4
+setp rp2040_eth.0.spindle-bitrate-0 9600
+# 0 = Not enabled, 1 = Huanyang, 2 = Fuling
+setp rp2040_eth.0.spindle-vfd-type-0 1
 

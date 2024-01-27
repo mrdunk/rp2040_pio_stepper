@@ -7,6 +7,7 @@
 #include <stdbool.h>
 
 #include "messages.h"
+#include "modbus.h"
 #include "buffer.h"
 #include "stepper_control.h"
 #include "ring_buffer.h"
@@ -131,5 +132,9 @@ bool serialise_axis_config(
 
 /* Serialise data stored in global config in a format for sending over UDP. */
 bool serialise_axis_metrics(const uint32_t axis, struct NWBuffer* tx_buf);
+
+bool serialise_spindle_speed_out(struct NWBuffer* tx_buf, float speed, struct vfd_stats *vfd_stats);
+
+bool serialise_spindle_config(size_t spindle, struct NWBuffer* tx_buf);
 
 #endif  // CONFIG__H

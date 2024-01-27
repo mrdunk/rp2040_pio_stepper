@@ -410,6 +410,52 @@ bool serialise_axis_movement(
   return true;
 }
 
+bool serialise_spindle_speed_out(struct NWBuffer* tx_buf, float speed, struct vfd_stats *vfd_stats)
+{
+  struct Reply_spindle_speed reply;
+  reply.type = REPLY_SPINDLE_SPEED;
+  reply.speed = speed;
+  reply.crc_errors = vfd_stats->crc_errors;
+  reply.unanswered = vfd_stats->unanswered;
+  reply.unknown = vfd_stats->unknown;
+  reply.got_status = vfd_stats->got_status;
+  reply.got_set_frequency = vfd_stats->got_set_frequency;
+  reply.got_act_frequency = vfd_stats->got_act_frequency;
+
+  uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
+
+  if(!tx_buf_len) {
+    //printf("WARN: TX length greater than buffer size. %u\n", update_id);
+    return false;
+  }
+
+  return true;
+}
+
+/* Serialise data stored in vfd_config in a format for sending over UDP. */
+bool serialise_spindle_config(size_t spindle, struct NWBuffer* tx_buf) {
+  if(spindle > MAX_SPINDLE) {
+    printf("ERROR: Invalid spindle: %u\n", spindle);
+    return false;
+  }
+
+  struct Reply_spindle_config reply;
+  reply.type = REPLY_SPINDLE_CONFIG;
+  reply.spindle_index = spindle;
+  reply.modbus_address = vfd_config.address;
+  reply.bitrate = vfd_config.bitrate;
+  reply.vfd_type = vfd_config.type;
+
+  uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
+
+  if(!tx_buf_len) {
+    printf("WARN: TX length greater than buffer size.\n");
+    return false;
+  }
+
+  return true;
+}
+
 /* Serialise data stored in global config in a format for sending over UDP. */
 bool serialise_axis_config(const uint32_t axis, struct NWBuffer* tx_buf) {
   if(axis >= MAX_AXIS) {

@@ -10,12 +10,14 @@
 
 #define MAX_AXIS 4
 #define MAX_GPIO 64
+#define MAX_SPINDLE 4
 #define MAX_I2C_MCP 4
 
 #else // BUILD_TESTS
 
 #define MAX_AXIS 4
 #define MAX_GPIO 64
+#define MAX_SPINDLE 4
 #define MAX_I2C_MCP 4
 
 #endif  // BUILD_TESTS
@@ -33,7 +35,8 @@
 #define MSG_SET_AXIS_CONFIG          10 // Set all config for a joint.
 #define MSG_SET_GPIO                 11 // Set values for a bank (32) of GPIO.
 #define MSG_SET_GPIO_CONFIG          12 // Set config for a single GPIO.
-
+#define MSG_SET_SPINDLE_CONFIG       13 // Set spindle configuration
+#define MSG_SET_SPINDLE_SPEED        14 // Set spindle speed
 
 struct Message_header {
   uint8_t type;
@@ -93,6 +96,19 @@ struct Message_joint_config {
   double max_accel;
 };
 
+struct Message_spindle_config {
+  uint8_t type;
+  uint8_t spindle_index;
+  uint8_t modbus_address;
+  uint8_t vfd_type;
+  uint16_t bitrate;
+};
+
+struct Message_spindle_speed {
+  uint8_t type;
+  float speed;
+};
+
 struct Message_gpio_config {
   uint8_t type;
   uint8_t gpio_type;
@@ -111,6 +127,8 @@ union MessageAny {
   struct Message_joint_gpio joint_gpio;
   struct Message_gpio gpio;
   struct Message_joint_config joint_config;
+  struct Message_spindle_config spindle_config;
+  struct Message_spindle_speed spindle_speed;
   struct Message_gpio_config gpio_config;
 };
 
@@ -122,6 +140,8 @@ union MessageAny {
 #define REPLY_AXIS_METRICS           4
 #define REPLY_GPIO                   5
 #define REPLY_GPIO_CONFIG            6
+#define REPLY_SPINDLE_SPEED          7
+#define REPLY_SPINDLE_CONFIG         8
 
 struct Reply_header {
   uint8_t type;
@@ -173,6 +193,25 @@ struct Reply_gpio {
   uint32_t values;
 };
 
+struct Reply_spindle_speed {
+  uint8_t type;
+  double speed;
+  uint16_t crc_errors;
+  uint16_t unanswered;
+  uint16_t unknown;
+  uint16_t got_status:1;
+  uint16_t got_set_frequency:1;
+  uint16_t got_act_frequency:1;
+};
+
+struct Reply_spindle_config {
+  uint8_t type;
+  uint8_t spindle_index;
+  uint8_t modbus_address;
+  uint8_t vfd_type;
+  uint16_t bitrate;
+};
+
 union ReplyAny {
   struct Reply_header header;
   struct Reply_timing timing;
@@ -180,6 +219,7 @@ union ReplyAny {
   struct Reply_axis_config joint_config;
   struct Reply_gpio_config gpio_config;
   struct Reply_axis_metrics joint_metrics;
+  struct Reply_spindle_speed spindle_speed;
 };
 
 #define GPIO_TYPE_NOT_SET            0

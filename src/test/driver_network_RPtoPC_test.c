@@ -69,6 +69,7 @@ static void test_timing(void **state) {
             &mess_received_count,
             sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum),
             NULL,
+            NULL,
             NULL
             );
 
@@ -104,6 +105,7 @@ static void test_axis_movement(void **state) {
             &data,
             &mess_received_count,
             sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum),
+            NULL,
             NULL,
             NULL
             );
@@ -149,6 +151,7 @@ static void test_axis_config(void **state) {
             &mess_received_count,
             sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum),
             &last_joint_config,
+            NULL,
             NULL
             );
 
@@ -185,6 +188,7 @@ static void test_axis_metrics(void **state) {
             &data,
             &mess_received_count,
             sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum),
+            NULL,
             NULL,
             NULL
             );

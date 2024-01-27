@@ -36,6 +36,9 @@ target_link_libraries(
 add_executable(
   rpNetworkTest
     ${CMAKE_CURRENT_SOURCE_DIR}/rp_network_test.c
+    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_fuling.c
+    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_huanyang.c
+    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
@@ -59,6 +62,9 @@ add_test(
 add_executable(
   rpNetworkTxTest
     ${CMAKE_CURRENT_SOURCE_DIR}/rp_network_tx_test.c
+    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_fuling.c
+    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_huanyang.c
+    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
@@ -83,6 +89,9 @@ add_executable(
   rpGpioTest
     ${CMAKE_CURRENT_SOURCE_DIR}/rp_gpio_test.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
+    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_fuling.c
+    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_huanyang.c
+    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
     ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
