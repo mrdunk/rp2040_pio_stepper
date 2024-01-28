@@ -64,7 +64,7 @@ void recover_clock() {
   int32_t time_diff = (int32_t)time_offset - (int32_t)ave_time_offset_us;
 
   // Do the busy-wait to synchronise timing.
-  restart_at = time_now + 150 - time_diff;
+  restart_at = time_now + 200 - time_diff;
   while(restart_at > time_now) {
     time_now = time_us_64();
     tight_loop_contents();
@@ -593,13 +593,17 @@ void core0_main() {
         serialise_axis_movement(axis, &tx_buf, true);
         serialise_axis_metrics(axis, &tx_buf);
       }
-      for(size_t spindle = 0; spindle < MAX_SPINDLE; spindle++) {
+
+      // No need to update each spindle every cycle.
+      if(count % 100 < MAX_SPINDLE) {
+        size_t spindle = count % 100;
         serialise_spindle_speed_out(spindle, &tx_buf, act_spindle_frequency, &vfd.stats);
       }
-      count++;
 
       size_t tx_buf_len = 0;
       gpio_serialize(&tx_buf, &tx_buf_len);
+
+      count++;
 
       put_UDP(
           SOCKET_NUMBER,

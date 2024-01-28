@@ -660,7 +660,9 @@ static void write_port(void *arg, long period)
     pack_success = pack_success && serialize_joint_pos(&buffer, joint, position, velocity);
   }
 
-  for(size_t spindle = 0; spindle < MAX_SPINDLE; spindle++) {
+  // No need to update each spindle every cycle.
+  if(count % 100 < MAX_SPINDLE) {
+    size_t spindle = count % 100;
     if(data->spindle_vfd_type[spindle] != MODBUS_TYPE_NOT_SET) {
       float speed = *data->spindle_speed_in[spindle] / (120.0 / data->spindle_poles[spindle]);
       pack_success = pack_success && serialise_spindle_speed_in(&buffer, spindle, speed);
