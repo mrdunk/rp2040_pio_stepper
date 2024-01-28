@@ -106,6 +106,8 @@ float modbus_loop_fuling(float frequency)
 {
   if (!modbus_check_config())
     return MODBUS_RESULT_NOT_CONFIGURED;
+  int refresh_delay = 1000; // delay between polls for the same value
+  int freshness_limit = 10000; // No updates after this time means that the data are stale
   vfd.cycle++;
   vfd.command_run = frequency != 0;
   vfd.command_reverse = frequency < 0;
@@ -120,8 +122,6 @@ float modbus_loop_fuling(float frequency)
   }
   
   modbus_fuling_receive();
-  int refresh_delay = 1000; // delay between polls for the same value
-  int freshness_limit = 10000; // No updates after this time means that the data are stale
   if (vfd.cycle - vfd.last_status_update > refresh_delay) {
     modbus_read_holding_registers(vfd_config.address, FULING_DZB_CMD_STATE, 1);
     modbus_transmit();

@@ -13,8 +13,6 @@
 #define WEIKEN_CMD_STATE 0x7008
 #define WEIKEN_CMD_STATE_RUN_FWD 1
 #define WEIKEN_CMD_STATE_RUN_REV 2
-#define WEIKEN_CMD_STATE_RUN_STANDBY 3
-#define WEIKEN_CMD_STATE_RUN_FAULT 4
 
 // Technically, this is the 'communication setting', and the range is -10000 to 10000 (corresponding to -100%..100% of the maximum frequency)
 #define WEIKEN_CMD_SPEED 0x1000
@@ -95,6 +93,8 @@ float modbus_loop_weiken(float frequency)
 {
   if (!modbus_check_config())
     return MODBUS_RESULT_NOT_CONFIGURED;
+  int refresh_delay = 1000; // delay between polls for the same value
+  int freshness_limit = 10000; // No updates after this time means that the data are stale
   vfd.cycle++;
   vfd.command_run = frequency != 0;
   vfd.command_reverse = frequency < 0;
@@ -109,8 +109,6 @@ float modbus_loop_weiken(float frequency)
   }
   
   modbus_weiken_receive();
-  int refresh_delay = 1000; // delay between polls for the same value
-  int freshness_limit = 10000; // No updates after this time means that the data are stale
   if (vfd.cycle - vfd.last_status_update > refresh_delay) {
     if (!vfd.command_run) {
       modbus_write_holding_register(vfd_config.address, WEIKEN_CMD_CONTROL, WEIKEN_CMD_CONTROL_STOP);
