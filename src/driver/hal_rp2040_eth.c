@@ -8,7 +8,9 @@
 #include <limits.h>
 
 #include "rp2040_defines.h"
+#include "rp2040_defines.h"
 #include "../shared/messages.h"
+#include "../rp2040/modbus.h"
 
 /* module information */
 MODULE_AUTHOR("Duncan Law");
@@ -91,7 +93,7 @@ void on_eth_down(
     skeleton_t *data,
     struct Message_joint_config* last_joint_config,
     struct Message_gpio_config* last_gpio_config,
-    struct Message_spindle_config* last_spindle_config
+    struct Message_spindle_config* last_spindle_config,
     uint count);
 void reset_rp_config(
     skeleton_t *data,
@@ -358,28 +360,40 @@ int rtapi_app_main(void)
     if (retval < 0) {
       goto port_error;
     }
-    port_data_array->spindle_vfd_type = 2;
+    port_data_array->spindle_vfd_type[0] = MODBUS_TYPE_NOT_SET;
+    port_data_array->spindle_vfd_type[1] = MODBUS_TYPE_NOT_SET;
+    port_data_array->spindle_vfd_type[2] = MODBUS_TYPE_NOT_SET;
+    port_data_array->spindle_vfd_type[3] = MODBUS_TYPE_NOT_SET;
 
     retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_address[num_spindle]),
         component_id, "rp2040_eth.%d.spindle-address-%d", num_device, num_spindle);
     if (retval < 0) {
       goto port_error;
     }
-    port_data_array->spindle_address = 1;
+    port_data_array->spindle_address[0] = 1;
+    port_data_array->spindle_address[1] = 1;
+    port_data_array->spindle_address[2] = 1;
+    port_data_array->spindle_address[3] = 1;
 
     retval = hal_param_float_newf(HAL_RW, &(port_data_array->spindle_poles[num_spindle]),
         component_id, "rp2040_eth.%d.spindle-poles-%d", num_device, num_spindle);
     if (retval < 0) {
       goto port_error;
     }
-    port_data_array->spindle_poles = 2;
+    port_data_array->spindle_poles[0] = 2;
+    port_data_array->spindle_poles[1] = 2;
+    port_data_array->spindle_poles[2] = 2;
+    port_data_array->spindle_poles[3] = 2;
 
     retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_bitrate[num_spindle]),
         component_id, "rp2040_eth.%d.spindle-bitrate-%d", num_device, num_spindle);
     if (retval < 0) {
       goto port_error;
     }
-    port_data_array->spindle_bitrate = 9600;
+    port_data_array->spindle_bitrate[0] = 9600;
+    port_data_array->spindle_bitrate[1] = 9600;
+    port_data_array->spindle_bitrate[2] = 9600;
+    port_data_array->spindle_bitrate[3] = 9600;
   }
 
   /* Export metrics pins, */
@@ -549,25 +563,30 @@ bool configure_spindle(
     struct Message_spindle_config* last_spindle_config,
     skeleton_t *data
 ) {
-    if(spindle > 0 && *data->spindle_vfd_type[spindle] > 0) {
+    if(data->spindle_vfd_type[spindle] == MODBUS_TYPE_NOT_SET) {
+      // Nothing to do.
+      return true;
+    }
+    if(spindle > 0) {
       printf("ERROR: More than one spindle not yet implemented.\n");
       return false;
     }
 
     bool pack_success = true;
     if(
-        last_spindle_config[spindle].spindle_vfd_type != *data->spindle_vfd_type[spindle]
+        last_spindle_config[spindle].vfd_type != data->spindle_vfd_type[spindle]
         ||
-        last_spindle_config[spindle].spindle_address != *data->spindle_address[spindle]
+        last_spindle_config[spindle].modbus_address != data->spindle_address[spindle]
         ||
-        last_spindle_config[spindle].spindle_bitrate != *data->spindle_bitrate[spindle]
+        last_spindle_config[spindle].bitrate != data->spindle_bitrate[spindle]
     ) {
+      printf("Configuring spindle: %u\t%u\n", spindle, data->spindle_vfd_type[spindle]);
       pack_success = pack_success && serialise_spindle_config(
           tx_buffer,
           spindle,
-          data->spindle_vfd_type,
-          data->spindle_address,
-          data->spindle_bitrate
+          data->spindle_vfd_type[spindle],
+          data->spindle_address[spindle],
+          data->spindle_bitrate[spindle]
       );
     }
     return pack_success;
@@ -594,7 +613,7 @@ bool configure(
     return configure_gpio(tx_buffer, gpio, last_gpio_config, data);
   } else if(joint_or_gpio_or_spindle < JOINTS + MAX_GPIO + MAX_SPINDLE) {
     uint8_t spindle = joint_or_gpio_or_spindle - JOINTS - MAX_GPIO;
-    return configure_spindle(tx_buffer, spindle, last_gpio_config, data);
+    return configure_spindle(tx_buffer, spindle, last_spindle_config, data);
   }
   return true;
 }
@@ -644,7 +663,7 @@ static void write_port(void *arg, long period)
   for(size_t spindle = 0; spindle < MAX_SPINDLE; spindle++) {
     if(data->spindle_vfd_type[spindle] != MODBUS_TYPE_NOT_SET) {
       float speed = *data->spindle_speed_in[spindle] / (120.0 / data->spindle_poles[spindle]);
-      pack_success = pack_success && serialise_spindle_speed_in(&buffer, speed);
+      pack_success = pack_success && serialise_spindle_speed_in(&buffer, spindle, speed);
     }
   }
 
@@ -750,7 +769,7 @@ void reset_rp_config(
   }
 
   for(size_t spindle = 0; spindle < MAX_SPINDLE; spindle++) {
-    last_spindle_config[spindle].spindle_type = SPINDLE_TYPE_NOT_SET;
+    last_spindle_config[spindle].vfd_type = MODBUS_TYPE_NOT_SET;
   }
 }
 

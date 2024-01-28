@@ -196,6 +196,7 @@ struct Reply_gpio {
 
 struct Reply_spindle_speed {
   uint8_t type;
+  uint8_t spindle_index;
   double speed;
   uint16_t crc_errors;
   uint16_t unanswered;

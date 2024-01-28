@@ -169,9 +169,13 @@ bool unpack_spindle_config(
   struct Message_spindle_config* message = data_p;
   uint8_t spindle = message->spindle_index;
   if(spindle > 0) {
-    printf("ERROR: More than one spindle not yet supported.\n");
+    printf("%u ERROR: More than one spindle not yet supported. %u\n",
+        *received_count, message->spindle_index);
     return false;
   }
+
+  printf("%u Configuring spindle: %u\n", *received_count, message->spindle_index);
+  
   vfd_config.address = message->modbus_address;
   vfd_config.bitrate = message->bitrate;
   vfd_config.type = message->vfd_type;
@@ -589,7 +593,9 @@ void core0_main() {
         serialise_axis_movement(axis, &tx_buf, true);
         serialise_axis_metrics(axis, &tx_buf);
       }
-      serialise_spindle_speed_out(&tx_buf, act_spindle_frequency, &vfd.stats);
+      for(size_t spindle = 0; spindle < MAX_SPINDLE; spindle++) {
+        serialise_spindle_speed_out(spindle, &tx_buf, act_spindle_frequency, &vfd.stats);
+      }
       count++;
 
       size_t tx_buf_len = 0;

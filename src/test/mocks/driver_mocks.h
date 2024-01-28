@@ -42,16 +42,16 @@ typedef struct {
   hal_u32_t gpio_data_received[MAX_GPIO / 32];
   hal_bit_t gpio_confirmation_pending[MAX_GPIO / 32];
   
-  hal_bit_t* spindle_fwd;
-  hal_bit_t* spindle_rev;
-  hal_float_t* spindle_speed_out;
-  hal_float_t* spindle_speed_in;
-  hal_bit_t* spindle_at_speed;
+  hal_bit_t* spindle_fwd[MAX_SPINDLE];
+  hal_bit_t* spindle_rev[MAX_SPINDLE];
+  hal_float_t* spindle_speed_out[MAX_SPINDLE];
+  hal_float_t* spindle_speed_in[MAX_SPINDLE];
+  hal_bit_t* spindle_at_speed[MAX_SPINDLE];
 
-  hal_u32_t spindle_vfd_type;
-  hal_u32_t spindle_address;
-  hal_float_t spindle_poles;
-  hal_u32_t spindle_bitrate;
+  hal_u32_t spindle_vfd_type[MAX_SPINDLE];
+  hal_u32_t spindle_address[MAX_SPINDLE];
+  hal_float_t spindle_poles[MAX_SPINDLE];
+  hal_u32_t spindle_bitrate[MAX_SPINDLE];
 } skeleton_t;
 
 
