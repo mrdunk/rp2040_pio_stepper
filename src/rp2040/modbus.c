@@ -147,6 +147,8 @@ float modbus_loop(float frequency) {
       return modbus_loop_huanyang(frequency);
     case MODBUS_TYPE_FULING:
       return modbus_loop_fuling(frequency);
+    case MODBUS_TYPE_WEIKEN:
+      return modbus_loop_weiken(frequency);
     default:
       return 0.f;
   }
