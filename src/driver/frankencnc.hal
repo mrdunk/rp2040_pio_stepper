@@ -127,6 +127,6 @@ setp rp2040_eth.0.gpio-3-index     9
 setp rp2040_eth.0.spindle-address-0 1
 setp rp2040_eth.0.spindle-poles-0 4
 setp rp2040_eth.0.spindle-bitrate-0 9600
-# 0 = Not enabled, 1 = Huanyang, 2 = Fuling
-setp rp2040_eth.0.spindle-vfd-type-0 1
+# 0 = Not enabled, 1 = Huanyang, 2 = Fuling, 3 = Weiken, 4 = Loopback
+setp rp2040_eth.0.spindle-vfd-type-0 4
 

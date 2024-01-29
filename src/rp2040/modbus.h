@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdio.h>
 #include <stdint.h>
 
 #define MODBUS_UART uart1
@@ -22,7 +23,8 @@ extern uint8_t modbus_outstanding;
 #define MODBUS_TYPE_NOT_SET 0
 #define MODBUS_TYPE_HUANYANG 1
 #define MODBUS_TYPE_FULING 2
-#define MODBUS_TYPE_LOOPBACK 3
+#define MODBUS_TYPE_WEIKEN 3
+#define MODBUS_TYPE_LOOPBACK 4
 
 #define MODBUS_RESULT_NOT_READY (1000000.f)
 #define MODBUS_RESULT_NOT_CONFIGURED (2000000.f)
@@ -84,6 +86,7 @@ extern void modbus_write_holding_register(uint8_t address, uint16_t reg_to_write
 
 extern float modbus_loop_fuling(float frequency);
 extern float modbus_loop_huanyang(float frequency);
+extern float modbus_loop_weiken(float frequency);
 
 extern void modbus_init(void);
 extern float modbus_loop(float);

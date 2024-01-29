@@ -591,7 +591,7 @@ void core0_main() {
       for(size_t axis = 0; axis < MAX_AXIS; axis++) {
         // Get data from config and put in TX buffer.
         serialise_axis_movement(axis, &tx_buf, true);
-        serialise_axis_metrics(axis, &tx_buf);
+        //serialise_axis_metrics(axis, &tx_buf);
       }
 
       // No need to update each spindle every cycle.

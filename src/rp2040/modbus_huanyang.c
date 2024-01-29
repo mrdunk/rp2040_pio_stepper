@@ -124,6 +124,8 @@ void modbus_huanyang_receive(void) {
 float modbus_loop_huanyang(float frequency) {
   if (!modbus_check_config())
     return MODBUS_RESULT_NOT_CONFIGURED;
+  int refresh_delay = 1000; // delay between polls for the same value
+  int freshness_limit = 10000; // No updates after this time means that the data are stale
   vfd.cycle++;
   vfd.command_run = frequency != 0;
   vfd.command_reverse = frequency < 0;
@@ -138,8 +140,6 @@ float modbus_loop_huanyang(float frequency) {
   }
   
   modbus_huanyang_receive();
-  int refresh_delay = 1000; // delay between polls for the same value
-  int freshness_limit = 10000; // No updates after this time means that the data are stale
   if (vfd.cycle - vfd.last_status_update > refresh_delay) {
     huanyang_poll_control_status();
     modbus_transmit();
