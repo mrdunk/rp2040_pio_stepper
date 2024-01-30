@@ -18,7 +18,7 @@
 // Semaphore for synchronizing cores.
 extern volatile uint32_t tick;
 
-/* Configuration object for an axis.
+/* Configuration object for an joint.
  * This is the format for the global config that is shared between cores. */
 struct ConfigAxis {
   uint8_t updated_from_c0;      // Data was updated on core 0.
@@ -56,10 +56,10 @@ struct ConfigI2c {
 struct ConfigGlobal {
   uint32_t last_update_id;    // Sequence number of last packet received.
   int32_t last_update_time;   // Sequence number of last packet received.
-  uint32_t update_time_us;    // Driven by how often we get axis updates from controlling host.
+  uint32_t update_time_us;    // Driven by how often we get joint updates from controlling host.
   bool pio_io_configured;     // PIO IO pins set.
 
-  struct ConfigAxis axis[MAX_AXIS];
+  struct ConfigAxis joint[MAX_JOINT];
   struct ConfigGPIO gpio[MAX_GPIO];
   struct ConfigI2c i2c[MAX_I2C_MCP];
   bool gpio_confirmation_pending[MAX_GPIO / 32];
@@ -69,11 +69,11 @@ struct ConfigGlobal {
 void init_config();
 
 /* Update the period of the main timing loop.
- * This should closely match the rate at which we receive axis position data. */
+ * This should closely match the rate at which we receive joint position data. */
 void update_period(uint32_t update_time_us);
 
 /* Get the period of the main timing loop.
- * This should closely match the rate at which we receive axis position data. */
+ * This should closely match the rate at which we receive joint position data. */
 uint32_t get_period();
 
 /* Set metrics for tracking successful update transmission and jitter. */
@@ -82,10 +82,10 @@ void update_packet_metrics(
     int32_t* id_diff,
     int32_t* time_diff);
 
-uint8_t has_new_c0_data(const uint8_t axis);
+uint8_t has_new_c0_data(const uint8_t joint);
 
-void update_axis_config(
-    const uint8_t axis,
+void update_joint_config(
+    const uint8_t joint,
     const uint8_t core,
     const uint8_t* enabled,
     const int8_t* io_pos_step,
@@ -100,8 +100,8 @@ void update_axis_config(
     const int32_t* step_len_ticks
 );
 
-uint32_t get_axis_config(
-    const uint8_t axis,
+uint32_t get_joint_config(
+    const uint8_t joint,
     const uint8_t core,
     uint8_t* enabled,
     int8_t* io_pos_step,
@@ -120,18 +120,17 @@ uint32_t get_axis_config(
 bool serialise_timing(struct NWBuffer* tx_buf, int32_t update_id, int32_t time_diff);
 
 /* Serialise data stored in global config in a format for sending over UDP. */
-bool serialise_axis_movement(
-    const uint32_t axis,
+bool serialise_joint_movement(
     struct NWBuffer* tx_buf,
     uint8_t wait_for_data);
 
 /* Serialise data stored in global config in a format for sending over UDP. */
-bool serialise_axis_config(
-    const uint32_t axis,
+bool serialise_joint_config(
+    const uint32_t joint,
     struct NWBuffer* tx_buf);
 
 /* Serialise data stored in global config in a format for sending over UDP. */
-bool serialise_axis_metrics(const uint32_t axis, struct NWBuffer* tx_buf);
+bool serialise_joint_metrics(const uint32_t joint, struct NWBuffer* tx_buf);
 
 bool serialise_spindle_speed_out(
     size_t spindle, struct NWBuffer* tx_buf, float speed, struct vfd_stats *vfd_stats);

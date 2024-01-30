@@ -6,7 +6,7 @@
 #include "pio.h"
 
 
-void update_all_axis() {
+void update_all_joint() {
   static uint32_t metric = 0;
   static uint32_t last_tick = 0;
   uint32_t update_period_us = get_period();
@@ -36,23 +36,23 @@ void update_all_axis() {
   }
   metric = metric_now;
 
-  for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
-    updated_count += do_steps(axis, update_period_us);
+  for(uint8_t joint = 0; joint < MAX_JOINT; joint++) {
+    updated_count += do_steps(joint, update_period_us);
   }
   //update_pio_io_configured();
 }
 
 void core1_main() {
   while (1) {
-    update_all_axis();
+    update_all_joint();
   }
 }
 
 void init_core1() {
   printf("core0: Initializing.\n");
 
-  if(MAX_AXIS > 4) {
-    printf("ERROR: Maximum axis count: 4. Configured: %u\n", MAX_AXIS);
+  if(MAX_JOINT > 4) {
+    printf("ERROR: Maximum joint count: 4. Configured: %u\n", MAX_JOINT);
     while (1) {
       tight_loop_contents();
     }

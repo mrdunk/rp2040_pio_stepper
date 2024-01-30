@@ -79,21 +79,19 @@ static void test_timing(void **state) {
     assert_int_equal(*(data.metric_rp_update_len), message.rp_update_len);
 }
 
-static void test_axis_movement(void **state) {
+static void test_joint_movement(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer buffer = {0};
     size_t mess_received_count = 0;
 
-    skeleton_t data;
+    skeleton_t data = {0};
     setup_data(&data);
    
-    uint32_t axis = 0;
-    struct Reply_axis_movement message = {
-        .type = REPLY_AXIS_MOVEMENT,
-        .axis = axis,
-        .abs_pos_acheived = 1234,
-        .velocity_acheived = 7890,
+    struct Reply_joint_movement message = {
+        .type = REPLY_JOINT_MOVEMENT,
+        .abs_pos_acheived = {1234, 5678, 9, 10},
+        .velocity_acheived = {7890, 1234, 5, 6}
     };
 
     memcpy(buffer.payload, &message, sizeof(message));
@@ -110,14 +108,16 @@ static void test_axis_movement(void **state) {
             NULL
             );
 
-    assert_double_equal(
-            *(data.joint_pos_feedback[axis]),
-            (double)message.abs_pos_acheived / *(data.joint_scale[axis]),
-            0.0001);
-    assert_int_equal(*(data.joint_velocity_feedback[axis]), message.velocity_acheived);
+    for(size_t joint = 0; joint < MAX_JOINT; joint++) {
+        assert_double_equal(
+                (*data.joint_pos_feedback)[joint],
+                (double)message.abs_pos_acheived[joint] / (*data.joint_scale)[joint],
+                0.0001);
+        assert_int_equal((*data.joint_velocity_feedback)[joint], message.velocity_acheived[joint]);
+    }
 }
 
-static void test_axis_config(void **state) {
+static void test_joint_config(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer buffer = {0};
@@ -126,10 +126,10 @@ static void test_axis_config(void **state) {
     skeleton_t data = {0};
     setup_data(&data);
    
-    uint32_t axis = 0;
-    struct Reply_axis_config message = {
-        .type = REPLY_AXIS_CONFIG,
-        .axis = axis,
+    uint32_t joint = 0;
+    struct Reply_joint_config message = {
+        .type = REPLY_JOINT_CONFIG,
+        .joint = joint,
         .enable = 1,
         .gpio_step = 2,
         .gpio_dir = 3,
@@ -162,7 +162,7 @@ static void test_axis_config(void **state) {
     assert_double_equal(last_joint_config.max_accel, message.max_accel, 0.0001);
 }
 
-static void test_axis_metrics(void **state) {
+static void test_joint_metrics(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer buffer = {0};
@@ -171,10 +171,10 @@ static void test_axis_metrics(void **state) {
     skeleton_t data = {0};
     setup_data(&data);
    
-    uint32_t axis = 0;
-    struct Reply_axis_metrics message = {
-        .type = REPLY_AXIS_METRICS,
-        .axis = axis,
+    uint32_t joint = 0;
+    struct Reply_joint_metrics message = {
+        .type = REPLY_JOINT_METRICS,
+        .joint = joint,
         .velocity_requested = 3456,
         .step_len_ticks = 1357,
     };
@@ -193,17 +193,17 @@ static void test_axis_metrics(void **state) {
             NULL
             );
 
-    assert_int_equal(*(data.joint_step_len_ticks[axis]), message.step_len_ticks);
-    assert_int_equal(*(data.joint_velocity_cmd[axis]), message.velocity_requested);
+    assert_int_equal(*(data.joint_step_len_ticks[joint]), message.step_len_ticks);
+    assert_int_equal(*(data.joint_velocity_cmd[joint]), message.velocity_requested);
 }
 
 
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_timing),
-        cmocka_unit_test(test_axis_movement),
-        cmocka_unit_test(test_axis_config),
-        cmocka_unit_test(test_axis_metrics)
+        cmocka_unit_test(test_joint_movement),
+        cmocka_unit_test(test_joint_config),
+        cmocka_unit_test(test_joint_metrics)
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);

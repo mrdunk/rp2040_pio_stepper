@@ -32,18 +32,18 @@ typedef struct {
   hal_u32_t* metric_rp_update_len;
   hal_u32_t* metric_missed_packets;
   hal_bit_t* metric_eth_state;
-  hal_bit_t* joint_enable[JOINTS];
-  hal_s32_t* joint_gpio_step[JOINTS];
-  hal_s32_t* joint_gpio_dir[JOINTS];
-  hal_float_t* joint_max_velocity[JOINTS];
-  hal_float_t* joint_max_accel[JOINTS];
-  hal_float_t* joint_scale[JOINTS];
-  hal_float_t* joint_pos_cmd[JOINTS];
-  hal_float_t* joint_vel_cmd[JOINTS];
-  hal_float_t* joint_pos_feedback[JOINTS];
-  hal_s32_t* joint_step_len_ticks[JOINTS];
-  hal_float_t* joint_velocity_cmd[JOINTS];   // TODO: why a joint_vel_cmd and a joint_velocity_cmd?
-  hal_float_t* joint_velocity_feedback[JOINTS];
+  hal_bit_t* joint_enable[MAX_JOINT];
+  hal_s32_t* joint_gpio_step[MAX_JOINT];
+  hal_s32_t* joint_gpio_dir[MAX_JOINT];
+  hal_float_t* joint_max_velocity[MAX_JOINT];
+  hal_float_t* joint_max_accel[MAX_JOINT];
+  hal_float_t* joint_scale[MAX_JOINT];
+  hal_float_t* joint_position[MAX_JOINT];
+  hal_float_t* joint_velocity[MAX_JOINT];
+  hal_float_t* joint_pos_feedback[MAX_JOINT];
+  hal_s32_t* joint_step_len_ticks[MAX_JOINT];
+  hal_float_t* joint_velocity_cmd[MAX_JOINT];   // TODO: why a joint_vel_cmd and a joint_velocity_cmd?
+  hal_float_t* joint_velocity_feedback[MAX_JOINT];
 
   // For IN pins, HAL sets this to the value we want the IO pin set to on the RP.
   // For OUT pins, this is the value the RP pin is reported via the network update.
@@ -211,7 +211,7 @@ int rtapi_app_main(void)
     }
   }
 
-  for(int num_joint = 0; num_joint < JOINTS; num_joint++) {
+  for(int num_joint = 0; num_joint < MAX_JOINT; num_joint++) {
     /* Export the joint position pin(s) */
     retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->joint_enable[num_joint]),
                               component_id, "rp2040_eth.%d.joint-enable-%d", num_device, num_joint);
@@ -268,7 +268,7 @@ int rtapi_app_main(void)
       return -1;
     }
 
-    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->joint_pos_cmd[num_joint]),
+    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->joint_position[num_joint]),
                                 component_id, "rp2040_eth.%d.pos-cmd-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
@@ -277,7 +277,7 @@ int rtapi_app_main(void)
       return -1;
     }
 
-    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->joint_vel_cmd[num_joint]),
+    retval = hal_pin_float_newf(HAL_IN, &(port_data_array->joint_velocity[num_joint]),
                                 component_id, "rp2040_eth.%d.vel-cmd-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
@@ -602,17 +602,17 @@ bool configure(
     struct Message_spindle_config* last_spindle_config,
     skeleton_t *data
 ) {
-  size_t total_things = JOINTS + MAX_GPIO + MAX_SPINDLE;
+  size_t total_things = MAX_JOINT + MAX_GPIO + MAX_SPINDLE;
   size_t joint_or_gpio_or_spindle = count % total_things;
 
-  if(joint_or_gpio_or_spindle < JOINTS) {
+  if(joint_or_gpio_or_spindle < MAX_JOINT) {
     uint8_t joint = joint_or_gpio_or_spindle;
     return configure_joint(tx_buffer, joint, last_joint_config, data);
-  } else if(joint_or_gpio_or_spindle < JOINTS + MAX_GPIO) {
-    uint8_t gpio = joint_or_gpio_or_spindle - JOINTS;
+  } else if(joint_or_gpio_or_spindle < MAX_JOINT + MAX_GPIO) {
+    uint8_t gpio = joint_or_gpio_or_spindle - MAX_JOINT;
     return configure_gpio(tx_buffer, gpio, last_gpio_config, data);
-  } else if(joint_or_gpio_or_spindle < JOINTS + MAX_GPIO + MAX_SPINDLE) {
-    uint8_t spindle = joint_or_gpio_or_spindle - JOINTS - MAX_GPIO;
+  } else if(joint_or_gpio_or_spindle < MAX_JOINT + MAX_GPIO + MAX_SPINDLE) {
+    uint8_t spindle = joint_or_gpio_or_spindle - MAX_JOINT - MAX_GPIO;
     return configure_spindle(tx_buffer, spindle, last_spindle_config, data);
   }
   return true;
@@ -623,7 +623,7 @@ static void write_port(void *arg, long period)
   int num_device = 0;
 
   static size_t count = 0;
-  static struct Message_joint_config last_joint_config[JOINTS] = {0};
+  static struct Message_joint_config last_joint_config[MAX_JOINT] = {0};
   static struct Message_gpio_config last_gpio_config[MAX_GPIO] = {0};
   static struct Message_spindle_config last_spindle_config[MAX_SPINDLE] = {0};
   static uint32_t last_update_id = 0;
@@ -652,13 +652,7 @@ static void write_port(void *arg, long period)
   pack_success = pack_success && configure(
       &buffer, count, last_joint_config, last_gpio_config, last_spindle_config, data);
 
-  // Iterate through joints.
-  for(size_t joint = 0; joint < JOINTS; joint++) {
-    // Put joint positions packet in buffer.
-    double position = *data->joint_scale[joint] * *data->joint_pos_cmd[joint];
-    double velocity = *data->joint_scale[joint] * *data->joint_vel_cmd[joint];
-    pack_success = pack_success && serialize_joint_pos(&buffer, joint, position, velocity);
-  }
+  pack_success = pack_success && serialize_joint_pos(&buffer, data);
 
   // No need to update each spindle every cycle.
   if(count % 100 < MAX_SPINDLE) {
@@ -760,7 +754,7 @@ void reset_rp_config(
     struct Message_gpio_config* last_gpio_config,
     struct Message_spindle_config* last_spindle_config
 ) {
-  for(size_t joint = 0; joint < JOINTS; joint++) {
+  for(size_t joint = 0; joint < MAX_JOINT; joint++) {
     *data->joint_enable[joint] = false;
     last_joint_config[joint].gpio_step = -1;
     last_joint_config[joint].gpio_dir = -1;
