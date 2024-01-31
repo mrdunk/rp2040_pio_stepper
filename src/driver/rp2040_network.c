@@ -334,11 +334,11 @@ bool unpack_joint_movement(
   struct Reply_joint_movement* reply = data_p;
 
   for(size_t joint = 0; joint < MAX_JOINT; joint++) {
-    (*data->joint_pos_feedback)[joint] =
+    *data->joint_pos_feedback[joint] =
       ((double)reply->abs_pos_acheived[joint])
-      / (*data->joint_scale)[joint];
+      / *data->joint_scale[joint];
 
-    (*data->joint_velocity_feedback)[joint] =
+    *data->joint_velocity_feedback[joint] =
       (double)reply->velocity_acheived[joint];
   }
 
