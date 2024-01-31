@@ -101,7 +101,6 @@ static void test_joint_movement(void **state) {
     buffer.length = sizeof(message);
     buffer.checksum = checksum(0, 0, buffer.length, buffer.payload);
 
-    printf("1\n");
     process_data(
             &buffer,
             &data,
@@ -111,7 +110,6 @@ static void test_joint_movement(void **state) {
             NULL,
             NULL
             );
-    printf("2\n");
 
     for(size_t joint = 0; joint < MAX_JOINT; joint++) {
         assert_double_equal(
