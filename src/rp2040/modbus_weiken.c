@@ -95,48 +95,33 @@ float modbus_loop_weiken(float frequency)
     return MODBUS_RESULT_NOT_CONFIGURED;
   int refresh_delay = 1000; // delay between polls for the same value
   int freshness_limit = 10000; // No updates after this time means that the data are stale
-  vfd.cycle++;
-  vfd.command_run = frequency != 0;
-  vfd.command_reverse = frequency < 0;
   vfd.req_freq_x10 = abs((int16_t)(frequency * 10));
-  if (modbus_pause > 0) {
-    if ((uart_get_hw(MODBUS_UART)->fr & UART_UARTFR_BUSY_BITS)) {
-      goto do_pause;
-    }
-    gpio_put(MODBUS_DIR_PIN, 0);
-    modbus_pause--;
-    goto do_pause;
-  }
-  
-  modbus_weiken_receive();
-  if (vfd.cycle - vfd.last_status_update > refresh_delay) {
-    if (!vfd.command_run) {
-      modbus_write_holding_register(vfd_config.address, WEIKEN_CMD_CONTROL, WEIKEN_CMD_CONTROL_STOP);
-    } else {
-      if (vfd.command_reverse) {
-        modbus_write_holding_register(vfd_config.address, WEIKEN_CMD_CONTROL, WEIKEN_CMD_CONTROL_RUN_REV);
+  if (modbus_check_receive()) {
+    modbus_weiken_receive();
+    if (vfd.cycle - vfd.last_status_update > refresh_delay) {
+      if (!frequency) {
+        modbus_write_holding_register(vfd_config.address, WEIKEN_CMD_CONTROL, WEIKEN_CMD_CONTROL_STOP);
       } else {
-        modbus_write_holding_register(vfd_config.address, WEIKEN_CMD_CONTROL, WEIKEN_CMD_CONTROL_RUN_FWD);
+        if (frequency < 0) {
+          modbus_write_holding_register(vfd_config.address, WEIKEN_CMD_CONTROL, WEIKEN_CMD_CONTROL_RUN_REV);
+        } else {
+          modbus_write_holding_register(vfd_config.address, WEIKEN_CMD_CONTROL, WEIKEN_CMD_CONTROL_RUN_FWD);
+        }
+      }
+    } else if (vfd.cycle - vfd.last_set_freq_update > refresh_delay) {
+      modbus_read_holding_registers(vfd_config.address, WEIKEN_CMD_STATUS_SET_FREQ, 2);
+    } else {
+      // This assumes top frequency of 400 Hz (2-pole motor with max RPM of 24000).
+      // Scales the -4000 to 4000 range to -10000 to 10000 expected by the inverter.
+      int rate = (vfd.req_freq_x10 * 5 + 1) / 2;
+      if (rate < -10000) rate = -10000;
+      if (rate > 10000) rate = 10000;
+      // Value received is not always exactly the value sent.
+      if (abs((rate * 2 + 2) / 5 - vfd.set_freq_x10) > 1) {
+        modbus_write_holding_register(vfd_config.address, WEIKEN_CMD_SPEED, rate);
       }
     }
-    modbus_transmit();
-  } else if (vfd.cycle - vfd.last_set_freq_update > refresh_delay) {
-    modbus_read_holding_registers(vfd_config.address, WEIKEN_CMD_STATUS_SET_FREQ, 2);
-    modbus_transmit();
-  } else {
-    // This assumes top frequency of 400 Hz (2-pole motor with max RPM of 24000).
-    // Scales the -4000 to 4000 range to -10000 to 10000 expected by the inverter.
-    int rate = (vfd.req_freq_x10 * 5 + 1) / 2;
-    if (rate < -10000) rate = -10000;
-    if (rate > 10000) rate = 10000;
-    // Value received is not always exactly the value sent.
-    if (abs((rate * 2 + 2) / 5 - vfd.set_freq_x10) > 1) {
-      modbus_write_holding_register(vfd_config.address, WEIKEN_CMD_SPEED, rate);
-      modbus_transmit();
-    } else if (vfd.command_run != vfd.status_run || vfd.command_reverse != vfd.status_reverse) {
-    }
   }
-do_pause:
   vfd.stats.got_status = (vfd.cycle - vfd.last_status_update < freshness_limit);
   vfd.stats.got_set_frequency = (vfd.cycle - vfd.last_set_freq_update < freshness_limit);
   vfd.stats.got_act_frequency = vfd.stats.got_set_frequency; // a single update does both

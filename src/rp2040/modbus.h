@@ -79,6 +79,7 @@ extern struct vfd_status vfd;
 extern uint16_t modbus_crc16(const uint8_t *data, uint8_t size);
 extern void modbus_transmit(void);
 extern int modbus_check_config(void);
+extern int modbus_check_receive(void);
 extern int modbus_get_data(void);
 
 extern void modbus_read_holding_registers(uint8_t address, uint16_t reg_to_read, uint16_t num_regs);

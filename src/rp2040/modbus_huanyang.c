@@ -126,47 +126,38 @@ float modbus_loop_huanyang(float frequency) {
     return MODBUS_RESULT_NOT_CONFIGURED;
   int refresh_delay = 1000; // delay between polls for the same value
   int freshness_limit = 10000; // No updates after this time means that the data are stale
-  vfd.cycle++;
-  vfd.command_run = frequency != 0;
-  vfd.command_reverse = frequency < 0;
   vfd.req_freq_x100 = abs((int16_t)(frequency * 100));
-  if (modbus_pause > 0) {
-    if ((uart_get_hw(MODBUS_UART)->fr & UART_UARTFR_BUSY_BITS)) {
-      goto do_pause;
-    }
-    gpio_put(MODBUS_DIR_PIN, 0);
-    modbus_pause--;
-    goto do_pause;
-  }
-  
-  modbus_huanyang_receive();
-  if (vfd.cycle - vfd.last_status_update > refresh_delay) {
-    huanyang_poll_control_status();
-    modbus_transmit();
-  } else if (vfd.cycle - vfd.last_set_freq_update > refresh_delay) {
-    huanyang_read_status(0);
-    modbus_transmit();
-  } else if (vfd.cycle - vfd.last_act_freq_update > refresh_delay) {
-    huanyang_read_status(1);
-    modbus_transmit();
-  } else {
-    if (vfd.req_freq_x100 != vfd.set_freq_x100) {
-      huanyang_setfreq(vfd.req_freq_x100);
+  if (modbus_check_receive()) {
+    modbus_huanyang_receive();
+    if (vfd.cycle - vfd.last_status_update > refresh_delay) {
+      huanyang_poll_control_status();
       modbus_transmit();
-    } else if (vfd.command_run != vfd.status_run || vfd.command_reverse != vfd.status_reverse) {
-      if (vfd.status_run && !vfd.command_run) {
-        huanyang_stop();
-      } else {
-        if (vfd.command_reverse) {
-          huanyang_start_reverse();
+    } else if (vfd.cycle - vfd.last_set_freq_update > refresh_delay) {
+      huanyang_read_status(0);
+      modbus_transmit();
+    } else if (vfd.cycle - vfd.last_act_freq_update > refresh_delay) {
+      huanyang_read_status(1);
+      modbus_transmit();
+    } else {
+      vfd.command_run = frequency != 0;
+      vfd.command_reverse = frequency < 0;
+      if (vfd.req_freq_x100 != vfd.set_freq_x100) {
+        huanyang_setfreq(vfd.req_freq_x100);
+        modbus_transmit();
+      } else if (vfd.command_run != vfd.status_run || vfd.command_reverse != vfd.status_reverse) {
+        if (vfd.status_run && !vfd.command_run) {
+          huanyang_stop();
         } else {
-          huanyang_start_forward();
+          if (vfd.command_reverse) {
+            huanyang_start_reverse();
+          } else {
+            huanyang_start_forward();
+          }
         }
+        modbus_transmit();
       }
-      modbus_transmit();
     }
   }
-do_pause:
   vfd.stats.got_status = (vfd.cycle - vfd.last_status_update < freshness_limit);
   vfd.stats.got_set_frequency = (vfd.cycle - vfd.last_set_freq_update < freshness_limit);
   vfd.stats.got_act_frequency = (vfd.cycle - vfd.last_act_freq_update < freshness_limit);

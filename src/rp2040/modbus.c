@@ -51,6 +51,20 @@ void modbus_transmit(void) {
   modbus_outstanding = 1;
 }
 
+int modbus_check_receive(void) {
+  vfd.cycle++;
+  // Ready to process data
+  if (modbus_pause <= 0)
+    return 1;
+  // Still sending
+  if (uart_get_hw(MODBUS_UART)->fr & UART_UARTFR_BUSY_BITS)
+    return 0;
+  // Receiving data into UART FIFO
+  gpio_put(MODBUS_DIR_PIN, 0);
+  modbus_pause--;
+  return 0;
+}
+
 void modbus_init(void) {
   precompute_crc16();
   gpio_set_function(MODBUS_TX_PIN, GPIO_FUNC_UART);
@@ -101,11 +115,13 @@ static inline void modbus_encode_twoints(uint8_t address, uint8_t command, uint1
 void modbus_read_holding_registers(uint8_t address, uint16_t reg_to_read, uint16_t num_regs)
 {
   modbus_encode_twoints(address, 3, reg_to_read, num_regs);
+  modbus_transmit();
 }
 
 void modbus_write_holding_register(uint8_t address, uint16_t reg_to_write, uint16_t value)
 {
   modbus_encode_twoints(address, 6, reg_to_write, value);
+  modbus_transmit();
 }
 
 int modbus_check_config(void)
