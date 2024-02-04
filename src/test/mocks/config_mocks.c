@@ -1,8 +1,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
-void update_axis_config(
-    const uint8_t axis,
+void update_joint_config(
+    const uint8_t joint,
     const uint8_t core,
     const uint8_t* enabled,
     const int8_t* io_pos_step,
@@ -36,8 +36,8 @@ size_t serialise_timing(
     return 0;
 }
 
-size_t serialise_axis_movement(
-    const uint32_t axis,
+size_t serialise_joint_movement(
+    const uint32_t joint,
     uint8_t* tx_buf,
     size_t* tx_buf_len,
     uint8_t wait_for_data)
@@ -45,8 +45,8 @@ size_t serialise_axis_movement(
     return 0;
 }
 
-size_t serialise_axis_config(
-    const uint32_t axis,
+size_t serialise_joint_config(
+    const uint32_t joint,
     uint8_t* tx_buf,
     size_t* tx_buf_len,
     uint8_t wait_for_data)

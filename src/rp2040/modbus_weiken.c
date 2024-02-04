@@ -1,6 +1,11 @@
 #include "modbus.h"
 #include <stdlib.h>
-#include "pico/stdlib.h"
+
+#ifdef BUILD_TESTS
+  #include "../test/mocks/rp_mocks.h"
+#else  // BUILD_TESTS
+  #include "pico/stdlib.h"
+#endif  // BUILD_TESTS
 
 #define WEIKEN_CMD_CONTROL 0x2000
 #define WEIKEN_CMD_CONTROL_RUN_FWD 1

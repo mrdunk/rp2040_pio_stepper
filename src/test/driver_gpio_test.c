@@ -35,7 +35,7 @@ void setup_data(skeleton_t* data) {
     data->metric_time_diff = &metric_time_diff;
     data->metric_rp_update_len = &metric_rp_update_len;
 
-    for(size_t joint = 0; joint < JOINTS; joint++) {
+    for(size_t joint = 0; joint < MAX_JOINT; joint++) {
         data->joint_enable[joint] =            &joint_enable[joint];
         data->joint_gpio_step[joint] =         &joint_gpio_step[joint];
         data->joint_gpio_dir[joint] =          &joint_gpio_dir[joint];

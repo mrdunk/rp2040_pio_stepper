@@ -26,19 +26,22 @@ hal_float_t joint_velocity_cmd[4];
 hal_float_t joint_velocity_feedback[4];
 
 void setup_data(skeleton_t* data) {
-    data->metric_update_id = &metric_update_id;
-    data->metric_time_diff = &metric_time_diff;
-    data->metric_rp_update_len = &metric_rp_update_len;
-    *data->joint_enable = joint_enable;
-    *data->joint_gpio_step = joint_gpio_step;
-    *data->joint_gpio_dir = joint_gpio_dir;
-    *data->joint_max_velocity = joint_max_velocity;
-    *data->joint_max_accel = joint_max_accel;
-    *data->joint_pos_feedback = joint_pos_feedback;
-    *data->joint_scale = joint_scale;
-    *data->joint_step_len_ticks = joint_step_len_ticks;
-    *data->joint_velocity_cmd = joint_velocity_cmd;
-    *data->joint_velocity_feedback = joint_velocity_feedback;
+  data->metric_update_id = &metric_update_id;
+  data->metric_time_diff = &metric_time_diff;
+  data->metric_rp_update_len = &metric_rp_update_len;
+
+  for(size_t joint = 0; joint < MAX_JOINT; joint++) {
+    data->joint_enable[joint] = &(joint_enable[joint]);
+    data->joint_gpio_step[joint] = &(joint_gpio_step[joint]);
+    data->joint_gpio_dir[joint] = &(joint_gpio_dir[joint]);
+    data->joint_max_velocity[joint] = &(joint_max_velocity[joint]);
+    data->joint_max_accel[joint] = &(joint_max_accel[joint]);
+    data->joint_pos_feedback[joint] = &(joint_pos_feedback[joint]);
+    data->joint_scale[joint] = &(joint_scale[joint]);
+    data->joint_step_len_ticks[joint] = &(joint_step_len_ticks[joint]);
+    data->joint_velocity_cmd[joint] = &(joint_velocity_cmd[joint]);
+    data->joint_velocity_feedback[joint] = &(joint_velocity_feedback[joint]);
+  }
 }
 
 
@@ -79,21 +82,19 @@ static void test_timing(void **state) {
     assert_int_equal(*(data.metric_rp_update_len), message.rp_update_len);
 }
 
-static void test_axis_movement(void **state) {
+static void test_joint_movement(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer buffer = {0};
     size_t mess_received_count = 0;
 
-    skeleton_t data;
+    skeleton_t data = {0};
     setup_data(&data);
    
-    uint32_t axis = 0;
-    struct Reply_axis_movement message = {
-        .type = REPLY_AXIS_MOVEMENT,
-        .axis = axis,
-        .abs_pos_acheived = 1234,
-        .velocity_acheived = 7890,
+    struct Reply_joint_movement message = {
+        .type = REPLY_JOINT_MOVEMENT,
+        .abs_pos_acheived = {1234, 5678, 9, 10},
+        .velocity_acheived = {7890, 1234, 5, 6}
     };
 
     memcpy(buffer.payload, &message, sizeof(message));
@@ -110,14 +111,16 @@ static void test_axis_movement(void **state) {
             NULL
             );
 
-    assert_double_equal(
-            *(data.joint_pos_feedback[axis]),
-            (double)message.abs_pos_acheived / *(data.joint_scale[axis]),
-            0.0001);
-    assert_int_equal(*(data.joint_velocity_feedback[axis]), message.velocity_acheived);
+    for(size_t joint = 0; joint < MAX_JOINT; joint++) {
+        assert_double_equal(
+                (*data.joint_pos_feedback)[joint],
+                (double)message.abs_pos_acheived[joint] / (*data.joint_scale)[joint],
+                0.0001);
+        assert_int_equal((*data.joint_velocity_feedback)[joint], message.velocity_acheived[joint]);
+    }
 }
 
-static void test_axis_config(void **state) {
+static void test_joint_config(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer buffer = {0};
@@ -126,10 +129,10 @@ static void test_axis_config(void **state) {
     skeleton_t data = {0};
     setup_data(&data);
    
-    uint32_t axis = 0;
-    struct Reply_axis_config message = {
-        .type = REPLY_AXIS_CONFIG,
-        .axis = axis,
+    uint32_t joint = 0;
+    struct Reply_joint_config message = {
+        .type = REPLY_JOINT_CONFIG,
+        .joint = joint,
         .enable = 1,
         .gpio_step = 2,
         .gpio_dir = 3,
@@ -162,7 +165,7 @@ static void test_axis_config(void **state) {
     assert_double_equal(last_joint_config.max_accel, message.max_accel, 0.0001);
 }
 
-static void test_axis_metrics(void **state) {
+static void test_joint_metrics(void **state) {
     (void) state; /* unused */
 
     struct NWBuffer buffer = {0};
@@ -171,12 +174,10 @@ static void test_axis_metrics(void **state) {
     skeleton_t data = {0};
     setup_data(&data);
    
-    uint32_t axis = 0;
-    struct Reply_axis_metrics message = {
-        .type = REPLY_AXIS_METRICS,
-        .axis = axis,
-        .velocity_requested = 3456,
-        .step_len_ticks = 1357,
+    struct Reply_joint_metrics message = {
+        .type = REPLY_JOINT_METRICS,
+        .velocity_requested = {3456, 7890, 1234},
+        .step_len_ticks = {1357, 2468, 3579, 4680}
     };
 
     memcpy(buffer.payload, &message, sizeof(message));
@@ -193,17 +194,19 @@ static void test_axis_metrics(void **state) {
             NULL
             );
 
-    assert_int_equal(*(data.joint_step_len_ticks[axis]), message.step_len_ticks);
-    assert_int_equal(*(data.joint_velocity_cmd[axis]), message.velocity_requested);
+    for(size_t joint = 0; joint < MAX_JOINT; joint++) {
+      assert_int_equal(*(data.joint_step_len_ticks[joint]), message.step_len_ticks[joint]);
+      assert_int_equal(*(data.joint_velocity_cmd[joint]), message.velocity_requested[joint]);
+    }
 }
 
 
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_timing),
-        cmocka_unit_test(test_axis_movement),
-        cmocka_unit_test(test_axis_config),
-        cmocka_unit_test(test_axis_metrics)
+        cmocka_unit_test(test_joint_movement),
+        cmocka_unit_test(test_joint_config),
+        cmocka_unit_test(test_joint_metrics)
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);

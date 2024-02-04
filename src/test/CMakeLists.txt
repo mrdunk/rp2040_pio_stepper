@@ -38,6 +38,7 @@ add_executable(
     ${CMAKE_CURRENT_SOURCE_DIR}/rp_network_test.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_fuling.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_huanyang.c
+    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_weiken.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
@@ -64,6 +65,7 @@ add_executable(
     ${CMAKE_CURRENT_SOURCE_DIR}/rp_network_tx_test.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_fuling.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_huanyang.c
+    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_weiken.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
@@ -91,6 +93,7 @@ add_executable(
     ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_fuling.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_huanyang.c
+    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_weiken.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
     ${CMAKE_SOURCE_DIR}/src/rp2040/config.c

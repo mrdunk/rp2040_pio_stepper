@@ -20,7 +20,7 @@
 
 // Mutexes for locking the main config which is shared between cores.
 mutex_t mtx_top;
-mutex_t mtx_axis[MAX_AXIS];
+mutex_t mtx_joint[MAX_JOINT];
 
 // Semaphore for synchronizing cores.
 volatile uint32_t tick = 0;
@@ -30,7 +30,7 @@ volatile struct ConfigGlobal config = {
   .last_update_time = 0,
   .update_time_us = 1000,    // 1000us.
   .pio_io_configured = false,
-  .axis = {
+  .joint = {
     {
       // Axis 0.
       .updated_from_c0 = 0,
@@ -103,7 +103,7 @@ void init_gpio() {
     config.gpio[gpio].value = false;
   }
 
-  for(uint16_t bank = 0; bank < MAX_GPIO / 32; bank++) {
+  for(uint16_t bank = 0; bank < MAX_GPIO_BANK; bank++) {
     // Set confirmation to force an initial Reply_gpio to be sent.
     config.gpio_confirmation_pending[bank] = false;
   }
@@ -115,13 +115,13 @@ void init_config()
 
   mutex_init(&mtx_top);
 
-  for(uint8_t axis = 0; axis < MAX_AXIS; axis++) {
-    mutex_init(&mtx_axis[axis]);
+  for(uint8_t joint = 0; joint < MAX_JOINT; joint++) {
+    mutex_init(&mtx_joint[joint]);
   }
 }
 
 /* Update the period of the main timing loop.
- * This should closely match the rate at which we receive axis position data. */
+ * This should closely match the rate at which we receive joint position data. */
 void update_period(uint32_t update_time_us) {
   // TODO: The mutex probably isn't needed here.
   // Remove and test.
@@ -133,7 +133,7 @@ void update_period(uint32_t update_time_us) {
 }
 
 /* Get the period of the main timing loop.
- * This should closely match the rate at which we receive axis position data. */
+ * This should closely match the rate at which we receive joint position data. */
 uint32_t get_period() {
   // TODO: The mutex probably isn't needed here.
   // Remove and test.
@@ -185,16 +185,16 @@ void update_packet_metrics(
   mutex_exit(&mtx_top);
 }
 
-uint8_t has_new_c0_data(const uint8_t axis) {
-  mutex_enter_blocking(&mtx_axis[axis]);
-  uint8_t updated = config.axis[axis].updated_from_c0;
+uint8_t has_new_c0_data(const uint8_t joint) {
+  mutex_enter_blocking(&mtx_joint[joint]);
+  uint8_t updated = config.joint[joint].updated_from_c0;
 
-  mutex_exit(&mtx_axis[axis]);
+  mutex_exit(&mtx_joint[joint]);
   return updated;
 }
 
-void update_axis_config(
-    const uint8_t axis,
+void update_joint_config(
+    const uint8_t joint,
     const uint8_t core,
     const uint8_t* enabled,
     const int8_t* io_pos_step,
@@ -209,62 +209,62 @@ void update_axis_config(
     const int32_t* step_len_ticks
 )
 {
-  if(axis >= MAX_AXIS) {
+  if(joint >= MAX_JOINT) {
     return;
   }
 
-  //printf("Setting CORE%i:%i\n", core, axis);
-  mutex_enter_blocking(&mtx_axis[axis]);
+  //printf("Setting CORE%i:%i\n", core, joint);
+  mutex_enter_blocking(&mtx_joint[joint]);
 
   if(enabled != NULL) {
-    config.axis[axis].enabled = *enabled;
+    config.joint[joint].enabled = *enabled;
   }
   if(io_pos_step != NULL) {
-    config.axis[axis].io_pos_step = *io_pos_step;
+    config.joint[joint].io_pos_step = *io_pos_step;
   }
   if(io_pos_dir != NULL) {
-    config.axis[axis].io_pos_dir = *io_pos_dir;
+    config.joint[joint].io_pos_dir = *io_pos_dir;
   }
   if(rel_pos_requested != NULL) {
-    config.axis[axis].rel_pos_requested = *rel_pos_requested;
+    config.joint[joint].rel_pos_requested = *rel_pos_requested;
   }
   if(abs_pos_requested != NULL) {
-    config.axis[axis].abs_pos_requested = *abs_pos_requested;
+    config.joint[joint].abs_pos_requested = *abs_pos_requested;
   }
   if(abs_pos_acheived != NULL) {
-    config.axis[axis].abs_pos_acheived = *abs_pos_acheived;
+    config.joint[joint].abs_pos_acheived = *abs_pos_acheived;
   }
   if(max_velocity != NULL) {
-    config.axis[axis].max_velocity = *max_velocity;
+    config.joint[joint].max_velocity = *max_velocity;
   }
   if(max_accel_ticks != NULL) {
-    config.axis[axis].max_accel_ticks = *max_accel_ticks;
+    config.joint[joint].max_accel_ticks = *max_accel_ticks;
   }
   if(velocity_requested != NULL) {
-    config.axis[axis].velocity_requested = *velocity_requested;
+    config.joint[joint].velocity_requested = *velocity_requested;
   }
   if(velocity_acheived != NULL) {
-    config.axis[axis].velocity_acheived = *velocity_acheived;
+    config.joint[joint].velocity_acheived = *velocity_acheived;
   }
   if(step_len_ticks != NULL) {
-    config.axis[axis].step_len_ticks = *step_len_ticks;
+    config.joint[joint].step_len_ticks = *step_len_ticks;
   }
 
   switch(core) {
     case CORE0:
-      config.axis[axis].updated_from_c0++;
+      config.joint[joint].updated_from_c0++;
       break;
     case CORE1:
-      config.axis[axis].updated_from_c1++;
+      config.joint[joint].updated_from_c1++;
       break;
   }
 
-  mutex_exit(&mtx_axis[axis]);
+  mutex_exit(&mtx_joint[joint]);
 }
 
 
-uint32_t get_axis_config(
-    const uint8_t axis,
+uint32_t get_joint_config(
+    const uint8_t joint,
     const uint8_t core,
     uint8_t* enabled,
     int8_t* io_pos_step,
@@ -278,62 +278,62 @@ uint32_t get_axis_config(
     int32_t* velocity_acheived,
     int32_t* step_len_ticks)
 {
-  if(axis >= MAX_AXIS) {
+  if(joint >= MAX_JOINT) {
     return 0;
   }
 
-  mutex_enter_blocking(&mtx_axis[axis]);
-  //if(mutex_try_enter(&mtx_axis[axis], NULL) == false) {
+  mutex_enter_blocking(&mtx_joint[joint]);
+  //if(mutex_try_enter(&mtx_joint[joint], NULL) == false) {
   //  return 0;
   //}
 
   int32_t updated_by_other_core;
   switch(core) {
     case CORE0:
-      updated_by_other_core = config.axis[axis].updated_from_c1;
-      config.axis[axis].updated_from_c1 = 0;
+      updated_by_other_core = config.joint[joint].updated_from_c1;
+      config.joint[joint].updated_from_c1 = 0;
       break;
     case CORE1:
-      updated_by_other_core = config.axis[axis].updated_from_c0;
-      config.axis[axis].updated_from_c0 = 0;
+      updated_by_other_core = config.joint[joint].updated_from_c0;
+      config.joint[joint].updated_from_c0 = 0;
       break;
   }
 
   if(enabled != NULL) {
-    *enabled = config.axis[axis].enabled;
+    *enabled = config.joint[joint].enabled;
   }
   if(io_pos_step != NULL) {
-    *io_pos_step = config.axis[axis].io_pos_step;
+    *io_pos_step = config.joint[joint].io_pos_step;
   }
   if(io_pos_dir != NULL) {
-    *io_pos_dir = config.axis[axis].io_pos_dir;
+    *io_pos_dir = config.joint[joint].io_pos_dir;
   }
   if(rel_pos_requested != NULL) {
-    *rel_pos_requested = config.axis[axis].rel_pos_requested;
+    *rel_pos_requested = config.joint[joint].rel_pos_requested;
   }
   if(abs_pos_requested != NULL) {
-    *abs_pos_requested = config.axis[axis].abs_pos_requested;
+    *abs_pos_requested = config.joint[joint].abs_pos_requested;
   }
   if(abs_pos_acheived != NULL) {
-    *abs_pos_acheived = config.axis[axis].abs_pos_acheived;
+    *abs_pos_acheived = config.joint[joint].abs_pos_acheived;
   }
   if(max_velocity != NULL) {
-    *max_velocity = config.axis[axis].max_velocity;
+    *max_velocity = config.joint[joint].max_velocity;
   }
   if(max_accel_ticks != NULL) {
-    *max_accel_ticks = config.axis[axis].max_accel_ticks;
+    *max_accel_ticks = config.joint[joint].max_accel_ticks;
   }
   if(velocity_requested != NULL) {
-    *velocity_requested = config.axis[axis].velocity_requested;
+    *velocity_requested = config.joint[joint].velocity_requested;
   }
   if(velocity_acheived != NULL) {
-    *velocity_acheived = config.axis[axis].velocity_acheived;
+    *velocity_acheived = config.joint[joint].velocity_acheived;
   }
   if(step_len_ticks != NULL) {
-    *step_len_ticks = config.axis[axis].step_len_ticks;
+    *step_len_ticks = config.joint[joint].step_len_ticks;
   }
 
-  mutex_exit(&mtx_axis[axis]);
+  mutex_exit(&mtx_joint[joint]);
 
   return updated_by_other_core;
 }
@@ -358,47 +358,44 @@ bool serialise_timing(struct NWBuffer* tx_buf, int32_t update_id, int32_t time_d
 }
 
 /* Serialise data stored in global config in a format for sending over UDP. */
-bool serialise_axis_movement(
-    const uint32_t axis,
+bool serialise_joint_movement(
     struct NWBuffer* tx_buf,
     uint8_t wait_for_data)
 {
-  if(axis >= MAX_AXIS) {
-    printf("ERROR: Invalid axis: %u\n", axis);
-    return false;
-  }
-
   int32_t abs_pos_acheived;
   int32_t velocity_acheived;
   uint32_t updated = 0;
 
-  do {
-    updated = get_axis_config(
-        axis,
-        CORE0,
-        NULL, //&enabled,
-        NULL, //&io_pos_step,
-        NULL, //&io_pos_dir,
-        NULL, //&rel_pos_requested,
-        NULL, //&abs_pos_requested,
-        &abs_pos_acheived,
-        NULL, //&max_velocity,
-        NULL, //&max_accel_ticks,
-        NULL, //&velocity_requested,
-        &velocity_acheived,
-        NULL //&step_len_ticks,
-        );
-  } while(updated == 0 && wait_for_data);
 
-  if(updated > 1) {
-    printf("WC0, mult ud: %u \t%lu\n", axis, updated);
+  struct Reply_joint_movement reply;
+  reply.type = REPLY_JOINT_MOVEMENT;
+
+  for(size_t joint = 0; joint < MAX_JOINT; joint++) {
+    do {
+      updated = get_joint_config(
+          joint,
+          CORE0,
+          NULL, //&enabled,
+          NULL, //&io_pos_step,
+          NULL, //&io_pos_dir,
+          NULL, //&rel_pos_requested,
+          NULL, //&abs_pos_requested,
+          &abs_pos_acheived,
+          NULL, //&max_velocity,
+          NULL, //&max_accel_ticks,
+          NULL, //&velocity_requested,
+          &velocity_acheived,
+          NULL //&step_len_ticks,
+          );
+    } while(updated == 0 && wait_for_data);
+
+    if(updated > 1) {
+      printf("WC0, mult ud: %u \t%lu\n", joint, updated);
+    }
+
+    reply.abs_pos_acheived[joint] = abs_pos_acheived;
+    reply.velocity_acheived[joint] = velocity_acheived;
   }
-
-  struct Reply_axis_movement reply;
-  reply.type = REPLY_AXIS_MOVEMENT;
-  reply.axis = axis;
-  reply.abs_pos_acheived = abs_pos_acheived;
-  reply.velocity_acheived = velocity_acheived;
 
   uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
 
@@ -411,11 +408,12 @@ bool serialise_axis_movement(
 }
 
 bool serialise_spindle_speed_out(
-    size_t spindle, struct NWBuffer* tx_buf, float speed, struct vfd_stats *vfd_stats)
+    struct NWBuffer* tx_buf, float speed, struct vfd_stats *vfd_stats)
 {
   struct Reply_spindle_speed reply;
   reply.type = REPLY_SPINDLE_SPEED;
-  reply.spindle_index = spindle;
+
+  reply.spindle_index = 0;
   reply.speed = speed;
   reply.crc_errors = vfd_stats->crc_errors;
   reply.unanswered = vfd_stats->unanswered;
@@ -459,9 +457,9 @@ bool serialise_spindle_config(size_t spindle, struct NWBuffer* tx_buf) {
 }
 
 /* Serialise data stored in global config in a format for sending over UDP. */
-bool serialise_axis_config(const uint32_t axis, struct NWBuffer* tx_buf) {
-  if(axis >= MAX_AXIS) {
-    printf("ERROR: Invalid axis: %u\n", axis);
+bool serialise_joint_config(const uint32_t joint, struct NWBuffer* tx_buf) {
+  if(joint >= MAX_JOINT) {
+    printf("ERROR: Invalid joint: %u\n", joint);
     return false;
   }
 
@@ -471,8 +469,8 @@ bool serialise_axis_config(const uint32_t axis, struct NWBuffer* tx_buf) {
   double max_velocity;
   double max_accel;
 
-  get_axis_config(
-        axis,
+  get_joint_config(
+        joint,
         CORE0,
         &enabled,
         &io_pos_step,
@@ -487,9 +485,9 @@ bool serialise_axis_config(const uint32_t axis, struct NWBuffer* tx_buf) {
         NULL  //&step_len_ticks,
         );
 
-  struct Reply_axis_config reply;
-  reply.type = REPLY_AXIS_CONFIG;
-  reply.axis = axis;
+  struct Reply_joint_config reply;
+  reply.type = REPLY_JOINT_CONFIG;
+  reply.joint = joint;
   reply.enable = enabled;
   reply.gpio_step = io_pos_step;
   reply.gpio_dir = io_pos_dir;
@@ -507,17 +505,16 @@ bool serialise_axis_config(const uint32_t axis, struct NWBuffer* tx_buf) {
 }
 
 /* Serialise data stored in global config in a format for sending over UDP. */
-bool serialise_axis_metrics(const uint32_t axis, struct NWBuffer* tx_buf) {
-  if(axis >= MAX_AXIS) {
-    printf("ERROR: Invalid axis: %u\n", axis);
-    return false;
-  }
+bool serialise_joint_metrics(struct NWBuffer* tx_buf) {
+  struct Reply_joint_metrics reply;
+  reply.type = REPLY_JOINT_METRICS;
 
   int32_t velocity_requested;
   int32_t step_len_ticks;
 
-  get_axis_config(
-        axis,
+  for(size_t joint = 0; joint < MAX_JOINT; joint++) {
+    get_joint_config(
+        joint,
         CORE0,
         NULL, //&enabled,
         NULL, //&io_pos_step,
@@ -532,11 +529,9 @@ bool serialise_axis_metrics(const uint32_t axis, struct NWBuffer* tx_buf) {
         &step_len_ticks
         );
 
-  struct Reply_axis_metrics reply;
-  reply.type = REPLY_AXIS_METRICS;
-  reply.axis = axis;
-  reply.velocity_requested = velocity_requested;
-  reply.step_len_ticks = step_len_ticks;
+    reply.velocity_requested[joint] = velocity_requested;
+    reply.step_len_ticks[joint] = step_len_ticks;
+  }
 
   uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
 
