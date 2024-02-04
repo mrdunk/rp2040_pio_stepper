@@ -8,9 +8,7 @@
 #include <limits.h>
 
 #include "rp2040_defines.h"
-#include "rp2040_defines.h"
 #include "../shared/messages.h"
-#include "../rp2040/modbus.h"
 
 /* module information */
 MODULE_AUTHOR("Duncan Law");
@@ -53,8 +51,8 @@ typedef struct {
   hal_u32_t* gpio_index[MAX_GPIO];
   hal_u32_t* gpio_address[MAX_GPIO];
 
-  uint32_t gpio_data_received[MAX_GPIO / 32];
-  bool gpio_confirmation_pending[MAX_GPIO / 32];
+  uint32_t gpio_data_received[MAX_GPIO_BANK];
+  bool gpio_confirmation_pending[MAX_GPIO_BANK];
 
   hal_bit_t* spindle_fwd[MAX_SPINDLE];
   hal_bit_t* spindle_rev[MAX_SPINDLE];
@@ -148,7 +146,7 @@ int rtapi_app_main(void)
   }
 
   /* Set some default values. */
-  for(int gpio_bank = 0; gpio_bank < MAX_GPIO / 32; gpio_bank++) {
+  for(int gpio_bank = 0; gpio_bank < MAX_GPIO_BANK; gpio_bank++) {
     port_data_array->gpio_data_received[gpio_bank] = 0;
     port_data_array->gpio_confirmation_pending[gpio_bank] = true;
   }
@@ -655,12 +653,15 @@ static void write_port(void *arg, long period)
   pack_success = pack_success && serialize_joint_pos(&buffer, data);
 
   // No need to update each spindle every cycle.
-  if(count % 100 < MAX_SPINDLE) {
-    size_t spindle = count % 100;
-    if(data->spindle_vfd_type[spindle] != MODBUS_TYPE_NOT_SET) {
-      float speed = *data->spindle_speed_in[spindle] / (120.0 / data->spindle_poles[spindle]);
-      pack_success = pack_success && serialise_spindle_speed_in(&buffer, spindle, speed);
-    }
+  //if(count % 100 < MAX_SPINDLE) {
+  //  size_t spindle = count % 100;
+  //  if(data->spindle_vfd_type[spindle] != MODBUS_TYPE_NOT_SET) {
+  //    float speed = *data->spindle_speed_in[spindle] / (120.0 / data->spindle_poles[spindle]);
+  //    pack_success = pack_success && serialise_spindle_speed_in(&buffer, spindle, speed);
+  //  }
+  //}
+  if(count % 100 == 0) {
+    pack_success = pack_success && serialise_spindle_speed_in(&buffer, data);
   }
 
   if(pack_success) {

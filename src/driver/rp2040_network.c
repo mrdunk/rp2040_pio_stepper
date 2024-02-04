@@ -7,6 +7,7 @@
 #include "../shared/messages.h"
 #include "../shared/buffer.c"
 #include "../shared/checksum.c"
+#include "../rp2040/modbus.h"
 
 #ifdef BUILD_TESTS
 
@@ -151,16 +152,31 @@ bool serialise_spindle_config(
 
 bool serialise_spindle_speed_in(
     struct NWBuffer* tx_buf,
-    uint8_t spindle,
-    float speed
+    skeleton_t* data
 )
 {
+  bool at_least_one_eneabled = false;
+
   struct Message_spindle_speed message;
   message.type = MSG_SET_SPINDLE_SPEED;
-  message.spindle_index = spindle;
-  message.speed = speed;
 
-  return pack_nw_buff(tx_buf, &message, sizeof(message));
+  float speed;
+
+  for(size_t spindle = 0; spindle < MAX_SPINDLE; spindle++) {
+    if(data->spindle_vfd_type[spindle] == MODBUS_TYPE_NOT_SET) {
+      continue;
+    }
+    at_least_one_eneabled = true;
+
+    speed =
+      *data->spindle_speed_in[spindle] / (120.0 / data->spindle_poles[spindle]);
+    message.speed[spindle] = speed;
+  }
+
+  if(at_least_one_eneabled) {
+    return pack_nw_buff(tx_buf, &message, sizeof(message));
+  }
+  return true;
 }
 
 size_t serialize_joint_enable(
@@ -216,10 +232,10 @@ size_t serialize_gpio_config(
 
 uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
   size_t return_val = 0;
-  bool confirmation_pending[MAX_GPIO / 32];
-  uint32_t to_send[MAX_GPIO / 32];
+  bool confirmation_pending[MAX_GPIO_BANK];
+  uint32_t to_send[MAX_GPIO_BANK];
 
-  for(size_t bank = 0; bank < MAX_GPIO / 32; bank++) {
+  for(size_t bank = 0; bank < MAX_GPIO_BANK; bank++) {
     to_send[bank] = 0;
     confirmation_pending[bank] = false;
   }
@@ -277,7 +293,7 @@ uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
     to_send[bank] |= (current_value << gpio_per_bank);
   }
 
-  for(int bank = 0; bank < MAX_GPIO / 32; bank++) {
+  for(int bank = 0; bank < MAX_GPIO_BANK; bank++) {
     if(confirmation_pending[bank] || data->gpio_confirmation_pending[bank]) {
       // Values differ from those received in the last NW update
       // or the last network update requested confirmation.
@@ -335,8 +351,7 @@ bool unpack_joint_movement(
 
   for(size_t joint = 0; joint < MAX_JOINT; joint++) {
     *data->joint_pos_feedback[joint] =
-      ((double)reply->abs_pos_acheived[joint])
-      / *data->joint_scale[joint];
+      ((double)reply->abs_pos_acheived[joint]) / *data->joint_scale[joint];
 
     *data->joint_velocity_feedback[joint] =
       (double)reply->velocity_acheived[joint];
@@ -425,13 +440,11 @@ bool unpack_joint_metrics(
   }
 
   struct Reply_joint_metrics* reply = data_p;
-  uint32_t joint = reply->joint;
+  for(size_t joint = 0; joint < MAX_JOINT; joint++) {
+    *data->joint_step_len_ticks[joint] = (double)reply->step_len_ticks[joint];
 
-  *data->joint_step_len_ticks[joint] =
-          (double)reply->step_len_ticks;
-
-  *data->joint_velocity_cmd[joint] =
-          (double)reply->velocity_requested;
+    *data->joint_velocity_cmd[joint] = (double)reply->velocity_requested[joint];
+  }
 
   (*received_count)++;
   return true;

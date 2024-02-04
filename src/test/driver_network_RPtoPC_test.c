@@ -174,12 +174,10 @@ static void test_joint_metrics(void **state) {
     skeleton_t data = {0};
     setup_data(&data);
    
-    uint32_t joint = 0;
     struct Reply_joint_metrics message = {
         .type = REPLY_JOINT_METRICS,
-        .joint = joint,
-        .velocity_requested = 3456,
-        .step_len_ticks = 1357,
+        .velocity_requested = {3456, 7890, 1234},
+        .step_len_ticks = {1357, 2468, 3579, 4680}
     };
 
     memcpy(buffer.payload, &message, sizeof(message));
@@ -196,8 +194,10 @@ static void test_joint_metrics(void **state) {
             NULL
             );
 
-    assert_int_equal(*(data.joint_step_len_ticks[joint]), message.step_len_ticks);
-    assert_int_equal(*(data.joint_velocity_cmd[joint]), message.velocity_requested);
+    for(size_t joint = 0; joint < MAX_JOINT; joint++) {
+      assert_int_equal(*(data.joint_step_len_ticks[joint]), message.step_len_ticks[joint]);
+      assert_int_equal(*(data.joint_velocity_cmd[joint]), message.velocity_requested[joint]);
+    }
 }
 
 

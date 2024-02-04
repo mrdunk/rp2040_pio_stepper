@@ -103,7 +103,7 @@ void init_gpio() {
     config.gpio[gpio].value = false;
   }
 
-  for(uint16_t bank = 0; bank < MAX_GPIO / 32; bank++) {
+  for(uint16_t bank = 0; bank < MAX_GPIO_BANK; bank++) {
     // Set confirmation to force an initial Reply_gpio to be sent.
     config.gpio_confirmation_pending[bank] = false;
   }
@@ -408,11 +408,12 @@ bool serialise_joint_movement(
 }
 
 bool serialise_spindle_speed_out(
-    size_t spindle, struct NWBuffer* tx_buf, float speed, struct vfd_stats *vfd_stats)
+    struct NWBuffer* tx_buf, float speed, struct vfd_stats *vfd_stats)
 {
   struct Reply_spindle_speed reply;
   reply.type = REPLY_SPINDLE_SPEED;
-  reply.spindle_index = spindle;
+
+  reply.spindle_index = 0;
   reply.speed = speed;
   reply.crc_errors = vfd_stats->crc_errors;
   reply.unanswered = vfd_stats->unanswered;
@@ -504,16 +505,15 @@ bool serialise_joint_config(const uint32_t joint, struct NWBuffer* tx_buf) {
 }
 
 /* Serialise data stored in global config in a format for sending over UDP. */
-bool serialise_joint_metrics(const uint32_t joint, struct NWBuffer* tx_buf) {
-  if(joint >= MAX_JOINT) {
-    printf("ERROR: Invalid joint: %u\n", joint);
-    return false;
-  }
+bool serialise_joint_metrics(struct NWBuffer* tx_buf) {
+  struct Reply_joint_metrics reply;
+  reply.type = REPLY_JOINT_METRICS;
 
   int32_t velocity_requested;
   int32_t step_len_ticks;
 
-  get_joint_config(
+  for(size_t joint = 0; joint < MAX_JOINT; joint++) {
+    get_joint_config(
         joint,
         CORE0,
         NULL, //&enabled,
@@ -529,11 +529,9 @@ bool serialise_joint_metrics(const uint32_t joint, struct NWBuffer* tx_buf) {
         &step_len_ticks
         );
 
-  struct Reply_joint_metrics reply;
-  reply.type = REPLY_JOINT_METRICS;
-  reply.joint = joint;
-  reply.velocity_requested = velocity_requested;
-  reply.step_len_ticks = step_len_ticks;
+    reply.velocity_requested[joint] = velocity_requested;
+    reply.step_len_ticks[joint] = step_len_ticks;
+  }
 
   uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
 

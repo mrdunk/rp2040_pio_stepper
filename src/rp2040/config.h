@@ -62,7 +62,7 @@ struct ConfigGlobal {
   struct ConfigAxis joint[MAX_JOINT];
   struct ConfigGPIO gpio[MAX_GPIO];
   struct ConfigI2c i2c[MAX_I2C_MCP];
-  bool gpio_confirmation_pending[MAX_GPIO / 32];
+  bool gpio_confirmation_pending[MAX_GPIO_BANK];
 };
 
 
@@ -130,10 +130,10 @@ bool serialise_joint_config(
     struct NWBuffer* tx_buf);
 
 /* Serialise data stored in global config in a format for sending over UDP. */
-bool serialise_joint_metrics(const uint32_t joint, struct NWBuffer* tx_buf);
+bool serialise_joint_metrics(struct NWBuffer* tx_buf);
 
 bool serialise_spindle_speed_out(
-    size_t spindle, struct NWBuffer* tx_buf, float speed, struct vfd_stats *vfd_stats);
+    struct NWBuffer* tx_buf, float speed, struct vfd_stats *vfd_stats);
 
 bool serialise_spindle_config(size_t spindle, struct NWBuffer* tx_buf);
 

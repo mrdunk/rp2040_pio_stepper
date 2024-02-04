@@ -201,13 +201,15 @@ bool unpack_spindle_speed(
   }
 
   struct Message_spindle_speed* message = data_p;
-  uint8_t spindle = message->spindle_index;
-  if(spindle > 0) {
-    printf("ERROR: More than one spindle not yet supported.\n");
-    return false;
-  }
 
-  req_spindle_frequency = message->speed;
+  for(size_t spindle = 0; spindle < MAX_SPINDLE; spindle++) {
+    if(spindle > 0) {
+      // More that one spindle not yet supported.
+      continue;
+    }
+
+    req_spindle_frequency = message->speed[spindle];
+  }
 
   (*received_count)++;
   return true;
@@ -476,14 +478,11 @@ void core0_main() {
 
       // Get data from config and put in TX buffer.
       serialise_joint_movement(&tx_buf, true);
-      //for(size_t joint = 0; joint < MAX_JOINT; joint++) {
-        //serialise_joint_metrics(joint, &tx_buf);
-      //}
+      serialise_joint_metrics(&tx_buf);
 
       // No need to update each spindle every cycle.
-      if(count % 100 < MAX_SPINDLE) {
-        size_t spindle = count % 100;
-        serialise_spindle_speed_out(spindle, &tx_buf, act_spindle_frequency, &vfd.stats);
+      if(count % 100 == 0) {
+        serialise_spindle_speed_out(&tx_buf, act_spindle_frequency, &vfd.stats);
       }
 
       size_t tx_buf_len = 0;

@@ -189,10 +189,10 @@ bool gpio_i2c_mcp_get_pin(uint8_t index, uint8_t address) {
 
 /* Pack GPIO inputs in buffer for UDP transmission. */
 void gpio_serialize(struct NWBuffer* tx_buf, size_t* tx_buf_len) {
-  uint32_t values[MAX_GPIO / 32] = {0};
-  bool to_send[MAX_GPIO / 32];
+  uint32_t values[MAX_GPIO_BANK] = {0};
+  bool to_send[MAX_GPIO_BANK];
 
-  for(uint8_t bank = 0; bank < MAX_GPIO / 32; bank++) {
+  for(uint8_t bank = 0; bank < MAX_GPIO_BANK; bank++) {
     values[bank] = 0;
     to_send[bank] = false;
   }
@@ -242,7 +242,7 @@ void gpio_serialize(struct NWBuffer* tx_buf, size_t* tx_buf_len) {
   struct Reply_gpio reply;
   reply.type = REPLY_GPIO;
 
-  for(uint8_t bank = 0; bank < MAX_GPIO / 32; bank++) {
+  for(uint8_t bank = 0; bank < MAX_GPIO_BANK; bank++) {
       if(! config.gpio_confirmation_pending[bank]) {
         continue;
       }

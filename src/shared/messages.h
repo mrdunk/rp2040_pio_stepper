@@ -10,6 +10,7 @@
 
 #define MAX_JOINT 4
 #define MAX_GPIO 64
+#define MAX_GPIO_BANK (MAX_GPIO / 32)
 #define MAX_SPINDLE 4
 #define MAX_I2C_MCP 4
 
@@ -17,6 +18,7 @@
 
 #define MAX_JOINT 4
 #define MAX_GPIO 32
+#define MAX_GPIO_BANK (MAX_GPIO / 32)
 #define MAX_SPINDLE 4
 #define MAX_I2C_MCP 4
 
@@ -84,14 +86,13 @@ struct Message_spindle_config {
 
 struct Message_spindle_speed {
   uint8_t type;                   // MSG_SET_SPINDLE_SPEED
-  uint8_t spindle_index;
-  float speed;
+  float speed[MAX_SPINDLE];
 };
 
 struct Message_gpio_config {
   uint8_t type;                   // MSG_SET_GPIO_CONFIG
   uint8_t gpio_type;
-  uint8_t gpio_count;             // The HAL side index of which gpio this is. 
+  uint8_t gpio_count;             // The HAL side index of which gpio this is.
   uint8_t index;                  // The RP side component index. IO pin number for RP native.
   uint8_t address;                // The i2c address if applicable.
 };
@@ -156,9 +157,8 @@ struct Reply_gpio_config {
 
 struct Reply_joint_metrics {
   uint8_t type;
-  uint8_t joint;
-  int32_t velocity_requested;
-  int32_t step_len_ticks;
+  int32_t velocity_requested[MAX_JOINT];
+  int32_t step_len_ticks[MAX_JOINT];
 };
 
 struct Reply_gpio {
@@ -169,6 +169,7 @@ struct Reply_gpio {
 };
 
 struct Reply_spindle_speed {
+  // TODO: Needs parameters per spindle if support for multiple spindles is added.
   uint8_t type;
   uint8_t spindle_index;
   double speed;
