@@ -135,8 +135,9 @@ struct Reply_timing {
 
 struct Reply_joint_movement {
   uint8_t type;
-  int32_t abs_pos_acheived[MAX_JOINT];
-  int32_t velocity_acheived[MAX_JOINT];
+  int32_t abs_pos_achieved[MAX_JOINT];
+  int32_t velocity_achieved[MAX_JOINT];
+  int32_t position_error[MAX_JOINT];
 };
 
 struct Reply_joint_config {
@@ -159,7 +160,7 @@ struct Reply_gpio_config {
 
 struct Reply_joint_metrics {
   uint8_t type;
-  int32_t velocity_requested[MAX_JOINT];
+  int32_t velocity_requested_tm1[MAX_JOINT];
   int32_t step_len_ticks[MAX_JOINT];
 };
 

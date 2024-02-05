@@ -40,8 +40,12 @@ typedef struct {
   hal_float_t* joint_velocity[MAX_JOINT];
   hal_float_t* joint_pos_feedback[MAX_JOINT];
   hal_s32_t* joint_step_len_ticks[MAX_JOINT];
-  hal_float_t* joint_velocity_cmd[MAX_JOINT];   // TODO: why a joint_vel_cmd and a joint_velocity_cmd?
+  // The requested velocity at time of joint_velocity_feedback.
+  hal_float_t* joint_velocity_cmd[MAX_JOINT];
+  // The actual velocity achieved on the RP.
   hal_float_t* joint_velocity_feedback[MAX_JOINT];
+  // Difference between requested position and actual position on RP.
+  hal_s32_t* joint_pos_error[MAX_JOINT];
 
   // For IN pins, HAL sets this to the value we want the IO pin set to on the RP.
   // For OUT pins, this is the value the RP pin is reported via the network update.
@@ -313,6 +317,15 @@ int rtapi_app_main(void)
 
     retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->joint_velocity_feedback[num_joint]),
                                 component_id, "rp2040_eth.%d.velocity-fb-%d", num_device, num_joint);
+    if (retval < 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR,
+                      "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
+      hal_exit(component_id);
+      return -1;
+    }
+
+    retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->joint_pos_error[num_joint]),
+                                component_id, "rp2040_eth.%d.pos-error-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);

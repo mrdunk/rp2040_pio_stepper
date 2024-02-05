@@ -21,19 +21,20 @@ extern volatile uint32_t tick;
 /* Configuration object for an joint.
  * This is the format for the global config that is shared between cores. */
 struct ConfigAxis {
-  uint8_t updated_from_c0;      // Data was updated on core 0.
-  uint8_t updated_from_c1;      // Data was updated on core 1.
+  uint8_t updated_from_c0;        // Data was updated on core 0.
+  uint8_t updated_from_c1;        // Data was updated on core 1.
   int8_t enabled;
-  int8_t io_pos_step;           // Physical step IO pin.
-  int8_t io_pos_dir;            // Physical direction IO pin.
-  double rel_pos_requested;     // In steps. Default value is UINT_MAX / 2.
-  double abs_pos_requested;     // In steps. Default value is UINT_MAX / 2.
-  int32_t abs_pos_acheived;     // In steps. Default value is UINT_MAX / 2.
+  int8_t io_pos_step;             // Physical step IO pin.
+  int8_t io_pos_dir;              // Physical direction IO pin.
+  double velocity_requested;      // In steps. Default value is UINT_MAX / 2.
+  double abs_pos_requested;       // In steps. Default value is UINT_MAX / 2.
+  int32_t abs_pos_achieved;       // In steps. Default value is UINT_MAX / 2.
   double max_velocity;
-  double max_accel;       // ticks / update_time_ticks ^ 2
-  int32_t velocity_requested;   // Calculated steps per update_time_us.
-  int32_t velocity_acheived;    // Steps per update_time_us.
-  int32_t step_len_ticks;       // Length of steps requested from the PIO.
+  double max_accel;               // ticks / update_time_ticks ^ 2
+  int32_t velocity_requested_tm1; // Velocity requested last cycle. Compare to velocity_achieved.
+  int32_t velocity_achieved;      // Steps per update_time_us.
+  int32_t step_len_ticks;         // Length of steps requested from the PIO.
+  int32_t position_error;         // Difference between requested and achieved position.
 };
 
 /* Configuration object for a single GPIO. */
@@ -90,14 +91,15 @@ void update_joint_config(
     const uint8_t* enabled,
     const int8_t* io_pos_step,
     const int8_t* io_pos_dir,
-    const double* rel_pos_requested,
+    const double* velocity_requested,
     const double* abs_pos_requested,
-    const int32_t* abs_pos_acheived,
+    const int32_t* abs_pos_achieved,
     const double* max_velocity,
     const double* max_accel,
-    const int32_t* velocity_requested,
-    const int32_t* velocity_acheived,
-    const int32_t* step_len_ticks
+    const int32_t* velocity_requested_tm1,
+    const int32_t* velocity_achieved,
+    const int32_t* step_len_ticks,
+    const int32_t* position_error
 );
 
 uint32_t get_joint_config(
@@ -106,14 +108,15 @@ uint32_t get_joint_config(
     uint8_t* enabled,
     int8_t* io_pos_step,
     int8_t* io_pos_dir,
-    double* rel_pos_requested,
+    double* velocity_requested,
     double* abs_pos_requested,
-    int32_t* abs_pos_acheived,
+    int32_t* abs_pos_achieved,
     double* max_velocity,
     double* max_accel,
-    int32_t* velocity_requested,
-    int32_t* velocity_acheived,
-    int32_t* step_len_ticks
+    int32_t* velocity_requested_tm1,
+    int32_t* velocity_achieved,
+    int32_t* step_len_ticks,
+    int32_t* position_error
     );
 
 /* Serialise metrics stored in global config in a format for sending over UDP. */

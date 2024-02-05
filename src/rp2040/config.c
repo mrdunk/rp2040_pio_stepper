@@ -38,13 +38,13 @@ volatile struct ConfigGlobal config = {
       .enabled = 0,
       .io_pos_step = -1,
       .io_pos_dir = -1,
-      .rel_pos_requested = 0,
+      .velocity_requested = 0,
       .abs_pos_requested = 0,
-      .abs_pos_acheived = 0,
+      .abs_pos_achieved = 0,
       .max_velocity = 50,
       .max_accel = 2.0,
-      .velocity_requested = 0,
-      .velocity_acheived = 0
+      .velocity_requested_tm1 = 0,
+      .velocity_achieved = 0
     },
     {
       // Axis 1.
@@ -53,13 +53,13 @@ volatile struct ConfigGlobal config = {
       .enabled = 0,
       .io_pos_step = -1,
       .io_pos_dir = -1,
-      .rel_pos_requested = 0,
+      .velocity_requested = 0,
       .abs_pos_requested = 0,
-      .abs_pos_acheived = 0,
+      .abs_pos_achieved = 0,
       .max_velocity = 50,
       .max_accel = 10.0,
-      .velocity_requested = 0,
-      .velocity_acheived = 0
+      .velocity_requested_tm1 = 0,
+      .velocity_achieved = 0
     },
     {
       // Axis 2.
@@ -68,13 +68,13 @@ volatile struct ConfigGlobal config = {
       .enabled = 0,
       .io_pos_step = -1,
       .io_pos_dir = -1,
-      .rel_pos_requested = 0,
+      .velocity_requested = 0,
       .abs_pos_requested = 0,
-      .abs_pos_acheived = 0,
+      .abs_pos_achieved = 0,
       .max_velocity = 50,
       .max_accel = 200.0,
-      .velocity_requested = 0,
-      .velocity_acheived = 0
+      .velocity_requested_tm1 = 0,
+      .velocity_achieved = 0
     },
     {
       // Axis 3.
@@ -83,13 +83,13 @@ volatile struct ConfigGlobal config = {
       .enabled = 0,
       .io_pos_step = -1,
       .io_pos_dir = -1,
-      .rel_pos_requested = 0,
+      .velocity_requested = 0,
       .abs_pos_requested = 0,
-      .abs_pos_acheived = 0,
+      .abs_pos_achieved = 0,
       .max_velocity = 50,
       .max_accel = 200.0,
-      .velocity_requested = 0,
-      .velocity_acheived = 0
+      .velocity_requested_tm1 = 0,
+      .velocity_achieved = 0
     },
   }
 };
@@ -199,14 +199,15 @@ void update_joint_config(
     const uint8_t* enabled,
     const int8_t* io_pos_step,
     const int8_t* io_pos_dir,
-    const double* rel_pos_requested,
+    const double* velocity_requested,
     const double* abs_pos_requested,
-    const int32_t* abs_pos_acheived,
+    const int32_t* abs_pos_achieved,
     const double* max_velocity,
     const double* max_accel,
-    const int32_t* velocity_requested,
-    const int32_t* velocity_acheived,
-    const int32_t* step_len_ticks
+    const int32_t* velocity_requested_tm1,
+    const int32_t* velocity_achieved,
+    const int32_t* step_len_ticks,
+    const int32_t* position_error
 )
 {
   if(joint >= MAX_JOINT) {
@@ -225,14 +226,14 @@ void update_joint_config(
   if(io_pos_dir != NULL) {
     config.joint[joint].io_pos_dir = *io_pos_dir;
   }
-  if(rel_pos_requested != NULL) {
-    config.joint[joint].rel_pos_requested = *rel_pos_requested;
+  if(velocity_requested != NULL) {
+    config.joint[joint].velocity_requested = *velocity_requested;
   }
   if(abs_pos_requested != NULL) {
     config.joint[joint].abs_pos_requested = *abs_pos_requested;
   }
-  if(abs_pos_acheived != NULL) {
-    config.joint[joint].abs_pos_acheived = *abs_pos_acheived;
+  if(abs_pos_achieved != NULL) {
+    config.joint[joint].abs_pos_achieved = *abs_pos_achieved;
   }
   if(max_velocity != NULL) {
     config.joint[joint].max_velocity = *max_velocity;
@@ -240,14 +241,17 @@ void update_joint_config(
   if(max_accel != NULL) {
     config.joint[joint].max_accel = *max_accel;
   }
-  if(velocity_requested != NULL) {
-    config.joint[joint].velocity_requested = *velocity_requested;
+  if(velocity_requested_tm1 != NULL) {
+    config.joint[joint].velocity_requested_tm1 = *velocity_requested_tm1;
   }
-  if(velocity_acheived != NULL) {
-    config.joint[joint].velocity_acheived = *velocity_acheived;
+  if(velocity_achieved != NULL) {
+    config.joint[joint].velocity_achieved = *velocity_achieved;
   }
   if(step_len_ticks != NULL) {
     config.joint[joint].step_len_ticks = *step_len_ticks;
+  }
+  if(position_error != NULL) {
+    config.joint[joint].position_error = *position_error;
   }
 
   switch(core) {
@@ -269,14 +273,15 @@ uint32_t get_joint_config(
     uint8_t* enabled,
     int8_t* io_pos_step,
     int8_t* io_pos_dir,
-    double* rel_pos_requested,
+    double* velocity_requested,
     double* abs_pos_requested,
-    int32_t* abs_pos_acheived,
+    int32_t* abs_pos_achieved,
     double* max_velocity,
     double* max_accel,
-    int32_t* velocity_requested,
-    int32_t* velocity_acheived,
-    int32_t* step_len_ticks)
+    int32_t* velocity_requested_tm1,
+    int32_t* velocity_achieved,
+    int32_t* step_len_ticks,
+    int32_t* position_error)
 {
   if(joint >= MAX_JOINT) {
     return 0;
@@ -308,14 +313,14 @@ uint32_t get_joint_config(
   if(io_pos_dir != NULL) {
     *io_pos_dir = config.joint[joint].io_pos_dir;
   }
-  if(rel_pos_requested != NULL) {
-    *rel_pos_requested = config.joint[joint].rel_pos_requested;
+  if(velocity_requested != NULL) {
+    *velocity_requested = config.joint[joint].velocity_requested;
   }
   if(abs_pos_requested != NULL) {
     *abs_pos_requested = config.joint[joint].abs_pos_requested;
   }
-  if(abs_pos_acheived != NULL) {
-    *abs_pos_acheived = config.joint[joint].abs_pos_acheived;
+  if(abs_pos_achieved != NULL) {
+    *abs_pos_achieved = config.joint[joint].abs_pos_achieved;
   }
   if(max_velocity != NULL) {
     *max_velocity = config.joint[joint].max_velocity;
@@ -323,14 +328,17 @@ uint32_t get_joint_config(
   if(max_accel != NULL) {
     *max_accel = config.joint[joint].max_accel;
   }
-  if(velocity_requested != NULL) {
-    *velocity_requested = config.joint[joint].velocity_requested;
+  if(velocity_requested_tm1 != NULL) {
+    *velocity_requested_tm1 = config.joint[joint].velocity_requested_tm1;
   }
-  if(velocity_acheived != NULL) {
-    *velocity_acheived = config.joint[joint].velocity_acheived;
+  if(velocity_achieved != NULL) {
+    *velocity_achieved = config.joint[joint].velocity_achieved;
   }
   if(step_len_ticks != NULL) {
     *step_len_ticks = config.joint[joint].step_len_ticks;
+  }
+  if(position_error != NULL) {
+    *position_error = config.joint[joint].position_error;
   }
 
   mutex_exit(&mtx_joint[joint]);
@@ -362,8 +370,9 @@ bool serialise_joint_movement(
     struct NWBuffer* tx_buf,
     uint8_t wait_for_data)
 {
-  int32_t abs_pos_acheived;
-  int32_t velocity_acheived;
+  int32_t abs_pos_achieved;
+  int32_t velocity_achieved;
+  int32_t position_error;
   uint32_t updated = 0;
 
 
@@ -378,14 +387,15 @@ bool serialise_joint_movement(
           NULL, //&enabled,
           NULL, //&io_pos_step,
           NULL, //&io_pos_dir,
-          NULL, //&rel_pos_requested,
+          NULL, //&velocity_requested,
           NULL, //&abs_pos_requested,
-          &abs_pos_acheived,
+          &abs_pos_achieved,
           NULL, //&max_velocity,
           NULL, //&max_accel,
-          NULL, //&velocity_requested,
-          &velocity_acheived,
-          NULL //&step_len_ticks,
+          NULL, //&velocity_requested_tm1,
+          &velocity_achieved,
+          NULL, //&step_len_ticks,
+          &position_error
           );
     } while(updated == 0 && wait_for_data);
 
@@ -393,8 +403,9 @@ bool serialise_joint_movement(
       printf("WC0, mult ud: %u \t%lu\n", joint, updated);
     }
 
-    reply.abs_pos_acheived[joint] = abs_pos_acheived;
-    reply.velocity_acheived[joint] = velocity_acheived;
+    reply.abs_pos_achieved[joint] = abs_pos_achieved;
+    reply.velocity_achieved[joint] = velocity_achieved;
+    reply.position_error[joint] = position_error;
   }
 
   uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
@@ -475,14 +486,15 @@ bool serialise_joint_config(const uint32_t joint, struct NWBuffer* tx_buf) {
         &enabled,
         &io_pos_step,
         &io_pos_dir,
-        NULL, //&rel_pos_requested,
+        NULL, //&velocity_requested,
         NULL, //&abs_pos_requested,
-        NULL, //&abs_pos_acheived,
+        NULL, //&abs_pos_achieved,
         &max_velocity,
         &max_accel,
-        NULL, //&velocity_requested,
-        NULL, //&velocity_acheived,
-        NULL  //&step_len_ticks,
+        NULL, //&velocity_requested_tm1,
+        NULL, //&velocity_achieved,
+        NULL, //&step_len_ticks,
+        NULL  //&position_error
         );
 
   struct Reply_joint_config reply;
@@ -509,7 +521,7 @@ bool serialise_joint_metrics(struct NWBuffer* tx_buf) {
   struct Reply_joint_metrics reply;
   reply.type = REPLY_JOINT_METRICS;
 
-  int32_t velocity_requested;
+  int32_t velocity_requested_tm1;
   int32_t step_len_ticks;
 
   for(size_t joint = 0; joint < MAX_JOINT; joint++) {
@@ -519,17 +531,18 @@ bool serialise_joint_metrics(struct NWBuffer* tx_buf) {
         NULL, //&enabled,
         NULL, //&io_pos_step,
         NULL, //&io_pos_dir,
-        NULL, //&rel_pos_requested,
+        NULL, //&velocity_requested,
         NULL, //&abs_pos_requested,
-        NULL, //&abs_pos_acheived,
+        NULL, //&abs_pos_achieved,
         NULL, //&max_velocity,
         NULL, //&max_accel,
-        &velocity_requested,
-        NULL, //&velocity_acheived,
-        &step_len_ticks
+        &velocity_requested_tm1,
+        NULL, //&velocity_achieved,
+        &step_len_ticks,
+        NULL  //&position_error
         );
 
-    reply.velocity_requested[joint] = velocity_requested;
+    reply.velocity_requested_tm1[joint] = velocity_requested_tm1;
     reply.step_len_ticks[joint] = step_len_ticks;
   }
 

@@ -24,6 +24,7 @@ hal_float_t joint_pos_feedback[4];
 hal_float_t joint_scale[4] = {1000, 1000, 1000, 1000};
 hal_float_t joint_velocity_cmd[4];
 hal_float_t joint_velocity_feedback[4];
+hal_s32_t joint_pos_error[4];
 
 void setup_data(skeleton_t* data) {
   data->metric_update_id = &metric_update_id;
@@ -41,6 +42,7 @@ void setup_data(skeleton_t* data) {
     data->joint_step_len_ticks[joint] = &(joint_step_len_ticks[joint]);
     data->joint_velocity_cmd[joint] = &(joint_velocity_cmd[joint]);
     data->joint_velocity_feedback[joint] = &(joint_velocity_feedback[joint]);
+    data->joint_pos_error[joint] = &(joint_pos_error[joint]);
   }
 }
 
@@ -93,8 +95,8 @@ static void test_joint_movement(void **state) {
    
     struct Reply_joint_movement message = {
         .type = REPLY_JOINT_MOVEMENT,
-        .abs_pos_acheived = {1234, 5678, 9, 10},
-        .velocity_acheived = {7890, 1234, 5, 6}
+        .abs_pos_achieved = {1234, 5678, 9, 10},
+        .velocity_achieved = {7890, 1234, 5, 6}
     };
 
     memcpy(buffer.payload, &message, sizeof(message));
@@ -114,9 +116,9 @@ static void test_joint_movement(void **state) {
     for(size_t joint = 0; joint < MAX_JOINT; joint++) {
         assert_double_equal(
                 (*data.joint_pos_feedback)[joint],
-                (double)message.abs_pos_acheived[joint] / (*data.joint_scale)[joint],
+                (double)message.abs_pos_achieved[joint] / (*data.joint_scale)[joint],
                 0.0001);
-        assert_int_equal((*data.joint_velocity_feedback)[joint], message.velocity_acheived[joint]);
+        assert_int_equal((*data.joint_velocity_feedback)[joint], message.velocity_achieved[joint]);
     }
 }
 
@@ -138,7 +140,7 @@ static void test_joint_config(void **state) {
         .gpio_dir = 3,
         .max_velocity = 56.78,
         .max_accel = 90.12,
-        //.velocity_requested = 3456,
+        //.velocity_requested_tm1 = 3456,
         //.step_len_ticks = 1357
     };
 
@@ -176,7 +178,7 @@ static void test_joint_metrics(void **state) {
    
     struct Reply_joint_metrics message = {
         .type = REPLY_JOINT_METRICS,
-        .velocity_requested = {3456, 7890, 1234},
+        .velocity_requested_tm1 = {3456, 7890, 1234},
         .step_len_ticks = {1357, 2468, 3579, 4680}
     };
 
@@ -196,7 +198,7 @@ static void test_joint_metrics(void **state) {
 
     for(size_t joint = 0; joint < MAX_JOINT; joint++) {
       assert_int_equal(*(data.joint_step_len_ticks[joint]), message.step_len_ticks[joint]);
-      assert_int_equal(*(data.joint_velocity_cmd[joint]), message.velocity_requested[joint]);
+      assert_int_equal(*(data.joint_velocity_cmd[joint]), message.velocity_requested_tm1[joint]);
     }
 }
 

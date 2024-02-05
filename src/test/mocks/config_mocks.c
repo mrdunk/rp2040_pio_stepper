@@ -7,13 +7,13 @@ void update_joint_config(
     const uint8_t* enabled,
     const int8_t* io_pos_step,
     const int8_t* io_pos_dir,
-    const double* rel_pos_requested,
+    const double* velocity_requested,
     const double* abs_pos_requested,
-    const uint32_t* abs_pos_acheived,
+    const uint32_t* abs_pos_achieved,
     const double* max_velocity,
     const double* max_accel,
-    const int32_t* velocity_requested,
-    const int32_t* velocity_acheived,
+    const int32_t* velocity_requested_tm1,
+    const int32_t* velocity_achieved,
     const int32_t* step_len_ticks
 )
 {

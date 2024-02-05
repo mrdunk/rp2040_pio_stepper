@@ -82,16 +82,16 @@ static void test_serialise_joint_movement(void **state) {
     reply.type = REPLY_JOINT_MOVEMENT;
 
     for(size_t joint = 0; joint < MAX_JOINT; joint++) {
-        config.joint[joint].abs_pos_acheived = 123;
+        config.joint[joint].abs_pos_achieved = 123;
         config.joint[joint].max_velocity = 456;
         config.joint[joint].max_accel = 789;
-        config.joint[joint].velocity_requested = 135;
-        config.joint[joint].velocity_acheived = 791;
+        config.joint[joint].velocity_requested_tm1 = 135;
+        config.joint[joint].velocity_achieved = 791;
         config.joint[joint].step_len_ticks = 246;
         config.joint[joint].updated_from_c1 = 1;
 
-        reply.abs_pos_acheived[joint] = config.joint[joint].abs_pos_acheived;
-        reply.velocity_acheived[joint] = config.joint[joint].velocity_acheived;
+        reply.abs_pos_achieved[joint] = config.joint[joint].abs_pos_achieved;
+        reply.velocity_achieved[joint] = config.joint[joint].velocity_achieved;
     }
 
     assert_int_equal(tx_buf.length, initial_tx_buf_len);
@@ -107,8 +107,8 @@ static void test_serialise_joint_movement(void **state) {
     assert_int_equal(reply_p->type, reply.type);
 
     for(size_t joint = 0; joint < 4; joint++) {
-        assert_int_equal(reply_p->abs_pos_acheived[joint], reply.abs_pos_acheived[joint]);
-        assert_int_equal(reply_p->velocity_acheived[joint], reply.velocity_acheived[joint]);
+        assert_int_equal(reply_p->abs_pos_achieved[joint], reply.abs_pos_achieved[joint]);
+        assert_int_equal(reply_p->velocity_achieved[joint], reply.velocity_achieved[joint]);
     }
 }
 

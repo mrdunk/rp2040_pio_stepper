@@ -45,6 +45,7 @@ void init_pio(const uint32_t joint)
       NULL,
       NULL,
       NULL,
+      NULL,
       NULL
       );
 
@@ -109,11 +110,11 @@ void init_pio(const uint32_t joint)
 double get_velocity(
     const uint32_t update_period_us,
     const uint8_t joint,
-    const int32_t abs_pos_acheived,
+    const int32_t abs_pos_achieved,
     const double abs_pos_requested,
     const double expected_velocity)
 {
-  double position_error = (abs_pos_requested - (double)abs_pos_acheived);
+  double position_error = (abs_pos_requested - (double)abs_pos_achieved);
   double velocity = (expected_velocity / (double)update_period_us);
 
   // Note that the total of these 2 velocities add up to lass than 1.
@@ -137,7 +138,8 @@ double get_velocity(
 uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   static uint32_t failcount = 0;
   static uint32_t count = 0;
-  static int32_t last_pos[MAX_JOINT] = {0, 0, 0, 0};
+  static int32_t last_pos_requested[MAX_JOINT] = {0, 0, 0, 0};
+  static int32_t last_pos_achieved[MAX_JOINT] = {0, 0, 0, 0};
   static int32_t last_velocity[MAX_JOINT] = {0, 0, 0, 0};
   static uint32_t last_enabled[MAX_JOINT] = {0, 0, 0, 0};
   static double step_count[MAX_JOINT] = {0.0, 0.0, 0.0, 0.0};
@@ -146,12 +148,12 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   //uint32_t clock_multiplier = clock_get_hz(clk_sys) / 1000000;
   static const uint32_t clock_multiplier = 133;
   uint8_t enabled;
-  int32_t abs_pos_acheived = 0;
-  double rel_pos_requested;
+  int32_t abs_pos_achieved = 0;
+  double velocity_requested;
   double abs_pos_requested;
   double max_velocity;
   double max_accel;
-  int32_t velocity_acheived = 0;
+  int32_t velocity_achieved = 0;
   uint32_t updated;
 
   updated = get_joint_config(
@@ -160,14 +162,15 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
       &enabled,
       NULL,
       NULL,
-      &rel_pos_requested,
+      &velocity_requested,
       &abs_pos_requested,
-      &abs_pos_acheived,
+      &abs_pos_achieved,
       &max_velocity,
       &max_accel,
-      NULL, // &velocity_requested,
-      NULL, // &velocity_acheived,
-      NULL  // &step_len_ticks,
+      NULL, // &velocity_requested_tm1,
+      NULL, // &velocity_achieved,
+      NULL, // &step_len_ticks,
+      NULL  // &position_error
       );
 
   if(updated <= 0) {
@@ -201,16 +204,16 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   // Drain rx_fifo of PIO feedback data and keep the last value received.
   uint8_t fifo_len = pio_sm_get_rx_fifo_level(pio1, sm1[joint]);
   while(fifo_len > 0) {
-    abs_pos_acheived = pio_sm_get_blocking(pio1, sm1[joint]);
+    abs_pos_achieved = pio_sm_get_blocking(pio1, sm1[joint]);
     fifo_len--;
   }
 
   double velocity = get_velocity(
       update_period_us,
       joint,
-      abs_pos_acheived,
+      abs_pos_achieved,
       abs_pos_requested,
-      rel_pos_requested);
+      velocity_requested);
 
   double accel = last_velocity[joint] - velocity;
   if(accel > abs(max_accel)) {
@@ -250,8 +253,9 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   if(pio_sm_is_tx_fifo_empty(pio0, sm0[joint]))
     pio_sm_put(pio0, sm0[joint], (step_len_ticks << 1) | direction);
 
-  velocity_acheived = abs_pos_acheived - last_pos[joint];
-  int32_t velocity_requested = velocity;
+  velocity_achieved = abs_pos_achieved - last_pos_achieved[joint];
+  int32_t velocity_requested_tm1 = velocity;
+  int32_t position_error = abs_pos_achieved - last_pos_requested[joint];
 
   update_joint_config(
       joint,
@@ -261,15 +265,17 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
       NULL,
       NULL,
       NULL,
-      &abs_pos_acheived,
+      &abs_pos_achieved,
       NULL,
       NULL,
-      &velocity_requested,
-      &velocity_acheived,
-      &step_len_ticks);
+      &velocity_requested_tm1,
+      &velocity_achieved,
+      &step_len_ticks,
+      &position_error);
 
-  last_pos[joint] = abs_pos_acheived;
-  last_velocity[joint] = velocity_acheived;
+  last_pos_requested[joint] = abs_pos_requested;
+  last_pos_achieved[joint] = abs_pos_achieved;
+  last_velocity[joint] = velocity_achieved;
 
   return updated;
 }
