@@ -84,7 +84,7 @@ static void test_serialise_joint_movement(void **state) {
     for(size_t joint = 0; joint < MAX_JOINT; joint++) {
         config.joint[joint].abs_pos_acheived = 123;
         config.joint[joint].max_velocity = 456;
-        config.joint[joint].max_accel_ticks = 789;
+        config.joint[joint].max_accel = 789;
         config.joint[joint].velocity_requested = 135;
         config.joint[joint].velocity_acheived = 791;
         config.joint[joint].step_len_ticks = 246;

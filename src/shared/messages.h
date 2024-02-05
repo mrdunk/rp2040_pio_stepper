@@ -72,6 +72,8 @@ struct Message_joint_config {
   uint8_t enable;
   int8_t gpio_step;               // Negative if disabled.
   int8_t gpio_dir;                // Negative if disabled.
+
+  // TODO: These could be uint32_t.
   double max_velocity;
   double max_accel;
 };

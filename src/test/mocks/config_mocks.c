@@ -11,7 +11,7 @@ void update_joint_config(
     const double* abs_pos_requested,
     const uint32_t* abs_pos_acheived,
     const double* max_velocity,
-    const double* max_accel_ticks,
+    const double* max_accel,
     const int32_t* velocity_requested,
     const int32_t* velocity_acheived,
     const int32_t* step_len_ticks

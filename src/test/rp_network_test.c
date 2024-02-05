@@ -244,7 +244,7 @@ static void test_unpack_joint_config_message(void **state) {
     assert_int_equal(config.joint[2].io_pos_step, 1);
     assert_int_equal(config.joint[2].io_pos_dir, 2);
     assert_double_equal(config.joint[2].max_velocity, 12.34, 0.01);
-    assert_double_equal(config.joint[2].max_accel_ticks, 56.78, 0.01);
+    assert_double_equal(config.joint[2].max_accel, 56.78, 0.01);
 }
 
 static void test_unpack_unknown_message_type(void **state) {
@@ -306,7 +306,7 @@ static void test_unpack_unknown_message_type(void **state) {
     assert_int_not_equal(config.joint[3].io_pos_step, 2);
     assert_int_not_equal(config.joint[3].io_pos_dir, 3);
     assert_double_not_equal(config.joint[3].max_velocity, 13.34, 0.01);
-    assert_double_not_equal(config.joint[3].max_accel_ticks, 57.78, 0.01);
+    assert_double_not_equal(config.joint[3].max_accel, 57.78, 0.01);
 
     // Should have reset the rx_buf.
     assert_int_equal(rx_buf.length, 0);

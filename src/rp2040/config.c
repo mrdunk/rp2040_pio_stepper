@@ -42,7 +42,7 @@ volatile struct ConfigGlobal config = {
       .abs_pos_requested = 0,
       .abs_pos_acheived = 0,
       .max_velocity = 50,
-      .max_accel_ticks = 2.0,
+      .max_accel = 2.0,
       .velocity_requested = 0,
       .velocity_acheived = 0
     },
@@ -57,7 +57,7 @@ volatile struct ConfigGlobal config = {
       .abs_pos_requested = 0,
       .abs_pos_acheived = 0,
       .max_velocity = 50,
-      .max_accel_ticks = 10.0,
+      .max_accel = 10.0,
       .velocity_requested = 0,
       .velocity_acheived = 0
     },
@@ -72,7 +72,7 @@ volatile struct ConfigGlobal config = {
       .abs_pos_requested = 0,
       .abs_pos_acheived = 0,
       .max_velocity = 50,
-      .max_accel_ticks = 200.0,
+      .max_accel = 200.0,
       .velocity_requested = 0,
       .velocity_acheived = 0
     },
@@ -87,7 +87,7 @@ volatile struct ConfigGlobal config = {
       .abs_pos_requested = 0,
       .abs_pos_acheived = 0,
       .max_velocity = 50,
-      .max_accel_ticks = 200.0,
+      .max_accel = 200.0,
       .velocity_requested = 0,
       .velocity_acheived = 0
     },
@@ -203,7 +203,7 @@ void update_joint_config(
     const double* abs_pos_requested,
     const int32_t* abs_pos_acheived,
     const double* max_velocity,
-    const double* max_accel_ticks,
+    const double* max_accel,
     const int32_t* velocity_requested,
     const int32_t* velocity_acheived,
     const int32_t* step_len_ticks
@@ -237,8 +237,8 @@ void update_joint_config(
   if(max_velocity != NULL) {
     config.joint[joint].max_velocity = *max_velocity;
   }
-  if(max_accel_ticks != NULL) {
-    config.joint[joint].max_accel_ticks = *max_accel_ticks;
+  if(max_accel != NULL) {
+    config.joint[joint].max_accel = *max_accel;
   }
   if(velocity_requested != NULL) {
     config.joint[joint].velocity_requested = *velocity_requested;
@@ -273,7 +273,7 @@ uint32_t get_joint_config(
     double* abs_pos_requested,
     int32_t* abs_pos_acheived,
     double* max_velocity,
-    double* max_accel_ticks,
+    double* max_accel,
     int32_t* velocity_requested,
     int32_t* velocity_acheived,
     int32_t* step_len_ticks)
@@ -320,8 +320,8 @@ uint32_t get_joint_config(
   if(max_velocity != NULL) {
     *max_velocity = config.joint[joint].max_velocity;
   }
-  if(max_accel_ticks != NULL) {
-    *max_accel_ticks = config.joint[joint].max_accel_ticks;
+  if(max_accel != NULL) {
+    *max_accel = config.joint[joint].max_accel;
   }
   if(velocity_requested != NULL) {
     *velocity_requested = config.joint[joint].velocity_requested;
@@ -382,7 +382,7 @@ bool serialise_joint_movement(
           NULL, //&abs_pos_requested,
           &abs_pos_acheived,
           NULL, //&max_velocity,
-          NULL, //&max_accel_ticks,
+          NULL, //&max_accel,
           NULL, //&velocity_requested,
           &velocity_acheived,
           NULL //&step_len_ticks,

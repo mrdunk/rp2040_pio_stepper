@@ -138,6 +138,7 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   static uint32_t failcount = 0;
   static uint32_t count = 0;
   static int32_t last_pos[MAX_JOINT] = {0, 0, 0, 0};
+  static int32_t last_velocity[MAX_JOINT] = {0, 0, 0, 0};
   static uint32_t last_enabled[MAX_JOINT] = {0, 0, 0, 0};
   static double step_count[MAX_JOINT] = {0.0, 0.0, 0.0, 0.0};
   static uint8_t last_direction[MAX_JOINT] = {0, 0, 0, 0};
@@ -149,7 +150,7 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   double rel_pos_requested;
   double abs_pos_requested;
   double max_velocity;
-  double max_accel_ticks;
+  double max_accel;
   int32_t velocity_acheived = 0;
   uint32_t updated;
 
@@ -163,7 +164,7 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
       &abs_pos_requested,
       &abs_pos_acheived,
       &max_velocity,
-      &max_accel_ticks,
+      &max_accel,
       NULL, // &velocity_requested,
       NULL, // &velocity_acheived,
       NULL  // &step_len_ticks,
@@ -193,6 +194,10 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
     last_enabled[joint] = enabled;
   }
 
+  double update_period_ticks = update_period_us * clock_multiplier;
+  uint32_t min_step_len_ticks =
+    (update_period_ticks / (abs(max_velocity) * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
+
   // Drain rx_fifo of PIO feedback data and keep the last value received.
   uint8_t fifo_len = pio_sm_get_rx_fifo_level(pio1, sm1[joint]);
   while(fifo_len > 0) {
@@ -207,6 +212,13 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
       abs_pos_requested,
       rel_pos_requested);
 
+  double accel = last_velocity[joint] - velocity;
+  if(accel > abs(max_accel)) {
+    velocity = last_velocity[joint] + abs(max_accel);
+  } else if(accel < -abs(max_accel)) {
+    velocity = last_velocity[joint] - abs(max_accel);
+  }
+
   uint8_t direction = (velocity > 0);
   if(direction != last_direction[joint]) {
     // Direction has changed.
@@ -217,18 +229,19 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   step_count[joint] += fabs(velocity);
   int32_t step_len_ticks = 0;
 
-  // The PIO only process new instructions between steps. If a step length gets too long,
-  // it will block updates.
-  // If too small a step_count is allowed here, the steps can get very long and block further updates.
-  // If the limit is set too high, low speed resolution is lost and steps will become unevenly spaced.
+  // The PIO FIFO will only report step counts between steps.
+  // If a step length gets too long, it will block updates.
+  // If too small a step_count is allowed here, the steps can get very long and
+  // block further updates.
+  // If the limit is set too high, low speed resolution is lost and steps will
+  // become unevenly spaced.
   // 0.05 equates to a minimum speed of approximately 1 step every 20ms.
   if(enabled > 0 && step_count[joint] > 0.05) {
-    double update_period_ticks = update_period_us * clock_multiplier;
     step_len_ticks =
       (update_period_ticks / (step_count[joint] * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
-    if(step_len_ticks < 1) {
-      // TODO: use min_step_len_ticks for this.
-      step_len_ticks = 1;
+    if(step_len_ticks < min_step_len_ticks) {
+      // Clamps maximum speed.
+      step_len_ticks = min_step_len_ticks;
     }
     step_count[joint] = 0.0;
   }
@@ -256,6 +269,7 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
       &step_len_ticks);
 
   last_pos[joint] = abs_pos_acheived;
+  last_velocity[joint] = velocity_acheived;
 
   return updated;
 }
