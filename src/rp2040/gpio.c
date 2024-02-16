@@ -1,8 +1,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "gpio.h"
 #include "config.h"
+#include "gpio.h"
+#include "i2c.h"
 #include "messages.h"
 
 #ifdef BUILD_TESTS
@@ -123,68 +124,52 @@ bool gpio_local_get_pin(uint32_t index) {
   return gpio_get(index);
 }
 
-/* Happens before iterating through gpio data.
- * Do any i2c required operations here. */
-void gpio_i2c_mcp_prepare() {
-  for(uint8_t i2c_bucket = 0; i2c_bucket < MAX_I2C_MCP; i2c_bucket++) {
-    // uint8_t i2c_address = gpio_i2c_mcp_addresses[i2c_bucket];
-    // TODO: Any other MCP implementation here.
+int gpio_i2c_mcp_alloc(uint8_t address) {
+  int i2c = 0, i2c_free = -1;
+  for(i2c = 0; i2c < MAX_I2C_MCP; i2c++) {
+    if(gpio_i2c_mcp_addresses[i2c] == address) {
+      return i2c;
+    }
+    if(gpio_i2c_mcp_addresses[i2c] == 0xFF && i2c_free == -1) {
+      i2c_free = i2c;
+    }
   }
+  if (i2c_free != -1) {
+    gpio_i2c_mcp_addresses[i2c_free] = address;
+    i2c_gpio.config[i2c_free].i2c_address = address;
+  }
+  return i2c_free;
 }
 
 /* Find all GPIO pins sharing the same i2c address and put 
  */
 void gpio_i2c_mcp_set_out_pin(uint8_t index, uint8_t address, bool new_value) {
   // Find which slot this i2c address is being stored in.
-  uint8_t i2c = MAX_I2C_MCP;
-  for(i2c = 0; i2c < MAX_I2C_MCP; i2c++) {
-    if(gpio_i2c_mcp_addresses[i2c] == address) {
-      break;
-    }
-    if (gpio_i2c_mcp_addresses[i2c] == 0xff) {
-      // Haven't found this address yet.
-      // Since this buffer slot is empty, use it for this address.
-      gpio_i2c_mcp_addresses[i2c] = address;
-      break;
-    }
-  }
+  int i2c = gpio_i2c_mcp_alloc(address);
 
-  if(i2c >= MAX_I2C_MCP) {
+  if(i2c == -1) {
     printf("WARN: Too may i2c addresses. Add: %u  Index: %u\n", address, index);
     return;
   }
 
   // Add new_value to buffer to be sent to this i2c address.
+  uint8_t *data = &i2c_gpio.config[i2c].output_data[(index >> 3) & 1];
+  uint8_t bitmask = 0x1 << (index & 7);
   if(new_value) {
-    gpio_i2c_mcp_indexes[i2c] |= (0x1 << index);
+    *data |= bitmask;
   } else {
-    gpio_i2c_mcp_indexes[i2c] &= (~(0x1 << index));
-  }
-}
-
-/* Happens after iterating through GPIO data.
- * Do any i2c required operations here. */
-void gpio_i2c_mcp_tranceive() {
-  for(uint8_t i2c_bucket = 0; i2c_bucket < MAX_I2C_MCP; i2c_bucket++) {
-    // Write gpio_i2c_mcp_indexes[i2c] as output
-    // then read inputs into same buffer.
-    uint8_t values = gpio_i2c_mcp_indexes[i2c_bucket];
-    uint8_t address = gpio_i2c_mcp_addresses[i2c_bucket];
-    // TODO: Send values to the i2c connected MCP.
-    printf("i2c addr: %u  values: %#04x\n", address, values);
-
-    // TODO: Read i2c data into gpio_i2c_mcp_indexes[MAX_I2C_MCP] for later
-    // UDP transmission.
+    *data &= ~bitmask;
   }
 }
 
 bool gpio_i2c_mcp_get_pin(uint8_t index, uint8_t address) {
-  for(uint8_t i2c = 0; i2c < MAX_I2C_MCP; i2c++) {
-    if(gpio_i2c_mcp_addresses[i2c] == address) {
-      return gpio_i2c_mcp_indexes[i2c] | (0x1 << index);
-    }
+  int i2c = gpio_i2c_mcp_alloc(address);
+  if(i2c == -1) {
+    printf("WARN: Too may i2c addresses. Add: %u  Index: %u\n", address, index);
+    return false;
   }
-  return 0;
+  uint8_t data = i2c_gpio.config[i2c].input_data[(index >> 3) & 1];
+  return (data >> (index & 7)) & 0x1;
 }
 
 /* Pack GPIO inputs in buffer for UDP transmission. */

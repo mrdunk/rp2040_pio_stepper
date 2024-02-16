@@ -30,14 +30,8 @@ void gpio_set_values(const uint8_t bank, uint32_t values);
 
 void gpio_local_set_out_pin(uint8_t index, bool new_value);
 
-/* Happens before gpio data destined for i2c has been gathered. */
-void gpio_i2c_mcp_prepare();
-
 /* Put i2c data in temporary buffer pending gpio_i2c_mcp_tranceive() being called. */
 void gpio_i2c_mcp_set_out_pin(uint8_t index, uint8_t address, bool new_value);
-
-/* Happens after all gpio data destined for i2c has been gathered. */
-void gpio_i2c_mcp_tranceive();
 
 /* Pack GPIO inputs in buffer for UDP transmission. */
 void gpio_serialize(struct NWBuffer* tx_buf, size_t* tx_buf_len);

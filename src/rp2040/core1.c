@@ -3,17 +3,21 @@
 
 #include "core1.h"
 #include "config.h"
+#include "i2c.h"
 #include "pio.h"
 
+struct i2c_gpio_state i2c_gpio;
 
 void update_all_axis() {
   static uint32_t metric = 0;
   static uint32_t last_tick = 0;
   uint32_t update_period_us = get_period();
   uint8_t updated_count = 0;
+  i2c_gpio_init(&i2c_gpio);
 
   // Wait for semaphore from core0 to indicate time start.
   while(tick == last_tick) {
+    i2c_gpio_poll(&i2c_gpio);
     tight_loop_contents();
   }
   last_tick = tick;

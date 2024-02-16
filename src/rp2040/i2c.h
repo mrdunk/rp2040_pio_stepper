@@ -66,5 +66,7 @@ struct i2c_gpio_state {
   uint8_t cur_chip;
 };
 
+extern struct i2c_gpio_state i2c_gpio;
+
 extern void i2c_gpio_init(struct i2c_gpio_state *gpio);
 extern void i2c_gpio_poll(struct i2c_gpio_state *gpio);
