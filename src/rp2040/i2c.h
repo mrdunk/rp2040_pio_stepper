@@ -16,6 +16,7 @@ enum i2c_engine_phase {
   I2CES_FAIL_WAIT1,
   I2CES_FAIL_WAIT2,
   I2CES_FAIL_RECOVER,
+  I2CES_WAIT,
 };
 
 struct i2c_engine_state {
@@ -58,6 +59,7 @@ struct i2c_gpio_config {
   uint8_t input_data[2], output_data[2];
   uint8_t i2c_address;
   uint8_t type;
+  uint8_t needs_config;
 };
 
 struct i2c_gpio_state {

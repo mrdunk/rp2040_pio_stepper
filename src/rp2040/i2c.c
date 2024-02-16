@@ -82,8 +82,9 @@ bool i2c_engine_run(struct i2c_engine_state *state) {
     if (state->i2c->hw->raw_intr_stat & I2C_IC_RAW_INTR_STAT_STOP_DET_BITS) {
       // stop condition - all done
       state->i2c->hw->clr_stop_det;
-      state->phase = I2CES_IDLE;
+      state->phase = I2CES_WAIT;
       state->data_ptr += state->data_len;            
+      state->timeout_check = init_single_timeout_until(&state->timeout_state, make_timeout_time_us(500));
       return true;
     }
     else if (state->timeout_check(&state->timeout_state)) {
@@ -143,7 +144,8 @@ bool i2c_engine_run(struct i2c_engine_state *state) {
     if (state->i2c->hw->raw_intr_stat & I2C_IC_RAW_INTR_STAT_STOP_DET_BITS) {
       // stop condition - all done
       state->i2c->hw->clr_stop_det;
-      state->phase = I2CES_IDLE;
+      state->phase = I2CES_WAIT;
+      state->timeout_check = init_single_timeout_until(&state->timeout_state, make_timeout_time_us(500));
       return true;
     }
     else if (state->timeout_check(&state->timeout_state)) {
@@ -179,6 +181,11 @@ bool i2c_engine_run(struct i2c_engine_state *state) {
     }
     return false;  
   case I2CES_FAIL_RECOVER:
+    return false;
+  case I2CES_WAIT:
+    if (state->timeout_check(&state->timeout_state)) {
+      state->phase = I2CES_IDLE;
+    }
     return false;
   default:
     return false;

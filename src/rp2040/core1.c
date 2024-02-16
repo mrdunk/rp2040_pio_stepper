@@ -13,7 +13,6 @@ void update_all_axis() {
   static uint32_t last_tick = 0;
   uint32_t update_period_us = get_period();
   uint8_t updated_count = 0;
-  i2c_gpio_init(&i2c_gpio);
 
   // Wait for semaphore from core0 to indicate time start.
   while(tick == last_tick) {
@@ -21,6 +20,7 @@ void update_all_axis() {
     tight_loop_contents();
   }
   last_tick = tick;
+  i2c_gpio_poll(&i2c_gpio);
 
   static uint32_t count = 0;
   static uint32_t max_dt = 0;
@@ -54,6 +54,7 @@ void core1_main() {
 
 void init_core1() {
   printf("core0: Initializing.\n");
+  i2c_gpio_init(&i2c_gpio);
 
   if(MAX_AXIS > 4) {
     printf("ERROR: Maximum axis count: 4. Configured: %u\n", MAX_AXIS);

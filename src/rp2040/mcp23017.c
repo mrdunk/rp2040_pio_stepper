@@ -1,5 +1,6 @@
 #include "i2c.h"
 #include "hardware/gpio.h"
+#include <stdio.h>
 
 #define PLACEHOLDER 0x00
 #define I2C_WRITE_CMD(write_len, write_data...) (write_len), write_data
@@ -54,16 +55,24 @@ void i2c_gpio_init(struct i2c_gpio_state *gpio) {
     cfg->input_data[1] = 0;
     cfg->output_data[0] = 0;
     cfg->output_data[1] = 0;
-    cfg->input_bitmask[0] = 0x7F;
-    cfg->input_bitmask[1] = 0x7F;
-    cfg->pullup_bitmask[0] = 0x7F;
-    cfg->pullup_bitmask[1] = 0x7F;
+    cfg->input_bitmask[0] = 0xFF;
+    cfg->input_bitmask[1] = 0xFF;
+    cfg->pullup_bitmask[0] = 0xFF;
+    cfg->pullup_bitmask[1] = 0xFF;
+    cfg->needs_config = 0;
   }
   gpio->cur_chip = MAX_I2C_MCP - 1;
-  gpio->config[0].type = I2CGPIO_TYPE_MCP23017;
-  gpio->config[0].i2c_address = 32;
   
   mcp23017_init(&gpio->engine, i2c1, I2C_SDA_PIN, I2C_SCL_PIN, I2C_RESET_PIN);
+}
+
+static void i2c_gpio_run_setup_sequence(struct i2c_gpio_state *gpio) {
+  struct i2c_gpio_config *cfg = &gpio->config[gpio->cur_chip];
+  mcp23017_setup_sequence[2] = cfg->input_bitmask[0];
+  mcp23017_setup_sequence[3] = cfg->input_bitmask[1];
+  mcp23017_setup_sequence[6] = cfg->pullup_bitmask[0];
+  mcp23017_setup_sequence[7] = cfg->pullup_bitmask[1];
+  i2c_engine_set_sequence(&gpio->engine, cfg->i2c_address, mcp23017_setup_sequence, NULL);
 }
 
 static void i2c_gpio_next_chip(struct i2c_gpio_state *gpio) {
@@ -71,13 +80,20 @@ static void i2c_gpio_next_chip(struct i2c_gpio_state *gpio) {
   struct i2c_gpio_config *cfg = &gpio->config[gpio->cur_chip];
   switch(cfg->type) {
   case I2CGPIO_TYPE_MCP23017:
-    mcp23017_run_sequence[2] = cfg->output_data[0];
-    mcp23017_run_sequence[3] = cfg->output_data[1];
-    mcp23017_setup_sequence[2] = cfg->input_bitmask[0];
-    mcp23017_setup_sequence[3] = cfg->input_bitmask[1];
-    mcp23017_setup_sequence[6] = cfg->pullup_bitmask[0];
-    mcp23017_setup_sequence[7] = cfg->pullup_bitmask[1];
-    i2c_engine_set_sequence(&gpio->engine, cfg->i2c_address, mcp23017_run_sequence, &cfg->input_data[0]);
+    if (cfg->needs_config == 1) {
+      cfg->needs_config = 2;
+      printf("Reconfig at %02x\n", cfg->i2c_address);
+      i2c_gpio_run_setup_sequence(gpio);
+    }
+    else if (cfg->needs_config == 0) {
+      mcp23017_run_sequence[2] = cfg->output_data[0];
+      mcp23017_run_sequence[3] = cfg->output_data[1];
+      // printf("Output %04x Input %04x\n", (int)(cfg->output_data[0] + 256 * cfg->output_data[1]), (int)(cfg->input_data[0] + 256 * cfg->input_data[1]));
+      i2c_engine_set_sequence(&gpio->engine, cfg->i2c_address, mcp23017_run_sequence, &cfg->input_data[0]);
+    }
+    else if (cfg->needs_config == 2) {
+      cfg->needs_config = 0;
+    }
     break;
   default:
     break;
@@ -85,18 +101,20 @@ static void i2c_gpio_next_chip(struct i2c_gpio_state *gpio) {
 }
 
 void i2c_gpio_poll(struct i2c_gpio_state *gpio) {
-  struct i2c_gpio_config *cfg = &gpio->config[gpio->cur_chip];
-  if (i2c_engine_run(&gpio->engine))
+  if (gpio->config[gpio->cur_chip].type != I2CGPIO_TYPE_NONE && i2c_engine_run(&gpio->engine))
     return;
-  if (i2c_engine_is_idle(&gpio->engine)) {
+  if (gpio->config[gpio->cur_chip].type == I2CGPIO_TYPE_NONE || i2c_engine_is_idle(&gpio->engine)) {
+    // printf("MCP Next chip %02x\n", gpio->cur_chip);
     i2c_gpio_next_chip(gpio);
     return;
   }
   if (i2c_engine_is_fault(&gpio->engine)) {
+    printf("MCP Fault %02x\n", gpio->cur_chip);
     // reinitialize - at this point the device is reset
-    i2c_engine_set_sequence(&gpio->engine, cfg->i2c_address, mcp23017_setup_sequence, NULL);
     i2c_engine_clear_fault(&gpio->engine);
+    i2c_gpio_run_setup_sequence(gpio);
     i2c_engine_run(&gpio->engine);
   }
+  // printf("MCP %d In state %02x\n", gpio->cur_chip, gpio->engine.phase);
 }
 

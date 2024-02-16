@@ -137,6 +137,7 @@ int gpio_i2c_mcp_alloc(uint8_t address) {
   if (i2c_free != -1) {
     gpio_i2c_mcp_addresses[i2c_free] = address;
     i2c_gpio.config[i2c_free].i2c_address = address;
+    i2c_gpio.config[i2c_free].type = I2CGPIO_TYPE_MCP23017;
   }
   return i2c_free;
 }
@@ -153,7 +154,14 @@ void gpio_i2c_mcp_set_out_pin(uint8_t index, uint8_t address, bool new_value) {
   }
 
   // Add new_value to buffer to be sent to this i2c address.
-  uint8_t *data = &i2c_gpio.config[i2c].output_data[(index >> 3) & 1];
+  uint8_t bindex = (index >> 3) & 1;
+  uint8_t bmask = (1 << (index & 7));
+  if (i2c_gpio.config[i2c].input_bitmask[bindex] & bmask) {
+      i2c_gpio.config[i2c].input_bitmask[bindex] &= ~bmask;
+      i2c_gpio.config[i2c].pullup_bitmask[bindex] &= ~bmask;
+      i2c_gpio.config[i2c].needs_config = 1;
+  }
+  uint8_t *data = &i2c_gpio.config[i2c].output_data[bindex];
   uint8_t bitmask = 0x1 << (index & 7);
   if(new_value) {
     *data |= bitmask;
@@ -168,8 +176,16 @@ bool gpio_i2c_mcp_get_pin(uint8_t index, uint8_t address) {
     printf("WARN: Too may i2c addresses. Add: %u  Index: %u\n", address, index);
     return false;
   }
-  uint8_t data = i2c_gpio.config[i2c].input_data[(index >> 3) & 1];
-  return (data >> (index & 7)) & 0x1;
+  uint8_t bindex = (index >> 3) & 1;
+  uint8_t bmask = (1 << (index & 7));
+  if (!(i2c_gpio.config[i2c].input_bitmask[bindex] & bmask)) {
+      i2c_gpio.config[i2c].input_bitmask[bindex] |= bmask;
+      i2c_gpio.config[i2c].pullup_bitmask[bindex] |= bmask;
+      i2c_gpio.config[i2c].needs_config = 1;
+  }
+  uint8_t data = i2c_gpio.config[i2c].input_data[bindex];
+  //printf("%02x:%d = %d [%02x, %02x]\n", address, index, (data & bmask), data, bmask);
+  return data & bmask ? 1 : 0;
 }
 
 /* Pack GPIO inputs in buffer for UDP transmission. */
