@@ -72,3 +72,4 @@ extern struct i2c_gpio_state i2c_gpio;
 
 extern void i2c_gpio_init(struct i2c_gpio_state *gpio);
 extern void i2c_gpio_poll(struct i2c_gpio_state *gpio);
+extern void i2c_gpio_set_pin_config(struct i2c_gpio_state *gpio, uint8_t device, uint8_t index, int type);

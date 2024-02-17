@@ -22,6 +22,8 @@ uint32_t gpio_i2c_mcp_indexes[MAX_I2C_MCP] = {0, 0, 0, 0};
 uint8_t gpio_i2c_mcp_addresses[MAX_I2C_MCP] = {0xff, 0xff, 0xff, 0xff};
 uint8_t gpio_last_type[32 * MAX_I2C_MCP];
 
+static int gpio_i2c_mcp_alloc(uint8_t address);
+
 void update_gpio_config(
     const uint8_t gpio,
     const uint8_t* type,
@@ -34,22 +36,41 @@ void update_gpio_config(
     printf("ERROR: Higher than MAX_GPIO requested. %u\n", gpio);
     return;
   }
+  volatile struct ConfigGPIO *cfg = &config.gpio[gpio];
+  int type_changed = 0;
 
   if(type != NULL) {
-    config.gpio[gpio].type = *type;
+    if (cfg->type != *type) {
+      type_changed = 1;
+    }
+    cfg->type = *type;
   }
   if(index != NULL) {
     if(*index > 32) {
       printf("WARN: GPIO index out of range. Add: %u  Index: %u\n", *address, *index);
     } else {
-      config.gpio[gpio].index = *index;
+      if (cfg->index != *index) {
+        type_changed = 1;
+      }
+      cfg->index = *index;
     }
   }
   if(address != NULL) {
-    config.gpio[gpio].address = *address;
+    if (cfg->address != *address) {
+      type_changed = 1;
+    }
+    cfg->address = *address;
   }
   if(value != NULL) {
-    config.gpio[gpio].value = *value;
+    cfg->value = *value;
+  }
+  if(type_changed && cfg->address != 0xFF && cfg->index < 0x10) {
+    if (cfg->type >= GPIO_TYPE_I2C_MCP_IN && cfg->type <= GPIO_TYPE_I2C_MCP_OUT_PULLUP) {
+      int i2c = gpio_i2c_mcp_alloc(cfg->address);
+      if (i2c >= 0) {
+        i2c_gpio_set_pin_config(&i2c_gpio, i2c, cfg->index, cfg->type);
+      }
+    }
   }
 }
 
@@ -92,7 +113,7 @@ void gpio_set_values(const uint8_t bank, uint32_t values) {
     // Parsed from Message_gpio.
     bool new_value = values & (0x1 << (gpio % 32));
 
-    if(new_value == current_value && type == gpio_last_type[gpio]) {
+    if(new_value == current_value) {
       continue;
     }
     config.gpio_confirmation_pending[bank] = true;
@@ -157,14 +178,8 @@ void gpio_i2c_mcp_set_out_pin(uint8_t index, uint8_t address, bool new_value) {
 
   // Add new_value to buffer to be sent to this i2c address.
   uint8_t bindex = (index >> 3) & 1;
-  uint8_t bmask = (1 << (index & 7));
-  if (i2c_gpio.config[i2c].input_bitmask[bindex] & bmask) {
-    i2c_gpio.config[i2c].input_bitmask[bindex] &= ~bmask;
-    i2c_gpio.config[i2c].pullup_bitmask[bindex] &= ~bmask;
-    i2c_gpio.config[i2c].needs_config = 1;
-  }
-  uint8_t *data = &i2c_gpio.config[i2c].output_data[bindex];
   uint8_t bitmask = 0x1 << (index & 7);
+  uint8_t *data = &i2c_gpio.config[i2c].output_data[bindex];
   if(new_value) {
     *data |= bitmask;
   } else {
@@ -180,14 +195,6 @@ bool gpio_i2c_mcp_get_pin(uint8_t index, uint8_t address, uint8_t pullup) {
   }
   uint8_t bindex = (index >> 3) & 1;
   uint8_t bmask = (1 << (index & 7));
-  if (!(i2c_gpio.config[i2c].input_bitmask[bindex] & bmask)) {
-    i2c_gpio.config[i2c].input_bitmask[bindex] |= bmask;
-    if (pullup)
-      i2c_gpio.config[i2c].pullup_bitmask[bindex] |= bmask;
-    else
-      i2c_gpio.config[i2c].pullup_bitmask[bindex] &= ~bmask;
-    i2c_gpio.config[i2c].needs_config = 1;
-  }
   uint8_t data = i2c_gpio.config[i2c].input_data[bindex];
   //printf("%02x:%d = %d [%02x, %02x]\n", address, index, (data & bmask), data, bmask);
   return data & bmask ? 1 : 0;

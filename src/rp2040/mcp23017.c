@@ -75,6 +75,29 @@ static void i2c_gpio_run_setup_sequence(struct i2c_gpio_state *gpio) {
   i2c_engine_set_sequence(&gpio->engine, cfg->i2c_address, mcp23017_setup_sequence, NULL);
 }
 
+void i2c_gpio_set_pin_config(struct i2c_gpio_state *gpio, uint8_t device, uint8_t index, int type)
+{
+  uint8_t bank = (index >> 3) & 1;
+  uint8_t bitmask = 1 << (index & 7);
+  switch(type) {
+    case GPIO_TYPE_I2C_MCP_IN:
+      gpio->config[device].pullup_bitmask[bank] &= ~bitmask;
+      gpio->config[device].input_bitmask[bank] &= ~bitmask;
+      break;
+    case GPIO_TYPE_I2C_MCP_OUT:
+      gpio->config[device].pullup_bitmask[bank] &= ~bitmask;
+      gpio->config[device].input_bitmask[bank] |= bitmask;
+      break;
+    case GPIO_TYPE_I2C_MCP_OUT_PULLUP:
+      gpio->config[device].pullup_bitmask[bank] |= bitmask;
+      gpio->config[device].input_bitmask[bank] |= bitmask;
+      break;
+    default:
+      return;
+  }
+  gpio->config[device].needs_config = 1;
+}
+
 static void i2c_gpio_next_chip(struct i2c_gpio_state *gpio) {
   gpio->cur_chip = (gpio->cur_chip + 1) % MAX_I2C_MCP;
   struct i2c_gpio_config *cfg = &gpio->config[gpio->cur_chip];
