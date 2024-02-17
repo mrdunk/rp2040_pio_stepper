@@ -22,8 +22,6 @@ uint32_t gpio_i2c_mcp_indexes[MAX_I2C_MCP] = {0, 0, 0, 0};
 uint8_t gpio_i2c_mcp_addresses[MAX_I2C_MCP] = {0xff, 0xff, 0xff, 0xff};
 uint8_t gpio_last_type[32 * MAX_I2C_MCP];
 
-static int gpio_i2c_mcp_alloc(uint8_t address);
-
 void update_gpio_config(
     const uint8_t gpio,
     const uint8_t* type,
@@ -37,40 +35,22 @@ void update_gpio_config(
     return;
   }
   volatile struct ConfigGPIO *cfg = &config.gpio[gpio];
-  int type_changed = 0;
 
   if(type != NULL) {
-    if (cfg->type != *type) {
-      type_changed = 1;
-    }
     cfg->type = *type;
   }
   if(index != NULL) {
     if(*index > 32) {
       printf("WARN: GPIO index out of range. Add: %u  Index: %u\n", *address, *index);
     } else {
-      if (cfg->index != *index) {
-        type_changed = 1;
-      }
       cfg->index = *index;
     }
   }
   if(address != NULL) {
-    if (cfg->address != *address) {
-      type_changed = 1;
-    }
     cfg->address = *address;
   }
   if(value != NULL) {
     cfg->value = *value;
-  }
-  if(type_changed && cfg->address != 0xFF && cfg->index < 0x10) {
-    if (cfg->type >= GPIO_TYPE_I2C_MCP_IN && cfg->type <= GPIO_TYPE_I2C_MCP_OUT_PULLUP) {
-      int i2c = gpio_i2c_mcp_alloc(cfg->address);
-      if (i2c >= 0) {
-        i2c_gpio_set_pin_config(&i2c_gpio, i2c, cfg->index, cfg->type);
-      }
-    }
   }
 }
 

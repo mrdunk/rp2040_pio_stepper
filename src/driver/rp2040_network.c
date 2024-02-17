@@ -257,6 +257,7 @@ uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
       case GPIO_TYPE_NATIVE_OUT_DEBUG:
       case GPIO_TYPE_NATIVE_OUT:
       case GPIO_TYPE_I2C_MCP_OUT:
+      case GPIO_TYPE_I2C_MCP_OUT_PULLUP:
         current_value = *data->gpio_data_out[gpio];
         break;
       case GPIO_TYPE_NATIVE_IN:
@@ -278,6 +279,7 @@ uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
           // Note: no break here.
         case GPIO_TYPE_NATIVE_OUT:
         case GPIO_TYPE_I2C_MCP_OUT:
+        case GPIO_TYPE_I2C_MCP_OUT_PULLUP:
           // Network update to apply.
           *data->gpio_data_out[gpio] = received_value;
           current_value = received_value;

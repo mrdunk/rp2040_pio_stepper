@@ -33,6 +33,9 @@ void gpio_local_set_out_pin(uint8_t index, bool new_value);
 /* Put i2c data in temporary buffer pending gpio_i2c_mcp_tranceive() being called. */
 void gpio_i2c_mcp_set_out_pin(uint8_t index, uint8_t address, bool new_value);
 
+/* Convert I2C address to the slot number */
+int gpio_i2c_mcp_alloc(uint8_t address);
+
 /* Pack GPIO inputs in buffer for UDP transmission. */
 void gpio_serialize(struct NWBuffer* tx_buf, size_t* tx_buf_len);
 
