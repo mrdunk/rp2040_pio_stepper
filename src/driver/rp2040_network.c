@@ -384,8 +384,8 @@ bool unpack_joint_config(
   printf("      enable:       %u\n", reply->enable);
   printf("      gpio_step:    %i\n", reply->gpio_step);
   printf("      gpio_dir:     %i\n", reply->gpio_dir);
-  printf("      max_velocity: %d\n", reply->max_velocity);
-  printf("      max_accel:    %d\n", reply->max_accel);
+  printf("      max_velocity: %f\n", reply->max_velocity);
+  printf("      max_accel:    %f\n", reply->max_accel);
 
   last_joint_config[joint].enable = reply->enable;
   last_joint_config[joint].gpio_step = reply->gpio_step;

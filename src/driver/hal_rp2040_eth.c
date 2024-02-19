@@ -324,7 +324,7 @@ int rtapi_app_main(void)
       return -1;
     }
 
-    retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->joint_pos_error[num_joint]),
+    retval = hal_pin_s32_newf(HAL_OUT, &(port_data_array->joint_pos_error[num_joint]),
                                 component_id, "rp2040_eth.%d.pos-error-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
@@ -519,6 +519,10 @@ bool configure_joint(
     skeleton_t *data
 ) {
     bool pack_success = true;
+    double max_velocity_ticks =
+      (*data->joint_max_velocity[joint]) * (*data->joint_scale[joint]);
+    double max_accel_ticks =
+      (*data->joint_max_accel[joint]) * (*data->joint_scale[joint]);
     if(
         last_joint_config[joint].enable != *data->joint_enable[joint]
         ||
@@ -526,9 +530,9 @@ bool configure_joint(
         ||
         last_joint_config[joint].gpio_dir != *data->joint_gpio_dir[joint]
         ||
-        last_joint_config[joint].max_velocity != *data->joint_max_velocity[joint]
+        last_joint_config[joint].max_velocity != max_velocity_ticks
         ||
-        last_joint_config[joint].max_accel != *data->joint_max_accel[joint]
+        last_joint_config[joint].max_accel != max_accel_ticks
       ) {
       pack_success = pack_success && serialize_joint_config(
           tx_buffer,
@@ -536,8 +540,8 @@ bool configure_joint(
           *data->joint_enable[joint],
           *data->joint_gpio_step[joint],
           *data->joint_gpio_dir[joint],
-          *data->joint_max_velocity[joint],
-          *data->joint_max_accel[joint]
+          max_velocity_ticks,
+          max_accel_ticks
           );
     }
     return pack_success;
@@ -591,7 +595,7 @@ bool configure_spindle(
         ||
         last_spindle_config[spindle].bitrate != data->spindle_bitrate[spindle]
     ) {
-      printf("Configuring spindle: %u\t%u\n", spindle, data->spindle_vfd_type[spindle]);
+      //printf("Configuring spindle: %u\t%u\n", spindle, data->spindle_vfd_type[spindle]);
       pack_success = pack_success && serialise_spindle_config(
           tx_buffer,
           spindle,
@@ -731,6 +735,14 @@ static void write_port(void *arg, long period)
     (*data->metric_missed_packets)++;
     if (*data->metric_missed_packets == 5000 || !(*data->metric_missed_packets % 10000)) {
       printf("WARN: Still no connection over Ethernet link.\n");
+    }
+  }
+
+  // If joint not enabled, assume LinuxCNC has just started and set it's position
+  // to that of the RP.
+  for(uint32_t joint = 0; joint < MAX_JOINT; joint++) {
+    if(! *data->joint_enable[joint]) {
+      *data->joint_position[joint] = *data->joint_pos_feedback[joint];
     }
   }
 
