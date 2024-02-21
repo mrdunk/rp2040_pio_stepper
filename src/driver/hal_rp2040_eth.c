@@ -42,6 +42,7 @@ typedef struct {
   hal_s32_t* joint_step_len_ticks[MAX_JOINT];
   // The requested velocity at time of joint_velocity_feedback.
   hal_float_t* joint_velocity_cmd[MAX_JOINT];
+  hal_float_t* joint_accel_cmd[MAX_JOINT];
   // The actual velocity achieved on the RP.
   hal_float_t* joint_velocity_feedback[MAX_JOINT];
   // Difference between requested position and actual position on RP.
@@ -308,6 +309,15 @@ int rtapi_app_main(void)
 
     retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->joint_velocity_cmd[num_joint]),
                                 component_id, "rp2040_eth.%d.velocity-calc-%d", num_device, num_joint);
+    if (retval < 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR,
+                      "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);
+      hal_exit(component_id);
+      return -1;
+    }
+
+    retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->joint_accel_cmd[num_joint]),
+                                component_id, "rp2040_eth.%d.accel-calc-%d", num_device, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", num_device, retval);

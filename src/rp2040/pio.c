@@ -13,6 +13,7 @@
 #define STEP_PIO_MULTIPLIER 2.0
 #define DEAD_ZONE_THRESHOLD 1  // steps / ms
 
+
 /* Initialize a pair of PIO programmes.
  * One for step generation on pio0 and one for counting said steps on pio1.
  */
@@ -106,91 +107,60 @@ void init_pio(const uint32_t joint)
   init_done[joint] = true;
 }
 
+// These 2 should add up to 1.0 or slightly less. eg: 0.95
+// The slight delay smooths output. More delay = smoother but more latency.
+#define POSITION_BIAS 0.1
+#define VELOCITY_BIAS 0.85
+#define MIN_STEP_COUNT 0.0625
+
 /* Convert step command from LinuxCNC and Feedback from PIO into a desired velocity. */
-double get_velocity_smoothed(
+double get_velocity(
     const uint32_t update_period_us,
     const uint8_t joint,
     const int32_t abs_pos_achieved,
     const double abs_pos_requested,
     const double expected_velocity)
 {
-  double position_error = (abs_pos_requested - (double)abs_pos_achieved);
-  double velocity = (expected_velocity / (double)update_period_us);
+  static int32_t last_dir[MAX_JOINT] = {0, 0, 0, 0};
+  static int32_t holdoff[MAX_JOINT] = {0, 0, 0, 0};
 
-  // Note that the total of these 2 velocities add up to less than 1.
-  // This performs like the Proportional stage of a PID controller.
-  double combined_velocity = position_error * 0.1 + velocity * 0.8;
-
-  if(abs(velocity) <= DEAD_ZONE_THRESHOLD) {  // steps / ms
-    // Deadzone. Minimize movement to prevent oscillating around zero.
-    if((position_error > 0.0 && velocity < 0.0) || (position_error < 0.0 && velocity > 0.0)) {
-      // Position and velocity disagree.
-      // Do not do steps.
-      return 0;
-    }
-    return velocity;
+  double position_diff = (abs_pos_requested - (double)abs_pos_achieved);
+  if(fabs(position_diff) < 0.001) {
+    // One step per second.
+    return 0.0;
   }
 
-  return combined_velocity;
-}
-
-/* Convert step command from LinuxCNC and Feedback from PIO into a desired velocity. */
-double get_velocity_smoothed_2(
-    const uint32_t update_period_us,
-    const uint8_t joint,
-    const int32_t abs_pos_achieved,
-    const double abs_pos_requested,
-    const double expected_velocity)
-{
-  double position_error = (abs_pos_requested - (double)abs_pos_achieved);
   double velocity = (expected_velocity / (double)update_period_us);
 
-  double combined_velocity = position_error * 0.8 + velocity * 0.1;
-
-  if(abs(position_error) <= DEAD_ZONE_THRESHOLD) {  // steps / ms
-    // Deadzone. Minimize movement to prevent oscillating around zero.
-    if((position_error > 0.0 && velocity < 0.0) || (position_error < 0.0 && velocity > 0.0)) {
-      // Position and velocity disagree.
-      // Do not do steps.
-      return 0;
-    }
-    return position_error;
-  }
-
-  return combined_velocity;
-}
-
-/* Convert step command from LinuxCNC and Feedback from PIO into a desired velocity. */
-double get_velocity_simple(
-    const uint32_t update_period_us,
-    const uint8_t joint,
-    const int32_t abs_pos_achieved,
-    const double abs_pos_requested,
-    const double expected_velocity)
-{
-  double position_error = (abs_pos_requested - (double)abs_pos_achieved);
-  double velocity = (expected_velocity / (double)update_period_us);
-
-  if((position_error > 0.0 && velocity < 0.0) || (position_error < 0.0 && velocity > 0.0)) {
+  if((position_diff > 0.0 && velocity < 0.0) || (position_diff < 0.0 && velocity > 0.0)) {
     return 0;
   }
 
-  return position_error * 0.1 + velocity * 0.85;
+  double combined_vel = position_diff * POSITION_BIAS + velocity * VELOCITY_BIAS;
+
+  if(fabs(combined_vel) <= MIN_STEP_COUNT * 4) {
+    if(holdoff[joint] == 0) {
+      holdoff[joint] = 4;
+    } else {
+      holdoff[joint]--;
+      return 0.0;
+    }
+  } else if(holdoff[joint] > 0) {
+    holdoff[joint]--;
+  }
+
+  size_t dir = (combined_vel > 0) ? 1 : -1;
+
+  if(fabs(combined_vel) <= MIN_STEP_COUNT * 2) {
+    if(dir != last_dir[joint]) {
+      dir = 0;
+      combined_vel = 0.0;
+    }
+  }
+
+  last_dir[joint] = dir;
+  return combined_vel;
 }
-
-/* Convert step command from LinuxCNC and Feedback from PIO into a desired velocity. */
-double get_velocity_raw(
-    const uint32_t update_period_us,
-    const uint8_t joint,
-    const int32_t abs_pos_achieved,
-    const double abs_pos_requested,
-    const double expected_velocity)
-{
-  double position_error = (abs_pos_requested - (double)abs_pos_achieved);
-
-  return position_error;
-}
-
 
 /* Generate step counts and send to PIOs. */
 uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
@@ -200,7 +170,6 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   static int32_t last_pos_achieved[MAX_JOINT] = {0, 0, 0, 0};
   static double last_velocity[MAX_JOINT] = {0, 0, 0, 0};
   static uint32_t last_enabled[MAX_JOINT] = {0, 0, 0, 0};
-  static uint8_t last_direction[MAX_JOINT] = {0, 0, 0, 0};
 
   //uint32_t clock_multiplier = clock_get_hz(clk_sys) / 1000000;
   static const uint32_t clock_multiplier = 133;
@@ -245,13 +214,14 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   }
 
   if(enabled != last_enabled[joint]) {
+    last_enabled[joint] = enabled;
     if(enabled) {
       printf("Joint %u was enabled.\n", joint);
       init_pio(joint);
     } else {
       printf("Joint %u was disabled.\n", joint);
+      return 0;
     }
-    last_enabled[joint] = enabled;
   }
 
   double update_period_ticks = update_period_us * clock_multiplier;
@@ -263,9 +233,7 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
     fifo_len--;
   }
 
-  double velocity = get_velocity_simple(
-  //double velocity = get_velocity_smoothed_2(
-  //double velocity = get_velocity_raw(
+  double velocity = get_velocity(
       update_period_us,
       joint,
       abs_pos_achieved,
@@ -274,7 +242,7 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
 
   if(update_period_us > 0) {
     max_velocity /= update_period_us;
-    max_accel /= (update_period_us * 100);
+    max_accel /= (update_period_us * update_period_us);
   } else {
     return 0;
   }
@@ -282,58 +250,32 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   /*
   double accel = velocity - last_velocity[joint];
 
-  static double global_max_accel = 0;
-  static double global_min_accel = 0;
-
   if(accel > max_accel) {
-    if(accel > global_max_accel) {
-      global_max_accel = accel;
-    }
-    velocity = last_velocity[joint] + max_accel;
+    //velocity = last_velocity[joint] + max_accel;
   } else if(accel < (-max_accel)) {
-    if(accel < global_min_accel) {
-      global_min_accel = accel;
-    }
-    velocity = last_velocity[joint] - max_accel;
-  }
-
-  if((count % 100000) < 4 && joint == 0) {
-    printf("%f\t%f\t%f\t%u\t%u\n",
-        global_max_accel, global_min_accel,
-        max_accel,
-        (global_max_accel > max_accel),
-        (global_min_accel < -max_accel)
-        );
-    global_max_accel = 0;
-    global_min_accel = 0;
+    //velocity = last_velocity[joint] - max_accel;
   }
   */
 
-  uint8_t direction = (velocity > 0);
-  if(direction != last_direction[joint]) {
-    // Direction has changed.
-    last_direction[joint] = direction;
-  }
-
   double step_count = fabs(velocity);
-  double max_step_count = fabs(max_velocity);
   int32_t step_len_ticks = 0;
-  int32_t min_step_len_ticks =
-      (update_period_ticks / (max_step_count * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
 
   // The PIO FIFO will only report step counts between steps.
-  // If a step length gets too long, it will block updates.
   // If too small a step_count is allowed here, the steps can get very long and
   // block further updates.
-  if(enabled > 0 && step_count > 0.5) {
+  if(step_count > MIN_STEP_COUNT) {
     step_len_ticks =
       (update_period_ticks / (step_count * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
+
+    int32_t min_step_len_ticks =
+      (update_period_ticks / (fabs(max_velocity) * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
     if(step_len_ticks < min_step_len_ticks) {
       step_len_ticks = min_step_len_ticks;
     }
   }
 
   // Request steps from PIO.
+  uint8_t direction = (velocity > 0);
   if(pio_sm_is_tx_fifo_empty(pio0, sm0[joint]))
     pio_sm_put(pio0, sm0[joint], (step_len_ticks << 1) | direction);
 

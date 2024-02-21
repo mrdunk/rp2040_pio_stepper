@@ -443,9 +443,11 @@ bool unpack_joint_metrics(
 
   struct Reply_joint_metrics* reply = data_p;
   for(size_t joint = 0; joint < MAX_JOINT; joint++) {
-    *data->joint_step_len_ticks[joint] = (double)reply->step_len_ticks[joint];
+    *data->joint_step_len_ticks[joint] = reply->step_len_ticks[joint];
 
-    *data->joint_velocity_cmd[joint] = (double)reply->velocity_requested_tm1[joint];
+    *data->joint_accel_cmd[joint] =
+      reply->velocity_requested_tm1[joint] - *data->joint_velocity_cmd[joint];
+    *data->joint_velocity_cmd[joint] = reply->velocity_requested_tm1[joint];
   }
 
   (*received_count)++;
