@@ -11,7 +11,6 @@
 
 #define STEP_PIO_LEN_OVERHEAD 9.0
 #define STEP_PIO_MULTIPLIER 2.0
-#define DEAD_ZONE_THRESHOLD 1  // steps / ms
 
 
 /* Initialize a pair of PIO programmes.
@@ -107,11 +106,11 @@ void init_pio(const uint32_t joint)
   init_done[joint] = true;
 }
 
-// These 2 should add up to 1.0 or slightly less. eg: 0.95
+// These POSITION_BIAS and VELOCITY_BIAS should add up to 1.0 or slightly less. eg: 0.95
 // The slight delay smooths output. More delay = smoother but more latency.
 #define POSITION_BIAS 0.1
 #define VELOCITY_BIAS 0.85
-#define MIN_STEP_COUNT 0.0625
+#define MIN_STEP_COUNT 0.0625   // 1/16
 
 /* Convert step command from LinuxCNC and Feedback from PIO into a desired velocity. */
 double get_velocity(
@@ -121,44 +120,37 @@ double get_velocity(
     const double abs_pos_requested,
     const double expected_velocity)
 {
-  static int32_t last_dir[MAX_JOINT] = {0, 0, 0, 0};
   static int32_t holdoff[MAX_JOINT] = {0, 0, 0, 0};
 
   double position_diff = (abs_pos_requested - (double)abs_pos_achieved);
+  double velocity = (expected_velocity / (double)update_period_us);
+  double combined_vel = position_diff * POSITION_BIAS + velocity * VELOCITY_BIAS;
+
+  // Skip very slow speeds.
+  // Try again next cycle.
   if(fabs(position_diff) < 0.001) {
-    // One step per second.
     return 0.0;
   }
 
-  double velocity = (expected_velocity / (double)update_period_us);
-
+  // Different opinions on which direction to turn. Implies low speed jitter.
+  // Try again next cycle.
   if((position_diff > 0.0 && velocity < 0.0) || (position_diff < 0.0 && velocity > 0.0)) {
-    return 0;
+    return 0.0;
   }
 
-  double combined_vel = position_diff * POSITION_BIAS + velocity * VELOCITY_BIAS;
-
-  if(fabs(combined_vel) <= MIN_STEP_COUNT * 4) {
-    if(holdoff[joint] == 0) {
-      holdoff[joint] = 4;
-    } else {
+  // Short steps that span multiple cycles are inclined to "clump" together.
+  // If a single step is calculated to take more than one cycle, don't allow
+  // any steps in the following cycles.
+  if(fabs(combined_vel) < 1.0) {
+    if(holdoff[joint] > 0) {
       holdoff[joint]--;
       return 0.0;
     }
+    holdoff[joint] = 0.75 / fabs(combined_vel);
   } else if(holdoff[joint] > 0) {
     holdoff[joint]--;
   }
 
-  size_t dir = (combined_vel > 0) ? 1 : -1;
-
-  if(fabs(combined_vel) <= MIN_STEP_COUNT * 2) {
-    if(dir != last_dir[joint]) {
-      dir = 0;
-      combined_vel = 0.0;
-    }
-  }
-
-  last_dir[joint] = dir;
   return combined_vel;
 }
 
@@ -181,6 +173,10 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   double max_accel;
   int32_t velocity_achieved = 0;
   uint32_t updated;
+
+  if(update_period_us ==0) {
+    return 0;
+  }
 
   updated = get_joint_config(
       joint,
@@ -224,8 +220,6 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
     }
   }
 
-  double update_period_ticks = update_period_us * clock_multiplier;
-
   // Drain rx_fifo of PIO feedback data and keep the last value received.
   uint8_t fifo_len = pio_sm_get_rx_fifo_level(pio1, sm1[joint]);
   while(fifo_len > 0) {
@@ -240,25 +234,20 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
       abs_pos_requested,
       velocity_requested);
 
-  if(update_period_us > 0) {
-    max_velocity /= update_period_us;
-    max_accel /= (update_period_us * update_period_us);
-  } else {
-    return 0;
-  }
+  max_velocity /= update_period_us;
+  max_accel /= update_period_us;
 
-  /*
-  double accel = velocity - last_velocity[joint];
-
-  if(accel > max_accel) {
-    //velocity = last_velocity[joint] + max_accel;
-  } else if(accel < (-max_accel)) {
-    //velocity = last_velocity[joint] - max_accel;
-  }
-  */
+  //double accel = velocity - last_velocity[joint];
+  //if(accel > max_accel) {
+  //  velocity = last_velocity[joint] + max_accel;
+  //} else if(accel < (-max_accel)) {
+  //  velocity = last_velocity[joint] - max_accel;
+  //}
 
   double step_count = fabs(velocity);
   int32_t step_len_ticks = 0;
+  double update_period_ticks = update_period_us * clock_multiplier;
+
 
   // The PIO FIFO will only report step counts between steps.
   // If too small a step_count is allowed here, the steps can get very long and
