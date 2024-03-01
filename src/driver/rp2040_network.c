@@ -7,6 +7,7 @@
 #include "../shared/messages.h"
 #include "../shared/buffer.c"
 #include "../shared/checksum.c"
+#include "../rp2040/modbus.h"
 
 #ifdef BUILD_TESTS
 
@@ -116,17 +117,19 @@ size_t serialize_timing(
 
 size_t serialize_joint_pos(
     struct NWBuffer* buffer,
-    uint8_t joint,
-    double position,
-    double velocity
+    skeleton_t* data
 ) {
-  union MessageAny message;
-  message.set_abs_pos.type = MSG_SET_AXIS_ABS_POS;
-  message.set_abs_pos.axis = joint;
-  message.set_abs_pos.position = position;
-  message.set_abs_pos.velocity = velocity;
+  struct Message_set_joints_pos message;
+  message.type = MSG_SET_JOINT_ABS_POS;
 
-  return pack_nw_buff(buffer, &message, sizeof(struct Message_set_abs_pos));
+  for(size_t joint = 0; joint < MAX_JOINT; joint++) {
+    double position = *data->joint_scale[joint] * *data->joint_position[joint];
+    double velocity = *data->joint_scale[joint] * *data->joint_velocity[joint];
+    message.position[joint] = position;
+    message.velocity[joint] = velocity;
+  }
+
+  return pack_nw_buff(buffer, &message, sizeof(struct Message_set_joints_pos));
 }
 
 bool serialise_spindle_config(
@@ -149,42 +152,31 @@ bool serialise_spindle_config(
 
 bool serialise_spindle_speed_in(
     struct NWBuffer* tx_buf,
-    uint8_t spindle,
-    float speed
+    skeleton_t* data
 )
 {
+  bool at_least_one_eneabled = false;
+
   struct Message_spindle_speed message;
   message.type = MSG_SET_SPINDLE_SPEED;
-  message.spindle_index = spindle;
-  message.speed = speed;
 
-  return pack_nw_buff(tx_buf, &message, sizeof(message));
-}
+  float speed;
 
-size_t serialize_joint_io_step(
-    struct NWBuffer* buffer,
-    uint8_t joint,
-    uint8_t value
-) {
-  union MessageAny message;
-  message.joint_gpio.type = MSG_SET_AXIS_IO_STEP;
-  message.joint_gpio.axis = joint;
-  message.joint_gpio.value = value;
+  for(size_t spindle = 0; spindle < MAX_SPINDLE; spindle++) {
+    if(data->spindle_vfd_type[spindle] == MODBUS_TYPE_NOT_SET) {
+      continue;
+    }
+    at_least_one_eneabled = true;
 
-  return pack_nw_buff(buffer, &message, sizeof(struct Message_joint_gpio));
-}
+    speed =
+      *data->spindle_speed_in[spindle] / (120.0 / data->spindle_poles[spindle]);
+    message.speed[spindle] = speed;
+  }
 
-size_t serialize_joint_io_dir(
-    struct NWBuffer* buffer,
-    uint8_t joint,
-    uint8_t value
-) {
-  union MessageAny message;
-  message.joint_gpio.type = MSG_SET_AXIS_IO_DIR;
-  message.joint_gpio.axis = joint;
-  message.joint_gpio.value = value;
-
-  return pack_nw_buff(buffer, &message, sizeof(struct Message_joint_gpio));
+  if(at_least_one_eneabled) {
+    return pack_nw_buff(tx_buf, &message, sizeof(message));
+  }
+  return true;
 }
 
 size_t serialize_joint_enable(
@@ -193,8 +185,8 @@ size_t serialize_joint_enable(
     uint8_t value
 ) {
   union MessageAny message;
-  message.joint_enable.type = MSG_SET_AXIS_ENABLED;
-  message.joint_enable.axis = joint;
+  message.joint_enable.type = MSG_SET_JOINT_ENABLED;
+  message.joint_enable.joint = joint;
   message.joint_enable.value = value;
 
   return pack_nw_buff(buffer, &message, sizeof(struct Message_joint_enable));
@@ -210,8 +202,8 @@ size_t serialize_joint_config(
     double max_accel
 ) {
   union MessageAny message;
-  message.joint_config.type = MSG_SET_AXIS_CONFIG;
-  message.joint_config.axis = joint;
+  message.joint_config.type = MSG_SET_JOINT_CONFIG;
+  message.joint_config.joint = joint;
   message.joint_config.enable = enable;
   message.joint_config.gpio_step = gpio_step;
   message.joint_config.gpio_dir = gpio_dir;
@@ -240,10 +232,10 @@ size_t serialize_gpio_config(
 
 uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
   size_t return_val = 0;
-  bool confirmation_pending[MAX_GPIO / 32];
-  uint32_t to_send[MAX_GPIO / 32];
+  bool confirmation_pending[MAX_GPIO_BANK];
+  uint32_t to_send[MAX_GPIO_BANK];
 
-  for(size_t bank = 0; bank < MAX_GPIO / 32; bank++) {
+  for(size_t bank = 0; bank < MAX_GPIO_BANK; bank++) {
     to_send[bank] = 0;
     confirmation_pending[bank] = false;
   }
@@ -303,7 +295,7 @@ uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
     to_send[bank] |= (current_value << gpio_per_bank);
   }
 
-  for(int bank = 0; bank < MAX_GPIO / 32; bank++) {
+  for(int bank = 0; bank < MAX_GPIO_BANK; bank++) {
     if(confirmation_pending[bank] || data->gpio_confirmation_pending[bank]) {
       // Values differ from those received in the last NW update
       // or the last network update requested confirmation.
@@ -351,21 +343,23 @@ bool unpack_joint_movement(
     skeleton_t* data
 ) {
   void* data_p = unpack_nw_buff(
-      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_axis_movement));
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_joint_movement));
 
   if(! data_p) {
     return false;
   }
 
-  struct Reply_axis_movement* reply = data_p;
-  size_t joint = reply->axis;
+  struct Reply_joint_movement* reply = data_p;
 
-  *data->joint_pos_feedback[joint] =
-          ((double)reply->abs_pos_acheived)
-          / *data->joint_scale[joint];
+  for(size_t joint = 0; joint < MAX_JOINT; joint++) {
+    *data->joint_pos_feedback[joint] =
+      ((double)reply->abs_pos_achieved[joint]) / *data->joint_scale[joint];
 
-  *data->joint_velocity_feedback[joint] =
-          (double)reply->velocity_acheived;
+    *data->joint_velocity_feedback[joint] =
+      (double)reply->velocity_achieved[joint];
+
+    *data->joint_pos_error[joint] = reply->position_error[joint];
+  }
 
   (*received_count)++;
   return true;
@@ -379,21 +373,21 @@ bool unpack_joint_config(
     struct Message_joint_config* last_joint_config
 ) {
   void* data_p = unpack_nw_buff(
-      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_axis_config));
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_joint_config));
 
   if(! data_p) {
     return false;
   }
 
-  struct Reply_axis_config* reply = data_p;
-  size_t joint = reply->axis;
+  struct Reply_joint_config* reply = data_p;
+  size_t joint = reply->joint;
 
   printf("INFO: Received confirmation of config received by RP for joint: %u\n", joint);
   printf("      enable:       %u\n", reply->enable);
   printf("      gpio_step:    %i\n", reply->gpio_step);
   printf("      gpio_dir:     %i\n", reply->gpio_dir);
-  printf("      max_velocity: %d\n", reply->max_velocity);
-  printf("      max_accel:    %d\n", reply->max_accel);
+  printf("      max_velocity: %f\n", reply->max_velocity);
+  printf("      max_accel:    %f\n", reply->max_accel);
 
   last_joint_config[joint].enable = reply->enable;
   last_joint_config[joint].gpio_step = reply->gpio_step;
@@ -443,20 +437,20 @@ bool unpack_joint_metrics(
     skeleton_t* data
 ) {
   void* data_p = unpack_nw_buff(
-      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_axis_metrics));
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_joint_metrics));
 
   if(! data_p) {
     return false;
   }
 
-  struct Reply_axis_metrics* reply = data_p;
-  uint32_t joint = reply->axis;
+  struct Reply_joint_metrics* reply = data_p;
+  for(size_t joint = 0; joint < MAX_JOINT; joint++) {
+    *data->joint_step_len_ticks[joint] = reply->step_len_ticks[joint];
 
-  *data->joint_step_len_ticks[joint] =
-          (double)reply->step_len_ticks;
-
-  *data->joint_velocity_cmd[joint] =
-          (double)reply->velocity_requested;
+    *data->joint_accel_cmd[joint] =
+      reply->velocity_requested_tm1[joint] - *data->joint_velocity_cmd[joint];
+    *data->joint_velocity_cmd[joint] = reply->velocity_requested_tm1[joint];
+  }
 
   (*received_count)++;
   return true;
@@ -589,11 +583,11 @@ void process_data(
         unpack_success = unpack_success && unpack_timing(
             rx_buf, &rx_offset, received_count, data);
         break;
-      case REPLY_AXIS_MOVEMENT:
+      case REPLY_JOINT_MOVEMENT:
         unpack_success = unpack_success && unpack_joint_movement(
             rx_buf, &rx_offset, received_count, data);
         break;
-      case REPLY_AXIS_CONFIG:
+      case REPLY_JOINT_CONFIG:
         unpack_success = unpack_success && unpack_joint_config(
             rx_buf, &rx_offset, received_count, last_joint_config);
         break;
@@ -601,7 +595,7 @@ void process_data(
         unpack_success = unpack_success && unpack_gpio_config(
             rx_buf, &rx_offset, received_count, last_gpio_config);
         break;
-      case REPLY_AXIS_METRICS:
+      case REPLY_JOINT_METRICS:
         unpack_success = unpack_success && unpack_joint_metrics(
             rx_buf, &rx_offset, received_count, data);
         break;
