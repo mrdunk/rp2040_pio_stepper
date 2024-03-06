@@ -238,6 +238,11 @@ bool unpack_joint_config(
 
 
   printf("%u Configuring joint: %u\n", *received_count, joint);
+  printf("\tenabled:\t%u\n", enabled);
+  printf("\tio_step:\t%i\n", io_step);
+  printf("\tio_dir: \t%i\n", io_dir);
+  printf("\tmax_velocity:\t%f\n", max_velocity);
+  printf("\tmax_accel:\t%u\n", max_accel);
   update_joint_config(
       joint,
       CORE0,
@@ -451,6 +456,7 @@ void core0_main() {
   int count = 0;
   while (1) {
     data_received = 0;
+    retval = 0;
 
     while(data_received == 0 || retval <= 0) {
       retval = get_UDP(
@@ -477,7 +483,7 @@ void core0_main() {
       received_msg_count = 0;
 
       // Get data from config and put in TX buffer.
-      serialise_joint_movement(&tx_buf, true);
+      serialise_joint_movement(&tx_buf, false);
       serialise_joint_metrics(&tx_buf);
 
       // No need to update each spindle every cycle.

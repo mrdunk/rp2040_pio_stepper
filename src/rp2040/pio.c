@@ -134,7 +134,7 @@ double get_velocity(
 
   // Different opinions on which direction to turn. Implies low speed jitter.
   // Try again next cycle.
-  if((position_diff > 0.0 && velocity < 0.0) || (position_diff < 0.0 && velocity > 0.0)) {
+  if((position_diff >= 0.0 && velocity <= 0.0) || (position_diff <= 0.0 && velocity >= 0.0)) {
     return 0.0;
   }
 
@@ -174,7 +174,7 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   int32_t velocity_achieved = 0;
   uint32_t updated;
 
-  if(update_period_us ==0) {
+  if(update_period_us == 0) {
     return 0;
   }
 
@@ -218,6 +218,10 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
       printf("Joint %u was disabled.\n", joint);
       return 0;
     }
+  }
+
+  if(!enabled) {
+    return 0;
   }
 
   // Drain rx_fifo of PIO feedback data and keep the last value received.

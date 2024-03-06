@@ -39,7 +39,6 @@ void update_all_joint() {
   for(uint8_t joint = 0; joint < MAX_JOINT; joint++) {
     updated_count += do_steps(joint, update_period_us);
   }
-  //update_pio_io_configured();
 }
 
 void core1_main() {
