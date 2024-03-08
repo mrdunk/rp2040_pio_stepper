@@ -80,7 +80,7 @@ static skeleton_t *port_data_array;
 /* other globals */
 static int component_id;    /* component ID */
 
-#define MAX_SKIPPED_PACKETS 100
+#define MAX_SKIPPED_PACKETS 10
 
 
 /***********************************************************************
