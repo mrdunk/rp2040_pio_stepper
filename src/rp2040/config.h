@@ -15,6 +15,8 @@
 #define CORE0 0
 #define CORE1 1
 
+#define MAX_MISSED_PACKET 10
+
 // Semaphore for synchronizing cores.
 extern volatile uint32_t tick;
 
@@ -118,6 +120,8 @@ uint32_t get_joint_config(
     int32_t* step_len_ticks,
     int32_t* position_error
     );
+
+void disable_joint(const uint8_t joint, const uint8_t core);
 
 /* Serialise metrics stored in global config in a format for sending over UDP. */
 bool serialise_timing(struct NWBuffer* tx_buf, int32_t update_id, int32_t time_diff);
