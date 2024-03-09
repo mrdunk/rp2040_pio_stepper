@@ -346,6 +346,25 @@ uint32_t get_joint_config(
   return updated_by_other_core;
 }
 
+void disable_joint(const uint8_t joint, const uint8_t core) {
+  uint8_t enabled = 0;
+  update_joint_config(
+      joint,
+      core,
+      &enabled,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL);
+}
+
 /* Serialise metrics stored in global config in a format for sending over UDP. */
 bool serialise_timing(struct NWBuffer* tx_buf, int32_t update_id, int32_t time_diff) {
   struct Reply_timing reply;

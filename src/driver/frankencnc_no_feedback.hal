@@ -2,6 +2,7 @@ loadrt [KINS]KINEMATICS
 loadrt [EMCMOT]EMCMOT base_period_nsec=[EMCMOT]BASE_PERIOD servo_period_nsec=[EMCMOT]SERVO_PERIOD num_joints=[KINS]JOINTS
 loadrt hal_rp2040_eth
 loadrt mult2 count=8
+loadrt and2 count=1
 
 # Default GPIO values.
 source defualt_rp2040_eth_gpio.hal
@@ -17,10 +18,23 @@ addf mult2.4 servo-thread
 addf mult2.5 servo-thread
 addf mult2.6 servo-thread
 addf mult2.7 servo-thread
+addf and2.0 servo-thread
+
 
 # Machine enable
-net estop-out <= iocontrol.0.user-enable-out
-net estop-out => iocontrol.0.emc-enable-in
+# Requires both the UI button to be enabled and the driver to verify network is up.
+#net estop-out <= iocontrol.0.user-enable-out
+#net estop-out => iocontrol.0.emc-enable-in
+
+net estop-out-user   <= iocontrol.0.user-enable-out
+net estop-out-driver <= rp2040_eth.0.machine-enable-out
+
+net estop-out-user   => and2.0.in0
+net estop-out-driver => and2.0.in1
+
+net estop-out        <= and2.0.out
+net estop-out        => iocontrol.0.emc-enable-in
+net estop-out        => rp2040_eth.0.machine-enable-in
 
 
 # Joint 0

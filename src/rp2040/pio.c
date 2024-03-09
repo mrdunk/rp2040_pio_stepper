@@ -134,7 +134,7 @@ double get_velocity(
 
   // Different opinions on which direction to turn. Implies low speed jitter.
   // Try again next cycle.
-  if((position_diff > 0.0 && velocity < 0.0) || (position_diff < 0.0 && velocity > 0.0)) {
+  if((position_diff >= 0.0 && velocity <= 0.0) || (position_diff <= 0.0 && velocity >= 0.0)) {
     return 0.0;
   }
 
@@ -174,7 +174,11 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   int32_t velocity_achieved = 0;
   uint32_t updated;
 
-  if(update_period_us ==0) {
+  if(update_period_us == 0) {
+    // Switch off PIO stepgen.
+    if(!pio_sm_is_tx_fifo_full(pio0, sm0[joint])) {
+      pio_sm_put(pio0, sm0[joint], 0);
+    }
     return 0;
   }
 
@@ -195,10 +199,6 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
       NULL  // &position_error
       );
 
-  if(updated <= 0) {
-    return 0;
-  }
-
   count++;
 
   if(updated > 2) {
@@ -216,8 +216,19 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
       init_pio(joint);
     } else {
       printf("Joint %u was disabled.\n", joint);
-      return 0;
     }
+  }
+
+  if(!enabled) {
+    // Switch off PIO stepgen.
+    if(pio_sm_is_tx_fifo_empty(pio0, sm0[joint])) {
+      pio_sm_put(pio0, sm0[joint], 0);
+    }
+    return 0;
+  }
+
+  if(updated <= 0) {
+    return 0;
   }
 
   // Drain rx_fifo of PIO feedback data and keep the last value received.
@@ -265,8 +276,9 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
 
   // Request steps from PIO.
   uint8_t direction = (velocity > 0);
-  if(pio_sm_is_tx_fifo_empty(pio0, sm0[joint]))
+  if(pio_sm_is_tx_fifo_empty(pio0, sm0[joint])) {
     pio_sm_put(pio0, sm0[joint], (step_len_ticks << 1) | direction);
+  }
 
   velocity_achieved = abs_pos_achieved - last_pos_achieved[joint];
   int32_t velocity_requested_tm1 = velocity;

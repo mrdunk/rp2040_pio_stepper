@@ -30,6 +30,8 @@ typedef struct {
   hal_u32_t* metric_rp_update_len;
   hal_u32_t* metric_missed_packets;
   hal_bit_t* metric_eth_state;
+  hal_bit_t* machine_enable_in;
+  hal_bit_t* machine_enable_out;
   hal_bit_t* joint_enable[MAX_JOINT];
   hal_s32_t* joint_gpio_step[MAX_JOINT];
   hal_s32_t* joint_gpio_dir[MAX_JOINT];
@@ -80,7 +82,7 @@ static skeleton_t *port_data_array;
 /* other globals */
 static int component_id;    /* component ID */
 
-#define MAX_SKIPPED_PACKETS 100
+#define MAX_SKIPPED_PACKETS 10
 
 
 /***********************************************************************
@@ -212,6 +214,26 @@ int rtapi_app_main(void)
       hal_exit(component_id);
       return -1;
     }
+  }
+
+  retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->machine_enable_in),
+      component_id, "rp2040_eth.%d.machine-enable-in", num_device);
+  if (retval < 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR,
+        "SKELETON: ERROR: port %d var export failed with err=%i\n",
+        num_device, retval);
+    hal_exit(component_id);
+    return -1;
+  }
+
+  retval = hal_pin_bit_newf(HAL_OUT, &(port_data_array->machine_enable_out),
+      component_id, "rp2040_eth.%d.machine-enable-out", num_device);
+  if (retval < 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR,
+        "SKELETON: ERROR: port %d var export failed with err=%i\n",
+        num_device, retval);
+    hal_exit(component_id);
+    return -1;
   }
 
   for(int num_joint = 0; num_joint < MAX_JOINT; num_joint++) {
@@ -764,6 +786,7 @@ static void write_port(void *arg, long period)
 void on_eth_up(skeleton_t *data, uint count) {
   printf("Ethernet up. Packet count: %u\n", count);
   *data->metric_eth_state = true;
+  *data->machine_enable_out = true;
 }
 
 void on_eth_down(
@@ -778,6 +801,7 @@ void on_eth_down(
 
   printf("WARN: Ethernet down. Packet count: %u\n", count);
   *data->metric_eth_state = false;
+  *data->machine_enable_out = false;
 
   // Force reconfiguration when network comes back up.
   reset_rp_config(data, last_joint_config, last_gpio_config, last_spindle_config);

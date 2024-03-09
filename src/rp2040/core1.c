@@ -11,22 +11,40 @@ struct i2c_gpio_state i2c_gpio;
 void update_all_joint() {
   static uint32_t metric = 0;
   static uint32_t last_tick = 0;
-  uint32_t update_period_us = get_period();
-  uint8_t updated_count = 0;
-
-  // Wait for semaphore from core0 to indicate time start.
-  while(tick == last_tick) {
-    i2c_gpio_poll(&i2c_gpio);
-    tight_loop_contents();
-  }
-  last_tick = tick;
-  i2c_gpio_poll(&i2c_gpio);
-
   static uint32_t count = 0;
   static uint32_t max_dt = 0;
   static uint32_t min_dt = 10000;
-  uint32_t metric_now = time_us_64();
-  uint32_t dt = metric_now - metric;
+  static uint32_t no_network = 0;
+  uint32_t update_period_us = get_period();
+  uint32_t metric_now;
+  uint32_t dt = 0;
+
+  // Wait for semaphore from core0 to indicate time start.
+  while(tick == last_tick) {
+    metric_now = time_us_64();
+    dt = metric_now - metric;
+    if(dt > update_period_us * MAX_MISSED_PACKET) {
+      break;
+    }
+    i2c_gpio_poll(&i2c_gpio);
+  }
+  if(tick == last_tick) {
+    // Didn't receive tick semaphore.
+    for(uint8_t joint = 0; joint < MAX_JOINT; joint++) {
+      disable_joint(joint, CORE1);
+    }
+    if(!no_network) {
+      printf("No network update for %ums.\tDisabling joints.\n", dt / 1000);
+    }
+    no_network = 1;
+  } else {
+    // Did receive tick semaphore.
+    no_network = 0;
+  }
+  last_tick = tick;
+
+  metric_now = time_us_64();
+  dt = metric_now - metric;
   if(dt > max_dt) {
     max_dt = dt;
   }
@@ -41,9 +59,9 @@ void update_all_joint() {
   metric = metric_now;
 
   for(uint8_t joint = 0; joint < MAX_JOINT; joint++) {
-    updated_count += do_steps(joint, update_period_us);
+    do_steps(joint, update_period_us);
   }
-  //update_pio_io_configured();
+  i2c_gpio_poll(&i2c_gpio);
 }
 
 void core1_main() {
