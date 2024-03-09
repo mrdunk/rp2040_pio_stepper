@@ -126,7 +126,6 @@ float modbus_loop_fuling(float frequency)
       // Value received is not always exactly the value sent.
       if (abs((rate * 4 + 2) / 5 - vfd.set_freq_x10) > 1) {
         modbus_write_holding_register(vfd_config.address, FULING_DZB_CMD_SPEED, rate);
-        modbus_transmit();
       } else if (vfd.command_run != vfd.status_run || vfd.command_reverse != vfd.status_reverse) {
         if (vfd.status_run && !vfd.command_run) {
           modbus_write_holding_register(vfd_config.address, FULING_DZB_CMD_CONTROL, FULING_DZB_CMD_CONTROL_STOP);
