@@ -23,6 +23,7 @@ hal_s32_t joint_step_len_ticks[4];
 hal_float_t joint_pos_feedback[4];
 hal_float_t joint_scale[4] = {1000, 1000, 1000, 1000};
 hal_float_t joint_velocity_cmd[4];
+hal_float_t joint_accel_cmd[4];
 hal_float_t joint_velocity_feedback[4];
 hal_s32_t joint_pos_error[4];
 
@@ -41,6 +42,7 @@ void setup_data(skeleton_t* data) {
     data->joint_scale[joint] = &(joint_scale[joint]);
     data->joint_step_len_ticks[joint] = &(joint_step_len_ticks[joint]);
     data->joint_velocity_cmd[joint] = &(joint_velocity_cmd[joint]);
+    data->joint_accel_cmd[joint] = &(joint_accel_cmd[joint]);
     data->joint_velocity_feedback[joint] = &(joint_velocity_feedback[joint]);
     data->joint_pos_error[joint] = &(joint_pos_error[joint]);
   }
@@ -178,7 +180,7 @@ static void test_joint_metrics(void **state) {
    
     struct Reply_joint_metrics message = {
         .type = REPLY_JOINT_METRICS,
-        .velocity_requested_tm1 = {3456, 7890, 1234},
+        .velocity_requested_tm1 = {3456, 7890, 1234, 5678},
         .step_len_ticks = {1357, 2468, 3579, 4680}
     };
 
