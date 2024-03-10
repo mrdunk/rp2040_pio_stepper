@@ -1,0 +1,19 @@
+#!/bin/sh
+
+# Add this file to .git/hooks/ to automatically build and run tests before git commit.
+
+# Exit on any error
+set -e
+
+# Setup and build tests
+mkdir -p build_tests/
+cmake -B ./build_tests -S . -D BUILD_TESTS=ON
+cd build_tests
+make
+
+# Run tests.
+tests=$(find ./src/test/ -executable -type f)
+for test in $tests; do
+  echo "executing test: $test"
+  $test
+done
