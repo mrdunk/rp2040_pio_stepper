@@ -281,7 +281,7 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   uint32_t direction = (velocity > 0);
 
   // TODO: Remove this section once dead-zone calculation has been proven stable.
-  if(direction != last_direction[joint]) {
+  if(direction != last_direction[joint] && velocity > 0) {
     dir_change_count[joint]++;
     last_direction[joint] = direction;
   }
