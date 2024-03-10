@@ -167,7 +167,7 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   static const uint32_t clock_multiplier = 133;
 
   static size_t dir_change_count[MAX_JOINT] = {0, 0, 0, 0};
-  static uint32_t last_direction[MAX_JOINT] = [0, 0, 0, 0};
+  static uint32_t last_direction[MAX_JOINT] = {0, 0, 0, 0};
 
   uint8_t enabled;
   int32_t abs_pos_achieved = 0;
@@ -283,13 +283,13 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   // TODO: Remove this section once dead-zone calculation has been proven stable.
   if(direction != last_direction[joint]) {
     dir_change_count[joint]++;
-    last_direction[joint] - direction;
+    last_direction[joint] = direction;
   }
   if((count % 1000) < MAX_JOINT) {
     if(dir_change_count[joint] > 10) {
       printf("Excessive jitter. j: %u\tcount: %u\n", joint, dir_change_count[joint]);
     }
-    joint, dir_change_count[joint] = 0;
+    dir_change_count[joint] = 0;
   }
 
   // Request steps from PIO.
