@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "pico/multicore.h"
+#include "hardware/watchdog.h"
 
 #include "core1.h"
 #include "config.h"
@@ -62,9 +63,18 @@ void update_all_joint() {
     do_steps(joint, update_period_us);
   }
   i2c_gpio_poll(&i2c_gpio);
+
+  // Pet the watchdog if every axis has either programmed or disabled its PIO.
+  if (axis_updated_bitmask == (1 << MAX_JOINT) - 1) {
+    watchdog_update();
+    axis_updated_bitmask = 0;
+  }
 }
 
 void core1_main() {
+  // 10ms is 5x larger than it should be, but we're erring on the side of not causing
+  // excessive resets here.
+  watchdog_enable(10, true);
   while (1) {
     update_all_joint();
   }

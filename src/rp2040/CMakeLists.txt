@@ -47,6 +47,7 @@ target_link_libraries(
   hardware_dma
   hardware_pio
   hardware_i2c
+  hardware_watchdog
   ETHERNET_FILES
   IOLIBRARY_FILES
   LOOPBACK_FILES

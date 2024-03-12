@@ -11,4 +11,7 @@ void init_pio(const uint32_t joint);
 /* Generate step counts and send to PIOs. */
 uint8_t do_steps(const uint8_t joint, const uint32_t update_time_us);
 
+/* One bit per axis to indicate whether a corresponding PIO has been updated */
+extern uint32_t axis_updated_bitmask;
+
 #endif  // PIO__H

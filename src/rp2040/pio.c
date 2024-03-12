@@ -19,6 +19,8 @@
 static uint32_t sm0[MAX_JOINT];
 static uint32_t sm1[MAX_JOINT];
 
+uint32_t axis_updated_bitmask = 0;
+
 void init_pio(const uint32_t joint)
 {
   static bool init_done[MAX_JOINT] = {false, false, false, false};
@@ -178,6 +180,7 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
     // Switch off PIO stepgen.
     if(!pio_sm_is_tx_fifo_full(pio0, sm0[joint])) {
       pio_sm_put(pio0, sm0[joint], 0);
+      axis_updated_bitmask |= (1 << joint);
     }
     return 0;
   }
@@ -223,6 +226,7 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
     // Switch off PIO stepgen.
     if(pio_sm_is_tx_fifo_empty(pio0, sm0[joint])) {
       pio_sm_put(pio0, sm0[joint], 0);
+      axis_updated_bitmask |= (1 << joint);
     }
     return 0;
   }
@@ -278,6 +282,7 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   uint8_t direction = (velocity > 0);
   if(pio_sm_is_tx_fifo_empty(pio0, sm0[joint])) {
     pio_sm_put(pio0, sm0[joint], (step_len_ticks << 1) | direction);
+    axis_updated_bitmask |= (1 << joint);
   }
 
   velocity_achieved = abs_pos_achieved - last_pos_achieved[joint];
