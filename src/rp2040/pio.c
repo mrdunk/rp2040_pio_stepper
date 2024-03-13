@@ -114,6 +114,8 @@ void init_pio(const uint32_t joint)
 #define VELOCITY_BIAS 0.85
 #define MIN_STEP_COUNT 0.0625   // 1/16
 
+static int32_t holdoff[MAX_JOINT] = {0, 0, 0, 0};
+
 /* Convert step command from LinuxCNC and Feedback from PIO into a desired velocity. */
 double get_velocity(
     const uint32_t update_period_us,
@@ -122,7 +124,6 @@ double get_velocity(
     const double abs_pos_requested,
     const double expected_velocity)
 {
-  static int32_t holdoff[MAX_JOINT] = {0, 0, 0, 0};
 
   double position_diff = (abs_pos_requested - (double)abs_pos_achieved);
   double velocity = (expected_velocity / (double)update_period_us);
@@ -242,6 +243,10 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
     fifo_len--;
   }
 
+  if (holdoff[joint]) {
+    // We are still waiting for the slow step to complete
+    axis_updated_bitmask |= (1 << joint);
+  }
   double velocity = get_velocity(
       update_period_us,
       joint,
