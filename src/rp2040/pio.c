@@ -24,12 +24,11 @@ uint8_t axis_initialized_bitmask = 0;
 
 void init_pio(const uint32_t joint)
 {
-  static bool init_done[MAX_JOINT] = {false, false, false, false};
   static uint32_t offset_pio0 = 0;
   static uint32_t offset_pio1 = 0;
   static uint8_t programs_loaded = 0;
 
-  if(init_done[joint]) {
+  if(axis_initialized_bitmask & (1 << joint)) {
     return;
   }
 
@@ -106,7 +105,7 @@ void init_pio(const uint32_t joint)
         joint, sm1[joint]);
   }
 
-  init_done[joint] = true;
+  axis_initialized_bitmask |= 1 << joint;
 }
 
 // These POSITION_BIAS and VELOCITY_BIAS should add up to 1.0 or slightly less. eg: 0.95
