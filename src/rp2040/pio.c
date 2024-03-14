@@ -19,7 +19,8 @@
 static uint32_t sm0[MAX_JOINT];
 static uint32_t sm1[MAX_JOINT];
 
-uint32_t axis_updated_bitmask = 0;
+uint8_t axis_updated_bitmask = 0;
+uint8_t axis_initialized_bitmask = 0;
 
 void init_pio(const uint32_t joint)
 {
@@ -157,6 +158,18 @@ double get_velocity(
   return combined_vel;
 }
 
+void disable_stepgen_for_joint(const uint8_t joint) {
+  if ((axis_initialized_bitmask & (1 << joint)) == 0) {
+    axis_updated_bitmask |= (1 << joint);
+    return;
+  }
+  // Switch off PIO stepgen.
+  if(!pio_sm_is_tx_fifo_full(pio0, sm0[joint])) {
+    pio_sm_put(pio0, sm0[joint], 0);
+    axis_updated_bitmask |= (1 << joint);
+  }
+}
+
 /* Generate step counts and send to PIOs. */
 uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   static uint32_t failcount = 0;
@@ -178,11 +191,7 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   uint32_t updated;
 
   if(update_period_us == 0) {
-    // Switch off PIO stepgen.
-    if(!pio_sm_is_tx_fifo_full(pio0, sm0[joint])) {
-      pio_sm_put(pio0, sm0[joint], 0);
-      axis_updated_bitmask |= (1 << joint);
-    }
+    disable_stepgen_for_joint(joint);
     return 0;
   }
 
@@ -224,15 +233,12 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   }
 
   if(!enabled) {
-    // Switch off PIO stepgen.
-    if(pio_sm_is_tx_fifo_empty(pio0, sm0[joint])) {
-      pio_sm_put(pio0, sm0[joint], 0);
-      axis_updated_bitmask |= (1 << joint);
-    }
+    disable_stepgen_for_joint(joint);
     return 0;
   }
 
   if(updated <= 0) {
+    axis_updated_bitmask |= (1 << joint);
     return 0;
   }
 
