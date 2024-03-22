@@ -1,10 +1,19 @@
 #include <stdio.h>
 #include <math.h>
+
+#ifdef BUILD_TESTS
+
+#include "../test/mocks/rp_mocks.h"
+#include "../test/mocks/pio_mocks.h"
+
+#else  // BUILD_TESTS
+
 #include "hardware/pio.h"
 #include "hardware/clocks.h"
-
 #include "pico/stdlib.h"
 #include "pico_stepper.pio.h"
+
+#endif  // BUILD_TESTS
 
 #include "pio.h"
 #include "config.h"

@@ -17,208 +17,209 @@ add_compile_options(
 add_definitions(-DBUILD_TESTS)
 
 add_executable(
-    ringBufferTest
-    ${CMAKE_CURRENT_SOURCE_DIR}/ring_buffer_test.c
-    ${CMAKE_SOURCE_DIR}/src/rp2040/ring_buffer.c
-    )
+  ringBufferTest
+  ${CMAKE_CURRENT_SOURCE_DIR}/ring_buffer_test.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/ring_buffer.c
+  )
 target_compile_features(
   ringBufferTest PRIVATE
   c_std_99
   )
 target_link_libraries(
-    ringBufferTest
-    cmocka
-    -Wl,--wrap,time_us_64
-    -Wl,--wrap,tight_loop_contents
-    -Wl,--wrap,update_period
-    )
+  ringBufferTest
+  cmocka
+  -Wl,--wrap,time_us_64
+  -Wl,--wrap,tight_loop_contents
+  -Wl,--wrap,update_period
+  )
 
 add_executable(
   rpNetworkTest
-    ${CMAKE_CURRENT_SOURCE_DIR}/rp_network_test.c
-    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_fuling.c
-    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_huanyang.c
-    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_weiken.c
-    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
-    ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
-    ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
-    ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
-    ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
-    ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
-    #${CMAKE_CURRENT_SOURCE_DIR}/mocks/config_mocks.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c
-    )
+  ${CMAKE_CURRENT_SOURCE_DIR}/rp_network_test.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_fuling.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_huanyang.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_weiken.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
+  ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
+  ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
+  #${CMAKE_CURRENT_SOURCE_DIR}/mocks/config_mocks.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c
+  )
 target_link_libraries(
-    rpNetworkTest
-    cmocka
-    )
+  rpNetworkTest
+  cmocka
+  )
 add_test(
-    rpNetworkTest
-    rpNetworkTest
-    )
+  rpNetworkTest
+  rpNetworkTest
+  )
 
 
 add_executable(
   rpNetworkTxTest
-    ${CMAKE_CURRENT_SOURCE_DIR}/rp_network_tx_test.c
-    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_fuling.c
-    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_huanyang.c
-    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_weiken.c
-    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
-    ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
-    ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
-    ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
-    ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
-    ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
-    #${CMAKE_CURRENT_SOURCE_DIR}/mocks/config_mocks.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c
-    )
+  ${CMAKE_CURRENT_SOURCE_DIR}/rp_network_tx_test.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_fuling.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_huanyang.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_weiken.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
+  ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
+  ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
+  #${CMAKE_CURRENT_SOURCE_DIR}/mocks/config_mocks.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c
+  )
 target_link_libraries(
-    rpNetworkTxTest
-    cmocka
-    )
+  rpNetworkTxTest
+  cmocka
+  )
 add_test(
-    rpNetworkTxTest
-    rpNetworkTxTest
-    )
+  rpNetworkTxTest
+  rpNetworkTxTest
+  )
 
 
 add_executable(
   rpGpioTest
-    ${CMAKE_CURRENT_SOURCE_DIR}/rp_gpio_test.c
-    ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
-    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_fuling.c
-    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_huanyang.c
-    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_weiken.c
-    ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
-    ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
-    ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
-    ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
-    ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c
-    )
+  ${CMAKE_CURRENT_SOURCE_DIR}/rp_gpio_test.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_fuling.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_huanyang.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_weiken.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
+  ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
+  ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c
+  )
 target_link_libraries(
-    rpGpioTest
-    cmocka
-    -Wl,--wrap=gpio_put
-    -Wl,--wrap=gpio_get
-    )
+  rpGpioTest
+  cmocka
+  -Wl,--wrap=gpio_put
+  -Wl,--wrap=gpio_get
+  )
 add_test(
-    rpGpioTest
-    rpGpioTest
-    )
+  rpGpioTest
+  rpGpioTest
+  )
 
 
 add_executable(
-    driverNetworkPCtoRPTest
-    ${CMAKE_CURRENT_SOURCE_DIR}/driver_network_PCtoRP_test.c
-    #${CMAKE_SOURCE_DIR}/src/driver/rp2040_network.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/driver_mocks.c
-    )
+  driverNetworkPCtoRPTest
+  ${CMAKE_CURRENT_SOURCE_DIR}/driver_network_PCtoRP_test.c
+  #${CMAKE_SOURCE_DIR}/src/driver/rp2040_network.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/driver_mocks.c
+  )
 target_link_libraries(
-    driverNetworkPCtoRPTest
-    cmocka
-    )
+  driverNetworkPCtoRPTest
+  cmocka
+  )
 add_test(
-    driverNetworkPCtoRPTest
-    driverNetworkPCtoRPTest
-    )
+  driverNetworkPCtoRPTest
+  driverNetworkPCtoRPTest
+  )
 
 
 add_executable(
-    driverNetworkRPtoPCTest
-    ${CMAKE_CURRENT_SOURCE_DIR}/driver_network_RPtoPC_test.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/driver_mocks.c
-    )
+  driverNetworkRPtoPCTest
+  ${CMAKE_CURRENT_SOURCE_DIR}/driver_network_RPtoPC_test.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/driver_mocks.c
+  )
 target_link_libraries(
-    driverNetworkRPtoPCTest
-    cmocka
-    )
+  driverNetworkRPtoPCTest
+  cmocka
+  )
 add_test(
-    driverNetworkRPtoPCTest
-    driverNetworkRPtoPCTest
-    )
+  driverNetworkRPtoPCTest
+  driverNetworkRPtoPCTest
+  )
 
 
 add_executable(
-    driverGpioTest
-    ${CMAKE_CURRENT_SOURCE_DIR}/driver_gpio_test.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/driver_mocks.c
-    )
+  driverGpioTest
+  ${CMAKE_CURRENT_SOURCE_DIR}/driver_gpio_test.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/driver_mocks.c
+  )
 target_link_libraries(
-    driverGpioTest
-    cmocka
-    )
+  driverGpioTest
+  cmocka
+  )
 add_test(
-    driverGpioTest
-    driverGpioTest
-    )
+  driverGpioTest
+  driverGpioTest
+  )
 
 
 add_executable(
-    sharedBufferTest
-    ${CMAKE_CURRENT_SOURCE_DIR}/shared_buffer_test.c
-    )
+  sharedBufferTest
+  ${CMAKE_CURRENT_SOURCE_DIR}/shared_buffer_test.c
+  )
 target_link_libraries(
-    sharedBufferTest
-    cmocka::cmocka
-    ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
-    ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
-    -Wl,--wrap=checksum
-    )
+  sharedBufferTest
+  cmocka::cmocka
+  ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
+  ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
+  -Wl,--wrap=checksum
+  )
 add_test(
-    sharedBufferTest
-    sharedBufferTest
-    )
+  sharedBufferTest
+  sharedBufferTest
+  )
 
 
 add_executable(
-    sharedChecksumTest
-    ${CMAKE_CURRENT_SOURCE_DIR}/shared_checksum_test.c
-    )
+  sharedChecksumTest
+  ${CMAKE_CURRENT_SOURCE_DIR}/shared_checksum_test.c
+  )
 target_link_libraries(
-    sharedChecksumTest
-    cmocka::cmocka
-    ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
-    )
+  sharedChecksumTest
+  cmocka::cmocka
+  ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
+  )
 add_test(
-    sharedChecksumTest
-    sharedChecksumTest
-    )
+  sharedChecksumTest
+  sharedChecksumTest
+  )
 
 
-  #add_executable(
-  #rpCore1Test
-  #  ${CMAKE_CURRENT_SOURCE_DIR}/rp_core1_test.c
-  #
-  #  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_fuling.c
-  #  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_huanyang.c
-  #  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_weiken.c
-  #  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
-  #
-  #  ${CMAKE_SOURCE_DIR}/src/rp2040/core1.c
-  #  ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
-  #  #${CMAKE_SOURCE_DIR}/src/rp2040/pio.c
-  #  #${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
-  #  ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
-  #  ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
-  #  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
-  #  #${CMAKE_CURRENT_SOURCE_DIR}/mocks/config_mocks.c
-  #  #${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
-  #  #${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c
-  #  )
-  #target_link_libraries(
-  #rpCore1Test
-  #cmocka
-  #)
-  #add_test(
-  #rpCore1Test
-  #rpCore1Test
-  #)
+add_executable(
+  rpCore1Test
+  ${CMAKE_CURRENT_SOURCE_DIR}/rp_core1_test.c
+
+  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_fuling.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_huanyang.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_weiken.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
+
+  ${CMAKE_SOURCE_DIR}/src/rp2040/core1.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/pio.c
+  #${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
+  ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
+  ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
+  #${CMAKE_CURRENT_SOURCE_DIR}/mocks/config_mocks.c
+  #${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
+  #${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/pio_mocks.c
+  )
+target_link_libraries(
+  rpCore1Test
+  cmocka
+  )
+add_test(
+  rpCore1Test
+  rpCore1Test
+  )
 
