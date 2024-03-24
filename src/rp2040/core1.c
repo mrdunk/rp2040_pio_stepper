@@ -34,6 +34,7 @@ void update_all_joint() {
     for(uint8_t joint = 0; joint < MAX_JOINT; joint++) {
       disable_joint(joint, CORE1);
     }
+    axis_updated_bitmask = (1 << MAX_JOINT) - 1;
     if(!no_network) {
       printf("No network update for %ums.\tDisabling joints.\n", dt / 1000);
     }
