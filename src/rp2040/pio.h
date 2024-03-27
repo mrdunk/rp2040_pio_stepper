@@ -3,6 +3,9 @@
 
 #include <stdint.h>
 
+/* Force PIO to stop a joint. */
+void stop_joint(const uint32_t joint);
+
 /* Initialize a pair of PIO programmes.
  * One for step generation on pio0 and one for counting said steps on pio1.
  */

@@ -17,41 +17,42 @@
 
 
 void update_all_joint() {
-  static uint32_t metric = 0;
+  static uint32_t last_time = 0;
   static uint32_t last_tick = 0;
   static uint32_t count = 0;
   static uint32_t max_dt = 0;
   static uint32_t min_dt = 10000;
-  static uint32_t no_network = 0;
+  static uint32_t network = 1;
   uint32_t update_period_us = get_period();
-  uint32_t metric_now;
+  uint32_t now_time;
   uint32_t dt = 0;
 
   // Wait for semaphore from core0 to indicate time start.
   while(tick == last_tick) {
-    metric_now = time_us_64();
-    dt = metric_now - metric;
+    now_time = time_us_64();
+    dt = now_time - last_time;
     if(dt > update_period_us * MAX_MISSED_PACKET) {
+      // Timeout
       break;
     }
   }
   if(tick == last_tick) {
-    // Didn't receive tick semaphore.
+    // Didn't receive tick semaphore. Implies no network packet arrived.
+    if(network) {
+      printf("No network update for %ums.\tDisabling joints.\n", dt / 1000);
+    }
     for(uint8_t joint = 0; joint < MAX_JOINT; joint++) {
       disable_joint(joint, CORE1);
     }
-    if(!no_network) {
-      printf("No network update for %ums.\tDisabling joints.\n", dt / 1000);
-    }
-    no_network = 1;
+    network = 0;
   } else {
     // Did receive tick semaphore.
-    no_network = 0;
+    network = 1;
   }
   last_tick = tick;
 
-  metric_now = time_us_64();
-  dt = metric_now - metric;
+  now_time = time_us_64();
+  dt = now_time - last_time;
   if(dt > max_dt) {
     max_dt = dt;
   }
@@ -59,11 +60,12 @@ void update_all_joint() {
     min_dt = dt;
   }
   if(count++ % 10000 == 0) {
+    // Periodic message to console.
     printf("%i\t%i\n", min_dt - 1000, max_dt - 1000);
     max_dt = 0;
     min_dt = 10000;
   }
-  metric = metric_now;
+  last_time = now_time;
 
   for(uint8_t joint = 0; joint < MAX_JOINT; joint++) {
     do_steps(joint, update_period_us);

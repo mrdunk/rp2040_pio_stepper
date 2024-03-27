@@ -31,6 +31,7 @@ target_sources(
   modbus_huanyang.c
   modbus_weiken.c
   pio.c
+  pio_utils.c
   ring_buffer.c
   gpio.c
   ../shared/buffer.c

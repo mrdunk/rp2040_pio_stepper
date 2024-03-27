@@ -1,5 +1,8 @@
 #include <stddef.h>
 
+size_t pio0;
+size_t pio1;
+
 void step_gen_program(size_t pio) {}
 void step_count_program(size_t pio ) {}
 
@@ -27,5 +30,7 @@ void pio_sm_put(size_t, size_t pio, size_t sm) {}
 int pio_sm_is_tx_fifo_empty(size_t pio, size_t sm) {return 0;}
 
 size_t pio_sm_get_rx_fifo_level(size_t pio, size_t sm) {return 1;}
+
+void pio_sm_clear_fifos(size_t pio, size_t sm) {}
 
 void multicore_launch_core1(void(*entry)(void)) {}
