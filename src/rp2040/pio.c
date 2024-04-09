@@ -32,6 +32,7 @@ uint32_t sm0[MAX_JOINT];
 uint32_t sm1[MAX_JOINT];
 
 /* Convert step command from LinuxCNC and Feedback from PIO into a desired velocity. */
+__attribute__((weak))
 double get_velocity(
     const uint32_t update_period_us,
     const uint8_t joint,
@@ -73,6 +74,27 @@ double get_velocity(
   return combined_vel;
 }
 
+int32_t get_step_len(double velocity, double max_velocity, double update_period_ticks) {
+  int32_t step_len_ticks = 0;
+  double step_count = fabs(velocity);
+
+  // The PIO FIFO will only report step counts between steps.
+  // If too small a step_count is allowed here, the steps can get very long and
+  // block further updates.
+  if(step_count > MIN_STEP_COUNT) {
+    step_len_ticks =
+      (update_period_ticks / (step_count * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
+
+    int32_t min_step_len_ticks =
+      (update_period_ticks / (fabs(max_velocity) * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
+    if(step_len_ticks < min_step_len_ticks) {
+      step_len_ticks = min_step_len_ticks;
+    }
+  }
+
+  return step_len_ticks;
+}
+
 /* Generate step counts and send to PIOs. */
 uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   static uint32_t failcount = 0;
@@ -101,6 +123,7 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
 
   if(update_period_us == 0) {
     // Switch off PIO stepgen.
+    disable_joint(joint, 1);
     stop_joint(joint);
     return 0;
   }
@@ -169,33 +192,9 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   max_velocity /= update_period_us;
   max_accel /= update_period_us;
 
-  //double accel = velocity - last_velocity[joint];
-  //if(accel > max_accel) {
-  //  velocity = last_velocity[joint] + max_accel;
-  //} else if(accel < (-max_accel)) {
-  //  velocity = last_velocity[joint] - max_accel;
-  //}
-
-  double step_count = fabs(velocity);
-  int32_t step_len_ticks = 0;
   double update_period_ticks = update_period_us * clock_multiplier;
-
-
-  // The PIO FIFO will only report step counts between steps.
-  // If too small a step_count is allowed here, the steps can get very long and
-  // block further updates.
-  if(step_count > MIN_STEP_COUNT) {
-    step_len_ticks =
-      (update_period_ticks / (step_count * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
-
-    int32_t min_step_len_ticks =
-      (update_period_ticks / (fabs(max_velocity) * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
-    if(step_len_ticks < min_step_len_ticks) {
-      step_len_ticks = min_step_len_ticks;
-    }
-  }
-
   uint32_t direction = (velocity > 0);
+  int32_t step_len_ticks = get_step_len(velocity, max_velocity, update_period_ticks);
 
   // TODO: Remove this section once dead-zone calculation has been proven stable.
   if(direction != last_direction[joint] && velocity > 0) {
@@ -204,7 +203,7 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   }
   if((count % 1000) < MAX_JOINT) {
     if(dir_change_count[joint] > 10) {
-      printf("Excessive jitter. j: %u\tcount: %u\n", joint, dir_change_count[joint]);
+      printf("Excessive jitter. joint: %u\tcount: %u\n", joint, dir_change_count[joint]);
     }
     dir_change_count[joint] = 0;
   }

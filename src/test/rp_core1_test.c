@@ -57,7 +57,7 @@ uint8_t get_joint_config__enabled = 1;
 double get_joint_config__velocity_requested = 0;
 double get_joint_config__abs_pos_requested = 1000;
 double get_joint_config__abs_pos_achieved = 1000;
-double get_joint_config__max_velocity = 10;
+double get_joint_config__max_velocity = 1000;
 double get_joint_config__max_accel = 1;
 uint32_t __wrap_get_joint_config(
     const uint8_t joint,
@@ -108,6 +108,18 @@ uint32_t __wrap_pio_sm_get_blocking(uint32_t pio, uint32_t sm) {
     return mock_type(uint32_t);
 }
 
+uint32_t __wrap_pio_sm_is_tx_fifo_empty(uint32_t pio, uint32_t sm) {
+    check_expected(pio);
+    check_expected(sm);
+    return mock_type(uint32_t);
+}
+
+void __wrap_pio_sm_put(uint32_t pio, uint32_t sm, uint32_t value) {
+    check_expected(pio);
+    check_expected(sm);
+    check_expected(value);
+}
+
 void __wrap_update_joint_config(
     const uint8_t joint,
     const uint8_t core,
@@ -130,8 +142,25 @@ void __wrap_update_joint_config(
 }
 
 
+double get_velocity__return;
+double get_velocity(
+    const uint32_t update_period_us,
+    const uint8_t joint,
+    const int32_t abs_pos_achieved,
+    const double abs_pos_requested,
+    const double expected_velocity)
+{
+    printf("Mocked get_velocity\n");
+    return get_velocity__return;
+}
+
+
 /*** Tests ***/
 
+
+/* If the tick variable has not incremented, it implies no new packet arrived 
+ * on core0.
+ * Shut down step generation. */
 static void test_packet_timeout(void **state) {
     (void) state; /* unused */
 
@@ -151,7 +180,8 @@ static void test_packet_timeout(void **state) {
 
     will_return(__wrap_get_period, 1000);
 
-    // Same tick value as last time.
+    // Same tick value as last time so will timeout when __wrap_time_us_64(..)
+    // returns a high enough value.
     tick = 0;
 
     // Disables all joints.
@@ -174,10 +204,16 @@ static void test_packet_timeout(void **state) {
     // Call code being tested.
     update_all_joint();
 
+    // Should have called __wrap_time_us_64(..) enough times while timing out
+    // to exceed MAX_MISSED_PACKET.
     assert_in_range(count_time_us_64,
             MAX_MISSED_PACKET, MAX_MISSED_PACKET * 2);
 }
 
+
+/* Since the tick variable is different since last called, it implies a packet
+ * has arrived on core0.
+ * Do not shut down step generation. */
 static void test_packet_received(void **state) {
     (void) state; /* unused */
 
@@ -205,20 +241,31 @@ static void test_packet_received(void **state) {
 }
 
 
+/* If a sane value is not passed to do_steps(...) for the update time span, it
+ * implies the system has not yet stabilised after startup.
+ * Quit early without doing anything step generation related. */
 static void test_do_steps__period_not_set(void **state) {
     (void) state; /* unused */
 
     uint32_t period = 0;
     expect_value(__wrap_init_pio, joint, 2);
 
+    // Disables all joints in config.
+    expect_value(__wrap_disable_joint, joint, 2);
+    expect_value_count(__wrap_disable_joint, core, 1, 1);
+
     // Stops joint.
     expect_value(__wrap_stop_joint, joint, 2);
 
     uint16_t ret_val = __real_do_steps(2, period);
+    // do_steps(..) has quit early without doing anything step generation related. */
     assert_int_equal(ret_val, 0);
 }
 
 
+/* If the config's updated parameter is not set, no new data has been received
+ * over the network.
+ * Quit early without doing anything step generation related. */
 static void test_do_steps__data_not_updated(void **state) {
     (void) state; /* unused */
 
@@ -228,10 +275,13 @@ static void test_do_steps__data_not_updated(void **state) {
     expect_value(__wrap_init_pio, joint, 2);
 
     uint16_t ret_val = __real_do_steps(2, period);
+    // do_steps(..) has quit early without doing anything step generation related. */
     assert_int_equal(ret_val, 0);
 }
 
 
+/* Joint disabled in the config.
+ * Quit early without doing anything step generation related. */
 static void test_do_steps__joint_not_enabled(void **state) {
     (void) state; /* unused */
 
@@ -245,6 +295,7 @@ static void test_do_steps__joint_not_enabled(void **state) {
     expect_value(__wrap_stop_joint, joint, 2);
 
     uint16_t ret_val = __real_do_steps(2, period);
+    // do_steps(..) has quit early without doing anything step generation related. */
     assert_int_equal(ret_val, 0);
 }
 
@@ -255,6 +306,8 @@ int const check_uint_pointer(
     return *(uint32_t*)to_check == provided;
 }
 
+/* Try to pull number of steps performed off the PIO FIFO but FIFO is empty.
+ * Make sure the original configured step count is returned to the config */
 static void test_do_steps__no_rx_fifo_data(void **state) {
     (void) state; /* unused */
 
@@ -263,16 +316,33 @@ static void test_do_steps__no_rx_fifo_data(void **state) {
     get_joint_config__enabled = 1;
     get_joint_config__abs_pos_achieved = 8;
 
+    sm0[2] = 2;
     sm1[2] = 2;
 
     expect_value(__wrap_init_pio, joint, 2);
 
+    // FIFO has no data to return.
     expect_value(__wrap_pio_sm_get_rx_fifo_level, pio, 0);
     expect_value(__wrap_pio_sm_get_rx_fifo_level, sm, 2);
     will_return(__wrap_pio_sm_get_rx_fifo_level, 0);
 
-    // Correct value saved to config.
-    // This is the value that was originally retrieved from config.
+    // Calculated velocity.
+    // This value returns a velocity too slow to generate a step length but the
+    // direction will still be set to 0.
+    get_velocity__return = -0.05;
+
+    // Tell PIO to do steps.
+    expect_value(__wrap_pio_sm_is_tx_fifo_empty, pio, 0);
+    expect_value(__wrap_pio_sm_is_tx_fifo_empty, sm, 2);
+    will_return(__wrap_pio_sm_is_tx_fifo_empty, 1);
+
+    expect_value(__wrap_pio_sm_put, pio, 0);
+    expect_value(__wrap_pio_sm_put, sm, 2);
+    expect_value(__wrap_pio_sm_put, value, 0);
+
+    // Saving value saved to config.
+    // Since we didn't pull data off the FIFO,
+    // this is the value that was originally retrieved from config.
     expect_value(
             __wrap_update_joint_config,
             joint,
@@ -284,9 +354,12 @@ static void test_do_steps__no_rx_fifo_data(void **state) {
             get_joint_config__abs_pos_achieved);
 
     uint16_t ret_val = __real_do_steps(2, period);
+    // do_steps(..) did not quit early.
     assert_int_equal(ret_val, 1);
 }
 
+/* Pull number of steps performed off the PIO FIFO.
+ * Make sure that value is saved to the config is the step count. */
 static void test_do_steps__yes_rx_fifo_data(void **state) {
     (void) state; /* unused */
 
@@ -294,6 +367,7 @@ static void test_do_steps__yes_rx_fifo_data(void **state) {
     will_return(__wrap_get_joint_config, 1);
     get_joint_config__enabled = 1;
 
+    sm0[2] = 2;
     sm1[2] = 2;
 
     expect_value(__wrap_init_pio, joint, 2);
@@ -304,6 +378,7 @@ static void test_do_steps__yes_rx_fifo_data(void **state) {
     will_return(__wrap_pio_sm_get_rx_fifo_level, 2);
 
     // First fifo read.
+    // Is overwritten when the next, more up to date value is read.
     expect_value(__wrap_pio_sm_get_blocking, pio, 0);
     expect_value(__wrap_pio_sm_get_blocking, sm, 2);
     will_return(__wrap_pio_sm_get_blocking, 222);
@@ -312,6 +387,20 @@ static void test_do_steps__yes_rx_fifo_data(void **state) {
     expect_value(__wrap_pio_sm_get_blocking, pio, 0);
     expect_value(__wrap_pio_sm_get_blocking, sm, 2);
     will_return(__wrap_pio_sm_get_blocking, 333);
+
+    // Calculated velocity.
+    // This value returns a velocity too slow to generate a step length but the
+    // direction will still be set to 1.
+    get_velocity__return = 0.05;
+
+    // Tell PIO to do steps.
+    expect_value(__wrap_pio_sm_is_tx_fifo_empty, pio, 0);
+    expect_value(__wrap_pio_sm_is_tx_fifo_empty, sm, 2);
+    will_return(__wrap_pio_sm_is_tx_fifo_empty, 1);
+
+    expect_value(__wrap_pio_sm_put, pio, 0);
+    expect_value(__wrap_pio_sm_put, sm, 2);
+    expect_value(__wrap_pio_sm_put, value, 1);
 
     // Correct value saved to config.
     expect_value(
@@ -325,8 +414,10 @@ static void test_do_steps__yes_rx_fifo_data(void **state) {
             333);
 
     uint16_t ret_val = __real_do_steps(2, period);
+    // do_steps(..) did not quit early.
     assert_int_equal(ret_val, 1);
 }
+
 
 int main(void) {
     const struct CMUnitTest tests[] = {
