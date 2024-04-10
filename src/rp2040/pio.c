@@ -119,8 +119,6 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   int32_t velocity_achieved = 0;
   uint32_t updated;
 
-  init_pio(joint);
-
   if(update_period_us == 0) {
     // Switch off PIO stepgen.
     disable_joint(joint, 1);
@@ -168,7 +166,9 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
     }
   }
 
-  if(!enabled) {
+  if(enabled) {
+    init_pio(joint);
+  } else {
     // Switch off PIO stepgen.
     stop_joint(joint);
     return 0;
