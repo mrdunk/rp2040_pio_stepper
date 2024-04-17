@@ -85,16 +85,6 @@ uint32_t __wrap_get_joint_config(
     return mock_type(uint32_t);
 }
 
-void __wrap_init_pio(const uint32_t joint) {
-    //printf("__wrap_init_pio(%u)\n", joint);
-    check_expected(joint);
-}
-
-void __wrap_stop_joint(const uint32_t joint) {
-    //printf("__wrap_stop_joint(%u)\n", joint);
-    check_expected(joint);
-}
-
 uint32_t __wrap_pio_sm_get_rx_fifo_level(uint32_t pio, uint32_t sm) {
     check_expected(pio);
     check_expected(sm);
@@ -158,6 +148,16 @@ int32_t get_step_len__return = 0;
 int32_t get_step_len(double velocity, double max_velocity, double update_period_ticks) {
     printf("Mocked get_step_len\n");
     return get_step_len__return;
+}
+
+void init_pio(const uint32_t joint) {
+    printf("Mocked init_pio\n");
+    check_expected(joint);
+}
+
+void stop_joint(const uint32_t joint) {
+    printf("Mocked stop_joint(%u)\n", joint);
+    check_expected(joint);
 }
 
 
@@ -259,7 +259,7 @@ static void test_do_steps__period_not_set(void **state) {
     expect_value_count(__wrap_disable_joint, core, 1, 1);
 
     // Stops joint.
-    expect_value(__wrap_stop_joint, joint, 2);
+    expect_value(stop_joint, joint, 2);
 
     uint32_t period = 0;
     uint16_t ret_val = __real_do_steps(2, period);
@@ -293,7 +293,7 @@ static void test_do_steps__joint_not_enabled(void **state) {
     get_joint_config__enabled = 0;
 
     // Stops joint.
-    expect_value(__wrap_stop_joint, joint, 2);
+    expect_value(stop_joint, joint, 2);
 
     uint16_t ret_val = __real_do_steps(2, period);
     // do_steps(..) has quit early without doing anything step generation related. */
@@ -320,7 +320,7 @@ static void test_do_steps__no_rx_fifo_data(void **state) {
     sm0[2] = 2;
     sm1[2] = 2;
 
-    expect_value(__wrap_init_pio, joint, 2);
+    expect_value(init_pio, joint, 2);
 
     // FIFO has no data to return.
     expect_value(__wrap_pio_sm_get_rx_fifo_level, pio, 0);
@@ -373,7 +373,7 @@ static void test_do_steps__yes_rx_fifo_data(void **state) {
     sm0[2] = 2;
     sm1[2] = 2;
 
-    expect_value(__wrap_init_pio, joint, 2);
+    expect_value(init_pio, joint, 2);
     
     // Set 2 values in fifo.
     expect_value(__wrap_pio_sm_get_rx_fifo_level, pio, 0);

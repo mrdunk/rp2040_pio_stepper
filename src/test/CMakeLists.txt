@@ -190,7 +190,6 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/src/rp2040/core1.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/pio.c
-  ${CMAKE_SOURCE_DIR}/src/rp2040/pio_utils.c
   ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
   ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
