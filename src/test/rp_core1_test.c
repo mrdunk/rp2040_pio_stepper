@@ -142,7 +142,7 @@ void __wrap_update_joint_config(
 }
 
 
-double get_velocity__return;
+double get_velocity__return = 0.0;
 double get_velocity(
     const uint32_t update_period_us,
     const uint8_t joint,
@@ -152,6 +152,12 @@ double get_velocity(
 {
     printf("Mocked get_velocity\n");
     return get_velocity__return;
+}
+
+int32_t get_step_len__return = 0;
+int32_t get_step_len(double velocity, double max_velocity, double update_period_ticks) {
+    printf("Mocked get_step_len\n");
+    return get_step_len__return;
 }
 
 
@@ -326,10 +332,11 @@ static void test_do_steps__no_rx_fifo_data(void **state) {
     expect_value(__wrap_pio_sm_get_rx_fifo_level, sm, 2);
     will_return(__wrap_pio_sm_get_rx_fifo_level, 0);
 
-    // Calculated velocity.
-    // This value returns a velocity too slow to generate a step length but the
-    // direction will still be set to 0.
-    get_velocity__return = -0.05;
+    // Calculated velocity and step_len_ticks.
+    // Although step_len_ticks produces 0 step length, the direction will still
+    // be set.
+    get_velocity__return = -1.0;
+    get_step_len__return = 0;
 
     // Tell PIO to do steps.
     expect_value(__wrap_pio_sm_is_tx_fifo_empty, pio, 0);
@@ -338,6 +345,7 @@ static void test_do_steps__no_rx_fifo_data(void **state) {
 
     expect_value(__wrap_pio_sm_put, pio, 0);
     expect_value(__wrap_pio_sm_put, sm, 2);
+    // Value indicates a negative step direction.
     expect_value(__wrap_pio_sm_put, value, 0);
 
     // Saving value saved to config.
@@ -388,10 +396,11 @@ static void test_do_steps__yes_rx_fifo_data(void **state) {
     expect_value(__wrap_pio_sm_get_blocking, sm, 2);
     will_return(__wrap_pio_sm_get_blocking, 333);
 
-    // Calculated velocity.
-    // This value returns a velocity too slow to generate a step length but the
-    // direction will still be set to 1.
-    get_velocity__return = 0.05;
+    // Calculated velocity and step_len_ticks.
+    // Although step_len_ticks produces 0 step length, the direction will still
+    // be set.
+    get_velocity__return = 1.0;
+    get_step_len__return = 0;
 
     // Tell PIO to do steps.
     expect_value(__wrap_pio_sm_is_tx_fifo_empty, pio, 0);
@@ -400,6 +409,7 @@ static void test_do_steps__yes_rx_fifo_data(void **state) {
 
     expect_value(__wrap_pio_sm_put, pio, 0);
     expect_value(__wrap_pio_sm_put, sm, 2);
+    // Value indicates a positive step direction.
     expect_value(__wrap_pio_sm_put, value, 1);
 
     // Correct value saved to config.

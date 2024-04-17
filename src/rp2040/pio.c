@@ -74,6 +74,7 @@ double get_velocity(
   return combined_vel;
 }
 
+__attribute__((weak))
 int32_t get_step_len(double velocity, double max_velocity, double update_period_ticks) {
   int32_t step_len_ticks = 0;
   double step_count = fabs(velocity);
