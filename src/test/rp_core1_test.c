@@ -253,8 +253,6 @@ static void test_packet_received(void **state) {
 static void test_do_steps__period_not_set(void **state) {
     (void) state; /* unused */
 
-    uint32_t period = 0;
-    expect_value(__wrap_init_pio, joint, 2);
 
     // Disables all joints in config.
     expect_value(__wrap_disable_joint, joint, 2);
@@ -263,6 +261,7 @@ static void test_do_steps__period_not_set(void **state) {
     // Stops joint.
     expect_value(__wrap_stop_joint, joint, 2);
 
+    uint32_t period = 0;
     uint16_t ret_val = __real_do_steps(2, period);
     // do_steps(..) has quit early without doing anything step generation related. */
     assert_int_equal(ret_val, 0);
@@ -278,8 +277,6 @@ static void test_do_steps__data_not_updated(void **state) {
     uint32_t period = 1000;
     will_return(__wrap_get_joint_config, 0);
 
-    expect_value(__wrap_init_pio, joint, 2);
-
     uint16_t ret_val = __real_do_steps(2, period);
     // do_steps(..) has quit early without doing anything step generation related. */
     assert_int_equal(ret_val, 0);
@@ -294,8 +291,6 @@ static void test_do_steps__joint_not_enabled(void **state) {
     uint32_t period = 1000;
     will_return(__wrap_get_joint_config, 1);
     get_joint_config__enabled = 0;
-
-    expect_value(__wrap_init_pio, joint, 2);
 
     // Stops joint.
     expect_value(__wrap_stop_joint, joint, 2);
