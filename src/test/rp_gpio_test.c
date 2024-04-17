@@ -236,6 +236,7 @@ static void test_send_PC_to_RP(void **state) {
 
     memcpy(rx_buf.payload, &message, sizeof(message));
     rx_buf.length = sizeof(message);
+    rx_buf.checksum = checksum(0, 0, rx_buf.length, rx_buf.payload);
 
     // Only config.gpio[3] is an output pin whose value differs from
     // what is being requested.
@@ -271,6 +272,7 @@ static void test_send_PC_to_RP(void **state) {
 
     memcpy(rx_buf.payload, &message, sizeof(message));
     rx_buf.length = sizeof(message);
+    rx_buf.checksum = checksum(0, 0, rx_buf.length, rx_buf.payload);
 
     // All output GPIO values now match what's being requested so gpio_out(...)
     // will not be called.
@@ -352,6 +354,7 @@ static void test_send_PC_to_RP_confirmation_set(void **state) {
 
     memcpy(rx_buf.payload, &message, sizeof(message));
     rx_buf.length = sizeof(message);
+    rx_buf.checksum = checksum(0, 0, rx_buf.length, rx_buf.payload);
 
     // Parse Message_gpio.
     process_received_buffer(

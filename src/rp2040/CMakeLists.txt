@@ -26,6 +26,10 @@ target_sources(
   network.c
   core0.c
   core1.c
+  modbus.c
+  modbus_fuling.c
+  modbus_huanyang.c
+  modbus_weiken.c
   pio.c
   ring_buffer.c
   gpio.c

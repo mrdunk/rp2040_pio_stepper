@@ -16,7 +16,7 @@ int32_t get_UDP(
     uint8_t socket_num,
     uint16_t port,
     void* rx_buf,
-    uint16_t* data_received,
+    size_t* data_received,
     uint8_t* destip,
     uint16_t* destport)
 {

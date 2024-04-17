@@ -1,32 +1,46 @@
 #include "buffer.h"
 #include <stdio.h>
 
-uint16_t pack_nw_buff(struct NWBuffer* buffer, void* new_data, uint16_t new_data_len) {
+size_t alligned32(size_t input) {
+  return input + 3 - ((input - 1) % 4);
+}
+
+size_t pack_nw_buff(struct NWBuffer* buffer, void* new_data, size_t new_data_len) {
+  // 32bit align value.
+  size_t new_data_len_alligned = alligned32(new_data_len);
+
   if(buffer->length + new_data_len > NW_BUF_LEN) {
     // Buffer full.
     return 0;
   }
 
-  if(new_data) {
-    memcpy(buffer->payload + buffer->length, new_data, new_data_len);
+  if(! new_data) {
+    return 0;
   }
 
-  buffer->length += new_data_len;
-  buffer->checksum = checksum(buffer->checksum, new_data, new_data_len);
+  memset(buffer->payload + buffer->length, 0, new_data_len_alligned);
+  memcpy(buffer->payload + buffer->length, new_data, new_data_len);
 
-  return new_data_len;
+  buffer->checksum = checksum(
+      buffer->checksum, buffer->length, buffer->length + new_data_len_alligned, buffer->payload);
+  buffer->length += new_data_len_alligned;
+
+  return new_data_len_alligned;
 }
 
 /* Returns pointer to struct position within network packet.
  * Updates offset value to point to next struct if required. */
 void* unpack_nw_buff(
     struct NWBuffer* buffer,
-    uint16_t payload_offset,
-    uint16_t* new_payload_offset,   // May be null if final offset not needed.
+    size_t payload_offset,
+    size_t* new_payload_offset,   // May be null if final offset not needed.
     void* dest_container,           // May be null if no copy to struct needed.
-    uint16_t dest_container_len
+    size_t dest_container_len
 ) {
-  if(payload_offset + dest_container_len > buffer->length) {
+  // 32bit align value.
+  size_t dest_container_len_alligned = alligned32(dest_container_len);
+
+  if(payload_offset + dest_container_len_alligned > buffer->length) {
     // Requested data overlaps end of buffer.
     // This implies we've reached the end of the valid data.
     return NULL;
@@ -45,16 +59,16 @@ void* unpack_nw_buff(
   }
 
   if(new_payload_offset) {
-    *new_payload_offset = payload_offset += dest_container_len;
+    *new_payload_offset = payload_offset += dest_container_len_alligned;
   }
 
   return data_p;
 }
 
 /* Calculate checksum and compare to the checksum stored in the NW data. */
-uint8_t checkNWBuff(struct NWBuffer* buffer) {
+size_t checkNWBuff(struct NWBuffer* buffer) {
   uint16_t cs = 0;
-  if(buffer->checksum != checksum(cs, buffer->payload, buffer->length)) {
+  if(buffer->checksum != checksum(cs, 0, buffer->length, buffer->payload)) {
     // Checksum failure.
     return 0;
   }

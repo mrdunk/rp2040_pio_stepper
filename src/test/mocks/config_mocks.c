@@ -1,22 +1,20 @@
 #include <stdint.h>
 #include <stddef.h>
 
-void update_axis_config(
-    const uint8_t axis,
+void update_joint_config(
+    const uint8_t joint,
     const uint8_t core,
     const uint8_t* enabled,
     const int8_t* io_pos_step,
     const int8_t* io_pos_dir,
-    const double* rel_pos_requested,
+    const double* velocity_requested,
     const double* abs_pos_requested,
-    const uint32_t* abs_pos_acheived,
+    const uint32_t* abs_pos_achieved,
     const double* max_velocity,
-    const double* max_accel_ticks,
-    const int32_t* velocity_requested,
-    const int32_t* velocity_acheived,
-    const int32_t* pos_error,
-    const int32_t* step_len_ticks,
-    const float* kp
+    const double* max_accel,
+    const int32_t* velocity_requested_tm1,
+    const int32_t* velocity_achieved,
+    const int32_t* step_len_ticks
 )
 {
 }
@@ -38,8 +36,8 @@ size_t serialise_timing(
     return 0;
 }
 
-size_t serialise_axis_movement(
-    const uint32_t axis,
+size_t serialise_joint_movement(
+    const uint32_t joint,
     uint8_t* tx_buf,
     size_t* tx_buf_len,
     uint8_t wait_for_data)
@@ -47,8 +45,8 @@ size_t serialise_axis_movement(
     return 0;
 }
 
-size_t serialise_axis_config(
-    const uint32_t axis,
+size_t serialise_joint_config(
+    const uint32_t joint,
     uint8_t* tx_buf,
     size_t* tx_buf_len,
     uint8_t wait_for_data)

@@ -15,12 +15,12 @@ int32_t get_UDP(
     uint8_t socket_num,
     uint16_t port,
     void* rx_buf,
-    uint16_t* data_received,
+    size_t* data_received,
     uint8_t* destip,
     uint16_t* destport)
 {
    int32_t ret = 0;
-   uint16_t size;
+   size_t size;
 
    //printf("NW: %u %u.%u.%u.%u : %u\r\n",
    //    socket_num, destip[0], destip[1], destip[2], destip[3], *destport);
@@ -65,8 +65,8 @@ int32_t put_UDP(
     uint8_t* destip,
     uint16_t* destport
     ) {
-  int32_t  ret;
-  uint16_t sentsize;
+  int32_t ret;
+  size_t sentsize;
 
   switch(getSn_SR(socket_num)) {
     case SOCK_UDP :

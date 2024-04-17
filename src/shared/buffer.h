@@ -15,21 +15,24 @@ struct NWBuffer {
     uint8_t payload[NW_BUF_LEN];
 };
 
-uint16_t pack_nw_buff(struct NWBuffer* buffer, void* new_data, uint16_t new_data_len);
+size_t alligned32(size_t input);
+
+size_t pack_nw_buff(struct NWBuffer* buffer, void* new_data, size_t new_data_len);
 
 void* unpack_nw_buff(
     struct NWBuffer* buffer,
-    uint16_t payload_offset,
-    uint16_t* new_payload_offset,
+    size_t payload_offset,
+    size_t* new_payload_offset,
     void* dest_container,
-    uint16_t dest_container_len
+    size_t dest_container_len
 );
 
-uint8_t checkNWBuff(struct NWBuffer* buffer);
+size_t checkNWBuff(struct NWBuffer* buffer);
 
 void reset_nw_buf(struct NWBuffer* buffer);
 
-uint16_t checksum(uint16_t val_in, void* data, uint16_t data_len);
+//uint16_t checksum(uint16_t val_in, void* data, uint16_t data_len);
+uint16_t checksum(uint16_t val_in, size_t pos_in, size_t pos_end, void* data);
 
 
 #endif  // BUFFER__H

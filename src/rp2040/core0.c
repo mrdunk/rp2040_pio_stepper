@@ -6,6 +6,7 @@
 #include "messages.h"
 #include "buffer.h"
 #include "gpio.h"
+#include "modbus.h"
 
 
 #ifdef BUILD_TESTS
@@ -20,6 +21,9 @@
 #include "network.h"
 
 #endif  // BUILD_TESTS
+
+float req_spindle_frequency = 0;
+float act_spindle_frequency = -1000000;
 
 /* Called after receiving network packet.
  * Takes the average time delay over the previous 1000 packet receive events and
@@ -60,7 +64,7 @@ void recover_clock() {
   int32_t time_diff = (int32_t)time_offset - (int32_t)ave_time_offset_us;
 
   // Do the busy-wait to synchronise timing.
-  restart_at = time_now + 150 - time_diff;
+  restart_at = time_now + 200 - time_diff;
   while(restart_at > time_now) {
     time_now = time_us_64();
     tight_loop_contents();
@@ -78,9 +82,9 @@ void recover_clock() {
 
 bool unpack_timing(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
+    size_t* rx_offset,
     struct NWBuffer* tx_buf,
-    uint8_t* received_count
+    size_t* received_count
 ) {
   void* data_p = unpack_nw_buff(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_timing));
@@ -101,8 +105,8 @@ bool unpack_timing(
 
 bool unpack_joint_enable(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
-    uint8_t* received_count
+    size_t* rx_offset,
+    size_t* received_count
 ) {
   void* data_p = unpack_nw_buff(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_joint_enable));
@@ -112,13 +116,13 @@ bool unpack_joint_enable(
   }
 
   struct Message_joint_enable* message = data_p;
-  uint32_t joint = message->axis;
+  uint8_t joint = message->joint;
   uint8_t enabled = message->value;
 
   printf("%u Enabling joint: %u\t%i\n", *received_count, joint, enabled);
-  update_axis_config(
+  update_joint_config(
       joint, CORE0,
-      &enabled, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+      &enabled, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
   (*received_count)++;
   return true;
@@ -126,146 +130,86 @@ bool unpack_joint_enable(
 
 bool unpack_joint_abs_pos(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
-    uint8_t* received_count
+    size_t* rx_offset,
+    size_t* received_count
 ) {
   void* data_p = unpack_nw_buff(
-      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_set_abs_pos));
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_set_joints_pos));
 
   if(! data_p) {
     return false;
   }
 
-  struct Message_set_abs_pos* message = data_p;
-  uint32_t joint = message->axis;
-  double abs_pos = message->value;
+  struct Message_set_joints_pos* message = data_p;
+  double* abs_pos = message->position;
+  double* vel_reques = message->velocity;
 
-  update_axis_config(
-      joint, CORE0,
-      NULL, NULL, NULL, NULL, &abs_pos, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+  for(size_t joint = 0; joint < MAX_JOINT; joint++) {
+    update_joint_config(
+        joint, CORE0,
+        NULL, NULL, NULL, &(vel_reques[joint]), &(abs_pos[joint]), NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+  }
 
   (*received_count)++;
   return true;
 }
 
-bool unpack_joint_velocity(
+bool unpack_spindle_config(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
-    uint8_t* received_count
+    size_t* rx_offset,
+    struct NWBuffer* tx_buf,
+    size_t* received_count
 ) {
   void* data_p = unpack_nw_buff(
-      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_set_velocity));
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_spindle_config));
 
   if(! data_p) {
     return false;
   }
 
-  struct Message_set_velocity* message = data_p;
-  uint32_t joint = message->axis;
-  double vel_reques = message->value;
+  struct Message_spindle_config* message = data_p;
+  uint8_t spindle = message->spindle_index;
+  if(spindle > 0) {
+    printf("%u ERROR: More than one spindle not yet supported. %u\n",
+        *received_count, message->spindle_index);
+    return false;
+  }
 
-  update_axis_config(
-      joint, CORE0,
-      NULL, NULL, NULL, &vel_reques, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+  printf("%u Configuring spindle: %u\n", *received_count, message->spindle_index);
+  
+  vfd_config.address = message->modbus_address;
+  vfd_config.bitrate = message->bitrate;
+  vfd_config.type = message->vfd_type;
+
+
+  serialise_spindle_config(spindle, tx_buf);
 
   (*received_count)++;
   return true;
 }
 
-bool unpack_joint_max_velocity(
+bool unpack_spindle_speed(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
-    uint8_t* received_count
+    size_t* rx_offset,
+    size_t* received_count
 ) {
   void* data_p = unpack_nw_buff(
-      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_set_max_velocity));
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_spindle_speed));
 
   if(! data_p) {
     return false;
   }
 
-  struct Message_set_max_velocity* message = data_p;
-  uint32_t joint = message->axis;
-  double max_velocity = message->value;
+  struct Message_spindle_speed* message = data_p;
 
-  update_axis_config(
-      joint, CORE0,
-      NULL, NULL, NULL, NULL, NULL, NULL, &max_velocity, NULL, NULL, NULL, NULL, NULL, NULL);
+  for(size_t spindle = 0; spindle < MAX_SPINDLE; spindle++) {
+    if(spindle > 0) {
+      // More that one spindle not yet supported.
+      continue;
+    }
 
-  (*received_count)++;
-  return true;
-}
-
-bool unpack_joint_max_accel(
-    struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
-    uint8_t* received_count
-) {
-  void* data_p = unpack_nw_buff(
-      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_set_max_accel));
-
-  if(! data_p) {
-    return false;
+    req_spindle_frequency = message->speed[spindle];
   }
-
-  struct Message_set_max_accel* message = data_p;
-  uint32_t joint = message->axis;
-  double max_accel = message->value;
-
-  update_axis_config(
-      joint, CORE0,
-      NULL, NULL, NULL, NULL, NULL, NULL, NULL, &max_accel, NULL, NULL, NULL, NULL, NULL);
-
-  (*received_count)++;
-  return true;
-}
-
-bool unpack_joint_io_step(
-    struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
-    uint8_t* received_count
-) {
-  void* data_p = unpack_nw_buff(
-      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_joint_gpio));
-
-  if(! data_p) {
-    return false;
-  }
-
-  struct Message_joint_gpio* message = data_p;
-  uint32_t joint = message->axis;
-  int8_t io_step = message->value;
-
-  printf("%u Setting axis: %u\tstep-io: %i\n", *received_count, joint, io_step);
-  update_axis_config(
-      joint, CORE0,
-            NULL, &io_step, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-
-
-  (*received_count)++;
-  return true;
-}
-
-bool unpack_joint_io_dir(
-    struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
-    uint8_t* received_count
-) {
-  void* data_p = unpack_nw_buff(
-      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_joint_gpio));
-
-  if(! data_p) {
-    return false;
-  }
-
-  struct Message_joint_gpio* message = data_p;
-  uint32_t joint = message->axis;
-  int8_t io_dir = message->value;
-
-  printf("%u Setting axis: %u\tdir-io:  %i\n", *received_count, joint, io_dir);
-  update_axis_config(
-      joint, CORE0,
-      NULL, NULL, &io_dir, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
   (*received_count)++;
   return true;
@@ -273,9 +217,9 @@ bool unpack_joint_io_dir(
 
 bool unpack_joint_config(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
+    size_t* rx_offset,
     struct NWBuffer* tx_buf,
-    uint8_t* received_count
+    size_t* received_count
 ) {
   void* data_p = unpack_nw_buff(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_joint_config));
@@ -285,7 +229,7 @@ bool unpack_joint_config(
   }
 
   struct Message_joint_config* message = data_p;
-  uint32_t joint = message->axis;
+  uint8_t joint = message->joint;
   uint8_t enabled = message->enable;
   int8_t io_step = message->gpio_step;
   int8_t io_dir = message->gpio_dir;
@@ -294,7 +238,12 @@ bool unpack_joint_config(
 
 
   printf("%u Configuring joint: %u\n", *received_count, joint);
-  update_axis_config(
+  printf("\tenabled:\t%u\n", enabled);
+  printf("\tio_step:\t%i\n", io_step);
+  printf("\tio_dir: \t%i\n", io_dir);
+  printf("\tmax_velocity:\t%f\n", max_velocity);
+  printf("\tmax_accel:\t%u\n", max_accel);
+  update_joint_config(
       joint,
       CORE0,
       &enabled,
@@ -305,9 +254,9 @@ bool unpack_joint_config(
       NULL,
       &max_velocity,
       &max_accel,
-      NULL, NULL, NULL, NULL, NULL);
+      NULL, NULL, NULL, NULL);
 
-  serialise_axis_config(joint, tx_buf);
+  serialise_joint_config(joint, tx_buf);
 
   (*received_count)++;
   return true;
@@ -315,8 +264,8 @@ bool unpack_joint_config(
 
 bool unpack_gpio(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
-    uint8_t* received_count
+    size_t* rx_offset,
+    size_t* received_count
 ) {
   void* data_p = unpack_nw_buff(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_gpio));
@@ -340,9 +289,9 @@ bool unpack_gpio(
 
 bool unpack_gpio_config(
     struct NWBuffer* rx_buf,
-    uint16_t* rx_offset,
+    size_t* rx_offset,
     struct NWBuffer* tx_buf,
-    uint8_t* received_count
+    size_t* received_count
 ) {
   void* data_p = unpack_nw_buff(
       rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_gpio_config));
@@ -350,39 +299,40 @@ bool unpack_gpio_config(
   if(! data_p) {
     return false;
   }
+
   struct Message_gpio_config* message = data_p;
   uint8_t gpio_type = message->gpio_type;
   uint8_t gpio_count = message->gpio_count;
   uint8_t index = message->index;
   uint8_t address = message->address;
 
+  printf("%u Configuring gpio: %u\t%u\n", *received_count, gpio_type, gpio_count);
+
   config.gpio[gpio_count].type = gpio_type;
   config.gpio[gpio_count].index = index;
   config.gpio[gpio_count].address = address;
 
-  printf("%u Configuring gpio: %u\t%u\n", *received_count, gpio_type, gpio_count);
+  switch(gpio_type) {
+    case GPIO_TYPE_NATIVE_IN:
+    case GPIO_TYPE_NATIVE_IN_DEBUG:
+      ;
+      // Remember HAL's definition of IN and OUT are opposite of RPs.
+      printf("Setting RP native IO to RP OUT: %u\n", index);
+      gpio_init(index);
+      gpio_set_dir(index, GPIO_OUT);
+      break;
+    case GPIO_TYPE_NATIVE_OUT:
+    case GPIO_TYPE_NATIVE_OUT_DEBUG:
+      // Remember HAL's definition of IN and OUT are opposite of RPs.
+      printf("Setting RP native IO to RP IN: %u\n", index);
+      gpio_init(index);
+      gpio_set_dir(index, GPIO_IN);
+      gpio_pull_up(index);
+      break;
+    default:
+      break;
+  }
 
-    switch(gpio_type) {
-      case GPIO_TYPE_NATIVE_IN:
-      case GPIO_TYPE_NATIVE_IN_DEBUG:
-        ;
-        // Remember HAL's definition of IN and OUT are opposite of RPs.
-        printf("Setting RP native IO to RP OUT: %u\n", index);
-        gpio_init(index);
-        gpio_set_dir(index, GPIO_OUT);
-        break;
-      case GPIO_TYPE_NATIVE_OUT:
-      case GPIO_TYPE_NATIVE_OUT_DEBUG:
-        // Remember HAL's definition of IN and OUT are opposite of RPs.
-        printf("Setting RP native IO to RP IN: %u\n", index);
-        gpio_init(index);
-        gpio_set_dir(index, GPIO_IN);
-        gpio_pull_up(index);
-        break;
-      default:
-        break;
-    }
-  
   serialise_gpio_config(gpio_count, tx_buf);
 
   (*received_count)++;
@@ -395,10 +345,10 @@ bool unpack_gpio_config(
 void process_received_buffer(
     struct NWBuffer* rx_buf,
     struct NWBuffer* tx_buf,
-    uint8_t* received_count,
-    uint16_t expected_length
+    size_t* received_count,
+    size_t expected_length
 ) {
-  uint16_t rx_offset = 0;
+  size_t rx_offset = 0;
 
   if(rx_buf->length + sizeof(rx_buf->length) + sizeof(rx_buf->checksum) != expected_length) {
     printf("WARN: RX length not equal to expected. %u\n", *received_count);
@@ -413,6 +363,11 @@ void process_received_buffer(
 
   if(!checkNWBuff(rx_buf)) {
     printf("WARN: RX checksum fail.\n");
+
+    reset_nw_buf(rx_buf);
+    reset_nw_buf(tx_buf);
+    *received_count = 0;
+    return;
   }
 
   bool unpack_success = true;
@@ -421,7 +376,7 @@ void process_received_buffer(
     struct Message_header* header = unpack_nw_buff(
         rx_buf, rx_offset, NULL, NULL, sizeof(struct Message_header));
 
-    if(!header) {
+    if(!header || !header->type) {
       // End of data.
       break;
     }
@@ -432,38 +387,25 @@ void process_received_buffer(
         unpack_success = unpack_success && unpack_timing(
             rx_buf, &rx_offset, tx_buf, received_count);
         break;
-      case MSG_SET_AXIS_ENABLED:
+      case MSG_SET_JOINT_ENABLED:
         unpack_success = unpack_success && unpack_joint_enable(
             rx_buf, &rx_offset, received_count);
         break;
-      case MSG_SET_AXIS_ABS_POS:
+      case MSG_SET_JOINT_ABS_POS:
         unpack_success = unpack_success && unpack_joint_abs_pos(
             rx_buf, &rx_offset, received_count);
         break;
-      case MSG_SET_AXIS_VELOCITY:
-        unpack_success = unpack_success && unpack_joint_velocity(
-            rx_buf, &rx_offset, received_count);
-        break;
-      case MSG_SET_AXIS_MAX_VELOCITY:
-        unpack_success = unpack_success && unpack_joint_max_velocity(
-            rx_buf, &rx_offset, received_count);
-        break;
-      case MSG_SET_AXIS_MAX_ACCEL:
-        unpack_success = unpack_success && unpack_joint_max_accel(
-            rx_buf, &rx_offset, received_count);
-        break;
-      case MSG_SET_AXIS_IO_STEP:
-        unpack_success = unpack_success && unpack_joint_io_step(
-            rx_buf, &rx_offset, received_count);
-        break;
-      case MSG_SET_AXIS_IO_DIR:
-        unpack_success = unpack_success && unpack_joint_io_dir(
-            rx_buf, &rx_offset, received_count);
-        break;
-      case MSG_SET_AXIS_CONFIG:
+      case MSG_SET_JOINT_CONFIG:
         unpack_success = unpack_success && unpack_joint_config(
             rx_buf, &rx_offset, tx_buf, received_count);
         break;
+      case MSG_SET_SPINDLE_CONFIG:
+        unpack_success = unpack_success && unpack_spindle_config(
+            rx_buf, &rx_offset, tx_buf, received_count);
+        break;
+      case MSG_SET_SPINDLE_SPEED:
+        unpack_success = unpack_success && unpack_spindle_speed(
+            rx_buf, &rx_offset, received_count);
       case MSG_SET_GPIO:
         unpack_success = unpack_success && unpack_gpio(
             rx_buf, &rx_offset, received_count);
@@ -476,7 +418,10 @@ void process_received_buffer(
         printf("WARN: Invalid message type: %u\t%lu\n", header->type, *received_count);
         // Implies data corruption.
         unpack_success = false;
-        break;
+        reset_nw_buf(rx_buf);
+        reset_nw_buf(tx_buf);
+        *received_count = 0;
+        return;
     }
   }
 
@@ -496,8 +441,8 @@ void core0_main() {
   int retval = 0;
   struct NWBuffer rx_buf = {0};
   struct NWBuffer tx_buf = {0};
-  uint8_t received_msg_count = 0;
-  uint16_t data_received = 0;
+  size_t received_msg_count = 0;
+  size_t data_received = 0;
   size_t time_now;
 
   // Need these to store the IP and port.
@@ -506,8 +451,12 @@ void core0_main() {
   uint8_t  destip_machine[4] = {0, 0, 0, 0};
   uint16_t destport_machine = 0;
 
+  modbus_init();
+
+  int count = 0;
   while (1) {
     data_received = 0;
+    retval = 0;
 
     while(data_received == 0 || retval <= 0) {
       retval = get_UDP(
@@ -533,14 +482,19 @@ void core0_main() {
       gpio_put(LED_PIN, (time_now / 1000000) % 2);
       received_msg_count = 0;
 
-      for(size_t axis = 0; axis < MAX_AXIS; axis++) {
-        // Get data from config and put in TX buffer.
-        serialise_axis_movement(axis, &tx_buf, true);
-        serialise_axis_metrics(axis, &tx_buf);
+      // Get data from config and put in TX buffer.
+      serialise_joint_movement(&tx_buf, false);
+      serialise_joint_metrics(&tx_buf);
+
+      // No need to update each spindle every cycle.
+      if(count % 100 == 0) {
+        serialise_spindle_speed_out(&tx_buf, act_spindle_frequency, &vfd.stats);
       }
 
       size_t tx_buf_len = 0;
       gpio_serialize(&tx_buf, &tx_buf_len);
+
+      count++;
 
       put_UDP(
           SOCKET_NUMBER,
@@ -549,6 +503,7 @@ void core0_main() {
           tx_buf.length + sizeof(tx_buf.length) + sizeof(tx_buf.checksum),
           destip_machine,
           &destport_machine);
+      act_spindle_frequency = modbus_loop(req_spindle_frequency);
     }
     reset_nw_buf(&tx_buf);
   }
