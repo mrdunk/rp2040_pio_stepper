@@ -2,6 +2,7 @@
 #define UPDATE_TYPES__H
 
 #include <sys/types.h>
+#include <stdint.h>
 
 /* This file contains objects that are passed over Ethernet UDP between host and RP2040.
  * Multiple structs can be packed in an array. */

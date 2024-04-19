@@ -51,4 +51,5 @@ struct uart_hw_t {
 struct uart_hw_t *uart_get_hw(size_t *uart);
 
 
+
 #endif  // MOCKS_RP_MOCKS__H

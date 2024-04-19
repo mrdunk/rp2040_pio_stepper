@@ -1,6 +1,16 @@
 #include <stdio.h>
+
+#ifdef BUILD_TESTS
+
+#include "../test/mocks/rp_mocks.h"
+
+#else  // BUILD_TESTS
+
 #include "pico/multicore.h"
 #include "hardware/watchdog.h"
+
+#endif  // BUILD_TESTS
+
 
 #include "core1.h"
 #include "config.h"
