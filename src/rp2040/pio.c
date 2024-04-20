@@ -25,12 +25,22 @@
 /* Initialize a pair of PIO programmes.
  * One for step generation on pio0 and one for counting said steps on pio1.
  */
-static uint32_t sm0[MAX_JOINT];
-static uint32_t sm1[MAX_JOINT];
+uint32_t sm0[MAX_JOINT];
+uint32_t sm1[MAX_JOINT];
 
 uint8_t axis_updated_bitmask = 0;
 uint8_t axis_initialized_bitmask = 0;
 
+/* Force PIO to stop a joint. */
+__attribute__((weak))
+void stop_joint(const uint32_t joint) {
+    pio_sm_clear_fifos(pio0, sm0[joint]);
+    // Zero step duration is a special case in the PIO code that does not emit
+    // pulses.
+    pio_sm_put(pio0, sm0[joint], 0);
+}
+
+__attribute__((weak))
 void init_pio(const uint32_t joint)
 {
   static uint32_t offset_pio0 = 0;
@@ -94,7 +104,6 @@ void init_pio(const uint32_t joint)
 
   // The stepping PIO program.
   pio_sm_set_enabled(pio0, sm0[joint], false);
-  // From pico_axs.pio
   step_gen_program_init(pio0, sm0[joint], offset_pio0, io_pos_step, io_pos_dir);
   pio_sm_set_enabled(pio0, sm0[joint], true);
 
@@ -105,7 +114,6 @@ void init_pio(const uint32_t joint)
 
   // The counting PIO program.
   pio_sm_set_enabled(pio1, sm1[joint], false);
-  // From pico_axs.pio
   step_count_program_init(pio1, sm1[joint], offset_pio1, io_pos_step, io_pos_dir);
   pio_sm_set_enabled(pio1, sm1[joint], true);
 
@@ -117,6 +125,7 @@ void init_pio(const uint32_t joint)
   axis_initialized_bitmask |= 1 << joint;
 }
 
+
 // These POSITION_BIAS and VELOCITY_BIAS should add up to 1.0 or slightly less. eg: 0.95
 // The slight delay smooths output. More delay = smoother but more latency.
 #define POSITION_BIAS 0.1
@@ -126,6 +135,7 @@ void init_pio(const uint32_t joint)
 static int32_t holdoff[MAX_JOINT] = {0, 0, 0, 0};
 
 /* Convert step command from LinuxCNC and Feedback from PIO into a desired velocity. */
+__attribute__((weak))
 double get_velocity(
     const uint32_t update_period_us,
     const uint8_t joint,
@@ -167,15 +177,36 @@ double get_velocity(
 }
 
 void disable_stepgen_for_joint(const uint8_t joint) {
+  disable_joint(joint, 1);
+
   if ((axis_initialized_bitmask & (1 << joint)) == 0) {
     axis_updated_bitmask |= (1 << joint);
     return;
   }
-  // Switch off PIO stepgen.
-  if(!pio_sm_is_tx_fifo_full(pio0, sm0[joint])) {
-    pio_sm_put(pio0, sm0[joint], 0);
-    axis_updated_bitmask |= (1 << joint);
+  stop_joint(joint);
+  axis_updated_bitmask |= (1 << joint);
+}
+
+__attribute__((weak))
+int32_t get_step_len(double velocity, double max_velocity, double update_period_ticks) {
+  int32_t step_len_ticks = 0;
+  double step_count = fabs(velocity);
+
+  // The PIO FIFO will only report step counts between steps.
+  // If too small a step_count is allowed here, the steps can get very long and
+  // block further updates.
+  if(step_count > MIN_STEP_COUNT) {
+    step_len_ticks =
+      (update_period_ticks / (step_count * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
+
+    int32_t min_step_len_ticks =
+      (update_period_ticks / (fabs(max_velocity) * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
+    if(step_len_ticks < min_step_len_ticks) {
+      step_len_ticks = min_step_len_ticks;
+    }
   }
+
+  return step_len_ticks;
 }
 
 /* Generate step counts and send to PIOs. */
@@ -226,6 +257,11 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
 
   count++;
 
+  if(!updated) {
+    axis_updated_bitmask |= (1 << joint);
+    return 0;
+  }
+
   if(updated > 2) {
     if(enabled && last_enabled[joint]) {
       failcount++;
@@ -238,23 +274,20 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
     last_enabled[joint] = enabled;
     if(enabled) {
       printf("Joint %u was enabled.\n", joint);
-      init_pio(joint);
     } else {
       printf("Joint %u was disabled.\n", joint);
     }
   }
 
-  if(!enabled) {
+  if(enabled) {
+    init_pio(joint);
+  } else {
     disable_stepgen_for_joint(joint);
     return 0;
   }
 
-  if(updated <= 0) {
-    axis_updated_bitmask |= (1 << joint);
-    return 0;
-  }
-
   // Drain rx_fifo of PIO feedback data and keep the last value received.
+  // If no new value in fifo, continue using the one retrieved from config.
   uint8_t fifo_len = pio_sm_get_rx_fifo_level(pio1, sm1[joint]);
   while(fifo_len > 0) {
     abs_pos_achieved = pio_sm_get_blocking(pio1, sm1[joint]);
@@ -275,33 +308,9 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   max_velocity /= update_period_us;
   max_accel /= update_period_us;
 
-  //double accel = velocity - last_velocity[joint];
-  //if(accel > max_accel) {
-  //  velocity = last_velocity[joint] + max_accel;
-  //} else if(accel < (-max_accel)) {
-  //  velocity = last_velocity[joint] - max_accel;
-  //}
-
-  double step_count = fabs(velocity);
-  int32_t step_len_ticks = 0;
   double update_period_ticks = update_period_us * clock_multiplier;
-
-
-  // The PIO FIFO will only report step counts between steps.
-  // If too small a step_count is allowed here, the steps can get very long and
-  // block further updates.
-  if(step_count > MIN_STEP_COUNT) {
-    step_len_ticks =
-      (update_period_ticks / (step_count * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
-
-    int32_t min_step_len_ticks =
-      (update_period_ticks / (fabs(max_velocity) * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
-    if(step_len_ticks < min_step_len_ticks) {
-      step_len_ticks = min_step_len_ticks;
-    }
-  }
-
   uint32_t direction = (velocity > 0);
+  int32_t step_len_ticks = get_step_len(velocity, max_velocity, update_period_ticks);
 
   // TODO: Remove this section once dead-zone calculation has been proven stable.
   if(direction != last_direction[joint] && velocity > 0) {
@@ -310,7 +319,7 @@ uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
   }
   if((count % 1000) < MAX_JOINT) {
     if(dir_change_count[joint] > 10) {
-      printf("Excessive jitter. j: %u\tcount: %u\n", joint, dir_change_count[joint]);
+      printf("Excessive jitter. joint: %u\tcount: %u\n", joint, dir_change_count[joint]);
     }
     dir_change_count[joint] = 0;
   }

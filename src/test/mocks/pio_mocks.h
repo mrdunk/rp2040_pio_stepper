@@ -1,8 +1,8 @@
 #ifndef MOCKS_PIO_MOCKS__H
 #define MOCKS_PIO_MOCKS__H
 
-size_t pio0;
-size_t pio1;
+extern size_t pio0;
+extern size_t pio1;
 
 void step_gen_program(size_t);
 void step_count_program(size_t);

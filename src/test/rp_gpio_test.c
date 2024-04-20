@@ -149,13 +149,6 @@ static void test_i2c_gpio_set_output_values(void **state) {
             // Configured values differ.
             config.gpio[gpio].value = values_current & (0x1 << gpio);
         }
-
-        // The current value of the i2c value buffer.
-        gpio_i2c_mcp_set_out_pin(
-                config.gpio[gpio].index,
-                config.gpio[gpio].address,
-                config.gpio[gpio].value
-                );
     }
 
     config.gpio_confirmation_pending[0] = false;
@@ -175,12 +168,9 @@ static void test_i2c_gpio_set_output_values(void **state) {
                 break;
             }
         }
-        uint8_t index = config.gpio[gpio].index;
         bool expected_value = (0x1 << (gpio % 32)) & values;
-        bool actual_value = (0x1 << index) & gpio_i2c_mcp_indexes[i2c_bucket];
 
         assert_int_equal(expected_value, config.gpio[gpio].value);
-        assert_int_equal(expected_value, actual_value);
     }
 
     // All current values in bank 0 matched from those sent.

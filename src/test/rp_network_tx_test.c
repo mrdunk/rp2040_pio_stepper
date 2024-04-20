@@ -12,11 +12,12 @@
 #include "../rp2040/config.h"
 #include "../rp2040/network.h"
 #include "../rp2040/ring_buffer.h"
+#include "../rp2040/i2c.h"
 #include "mocks/rp_mocks.h"
 
 
 extern volatile struct ConfigGlobal config;
-
+struct i2c_gpio_state i2c_gpio;
 
 static void test_serialise_timing(void **state) {
     (void) state; /* unused */

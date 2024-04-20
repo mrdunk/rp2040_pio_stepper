@@ -36,10 +36,6 @@ target_link_libraries(
 add_executable(
   rpNetworkTest
   ${CMAKE_CURRENT_SOURCE_DIR}/rp_network_test.c
-  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_fuling.c
-  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_huanyang.c
-  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_weiken.c
-  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
   #${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
@@ -50,6 +46,7 @@ add_executable(
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/i2c_mocks.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/modbus_mocks.c
   )
 target_link_libraries(
   rpNetworkTest
@@ -64,19 +61,17 @@ add_test(
 add_executable(
   rpNetworkTxTest
   ${CMAKE_CURRENT_SOURCE_DIR}/rp_network_tx_test.c
-  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_fuling.c
-  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_huanyang.c
-  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_weiken.c
-  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
-  #${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
-  #${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
   ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
   ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
   #${CMAKE_CURRENT_SOURCE_DIR}/mocks/config_mocks.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/i2c_mocks.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/modbus_mocks.c
   )
 target_link_libraries(
   rpNetworkTxTest
@@ -92,10 +87,6 @@ add_executable(
   rpGpioTest
   ${CMAKE_CURRENT_SOURCE_DIR}/rp_gpio_test.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
-  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_fuling.c
-  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_huanyang.c
-  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_weiken.c
-  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
   ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
@@ -104,6 +95,7 @@ add_executable(
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/i2c_mocks.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/modbus_mocks.c
   )
 target_link_libraries(
   rpGpioTest
@@ -198,27 +190,30 @@ add_test(
 add_executable(
   rpCore1Test
   ${CMAKE_CURRENT_SOURCE_DIR}/rp_core1_test.c
-
-  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_fuling.c
-  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_huanyang.c
-  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_weiken.c
-  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
-
   ${CMAKE_SOURCE_DIR}/src/rp2040/core1.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/pio.c
-  #${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
   ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
   ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
-  #${CMAKE_CURRENT_SOURCE_DIR}/mocks/config_mocks.c
-  #${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
-  #${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/pio_mocks.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/modbus_mocks.c
   )
 target_link_libraries(
   rpCore1Test
   cmocka
+  -Wl,--wrap=get_period
+  -Wl,--wrap=do_steps
+  -Wl,--wrap=disable_joint
+  -Wl,--wrap=time_us_64
+  -Wl,--wrap=get_joint_config
+  -Wl,--wrap=init_pio
+  -Wl,--wrap=stop_joint
+  -Wl,--wrap=pio_sm_get_rx_fifo_level
+  -Wl,--wrap=pio_sm_get_blocking
+  -Wl,--wrap=pio_sm_is_tx_fifo_empty
+  -Wl,--wrap=pio_sm_put
+  -Wl,--wrap=update_joint_config
   )
 add_test(
   rpCore1Test

@@ -1,3 +1,5 @@
+#include <stdbool.h>
+
 #include "messages.h"
 
 #ifdef BUILD_TESTS

@@ -17,10 +17,7 @@
 #endif  // BUILD_TESTS
 
 
-//uint32_t gpio_i2c_mcp_indexes[MAX_I2C_MCP] = {0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff};
-uint32_t gpio_i2c_mcp_indexes[MAX_I2C_MCP] = {0, 0, 0, 0};
 uint8_t gpio_i2c_mcp_addresses[MAX_I2C_MCP] = {0xff, 0xff, 0xff, 0xff};
-uint8_t gpio_last_type[32 * MAX_I2C_MCP];
 
 void update_gpio_config(
     const uint8_t gpio,
@@ -106,12 +103,12 @@ void gpio_set_values(const uint8_t bank, uint32_t values) {
         gpio_local_set_out_pin(index, new_value);
         break;
       case GPIO_TYPE_I2C_MCP_IN:
+        printf("DBG GPIO: %u  IO: %u  ADD: %u  val: %u\n", gpio, index, address, new_value);
         gpio_i2c_mcp_set_out_pin(index, address, new_value);
         break;
       default:
         break;
     }
-    gpio_last_type[gpio] = type;
 
     update_gpio_config(gpio, NULL, NULL, NULL, &new_value);
   }
@@ -210,8 +207,8 @@ void gpio_serialize(struct NWBuffer* tx_buf, size_t* tx_buf_len) {
         if(previous_value != new_value) {
           to_send[bank] = true;
           config.gpio_confirmation_pending[bank] = true;
-          // Do not update config here.
-          // Config gets updated on incoming Message_gpio.
+          // Do not update config.gpio here.
+          // config.gpio gets updated on incoming Message_gpio.
         }
         break;
       case GPIO_TYPE_I2C_MCP_OUT:
@@ -229,7 +226,6 @@ void gpio_serialize(struct NWBuffer* tx_buf, size_t* tx_buf_len) {
         new_value = previous_value;
         break;
     }
-    gpio_last_type[gpio] = type;
 
     values[bank] |= (new_value << (gpio % 32));
   }

@@ -6,6 +6,6 @@
 
 void init_core1();
 void core1_main();
-
+void update_all_joint();
 
 #endif  // CORE1__H
