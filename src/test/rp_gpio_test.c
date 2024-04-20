@@ -11,10 +11,12 @@
 #include "../rp2040/config.h"
 #include "../rp2040/gpio.h"
 #include "../rp2040/core0.h"
+#include "../rp2040/i2c.h"
 
 
 extern uint32_t gpio_i2c_mcp_indexes[MAX_I2C_MCP];
 extern uint8_t gpio_i2c_mcp_addresses[MAX_I2C_MCP];
+struct i2c_gpio_state i2c_gpio;
 
 void __wrap_gpio_put(int index, int value) {
     // printf("__wrap_gpio_put(%i, %i)\n", index, value);

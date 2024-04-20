@@ -1,6 +1,12 @@
 #include "messages.h"
-#include "hardware/i2c.h"
-#include "pico/timeout_helper.h"
+
+#ifdef BUILD_TESTS
+  #include "../test/mocks/i2c_mocks.h"
+#else  // BUILD_TESTS
+  #include "hardware/i2c.h"
+  #include "pico/timeout_helper.h"
+#endif  // BUILD_TESTS
+
 
 #pragma once
 

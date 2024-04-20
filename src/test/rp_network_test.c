@@ -13,19 +13,25 @@
 #include "../rp2040/config.h"
 #include "../rp2040/network.h"
 #include "../rp2040/ring_buffer.h"
+#include "../rp2040/i2c.h"
 #include "mocks/rp_mocks.h"
 
 
 extern volatile struct ConfigGlobal config;
+struct i2c_gpio_state i2c_gpio;
 
 void __wrap_update_packet_metrics(
     uint32_t update_id,
     uint32_t time,
     int32_t* id_diff,
     int32_t* time_diff
-) {
-}
+) {}
 
+void gpio_set_values(const uint8_t bank, uint32_t values) {}
+void gpio_serialize(struct NWBuffer* tx_buf, size_t* tx_buf_len) {}
+bool serialise_gpio_config(const uint8_t gpio, struct NWBuffer* tx_buf) {
+    return true;
+}
 
 /* Helper function.
  * Populates the buffer with a Message_joint_enable struct. */
@@ -38,6 +44,9 @@ size_t append_enable_message(struct NWBuffer* rx_buf, uint32_t joint, uint8_t va
     };
 
     return pack_nw_buff(rx_buf, &message, sizeof(message));
+}
+int gpio_i2c_mcp_alloc(uint8_t address) {
+    return 1;
 }
 
 /* Helper function.

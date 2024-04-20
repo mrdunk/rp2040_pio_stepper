@@ -2,7 +2,6 @@
 #define _MOCK_I2C_H
 
 
-
 typedef struct timeout_state {
     uint64_t param;
 } timeout_state_t;
