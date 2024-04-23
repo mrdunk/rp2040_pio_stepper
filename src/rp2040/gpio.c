@@ -103,7 +103,7 @@ void gpio_set_values(const uint8_t bank, uint32_t values) {
         gpio_local_set_out_pin(index, new_value);
         break;
       case GPIO_TYPE_I2C_MCP_IN:
-        printf("DBG GPIO: %u  IO: %u  ADD: %u  val: %u\n", gpio, index, address, new_value);
+        //printf("DBG GPIO: %u  IO: %u  ADD: %u  val: %u\n", gpio, index, address, new_value);
         gpio_i2c_mcp_set_out_pin(index, address, new_value);
         break;
       default:
