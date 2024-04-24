@@ -89,7 +89,7 @@ void update_all_joint() {
 void core1_main() {
   // 10ms is 5x larger than it should be, but we're erring on the side of not causing
   // excessive resets here.
-  watchdog_enable(10, true);
+  watchdog_enable(20, true);
   while (1) {
     update_all_joint();
   }

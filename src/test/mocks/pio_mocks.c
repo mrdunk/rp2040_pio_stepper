@@ -25,7 +25,7 @@ int pio_claim_unused_sm(size_t pio, int sm) {return 0;}
 
 int pio_sm_is_tx_fifo_full(size_t pio, size_t sm) {return 0;}
 
-void pio_sm_put(size_t, size_t pio, size_t sm) {}
+void pio_sm_put(size_t val, size_t pio, size_t sm) {}
 
 int pio_sm_is_tx_fifo_empty(size_t pio, size_t sm) {return 0;}
 
