@@ -111,16 +111,66 @@ void reset_rp_config(
  *                       INIT AND EXIT CODE                             *
  ************************************************************************/
 
-bool init_hal_pin_float(
+enum t_types {
+  PIN = 0,
+  U32 = 2,
+  S32 = 3,
+  FLOAT = 4
+}
+
+bool init_hal_pin(
+    enum t_types types,
     const hal_pin_dir_t hal_pin_dir,
     void* data_p,
     const int component_id,
     const int device_num,
     const char* io_type,
     const int chan_num,
+    const int chan_num_len,
     const char* specific_name
 ) {
-    int retval = hal_pin_bit_newf(hal_pin_dir, data_p, component_id, "rp2040_eth.%d.%s.%d.%s", device_num, io_type, chan_num, specific_name);
+    int retval;
+    if(chan_num < 0) {
+      switch(types) {
+        case PIN:
+          retval = hal_pin_bit_newf(hal_pin_dir, data_p, component_id, "rp2040_eth.%d.%s", device_num, io_type);
+          break;
+        case U32:
+          retval = hal_pin_u32_newf(hal_pin_dir, data_p, component_id, "rp2040_eth.%d.%s", device_num, io_type);
+          break;
+        case S32:
+          retval = hal_pin_s32_newf(hal_pin_dir, data_p, component_id, "rp2040_eth.%d.%s", device_num, io_type);
+          break;
+        case FLOAT:
+          retval = hal_pin_float_newf(hal_pin_dir, data_p, component_id, "rp2040_eth.%d.%s", device_num, io_type);
+          break;
+      }
+    } else {
+      char* format[64];
+      int check = snprintf(format, 64, "rp2040_eth.%%d.%%s.%%%dd.%%s", chan_num_len);
+      if (check < 0 || check >= 64) {
+        rtapi_print_msg(RTAPI_MSG_ERR,
+            "ERROR: Invalid string length=%i\n",
+            check);
+        hal_exit(component_id);
+        return false;
+      }
+
+      switch(types) {
+        case PIN:
+          retval = hal_pin_bit_newf(hal_pin_dir, data_p, component_id, format, device_num, io_type, chan_num, specific_name);
+          break;
+        case U32:
+          retval = hal_pin_u32_newf(hal_pin_dir, data_p, component_id, format, device_num, io_type, chan_num, specific_name);
+          break;
+        case S32:
+          retval = hal_pin_s32_newf(hal_pin_dir, data_p, component_id, format, device_num, io_type, chan_num, specific_name);
+          break;
+        case FLOAT:
+          retval = hal_pin_float_newf(hal_pin_dir, data_p, component_id, format, device_num, io_type, chan_num, specific_name);
+          break;
+      }
+    }
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: var export failed with err=%i\n",
@@ -130,6 +180,7 @@ bool init_hal_pin_float(
     }
     return true;
 }
+
 
 int rtapi_app_main(void)
 {
@@ -168,7 +219,7 @@ int rtapi_app_main(void)
   for(int gpio_num = 0; gpio_num < MAX_GPIO; gpio_num++) {
     /* Export the GPIO */
     // From PC to RP.
-    if(!init_hal_pin_float(HAL_IN, &(port_data_array->gpio_data_in[gpio_num]), component_id, device_num, "gpio", gpio_num, "in")) {
+    if(!init_hal_pin(PIN, HAL_IN, &(port_data_array->gpio_data_in[gpio_num]), component_id, device_num, "gpio", gpio_num, 2, "in")) {
       return -1;
     }
 
@@ -183,16 +234,32 @@ int rtapi_app_main(void)
     //}
 
     // From RP to PC.
-    retval = hal_pin_bit_newf(HAL_OUT, &(port_data_array->gpio_data_out[gpio_num]), component_id,
-                              "rp2040_eth.%d.gpio.%d.out", device_num, gpio_num);
-    if (retval < 0) {
-      rtapi_print_msg(RTAPI_MSG_ERR,
-                      "SKELETON: ERROR: port %d var export failed with err=%i\n",
-                      device_num, retval);
-      hal_exit(component_id);
+    if(!init_hal_pin(PIN, HAL_OUT, &(port_data_array->gpio_data_out[gpio_num]), component_id, device_num, "gpio", gpio_num, 2, "out")) {
       return -1;
     }
 
+    //retval = hal_pin_bit_newf(HAL_OUT, &(port_data_array->gpio_data_out[gpio_num]), component_id,
+    //                          "rp2040_eth.%d.gpio.%d.out", device_num, gpio_num);
+    //if (retval < 0) {
+    //  rtapi_print_msg(RTAPI_MSG_ERR,
+    //                  "SKELETON: ERROR: port %d var export failed with err=%i\n",
+    //                  device_num, retval);
+    //  hal_exit(component_id);
+    //  return -1;
+    //}
+
+    if(!init_hal_pin(U32, HAL_IN, &(port_data_array->gpio_type[gpio_num]), component_id, device_num, "gpio", gpio_num, 2, "type")) {
+      return -1;
+    }
+    port_data_array->gpio_type[gpio_num] = GPIO_TYPE_NOT_SET;
+
+    if(!init_hal_pin(U32, HAL_IN, &(port_data_array->gpio_index[gpio_num]), component_id, device_num, "gpio", gpio_num, 2, "index")) {
+      return -1;
+    }
+    if(!init_hal_pin(U32, HAL_IN, &(port_data_array->gpio_address[gpio_num]), component_id, device_num, "gpio", gpio_num, 2, "address")) {
+      return -1;
+    }
+    /*
     retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->gpio_type[gpio_num]),
                               component_id, "rp2040_eth.%d.gpio.%d.type", device_num, gpio_num);
     if (retval < 0) {
@@ -222,8 +289,22 @@ int rtapi_app_main(void)
       hal_exit(component_id);
       return -1;
     }
+    */
   }
 
+
+  // TODO: Is this used?
+  if(!init_hal_pin(PIN, HAL_IN, &(port_data_array->machine_enable_in), component_id, device_num, "machine-enable-in", -1, 1, NULL)) {
+    return -1;
+  }
+  port_data_array->machine_enable_in = false;
+
+  if(!init_hal_pin(PIN, HAL_OUT, &(port_data_array->machine_enable_out), component_id, device_num, "machine-enable-out", -1, 1, NULL)) {
+    return -1;
+  }
+  port_data_array->machine_enable_out = false;
+
+  /*
   retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->machine_enable_in),
       component_id, "rp2040_eth.%d.machine-enable-in", device_num);
   if (retval < 0) {
@@ -243,9 +324,16 @@ int rtapi_app_main(void)
     hal_exit(component_id);
     return -1;
   }
+  */
 
   for(int num_joint = 0; num_joint < MAX_JOINT; num_joint++) {
     /* Export the joint position pin(s) */
+    if(!init_hal_pin(PIN, HAL_IN, &(port_data_array->joint_enable[num_joint]), component_id, device_num, "joint", num_joint, 1, "enable")) {
+      return -1;
+    }
+    port_data_array->joint_enable[num_joint] = false;
+    
+    /*
     retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->joint_enable[num_joint]),
                               component_id, "rp2040_eth.%d.joint.%d.enable", device_num, num_joint);
     if (retval < 0) {
@@ -255,7 +343,36 @@ int rtapi_app_main(void)
       hal_exit(component_id);
       return -1;
     }
+    */
 
+
+    if(!init_hal_pin(S32, HAL_IN, &(port_data_array->joint_gpio_step[num_joint]), component_id, device_num, "joint", num_joint, 1, "gpio-step")) {
+      return -1;
+    }
+    port_data_array->joint_gpio_step[num_joint] = -1;
+
+    if(!init_hal_pin(S32, HAL_IN, &(port_data_array->joint_gpio_dir[num_joint]), component_id, device_num, "joint", num_joint, 1, "gpio-dir")) {
+      return -1;
+    }
+    port_data_array->joint_gpio_dir[num_joint] = -1;
+    
+    if(!init_hal_pin(FLOAT, HAL_IN, &(port_data_array->joint_max_velocity[num_joint]), component_id, device_num, "joint", num_joint, 1, "max-velocity")) {
+      return -1;
+    }
+    if(!init_hal_pin(FLOAT, HAL_IN, &(port_data_array->joint_max_accel[num_joint]), component_id, device_num, "joint", num_joint, 1, "max-accel")) {
+      return -1;
+    }
+    if(!init_hal_pin(FLOAT, HAL_IN, &(port_data_array->joint_scale[num_joint]), component_id, device_num, "joint", num_joint, 1, "scale")) {
+      return -1;
+    }
+    if(!init_hal_pin(FLOAT, HAL_IN, &(port_data_array->joint_position[num_joint]), component_id, device_num, "joint", num_joint, 1, "pos-cmd")) {
+      return -1;
+    }
+    if(!init_hal_pin(FLOAT, HAL_IN, &(port_data_array->joint_velocity[num_joint]), component_id, device_num, "joint", num_joint, 1, "vel-cmd")) {
+      return -1;
+    }
+
+    /*
     retval = hal_pin_s32_newf(HAL_IN, &(port_data_array->joint_gpio_step[num_joint]), component_id,
                               "rp2040_eth.%d.joint.%d.gpio-step", device_num, num_joint);
     if (retval < 0) {
@@ -318,9 +435,31 @@ int rtapi_app_main(void)
       hal_exit(component_id);
       return -1;
     }
+    */
 
+
+    if(!init_hal_pin(FLOAT, HAL_OUT, &(port_data_array->joint_pos_feedback[num_joint]), component_id, device_num, "joint", num_joint, 1, "fb-pos")) {
+      return -1;
+    }
+    if(!init_hal_pin(FLOAT, HAL_OUT, &(port_data_array->joint_step_len_ticks[num_joint]), component_id, device_num, "joint", num_joint, 1, "fb-step-len")) {
+      return -1;
+    }
+    if(!init_hal_pin(FLOAT, HAL_OUT, &(port_data_array->joint_velocity_cmd[num_joint]), component_id, device_num, "joint", num_joint, 1, "fb-velocity-cmd")) {
+      return -1;
+    }
+    if(!init_hal_pin(FLOAT, HAL_OUT, &(port_data_array->joint_accel_cmd[num_joint]), component_id, device_num, "joint", num_joint, 1, "fb-accel-cmd")) {
+      return -1;
+    }
+    if(!init_hal_pin(FLOAT, HAL_OUT, &(port_data_array->joint_velocity_feedback[num_joint]), component_id, device_num, "joint", num_joint, 1, "fb-velocity")) {
+      return -1;
+    }
+    if(!init_hal_pin(FLOAT, HAL_OUT, &(port_data_array->joint_pos_error[num_joint]), component_id, device_num, "joint", num_joint, 1, "fb-pos-error")) {
+      return -1;
+    }
+
+    /*
     retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->joint_pos_feedback[num_joint]),
-                                component_id, "rp2040_eth.%d.pos-fb-%d", device_num, num_joint);
+                                component_id, "rp2040_eth.%d.joint.%d.fb-pos", device_num, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", device_num, retval);
@@ -329,7 +468,7 @@ int rtapi_app_main(void)
     }
 
     retval = hal_pin_s32_newf(HAL_OUT, &(port_data_array->joint_step_len_ticks[num_joint]),
-                                component_id, "rp2040_eth.%d.step-len-ticks-%d", device_num, num_joint);
+                                component_id, "rp2040_eth.%d.joint.%d.fb-step-len-ticks", device_num, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", device_num, retval);
@@ -338,7 +477,7 @@ int rtapi_app_main(void)
     }
 
     retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->joint_velocity_cmd[num_joint]),
-                                component_id, "rp2040_eth.%d.velocity-calc-%d", device_num, num_joint);
+                                component_id, "rp2040_eth.%d.joint.%d.fb-velocity-calc", device_num, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", device_num, retval);
@@ -347,7 +486,7 @@ int rtapi_app_main(void)
     }
 
     retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->joint_accel_cmd[num_joint]),
-                                component_id, "rp2040_eth.%d.accel-calc-%d", device_num, num_joint);
+                                component_id, "rp2040_eth.%d.joint.%d.fb-accel-calc", device_num, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", device_num, retval);
@@ -356,7 +495,7 @@ int rtapi_app_main(void)
     }
 
     retval = hal_pin_float_newf(HAL_OUT, &(port_data_array->joint_velocity_feedback[num_joint]),
-                                component_id, "rp2040_eth.%d.joint.%d.velocity-fb", device_num, num_joint);
+                                component_id, "rp2040_eth.%d.joint.%d.fb-velocity", device_num, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", device_num, retval);
@@ -365,17 +504,26 @@ int rtapi_app_main(void)
     }
 
     retval = hal_pin_s32_newf(HAL_OUT, &(port_data_array->joint_pos_error[num_joint]),
-                                component_id, "rp2040_eth.%d.joint.%d.pos-error", device_num, num_joint);
+                                component_id, "rp2040_eth.%d.joint.%d.fb-pos-error", device_num, num_joint);
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
                       "SKELETON: ERROR: port %d var export failed with err=%i\n", device_num, retval);
       hal_exit(component_id);
       return -1;
     }
+    */
   }
 
   /* Export spindle pins, */
   for(uint8_t num_spindle = 0; num_spindle < MAX_SPINDLE; num_spindle++) {
+    if(!init_hal_pin(PIN, HAL_IN, &(port_data_array->spindle_fwd[num_spindle]), component_id, device_num, "spindle", num_spindle, 1, "fwd")) {
+      return -1;
+    }
+    if(!init_hal_pin(PIN, HAL_IN, &(port_data_array->spindle_rev[num_spindle]), component_id, device_num, "spindle", num_spindle, 1, "rev")) {
+      return -1;
+    }
+
+    /*
     retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->spindle_fwd[num_spindle]),
         component_id, "rp2040_eth.%d.spindle.%d.fwd", device_num, num_spindle);
     if (retval < 0) {
@@ -387,7 +535,17 @@ int rtapi_app_main(void)
     if (retval < 0) {
       goto port_error;
     }
+    */
 
+
+    if(!init_hal_pin(FLOAT, HAL_IN, &(port_data_array->spindle_speed_in[num_spindle]), component_id, device_num, "spindle", num_spindle, 1, "speed-in")) {
+      return -1;
+    }
+    if(!init_hal_pin(FLOAT, HAL_OUT, &(port_data_array->spindle_speed_out[num_spindle]), component_id, device_num, "spindle", num_spindle, 1, "speed-out")) {
+      return -1;
+    }
+
+    /*
     retval = hal_pin_float_newf(HAL_IN, &(port_data_array->spindle_speed_in[num_spindle]),
         component_id, "rp2040_eth.%d.spindle.%d.speed-in", device_num, num_spindle);
     if (retval < 0) {
@@ -399,57 +557,67 @@ int rtapi_app_main(void)
     if (retval < 0) {
       goto port_error;
     }
+    */
 
+
+    if(!init_hal_pin(PIN, HAL_OUT, &(port_data_array->spindle_at_speed[num_spindle]), component_id, device_num, "spindle", num_spindle, 1, "at-speed")) {
+      return -1;
+    }
+
+    /*
     retval = hal_pin_bit_newf(HAL_OUT, &(port_data_array->spindle_at_speed[num_spindle]),
         component_id, "rp2040_eth.%d.spindle.%d.at-speed", device_num, num_spindle);
     if (retval < 0) {
       goto port_error;
     }
+    */
 
     retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_vfd_type[num_spindle]),
         component_id, "rp2040_eth.%d.spindle.%d.vfd-type", device_num, num_spindle);
     if (retval < 0) {
       goto port_error;
     }
-    port_data_array->spindle_vfd_type[0] = MODBUS_TYPE_NOT_SET;
-    port_data_array->spindle_vfd_type[1] = MODBUS_TYPE_NOT_SET;
-    port_data_array->spindle_vfd_type[2] = MODBUS_TYPE_NOT_SET;
-    port_data_array->spindle_vfd_type[3] = MODBUS_TYPE_NOT_SET;
+    port_data_array->spindle_vfd_type[num_spindle] = MODBUS_TYPE_NOT_SET;
 
     retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_address[num_spindle]),
         component_id, "rp2040_eth.%d.spindle.%d.address", device_num, num_spindle);
     if (retval < 0) {
       goto port_error;
     }
-    port_data_array->spindle_address[0] = 1;
-    port_data_array->spindle_address[1] = 1;
-    port_data_array->spindle_address[2] = 1;
-    port_data_array->spindle_address[3] = 1;
+    port_data_array->spindle_address[num_spindle] = 1;
 
     retval = hal_param_float_newf(HAL_RW, &(port_data_array->spindle_poles[num_spindle]),
         component_id, "rp2040_eth.%d.spindle.%d.poles", device_num, num_spindle);
     if (retval < 0) {
       goto port_error;
     }
-    port_data_array->spindle_poles[0] = 2;
-    port_data_array->spindle_poles[1] = 2;
-    port_data_array->spindle_poles[2] = 2;
-    port_data_array->spindle_poles[3] = 2;
+    port_data_array->spindle_poles[num_spindle] = 2;
 
     retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_bitrate[num_spindle]),
         component_id, "rp2040_eth.%d.spindle.%d.bitrate", device_num, num_spindle);
     if (retval < 0) {
       goto port_error;
     }
-    port_data_array->spindle_bitrate[0] = 9600;
-    port_data_array->spindle_bitrate[1] = 9600;
-    port_data_array->spindle_bitrate[2] = 9600;
-    port_data_array->spindle_bitrate[3] = 9600;
+    port_data_array->spindle_bitrate[num_spindle] = 9600;
   }
 
   /* Export metrics pins, */
-  retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->metric_update_id),
-      component_id, "rp2040_eth.%d.metrics-update-id", device_num);
+  if(!init_hal_pin(S32, HAL_IN, &(port_data_array->metric_time_diff), component_id, device_num, "metrics-time-diff", -1, 0, NULL)) {
+    return -1;
+  }
+  if(!init_hal_pin(U32, HAL_IN, &(port_data_array->metric_update_id), component_id, device_num, "metrics-update-id", -1, 0, NULL)) {
+    return -1;
+  }
+  if(!init_hal_pin(U32, HAL_IN, &(port_data_array->metric_rp_update_len), component_id, device_num, "metrics-rp-update-len", -1, 0, NULL)) {
+    return -1;
+  }
+  if(!init_hal_pin(U32, HAL_IN, &(port_data_array->metric_missed_packets), component_id, device_num, "metrics-missed-packets", -1, 0, NULL)) {
+    return -1;
+  }
+
+  /*
+  retval = hal_pin_s32_newf(HAL_IN, &(port_data_array->metric_time_diff),
+      component_id, "rp2040_eth.%d.metrics-time-diff", device_num);
   if (retval < 0) {
     rtapi_print_msg(RTAPI_MSG_ERR,
         "SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -458,8 +626,8 @@ int rtapi_app_main(void)
     return -1;
   }
 
-  retval = hal_pin_s32_newf(HAL_IN, &(port_data_array->metric_time_diff),
-      component_id, "rp2040_eth.%d.metrics-time-diff", device_num);
+  retval = hal_pin_u32_newf(HAL_IN, &(port_data_array->metric_update_id),
+      component_id, "rp2040_eth.%d.metrics-update-id", device_num);
   if (retval < 0) {
     rtapi_print_msg(RTAPI_MSG_ERR,
         "SKELETON: ERROR: port %d var export failed with err=%i\n",
@@ -487,7 +655,13 @@ int rtapi_app_main(void)
     hal_exit(component_id);
     return -1;
   }
+  */
 
+
+  if(!init_hal_pin(PIN, HAL_IN, &(port_data_array->metric_eth_state), component_id, device_num, "metrics-eth-state", -1, 0, NULL)) {
+    return -1;
+  }
+  /*
   retval = hal_pin_bit_newf(HAL_IN, &(port_data_array->metric_eth_state),
       component_id, "rp2040_eth.%d.metrics-eth-state", device_num);
   port_data_array->metric_eth_state = false;
@@ -498,6 +672,7 @@ int rtapi_app_main(void)
     hal_exit(component_id);
     return -1;
   }
+  */
 
   /* STEP 4: export write function */
   rtapi_snprintf(name, sizeof(name), "rp2040_eth.%d.write", device_num);
