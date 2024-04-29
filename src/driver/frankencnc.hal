@@ -4,9 +4,6 @@ loadrt hal_rp2040_eth
 loadrt mult2 count=8
 loadrt and2 count=1
 
-# Default GPIO values.
-source defualt_rp2040_eth_gpio.hal
-
 addf motion-command-handler servo-thread
 addf motion-controller servo-thread
 addf rp2040_eth.0.write servo-thread
@@ -34,7 +31,6 @@ net estop-out-driver => and2.0.in1
 
 net estop-out        <= and2.0.out
 net estop-out        => iocontrol.0.emc-enable-in
-net estop-out        => rp2040_eth.0.machine-enable-in
 
 
 # Joint 0
@@ -133,19 +129,19 @@ net spindle-speed-in spindle.0.speed-in <= rp2040_eth.0.spindle.0.speed-out
 net spindle-at-speed spindle.0.at-speed <= rp2040_eth.0.spindle.0.at-speed
 
 # GPIO
-setp rp2040_eth.0.gpio.0.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_IN_DEBUG
-setp rp2040_eth.0.gpio.0.index     6
-setp rp2040_eth.0.gpio.0.in        0
+setp rp2040_eth.0.gpio.00.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_IN_DEBUG
+setp rp2040_eth.0.gpio.00.index     6
+setp rp2040_eth.0.gpio.00.in        0
 
-setp rp2040_eth.0.gpio.1.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_IN_DEBUG
-setp rp2040_eth.0.gpio.1.index     7
-setp rp2040_eth.0.gpio.1.in        0
+setp rp2040_eth.0.gpio.01.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_IN_DEBUG
+setp rp2040_eth.0.gpio.01.index     7
+setp rp2040_eth.0.gpio.01.in        0
 
-setp rp2040_eth.0.gpio.2.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_OUT_DEBUG
-setp rp2040_eth.0.gpio.2.index     8
+setp rp2040_eth.0.gpio.02.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_OUT_DEBUG
+setp rp2040_eth.0.gpio.02.index     8
 
-setp rp2040_eth.0.gpio.3.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_OUT_DEBUG
-setp rp2040_eth.0.gpio.3.index     9
+setp rp2040_eth.0.gpio.03.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_OUT_DEBUG
+setp rp2040_eth.0.gpio.03.index     9
 
 # Modbus
 setp rp2040_eth.0.spindle.0.address 1
