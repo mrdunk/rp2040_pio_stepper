@@ -313,16 +313,17 @@ bool unpack_gpio_config(
   config.gpio[gpio_count].address = address;
 
   switch(gpio_type) {
-    case GPIO_TYPE_NATIVE_IN:
-    case GPIO_TYPE_NATIVE_IN_DEBUG:
-      ;
+    case GPIO_TYPE_NATIVE_OUT:
+    case GPIO_TYPE_NATIVE_OUT_DEBUG:
+      ;  // This semicolon is required. It's a C syntax thing related to multiple
+         // `case` statments at the start.
       // Remember HAL's definition of IN and OUT are opposite of RPs.
       printf("Setting RP native IO to RP OUT: %u\n", index);
       gpio_init(index);
       gpio_set_dir(index, GPIO_OUT);
       break;
-    case GPIO_TYPE_NATIVE_OUT:
-    case GPIO_TYPE_NATIVE_OUT_DEBUG:
+    case GPIO_TYPE_NATIVE_IN:
+    case GPIO_TYPE_NATIVE_IN_DEBUG:
       // Remember HAL's definition of IN and OUT are opposite of RPs.
       printf("Setting RP native IO to RP IN: %u\n", index);
       gpio_init(index);

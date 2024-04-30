@@ -647,7 +647,7 @@ static void test_end_to_end_multi(void **state) {
 
     struct Message_gpio_config m1 = {
       .type = MSG_SET_GPIO_CONFIG,
-      .gpio_type = GPIO_TYPE_NATIVE_IN,
+      .gpio_type = GPIO_TYPE_NATIVE_OUT,
       .gpio_count = 0,
       .index = 6,
       .address = 0

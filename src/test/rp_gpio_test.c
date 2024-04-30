@@ -33,23 +33,23 @@ static void test_gpio_config(void **state) {
 
     // Put some values in config.
     uint8_t gpio = 0;
-    uint8_t type = GPIO_TYPE_NATIVE_IN;
+    uint8_t type = GPIO_TYPE_NATIVE_OUT;
     uint8_t index = 0;
     uint8_t address = 1;
     update_gpio_config(gpio, &type, &index, &address, NULL);
 
     gpio = 1;
-    type = GPIO_TYPE_NATIVE_OUT;
+    type = GPIO_TYPE_NATIVE_IN;
     index = 1;
     address = 42;
     update_gpio_config(gpio, &type, &index, &address, NULL);
 
     // Confirm the correct values are in the config's data structure.
-    assert_int_equal(config.gpio[0].type, GPIO_TYPE_NATIVE_IN);
+    assert_int_equal(config.gpio[0].type, GPIO_TYPE_NATIVE_OUT);
     assert_int_equal(config.gpio[0].index, 0);
     assert_int_equal(config.gpio[0].address, 1);
 
-    assert_int_equal(config.gpio[1].type, GPIO_TYPE_NATIVE_OUT);
+    assert_int_equal(config.gpio[1].type, GPIO_TYPE_NATIVE_IN);
     assert_int_equal(config.gpio[1].index, 1);
     assert_int_equal(config.gpio[1].address, 42);
 
@@ -76,7 +76,7 @@ static void test_native_gpio_set_output_values(void **state) {
 
     // Configure the GPIO in the main config.
     for(uint8_t gpio = 0; gpio < MAX_GPIO; gpio++) {
-        config.gpio[gpio].type = GPIO_TYPE_NATIVE_IN;
+        config.gpio[gpio].type = GPIO_TYPE_NATIVE_OUT;
         config.gpio[gpio].index = gpio % MAX_GPIO;
 
         if(gpio < 32) {
@@ -134,7 +134,7 @@ static void test_i2c_gpio_set_output_values(void **state) {
 
     // Configure the GPIO in the main config.
     for(uint8_t gpio = 0; gpio < MAX_GPIO; gpio++) {
-        config.gpio[gpio].type = GPIO_TYPE_I2C_MCP_IN;
+        config.gpio[gpio].type = GPIO_TYPE_I2C_MCP_OUT;
         config.gpio[gpio].index = gpio % 31;
         config.gpio[gpio].address = (gpio % MAX_I2C_MCP) * (gpio % MAX_I2C_MCP);
 
@@ -209,19 +209,19 @@ static void test_send_PC_to_RP(void **state) {
         config.gpio_confirmation_pending[bank] = false;
     }
 
-    config.gpio[0].type = GPIO_TYPE_NATIVE_OUT;
+    config.gpio[0].type = GPIO_TYPE_NATIVE_IN;
     config.gpio[0].index = 11;
     config.gpio[0].value = false;
 
-    config.gpio[1].type = GPIO_TYPE_NATIVE_OUT;
+    config.gpio[1].type = GPIO_TYPE_NATIVE_IN;
     config.gpio[1].index = 12;
     config.gpio[1].value = false;
 
-    config.gpio[2].type = GPIO_TYPE_NATIVE_IN;
+    config.gpio[2].type = GPIO_TYPE_NATIVE_OUT;
     config.gpio[2].index = 13;
     config.gpio[2].value = false;
 
-    config.gpio[3].type = GPIO_TYPE_NATIVE_IN;
+    config.gpio[3].type = GPIO_TYPE_NATIVE_OUT;
     config.gpio[3].index = 14;
     config.gpio[3].value = false;
 
@@ -327,19 +327,19 @@ static void test_send_PC_to_RP_confirmation_set(void **state) {
         config.gpio_confirmation_pending[bank] = false;
     }
 
-    config.gpio[0].type = GPIO_TYPE_NATIVE_OUT;
+    config.gpio[0].type = GPIO_TYPE_NATIVE_IN;
     config.gpio[0].index = 11;
     config.gpio[0].value = false;
 
-    config.gpio[1].type = GPIO_TYPE_NATIVE_OUT;
+    config.gpio[1].type = GPIO_TYPE_NATIVE_IN;
     config.gpio[1].index = 12;
     config.gpio[1].value = true;
 
-    config.gpio[2].type = GPIO_TYPE_NATIVE_IN;
+    config.gpio[2].type = GPIO_TYPE_NATIVE_OUT;
     config.gpio[2].index = 13;
     config.gpio[2].value = false;
 
-    config.gpio[3].type = GPIO_TYPE_NATIVE_IN;
+    config.gpio[3].type = GPIO_TYPE_NATIVE_OUT;
     config.gpio[3].index = 14;
     config.gpio[3].value = true;
 
@@ -393,19 +393,19 @@ static void test_send_RP_to_PC(void **state) {
         config.gpio[gpio].value = false;
     }
 
-    config.gpio[0].type = GPIO_TYPE_NATIVE_OUT;
+    config.gpio[0].type = GPIO_TYPE_NATIVE_IN;
     config.gpio[0].index = 11;
     config.gpio[0].value = true;
 
-    config.gpio[1].type = GPIO_TYPE_NATIVE_OUT;
+    config.gpio[1].type = GPIO_TYPE_NATIVE_IN;
     config.gpio[1].index = 12;
     config.gpio[1].value = false;
 
-    config.gpio[2].type = GPIO_TYPE_NATIVE_IN;
+    config.gpio[2].type = GPIO_TYPE_NATIVE_OUT;
     config.gpio[2].index = 13;
     config.gpio[2].value = true;
 
-    config.gpio[3].type = GPIO_TYPE_NATIVE_IN;
+    config.gpio[3].type = GPIO_TYPE_NATIVE_OUT;
     config.gpio[3].index = 14;
     config.gpio[3].value = false;
 
@@ -464,19 +464,19 @@ static void test_send_RP_to_PC_out_gpio_changed(void **state) {
         config.gpio[gpio].value = false;
     }
 
-    config.gpio[0].type = GPIO_TYPE_NATIVE_OUT;
+    config.gpio[0].type = GPIO_TYPE_NATIVE_IN;
     config.gpio[0].index = 11;
     config.gpio[0].value = true;
 
-    config.gpio[1].type = GPIO_TYPE_NATIVE_OUT;
+    config.gpio[1].type = GPIO_TYPE_NATIVE_IN;
     config.gpio[1].index = 12;
     config.gpio[1].value = false;
 
-    config.gpio[2].type = GPIO_TYPE_NATIVE_IN;
+    config.gpio[2].type = GPIO_TYPE_NATIVE_OUT;
     config.gpio[2].index = 13;
     config.gpio[2].value = true;
 
-    config.gpio[3].type = GPIO_TYPE_NATIVE_IN;
+    config.gpio[3].type = GPIO_TYPE_NATIVE_OUT;
     config.gpio[3].index = 14;
     config.gpio[3].value = false;
 
@@ -537,19 +537,19 @@ static void test_send_RP_to_PC_matching(void **state) {
         config.gpio[gpio].value = false;
     }
 
-    config.gpio[0].type = GPIO_TYPE_NATIVE_OUT;
+    config.gpio[0].type = GPIO_TYPE_NATIVE_IN;
     config.gpio[0].index = 11;
     config.gpio[0].value = true;
 
-    config.gpio[1].type = GPIO_TYPE_NATIVE_OUT;
+    config.gpio[1].type = GPIO_TYPE_NATIVE_IN;
     config.gpio[1].index = 12;
     config.gpio[1].value = false;
 
-    config.gpio[2].type = GPIO_TYPE_NATIVE_IN;
+    config.gpio[2].type = GPIO_TYPE_NATIVE_OUT;
     config.gpio[2].index = 13;
     config.gpio[2].value = true;
 
-    config.gpio[3].type = GPIO_TYPE_NATIVE_IN;
+    config.gpio[3].type = GPIO_TYPE_NATIVE_OUT;
     config.gpio[3].index = 14;
     config.gpio[3].value = false;
 

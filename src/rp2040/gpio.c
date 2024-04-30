@@ -96,13 +96,13 @@ void gpio_set_values(const uint8_t bank, uint32_t values) {
     config.gpio_confirmation_pending[bank] = true;
 
     switch(config.gpio[gpio].type) {
-      case GPIO_TYPE_NATIVE_IN_DEBUG:
+      case GPIO_TYPE_NATIVE_OUT_DEBUG:
         printf("DBG GPIO: %u  IO: %u  val: %u\n", gpio, index, new_value);
         // Note: no break.
-      case GPIO_TYPE_NATIVE_IN:
+      case GPIO_TYPE_NATIVE_OUT:
         gpio_local_set_out_pin(index, new_value);
         break;
-      case GPIO_TYPE_I2C_MCP_IN:
+      case GPIO_TYPE_I2C_MCP_OUT:
         gpio_i2c_mcp_set_out_pin(index, address, new_value);
         break;
       default:
@@ -115,7 +115,6 @@ void gpio_set_values(const uint8_t bank, uint32_t values) {
 
 void gpio_local_set_out_pin(uint8_t index, bool new_value) {
   // TODO: Filter on valid native GPIO indexes.
-  printf("gpio_put(%u, %u)\n", index, new_value);
   gpio_put(index, new_value);
 }
 
@@ -211,8 +210,8 @@ void gpio_serialize(struct NWBuffer* tx_buf, size_t* tx_buf_len) {
     get_gpio_config(gpio, &type, &index, &address, &previous_value);
 
     switch(config.gpio[gpio].type) {
-      case GPIO_TYPE_NATIVE_OUT_DEBUG:
-      case GPIO_TYPE_NATIVE_OUT:
+      case GPIO_TYPE_NATIVE_IN_DEBUG:
+      case GPIO_TYPE_NATIVE_IN:
         new_value = gpio_local_get_pin(index);
         if(previous_value != new_value) {
           to_send[bank] = true;
@@ -221,7 +220,7 @@ void gpio_serialize(struct NWBuffer* tx_buf, size_t* tx_buf_len) {
           // Config gets updated on incoming Message_gpio.
         }
         break;
-      case GPIO_TYPE_I2C_MCP_OUT:
+      case GPIO_TYPE_I2C_MCP_IN:
         new_value = gpio_i2c_mcp_get_pin(index, address);
         if(previous_value != new_value) {
           to_send[bank] = true;

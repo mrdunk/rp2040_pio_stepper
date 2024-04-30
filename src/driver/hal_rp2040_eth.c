@@ -30,7 +30,6 @@ typedef struct {
   hal_u32_t* metric_rp_update_len;
   hal_u32_t* metric_missed_packets;
   hal_bit_t* metric_eth_state;
-  hal_bit_t* machine_enable_in;
   hal_bit_t* machine_enable_out;
   hal_bit_t* joint_enable[MAX_JOINT];
   hal_s32_t* joint_gpio_step[MAX_JOINT];
@@ -53,7 +52,9 @@ typedef struct {
   // For IN pins, HAL sets this to the value we want the IO pin set to on the RP.
   // For OUT pins, this is the value the RP pin is reported via the network update.
   hal_bit_t* gpio_data_in[MAX_GPIO];
+  hal_bit_t* gpio_data_in_not[MAX_GPIO];
   hal_bit_t* gpio_data_out[MAX_GPIO];
+  hal_bit_t* gpio_data_out_invert[MAX_GPIO];
   hal_u32_t* gpio_type[MAX_GPIO];
   hal_u32_t* gpio_index[MAX_GPIO];
   hal_u32_t* gpio_address[MAX_GPIO];
@@ -218,15 +219,25 @@ int rtapi_app_main(void)
 
   for(int gpio_num = 0; gpio_num < MAX_GPIO; gpio_num++) {
     /* Export the GPIO */
-    // From PC to RP.
-    if(!init_hal_pin(PIN, HAL_IN, &(port_data_array->gpio_data_in[gpio_num]), component_id, device_num, "gpio", gpio_num, 2, "in")) {
+    // Physical RP2040 input pin.
+    if(!init_hal_pin(PIN, HAL_OUT, &(port_data_array->gpio_data_in[gpio_num]), component_id, device_num, "gpio", gpio_num, 2, "in")) {
       return -1;
     }
+    if(!init_hal_pin(PIN, HAL_OUT, &(port_data_array->gpio_data_in_not[gpio_num]), component_id, device_num, "gpio", gpio_num, 2, "in-not")) {
+      return -1;
+    }
+    *port_data_array->gpio_data_in[gpio_num] = true;
+    *port_data_array->gpio_data_in_not[gpio_num] = false;
 
-    // From RP to PC.
-    if(!init_hal_pin(PIN, HAL_OUT, &(port_data_array->gpio_data_out[gpio_num]), component_id, device_num, "gpio", gpio_num, 2, "out")) {
+    // Physical RP2040 output pin.
+    if(!init_hal_pin(PIN, HAL_IN, &(port_data_array->gpio_data_out[gpio_num]), component_id, device_num, "gpio", gpio_num, 2, "out")) {
       return -1;
     }
+    if(!init_hal_pin(PIN, HAL_IN, &(port_data_array->gpio_data_out_invert[gpio_num]), component_id, device_num, "gpio", gpio_num, 2, "out-invert")) {
+      return -1;
+    }
+    *port_data_array->gpio_data_out[gpio_num] = false;
+    *port_data_array->gpio_data_out_invert[gpio_num] = false;
 
     if(!init_hal_pin(U32, HAL_IN, &(port_data_array->gpio_type[gpio_num]), component_id, device_num, "gpio", gpio_num, 2, "type")) {
       return -1;

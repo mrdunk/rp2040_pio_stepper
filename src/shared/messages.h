@@ -204,11 +204,11 @@ union ReplyAny {
 };
 
 #define GPIO_TYPE_NOT_SET            0
-#define GPIO_TYPE_NATIVE_IN          1
-#define GPIO_TYPE_NATIVE_OUT         2
-#define GPIO_TYPE_NATIVE_IN_DEBUG    3
-#define GPIO_TYPE_NATIVE_OUT_DEBUG   4
-#define GPIO_TYPE_I2C_MCP_IN         5
-#define GPIO_TYPE_I2C_MCP_OUT        6
+#define GPIO_TYPE_NATIVE_OUT         1
+#define GPIO_TYPE_NATIVE_IN          2
+#define GPIO_TYPE_NATIVE_OUT_DEBUG   3
+#define GPIO_TYPE_NATIVE_IN_DEBUG    4
+#define GPIO_TYPE_I2C_MCP_OUT         5
+#define GPIO_TYPE_I2C_MCP_IN        6
 
 #endif  // UPDATE_TYPES__H

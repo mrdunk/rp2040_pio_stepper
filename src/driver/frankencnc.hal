@@ -129,18 +129,18 @@ net spindle-speed-in spindle.0.speed-in <= rp2040_eth.0.spindle.0.speed-out
 net spindle-at-speed spindle.0.at-speed <= rp2040_eth.0.spindle.0.at-speed
 
 # GPIO
-setp rp2040_eth.0.gpio.00.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_IN_DEBUG
+setp rp2040_eth.0.gpio.00.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_OUT_DEBUG
 setp rp2040_eth.0.gpio.00.index     6
 setp rp2040_eth.0.gpio.00.in        0
 
-setp rp2040_eth.0.gpio.01.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_IN_DEBUG
+setp rp2040_eth.0.gpio.01.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_OUT_DEBUG
 setp rp2040_eth.0.gpio.01.index     7
 setp rp2040_eth.0.gpio.01.in        0
 
-setp rp2040_eth.0.gpio.02.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_OUT_DEBUG
+setp rp2040_eth.0.gpio.02.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_IN_DEBUG
 setp rp2040_eth.0.gpio.02.index     8
 
-setp rp2040_eth.0.gpio.03.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_OUT_DEBUG
+setp rp2040_eth.0.gpio.03.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_IN_DEBUG
 setp rp2040_eth.0.gpio.03.index     9
 
 # Modbus

@@ -246,15 +246,15 @@ uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
 
     bool current_value = false;
     switch(*data->gpio_type[gpio]) {
-      case GPIO_TYPE_NATIVE_OUT_DEBUG:
-      case GPIO_TYPE_NATIVE_OUT:
-      case GPIO_TYPE_I2C_MCP_OUT:
-        current_value = *data->gpio_data_out[gpio];
-        break;
-      case GPIO_TYPE_NATIVE_IN:
       case GPIO_TYPE_NATIVE_IN_DEBUG:
+      case GPIO_TYPE_NATIVE_IN:
       case GPIO_TYPE_I2C_MCP_IN:
         current_value = *data->gpio_data_in[gpio];
+        break;
+      case GPIO_TYPE_NATIVE_OUT:
+      case GPIO_TYPE_NATIVE_OUT_DEBUG:
+      case GPIO_TYPE_I2C_MCP_OUT:
+        current_value = *data->gpio_data_out_invert[gpio] ? ! *data->gpio_data_out[gpio] : *data->gpio_data_out[gpio];
         break;
       default:
         break;
@@ -265,22 +265,23 @@ uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
 
     if(current_value != received_value) {
       switch(*data->gpio_type[gpio]) {
-        case GPIO_TYPE_NATIVE_OUT_DEBUG:
+        case GPIO_TYPE_NATIVE_IN_DEBUG:
           printf("DBG: GPIO OUT: %u  val: %u\n", gpio, current_value);
           // Note: no break here.
-        case GPIO_TYPE_NATIVE_OUT:
-        case GPIO_TYPE_I2C_MCP_OUT:
+        case GPIO_TYPE_NATIVE_IN:
+        case GPIO_TYPE_I2C_MCP_IN:
           // Network update to apply.
-          *data->gpio_data_out[gpio] = received_value;
+          *data->gpio_data_in[gpio] = received_value;
+          *data->gpio_data_in_not[gpio] = !received_value;
           current_value = received_value;
           // Confirmation of HAL update to send on network.
           confirmation_pending[bank] = true;
           break;
-        case GPIO_TYPE_NATIVE_IN_DEBUG:
+        case GPIO_TYPE_NATIVE_OUT_DEBUG:
           printf("DBG: GPIO IN: %u  val: %u\n", gpio, current_value);
           // Note: no break here.
-        case GPIO_TYPE_NATIVE_IN:
-        case GPIO_TYPE_I2C_MCP_IN:
+        case GPIO_TYPE_NATIVE_OUT:
+        case GPIO_TYPE_I2C_MCP_OUT:
           // HAL update to send on network.
           confirmation_pending[bank] = true;
           break;
