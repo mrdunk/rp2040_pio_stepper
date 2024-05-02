@@ -97,7 +97,7 @@ void gpio_set_values(const uint8_t bank, uint32_t values) {
 
     switch(config.gpio[gpio].type) {
       case GPIO_TYPE_NATIVE_OUT_DEBUG:
-        printf("DBG GPIO: %u  IO: %u  val: %u\n", gpio, index, new_value);
+        printf("DBG GPIO OUT: %u  IO: %u  val: %u\n", gpio, index, new_value);
         // Note: no break.
       case GPIO_TYPE_NATIVE_OUT:
         gpio_local_set_out_pin(index, new_value);

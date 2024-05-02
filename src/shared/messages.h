@@ -208,7 +208,7 @@ union ReplyAny {
 #define GPIO_TYPE_NATIVE_IN          2
 #define GPIO_TYPE_NATIVE_OUT_DEBUG   3
 #define GPIO_TYPE_NATIVE_IN_DEBUG    4
-#define GPIO_TYPE_I2C_MCP_OUT         5
-#define GPIO_TYPE_I2C_MCP_IN        6
+#define GPIO_TYPE_I2C_MCP_OUT        5
+#define GPIO_TYPE_I2C_MCP_IN         6
 
 #endif  // UPDATE_TYPES__H

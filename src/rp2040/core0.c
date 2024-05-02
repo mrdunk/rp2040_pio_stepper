@@ -306,7 +306,8 @@ bool unpack_gpio_config(
   uint8_t index = message->index;
   uint8_t address = message->address;
 
-  printf("%u Configuring gpio: %u\t%u\n", *received_count, gpio_type, gpio_count);
+  printf("Configuring gpio. type: %u\tindex: %u\taddress: %u\tcount: %u\n",
+      gpio_type, index, address, gpio_count);
 
   config.gpio[gpio_count].type = gpio_type;
   config.gpio[gpio_count].index = index;

@@ -266,7 +266,7 @@ uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
     if(current_value != received_value) {
       switch(*data->gpio_type[gpio]) {
         case GPIO_TYPE_NATIVE_IN_DEBUG:
-          printf("DBG: GPIO OUT: %u  val: %u\n", gpio, current_value);
+          printf("DBG: GPIO IN: %u  val: %u\n", gpio, current_value);
           // Note: no break here.
         case GPIO_TYPE_NATIVE_IN:
         case GPIO_TYPE_I2C_MCP_IN:
@@ -278,7 +278,7 @@ uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
           confirmation_pending[bank] = true;
           break;
         case GPIO_TYPE_NATIVE_OUT_DEBUG:
-          printf("DBG: GPIO IN: %u  val: %u\n", gpio, current_value);
+          printf("DBG: GPIO OUT: %u  val: %u\n", gpio, current_value);
           // Note: no break here.
         case GPIO_TYPE_NATIVE_OUT:
         case GPIO_TYPE_I2C_MCP_OUT:
