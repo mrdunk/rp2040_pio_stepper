@@ -33,11 +33,11 @@ void recover_clock() {
   static struct Ring_buf_uint_ave time_average_data_1;
   static struct Ring_buf_uint_ave time_average_data_2;
   static size_t time_last = 0;
-  uint32_t restart_at = 0;
+  uint64_t restart_at = 0;
   uint32_t last_ave_period_us = 0;
 
   // Record the average length of time between packets.
-  size_t time_now = time_us_64();
+  uint64_t time_now = time_us_64();
   uint32_t ave_period_us = ring_buf_uint_ave(&period_average_data, time_now - time_last);
   time_last = time_now;
 
