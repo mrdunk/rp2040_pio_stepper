@@ -10,6 +10,7 @@
 #endif  // BUILD_TESTS
 
 #include "modbus.h"
+#include "hardware/irq.h"
 
 uint16_t crc16_table[256];
 
@@ -41,14 +42,42 @@ uint16_t modbus_crc16(const uint8_t *data, uint8_t size) {
   return crc16;
 }
 
+uint8_t modbus_write = 0;
+
+void modbus_send_chars(void) {
+  while(modbus_write < modbus_length && uart_is_writable(MODBUS_UART)) {
+    uart_putc(MODBUS_UART, modbus_command[modbus_write++]);
+  }
+  uart_set_irq_enables(MODBUS_UART, false, modbus_write < modbus_length);
+}
+
 void modbus_transmit(void) {
   gpio_put(MODBUS_DIR_PIN, 1);
   uint16_t crc16 = modbus_crc16((const uint8_t *)modbus_command, modbus_length);
   uart_tx_wait_blocking(MODBUS_UART);
   modbus_command[modbus_length++] = crc16 & 0xFF;
   modbus_command[modbus_length++] = crc16 >> 8;
-  uart_write_blocking(MODBUS_UART, (const uint8_t *)modbus_command, modbus_length);
+  modbus_write = 0;
+  modbus_send_chars();
   modbus_outstanding = 1;
+}
+
+int modbus_check_receive(void) {
+  vfd.cycle++;
+  // Ready to process data
+  if (modbus_pause <= 0)
+    return 1;
+  // Still sending
+  if (uart_get_hw(MODBUS_UART)->fr & UART_UARTFR_BUSY_BITS)
+    return 0;
+  // Receiving data into UART FIFO
+  gpio_put(MODBUS_DIR_PIN, 0);
+  modbus_pause--;
+  return 0;
+}
+
+void modbus_uart_tx(void) {
+  modbus_send_chars();
 }
 
 void modbus_init(void) {
@@ -62,6 +91,7 @@ void modbus_init(void) {
   vfd.req_freq_x10 = 0;
   memset(&vfd.stats, 0, sizeof(vfd.stats));
   modbus_cur_bitrate = 0;
+  irq_set_exclusive_handler(MODBUS_UART_IRQ, modbus_uart_tx);
 }
 
 int modbus_rtu_encode(uint8_t address, uint8_t function_code, uint16_t v1, uint16_t v2, const uint8_t *data, uint8_t size)
@@ -80,7 +110,7 @@ int modbus_rtu_encode(uint8_t address, uint8_t function_code, uint16_t v1, uint1
       size--;
     }
   }
-  modbus_pause = 200;
+  modbus_pause = vfd_config.type == MODBUS_TYPE_WEIKEN ? 100 : 50;
   return wrptr - modbus_command;
 }
 
@@ -101,11 +131,13 @@ static inline void modbus_encode_twoints(uint8_t address, uint8_t command, uint1
 void modbus_read_holding_registers(uint8_t address, uint16_t reg_to_read, uint16_t num_regs)
 {
   modbus_encode_twoints(address, 3, reg_to_read, num_regs);
+  modbus_transmit();
 }
 
 void modbus_write_holding_register(uint8_t address, uint16_t reg_to_write, uint16_t value)
 {
   modbus_encode_twoints(address, 6, reg_to_write, value);
+  modbus_transmit();
 }
 
 int modbus_check_config(void)
