@@ -13,8 +13,10 @@
 
 #include "core1.h"
 #include "config.h"
+#include "i2c.h"
 #include "pio.h"
 
+struct i2c_gpio_state i2c_gpio;
 
 void update_all_joint() {
   static uint32_t metric = 0;
@@ -34,6 +36,7 @@ void update_all_joint() {
     if(dt > update_period_us * MAX_MISSED_PACKET) {
       break;
     }
+    i2c_gpio_poll(&i2c_gpio);
   }
   if(tick == last_tick) {
     // Didn't receive tick semaphore.
@@ -68,6 +71,7 @@ void update_all_joint() {
   for(uint8_t joint = 0; joint < MAX_JOINT; joint++) {
     do_steps(joint, update_period_us);
   }
+  i2c_gpio_poll(&i2c_gpio);
 }
 
 void core1_main() {
@@ -78,6 +82,7 @@ void core1_main() {
 
 void init_core1() {
   printf("core0: Initializing.\n");
+  i2c_gpio_init(&i2c_gpio);
 
   if(MAX_JOINT > 4) {
     printf("ERROR: Maximum joint count: 4. Configured: %u\n", MAX_JOINT);

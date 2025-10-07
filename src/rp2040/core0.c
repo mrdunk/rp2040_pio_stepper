@@ -6,6 +6,7 @@
 #include "messages.h"
 #include "buffer.h"
 #include "gpio.h"
+#include "i2c.h"
 #include "modbus.h"
 
 
@@ -306,12 +307,12 @@ bool unpack_gpio_config(
   uint8_t index = message->index;
   uint8_t address = message->address;
 
-  printf("Configuring gpio. type: %u\tindex: %u\taddress: %u\tcount: %u\n",
-      gpio_type, index, address, gpio_count);
+  printf("%u Configuring gpio: %u\t%u\n", *received_count, gpio_type, gpio_count);
 
-  config.gpio[gpio_count].type = gpio_type;
-  config.gpio[gpio_count].index = index;
-  config.gpio[gpio_count].address = address;
+  volatile struct ConfigGPIO *cfg = &config.gpio[gpio_count];
+  cfg->type = gpio_type;
+  cfg->index = index;
+  cfg->address = address;
 
   switch(gpio_type) {
     case GPIO_TYPE_NATIVE_OUT:
@@ -331,6 +332,16 @@ bool unpack_gpio_config(
       gpio_set_dir(index, GPIO_IN);
       gpio_pull_up(index);
       break;
+    case GPIO_TYPE_I2C_MCP_OUT:
+    case GPIO_TYPE_I2C_MCP_IN:
+    case GPIO_TYPE_I2C_MCP_IN_PULLUP:
+    {
+      int i2c = gpio_i2c_mcp_alloc(address);
+      if (i2c >= 0) {
+        i2c_gpio_set_pin_config(&i2c_gpio, i2c, index, gpio_type);
+      }
+      break;
+    }
     default:
       break;
   }
