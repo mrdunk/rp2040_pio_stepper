@@ -339,6 +339,8 @@ bool unpack_gpio_config(
       int i2c = gpio_i2c_mcp_alloc(address);
       if (i2c >= 0) {
         i2c_gpio_set_pin_config(&i2c_gpio, i2c, index, gpio_type);
+      } else {
+        printf("Error: Too many I2C addresses\n");
       }
       break;
     }

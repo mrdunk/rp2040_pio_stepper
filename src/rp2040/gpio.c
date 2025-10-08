@@ -20,7 +20,6 @@
 //uint32_t gpio_i2c_mcp_indexes[MAX_I2C_MCP] = {0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff};
 uint32_t gpio_i2c_mcp_indexes[MAX_I2C_MCP] = {0, 0, 0, 0};
 uint8_t gpio_i2c_mcp_addresses[MAX_I2C_MCP] = {0xff, 0xff, 0xff, 0xff};
-uint8_t gpio_last_type[32 * MAX_I2C_MCP];
 
 void update_gpio_config(
     const uint8_t gpio,
@@ -111,7 +110,6 @@ void gpio_set_values(const uint8_t bank, uint32_t values) {
       default:
         break;
     }
-    gpio_last_type[gpio] = type;
 
     update_gpio_config(gpio, NULL, NULL, NULL, &new_value);
   }
@@ -228,7 +226,6 @@ void gpio_serialize(struct NWBuffer* tx_buf, size_t* tx_buf_len) {
         new_value = previous_value;
         break;
     }
-    gpio_last_type[gpio] = type;
 
     values[bank] |= (new_value << (gpio % 32));
   }
