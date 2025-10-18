@@ -33,11 +33,11 @@ void recover_clock() {
   static struct Ring_buf_uint_ave time_average_data_1;
   static struct Ring_buf_uint_ave time_average_data_2;
   static size_t time_last = 0;
-  uint32_t restart_at = 0;
+  uint64_t restart_at = 0;
   uint32_t last_ave_period_us = 0;
 
   // Record the average length of time between packets.
-  size_t time_now = time_us_64();
+  uint64_t time_now = time_us_64();
   uint32_t ave_period_us = ring_buf_uint_ave(&period_average_data, time_now - time_last);
   time_last = time_now;
 
@@ -306,23 +306,25 @@ bool unpack_gpio_config(
   uint8_t index = message->index;
   uint8_t address = message->address;
 
-  printf("%u Configuring gpio: %u\t%u\n", *received_count, gpio_type, gpio_count);
+  printf("Configuring gpio. type: %u\tindex: %u\taddress: %u\tcount: %u\n",
+      gpio_type, index, address, gpio_count);
 
   config.gpio[gpio_count].type = gpio_type;
   config.gpio[gpio_count].index = index;
   config.gpio[gpio_count].address = address;
 
   switch(gpio_type) {
-    case GPIO_TYPE_NATIVE_IN:
-    case GPIO_TYPE_NATIVE_IN_DEBUG:
-      ;
+    case GPIO_TYPE_NATIVE_OUT:
+    case GPIO_TYPE_NATIVE_OUT_DEBUG:
+      ;  // This semicolon is required. It's a C syntax thing related to multiple
+         // `case` statments at the start.
       // Remember HAL's definition of IN and OUT are opposite of RPs.
       printf("Setting RP native IO to RP OUT: %u\n", index);
       gpio_init(index);
       gpio_set_dir(index, GPIO_OUT);
       break;
-    case GPIO_TYPE_NATIVE_OUT:
-    case GPIO_TYPE_NATIVE_OUT_DEBUG:
+    case GPIO_TYPE_NATIVE_IN:
+    case GPIO_TYPE_NATIVE_IN_DEBUG:
       // Remember HAL's definition of IN and OUT are opposite of RPs.
       printf("Setting RP native IO to RP IN: %u\n", index);
       gpio_init(index);
