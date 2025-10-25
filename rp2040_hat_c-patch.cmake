@@ -12,7 +12,6 @@ message("RP2040-HAT-C patch utils found")
 
 set(RP2040_HAT_C_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 set(IOLIBRARY_DRIVER_SRC_DIR "${RP2040_HAT_C_SRC_DIR}/libraries/ioLibrary_Driver")
-set(MBEDTLS_SRC_DIR "${RP2040_HAT_C_SRC_DIR}/libraries/mbedtls")
 set(PICO_EXTRAS_SRC_DIR "${RP2040_HAT_C_SRC_DIR}/libraries/pico-extras")
 set(PICO_SDK_SRC_DIR "${RP2040_HAT_C_SRC_DIR}/libraries/pico-sdk")
 set(PICO_SDK_TINYUSB_SRC_DIR "${RP2040_HAT_C_SRC_DIR}/libraries/lib/tinyusb")
@@ -24,14 +23,6 @@ if(EXISTS "${IOLIBRARY_DRIVER_SRC_DIR}/.git")
 	execute_process(COMMAND ${GIT_EXECUTABLE} -C ${IOLIBRARY_DRIVER_SRC_DIR} clean -fdx)
 	execute_process(COMMAND ${GIT_EXECUTABLE} -C ${IOLIBRARY_DRIVER_SRC_DIR} reset --hard)
 	message("ioLibrary_Driver cleaned")
-endif()
-
-# Delete untracked files in mbedtls
-if(EXISTS "${MBEDTLS_SRC_DIR}/.git")
-	message("cleaning mbedtls...")
-	execute_process(COMMAND ${GIT_EXECUTABLE} -C ${MBEDTLS_SRC_DIR} clean -fdx)
-	execute_process(COMMAND ${GIT_EXECUTABLE} -C ${MBEDTLS_SRC_DIR} reset --hard)
-	message("mbedtls cleaned")
 endif()
 
 # Delete untracked files in pico-extras

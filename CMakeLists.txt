@@ -4,29 +4,42 @@ set(CMAKE_CXX_STANDARD 17)
 
 include_directories (./src/shared/)
 
+# Set RP chip version
 
-OPTION(BUILD_RP "Build all examples" OFF)
+
+if(NOT DEFINED PICO_PLATFORM)
+    set(PICO_BOARD pico)
+#   set(PICO_BOARD pico2)
+endif()
+
+# Set ethernet chip
+
+
+if(NOT DEFINED WIZNET_CHIP)
+#   set(WIZNET_CHIP W5100S)
+    set(WIZNET_CHIP W5500)
+endif()
+
+####################################################################################
+
+OPTION(BUILD_RP "Build CNC firmware for RP2040/RP2350" ON)
 if(BUILD_RP)
     # Pull in SDK (must be before project)
     if(NOT DEFINED PICO_SDK_PATH)
         set(PICO_SDK_PATH ${CMAKE_SOURCE_DIR}/libraries/pico-sdk)
-        message(STATUS "PICO_SDK_PATH = ${PICO_SDK_PATH}")
     endif()
 
     if(NOT DEFINED WIZNET_DIR)
         set(WIZNET_DIR ${CMAKE_SOURCE_DIR}/libraries/ioLibrary_Driver)
-        message(STATUS "WIZNET_DIR = ${WIZNET_DIR}")
-    endif()
-
-    if(NOT DEFINED MBEDTLS_DIR)
-        set(MBEDTLS_DIR ${CMAKE_SOURCE_DIR}/libraries/mbedtls)
-        message(STATUS "MBEDTLS_DIR = ${MBEDTLS_DIR}")
     endif()
 
     if(NOT DEFINED PORT_DIR)
         set(PORT_DIR ${CMAKE_SOURCE_DIR}/port)
-        message(STATUS "PORT_DIR = ${PORT_DIR}")
     endif()
+
+    message(STATUS "PICO_SDK_PATH = ${PICO_SDK_PATH}")
+    message(STATUS "WIZNET_DIR = ${WIZNET_DIR}")
+    message(STATUS "PORT_DIR = ${PORT_DIR}")
 
     include(rp2040_hat_c-patch.cmake)
     include(pico_sdk_import.cmake)
@@ -41,9 +54,6 @@ if(BUILD_RP)
     # Initialize the SDK
     pico_sdk_init()
 
-    # Set ethernet chip
-    set(WIZNET_CHIP W5500)
-
     if(${WIZNET_CHIP} STREQUAL W5100S)
         add_definitions(-D_WIZCHIP_=W5100S)
     elseif(${WIZNET_CHIP} STREQUAL W5500)
@@ -52,21 +62,20 @@ if(BUILD_RP)
         message(FATAL_ERROR "WIZNET_CHIP is wrong = ${WIZNET_CHIP}")
     endif()
 
+    message(STATUS "*************************************************")
+    message(STATUS "Hardware target:")
+    message(STATUS "")
+    message(STATUS "PICO_BOARD = ${PICO_BOARD}")
+    message(STATUS "PICO_PLATFORM = ${PICO_PLATFORM}")
     message(STATUS "WIZNET_CHIP = ${WIZNET_CHIP}")
+    message(STATUS "*************************************************")
 
-
-    # Turn off mbedtls test mode
-    set(ENABLE_PROGRAMS OFF CACHE BOOL "Build mbedtls programs")
-    set(ENABLE_TESTING OFF CACHE BOOL "Build mbedtls testing")
-    add_definitions(-DMBEDTLS_CONFIG_FILE="${PORT_DIR}/mbedtls/inc/ssl_config.h")
-    add_definitions(-DSET_TRUSTED_CERT_IN_SAMPLES)
 
     # Code to include:
     add_subdirectory(src/rp2040)
 
     # Add libraries in subdirectories
     add_subdirectory(${CMAKE_SOURCE_DIR}/libraries)
-    add_subdirectory(${MBEDTLS_DIR})
     add_subdirectory(${PORT_DIR})
 endif()
 
