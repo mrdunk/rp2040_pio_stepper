@@ -56,8 +56,7 @@ static void core1_tick(void) {
   if (linuxcnc_restart_detected) {
     linuxcnc_restart_detected = false;
     handle_network_timeout();
-  }
-  if (!check_network_health()) {
+  } else if (!check_network_health()) {
     handle_network_timeout();
   } else {
     handle_network_recovery();
