@@ -9,6 +9,6 @@
 void init_pio(const uint32_t joint);
 
 /* Generate step counts and send to PIOs. */
-uint8_t do_steps(const uint8_t joint, const uint32_t update_time_us);
+uint8_t do_steps(const uint8_t joint);
 
 #endif  // PIO__H

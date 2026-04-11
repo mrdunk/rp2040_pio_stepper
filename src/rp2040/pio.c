@@ -164,7 +164,8 @@ double get_velocity(
 }
 
 /* Generate step counts and send to PIOs. */
-uint8_t do_steps(const uint8_t joint, const uint32_t update_period_us) {
+uint8_t do_steps(const uint8_t joint) {
+  uint32_t update_period_us = get_period();
   static uint32_t failcount = 0;
   static uint32_t count = 0;
   static int32_t last_pos_requested[MAX_JOINT] = {0, 0, 0, 0};
