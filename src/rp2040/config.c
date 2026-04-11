@@ -30,6 +30,7 @@ volatile bool linuxcnc_restart_detected = false;
 volatile struct ConfigGlobal config = {
   .last_update_id = 0,
   .last_update_time = 0,
+  .last_id_diff = 0,
   .update_time_us = 1000,    // 1000us.
   .pio_io_configured = false,
   .joint = {
@@ -149,6 +150,8 @@ uint32_t get_period() {
 }
 
 int32_t get_last_id_diff(void) {
+  // TODO: consider whether mtx_top is needed here (see get_period()).
+  // last_id_diff is 32-bit aligned, Core0-only; M0+ read is atomic.
   return config.last_id_diff;
 }
 

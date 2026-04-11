@@ -20,6 +20,10 @@
 // Semaphore for synchronizing cores.
 extern volatile uint32_t tick;
 extern volatile uint32_t last_packet_tick;
+/* Written by Core0 in update_packet_metrics() when id_diff < 0 (LinuxCNC
+ * restarted). Core1 reads it each tick, calls handle_network_timeout() to
+ * disable joints, then clears it. Single-writer/single-reader — same
+ * atomic pattern as last_packet_tick. No mutex needed. */
 extern volatile bool linuxcnc_restart_detected;
 
 /* Configuration object for an joint.
