@@ -26,6 +26,7 @@ target_sources(
   network.c
   core0.c
   core1.c
+  timing.c
   modbus.c
   modbus_fuling.c
   modbus_huanyang.c

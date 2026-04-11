@@ -59,7 +59,8 @@ void update_all_joint() {
     min_dt = dt;
   }
   if(count++ % 10000 == 0) {
-    printf("%i\t%i\n", min_dt - 1000, max_dt - 1000);
+    printf("%i\t%i\n", (int32_t)min_dt - (int32_t)update_period_us,
+                       (int32_t)max_dt - (int32_t)update_period_us);
     max_dt = 0;
     min_dt = 10000;
   }
