@@ -26,6 +26,8 @@ void core1_main(void);
 #ifdef BUILD_TESTS
 /* Reset all static state. Call at the start of each test. */
 void core1_reset_for_test(void);
+/* Run exactly one iteration of the core1_main loop body. */
+void core1_run_once_for_test(void);
 #endif
 
 #endif  // CORE1__H

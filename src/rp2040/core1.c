@@ -51,17 +51,31 @@ void step_all_joints(void) {
   }
 }
 
-void core1_main(void) {
-  while (1) {
-    wait_for_tick();
-    if (!check_network_health()) {
-      handle_network_timeout();
-    } else {
-      handle_network_recovery();
-      step_all_joints();
-    }
+static void core1_tick(void) {
+  wait_for_tick();
+  if (linuxcnc_restart_detected) {
+    linuxcnc_restart_detected = false;
+    handle_network_timeout();
+  }
+  if (!check_network_health()) {
+    handle_network_timeout();
+  } else {
+    handle_network_recovery();
+    step_all_joints();
   }
 }
+
+void core1_main(void) {
+  while (1) {
+    core1_tick();
+  }
+}
+
+#ifdef BUILD_TESTS
+void core1_run_once_for_test(void) {
+  core1_tick();
+}
+#endif
 
 void init_core1(void) {
   printf("core0: Initializing.\n");

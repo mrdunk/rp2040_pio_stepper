@@ -33,10 +33,11 @@ uint8_t __wrap_do_steps(const uint8_t joint) {
  * tick and last_packet_tick are extern from config.h — write directly. */
 static int test_setup(void **state) {
     (void)state;
-    tick                     = 0;
-    last_packet_tick         = 0;
-    disable_joint_call_count = 0;
-    do_steps_call_count      = 0;
+    tick                        = 0;
+    last_packet_tick            = 0;
+    linuxcnc_restart_detected   = false;
+    disable_joint_call_count    = 0;
+    do_steps_call_count         = 0;
     core1_reset_for_test();
     return 0;
 }
@@ -106,6 +107,19 @@ static void test_step_all_joints_calls_do_steps_for_each_joint(void **state) {
     assert_int_equal(MAX_JOINT, do_steps_call_count);
 }
 
+/* core1_main loop: when linuxcnc_restart_detected is set, one iteration must
+ * disable all joints and clear the flag. last_packet_tick is set equal to tick
+ * so check_network_health() returns healthy — restart detection fires first. */
+static void test_core1_disables_joints_on_linuxcnc_restart(void **state) {
+    (void)state;
+    linuxcnc_restart_detected = true;
+    tick             = 1;   /* tick (1) != last_tick (0) so wait_for_tick() returns */
+    last_packet_tick = 1;   /* network appears healthy; restart flag should fire first */
+    core1_run_once_for_test();
+    assert_int_equal(MAX_JOINT, disable_joint_call_count);
+    assert_false(linuxcnc_restart_detected);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_wait_for_tick_returns_when_tick_changed, test_setup),
@@ -116,6 +130,7 @@ int main(void) {
         cmocka_unit_test_setup(test_handle_network_timeout_disables_once_per_outage, test_setup),
         cmocka_unit_test_setup(test_handle_network_recovery_re_arms_timeout,         test_setup),
         cmocka_unit_test_setup(test_step_all_joints_calls_do_steps_for_each_joint,   test_setup),
+        cmocka_unit_test_setup(test_core1_disables_joints_on_linuxcnc_restart,       test_setup),
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);
