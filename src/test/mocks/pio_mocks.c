@@ -27,5 +27,3 @@ void pio_sm_put(size_t, size_t pio, size_t sm) {}
 int pio_sm_is_tx_fifo_empty(size_t pio, size_t sm) {return 0;}
 
 size_t pio_sm_get_rx_fifo_level(size_t pio, size_t sm) {return 1;}
-
-void multicore_launch_core1(void(*entry)(void)) {}
