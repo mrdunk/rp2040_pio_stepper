@@ -46,6 +46,14 @@ bool __wrap_cancel_repeating_timer(repeating_timer_t *timer) {
     return true;
 }
 
+/* Configurable id_diff mock. Default is 1 (normal single-packet arrival).
+ * Tests that exercise id_diff != 1 set mock_id_diff directly. */
+static int32_t mock_id_diff = 1;
+
+int32_t __wrap_get_last_id_diff(void) {
+    return mock_id_diff;
+}
+
 static int      update_period_call_count = 0;
 static uint32_t last_update_period_arg   = 0;
 static uint32_t min_update_period_arg    = UINT32_MAX;
@@ -69,6 +77,7 @@ static int setup(void **state) {
     tick                     = 0;
     captured_callback        = NULL;
     captured_timer_delay     = 0;
+    mock_id_diff             = 1;
     timing_reset_for_test();
     return 0;
 }
@@ -207,6 +216,99 @@ static void test_recover_clock__erratic_packets_stay_bounded(void **state) {
     assert_true(max_update_period_arg <= 1005);
 }
 
+/* ---- EMA id_diff normalisation tests ---- */
+
+/* When a packet arrives 2000 µs late because one slot was missed (id_diff=2),
+ * the normalized sample is 2000/2=1000 µs and the EMA must not change.
+ * Strategy: after seed, call recover_clock() once with step=2000 and id_diff=1
+ * to flush the one-call lag (sample=1000 µs, EMA stable), then switch to
+ * id_diff=2 and call again — now sample=2000 µs, normalized=1000 µs. */
+static void test_recover_clock__missed_packet_does_not_distort_ema(void **state) {
+    (void) state;
+    seed_at_1000us();
+
+    /* Flush the lag carry-over with a normal id_diff=1, step=2000. */
+    mock_time_step = 2000;
+    mock_id_diff   = 1;
+    recover_clock();     /* sample=1000 µs (lag), EMA stays at 1000 */
+
+    /* Now the inflated gap: sample=2000 µs, id_diff=2, normalized=1000 µs. */
+    int count_before = update_period_call_count;
+    mock_id_diff = 2;
+    recover_clock();     /* sample=2000 µs / 2 = 1000 µs → EMA unchanged */
+
+    assert_int_equal(count_before, update_period_call_count);
+}
+
+/* When 50 packets are missed, time gap=50000 µs, id_diff=50.
+ * Normalized sample=1000 µs → EMA must not change. */
+static void test_recover_clock__large_gap_normalizes_correctly(void **state) {
+    (void) state;
+    seed_at_1000us();
+
+    /* Flush the lag carry-over with id_diff=1, step=50000. */
+    mock_time_step = 50000;
+    mock_id_diff   = 1;
+    recover_clock();     /* sample=1000 µs (lag), EMA stays at 1000 */
+
+    /* Now the 50-packet gap: sample=50000 µs / 50 = 1000 µs → EMA unchanged. */
+    int count_before = update_period_call_count;
+    mock_id_diff = 50;
+    recover_clock();
+
+    assert_int_equal(count_before, update_period_call_count);
+}
+
+/* id_diff=0 must cause the EMA update to be skipped entirely.
+ * A very large time step would distort the EMA if the guard were absent. */
+static void test_recover_clock__skips_ema_on_zero_id_diff(void **state) {
+    (void) state;
+    seed_at_1000us();
+
+    int count_before   = update_period_call_count;
+    mock_id_diff       = 0;
+    mock_time_step     = 5000;
+    recover_clock();   /* EMA update skipped — count must not change */
+    recover_clock();   /* second call with same large step — still skipped */
+
+    assert_int_equal(count_before, update_period_call_count);
+}
+
+/* Negative id_diff (e.g. LinuxCNC restart wrapping the sequence counter) must
+ * also cause the EMA update to be skipped, protecting against huge normalized
+ * samples being fed into the accumulator.  After the guard fires, a second
+ * skipped call flushes the time gap (resetting time_last), then normal packets
+ * at 1000 µs leave the EMA undisturbed.
+ *
+ * Mock timing note: the call with step=5000000 advances mock_time by 5000000
+ * but time_last is set to the *returned* time (before the increment).  A second
+ * skipped call consumes that gap so the subsequent normal sample is small. */
+static void test_recover_clock__skips_ema_on_negative_id_diff(void **state) {
+    (void) state;
+    seed_at_1000us();
+
+    int count_before = update_period_call_count;
+
+    /* First skipped call: time gap of 5 seconds (simulates restart). */
+    mock_id_diff  = -50000;
+    mock_time_step = 5000000;
+    recover_clock();   /* EMA update skipped */
+    assert_int_equal(count_before, update_period_call_count);
+
+    /* Second skipped call at normal step: advances time_last to near mock_time
+     * so the subsequent normal sample is ≈ 1000 µs, not 5 seconds. */
+    mock_time_step = 1000;
+    recover_clock();   /* EMA update still skipped */
+    assert_int_equal(count_before, update_period_call_count);
+
+    /* Normal packet after recovery — the gap is now consumed, sample ≈ 1000 µs.
+     * EMA stays at 1000 µs so the timer period does not change. */
+    mock_id_diff   = 1;
+    mock_time_step = 1000;
+    recover_clock();
+    assert_int_equal(count_before, update_period_call_count);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_timing_init__registers_callback, setup),
@@ -218,6 +320,10 @@ int main(void) {
         cmocka_unit_test_setup(test_recover_clock__early_packets_converge, setup),
         cmocka_unit_test_setup(test_recover_clock__late_packets_converge, setup),
         cmocka_unit_test_setup(test_recover_clock__erratic_packets_stay_bounded, setup),
+        cmocka_unit_test_setup(test_recover_clock__missed_packet_does_not_distort_ema, setup),
+        cmocka_unit_test_setup(test_recover_clock__large_gap_normalizes_correctly, setup),
+        cmocka_unit_test_setup(test_recover_clock__skips_ema_on_zero_id_diff, setup),
+        cmocka_unit_test_setup(test_recover_clock__skips_ema_on_negative_id_diff, setup),
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);
