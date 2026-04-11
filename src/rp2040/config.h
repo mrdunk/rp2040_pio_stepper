@@ -19,6 +19,7 @@
 
 // Semaphore for synchronizing cores.
 extern volatile uint32_t tick;
+extern volatile uint32_t last_packet_tick;
 
 /* Configuration object for an joint.
  * This is the format for the global config that is shared between cores. */
