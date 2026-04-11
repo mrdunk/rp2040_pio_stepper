@@ -237,6 +237,7 @@ target_link_libraries(
   -Wl,--wrap,update_period
   -Wl,--wrap,add_repeating_timer_us
   -Wl,--wrap,cancel_repeating_timer
+  -Wl,--wrap,get_last_id_diff
   )
 add_test(
   timingTest

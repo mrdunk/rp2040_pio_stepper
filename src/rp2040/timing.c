@@ -44,10 +44,19 @@ void recover_clock(void) {
     uint64_t time_now = time_us_64();
 
     if(time_initialized) {
-        uint32_t sample = (uint32_t)(time_now - time_last);
-        /* EMA: alpha = 1/64.  Accumulator stores ave × 64 so that sub-µs
-         * drift accumulates before changing the integer output. */
-        ave_period_us_x64 = ave_period_us_x64 - (ave_period_us_x64 >> 6) + sample;
+        uint32_t sample  = (uint32_t)(time_now - time_last);
+        int32_t  id_diff = get_last_id_diff();
+        if(id_diff >= 1) {
+            /* Normalise by id_diff so that missed packets (id_diff > 1) do not
+             * inflate the EMA.  When id_diff == 1 (normal) this is a no-op.
+             * id_diff <= 0 means LinuxCNC restarted or first packet — skip the
+             * EMA update entirely and keep the current timer period. */
+            uint32_t normalized = sample / (uint32_t)id_diff;
+            /* EMA: alpha = 1/64.  Accumulator stores ave × 64 so that sub-µs
+             * drift accumulates before changing the integer output. */
+            ave_period_us_x64 = ave_period_us_x64 - (ave_period_us_x64 >> 6) + normalized;
+        }
+        /* else: no reliable timing data — keep current EMA */
     }
     time_last        = time_now;
     time_initialized = true;
