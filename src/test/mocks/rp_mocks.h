@@ -61,5 +61,7 @@ bool add_repeating_timer_us(int32_t delay_us,
                              repeating_timer_t *out);
 bool cancel_repeating_timer(repeating_timer_t *timer);
 
+void multicore_launch_core1(void(*entry)(void));
+
 
 #endif  // MOCKS_RP_MOCKS__H

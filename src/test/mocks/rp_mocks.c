@@ -72,3 +72,7 @@ bool cancel_repeating_timer(repeating_timer_t *timer) {
     return true;
 }
 
+void multicore_launch_core1(void(*entry)(void)) {
+    (void)entry;
+}
+
