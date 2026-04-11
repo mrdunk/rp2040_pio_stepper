@@ -71,7 +71,7 @@ void setup_data(skeleton_t* data) {
 void helper_set_gpio_data(hal_bit_t** gpio_data, uint32_t values, uint8_t bank) {
     int bank_offset = bank * 32;
     for(int i = bank_offset; i < 32 + bank_offset ; i++) {
-        bool value = values & (0x1 << i);
+        bool value = values & (0x1 << (i - bank_offset));
         (*gpio_data)[i] = value;
     }
 }
@@ -81,7 +81,7 @@ bool helper_compare_gpio_data(hal_bit_t** gpio_data, uint32_t values, uint8_t ba
     bool return_val = true;
     int bank_offset = bank * 32;
     for(int i = bank_offset; i < 32 + bank_offset ; i++) {
-        bool value = values & (0x1 << i);
+        bool value = values & (0x1 << (i - bank_offset));
         return_val &= ((*gpio_data)[i] == value);
     }
     return return_val;

@@ -61,3 +61,14 @@ struct uart_hw_t *uart_get_hw(size_t *uart) {
     return NULL;
 }
 
+bool add_repeating_timer_us(int32_t delay_us,
+                             repeating_timer_callback_t callback,
+                             void *user_data,
+                             repeating_timer_t *out) {
+    return true;
+}
+
+bool cancel_repeating_timer(repeating_timer_t *timer) {
+    return true;
+}
+

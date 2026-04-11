@@ -7,6 +7,7 @@
 #include "buffer.h"
 #include "gpio.h"
 #include "modbus.h"
+#include "timing.h"
 
 
 #ifdef BUILD_TESTS
@@ -24,61 +25,6 @@
 
 float req_spindle_frequency = 0;
 float act_spindle_frequency = -1000000;
-
-/* Called after receiving network packet.
- * Takes the average time delay over the previous 1000 packet receive events and
- * blocks long enough to normalize any network time jitter. */
-void recover_clock() {
-  static struct Ring_buf_uint_ave period_average_data;
-  static struct Ring_buf_uint_ave time_average_data_1;
-  static struct Ring_buf_uint_ave time_average_data_2;
-  static size_t time_last = 0;
-  uint64_t restart_at = 0;
-  uint32_t last_ave_period_us = 0;
-
-  // Record the average length of time between packets.
-  uint64_t time_now = time_us_64();
-  uint32_t ave_period_us = ring_buf_uint_ave(&period_average_data, time_now - time_last);
-  time_last = time_now;
-
-  // Record the average arrival time.
-  // Since we can't average modulo values (0us and 1000us would return 500 despite them
-  // being adjacent) so we collect 2 averages, offset by 500us.
-  uint32_t time_offset_1 = time_now % 1000;
-  uint32_t ave_time_offset_us_1 = ring_buf_uint_ave(&time_average_data_1, time_offset_1);
-  uint32_t time_offset_2 = (time_now + 500) % 1000;
-  uint32_t ave_time_offset_us_2 = ring_buf_uint_ave(&time_average_data_2, time_offset_2);
-
-  // Use whichever average arrival time is furthest from the modulo rollover event.
-  uint32_t time_offset;
-  uint32_t ave_time_offset_us;
-  if(time_offset_1 > 250 && time_offset_1 < 750) {
-    time_offset = time_offset_1;
-    ave_time_offset_us = ave_time_offset_us_1;
-  } else {
-    time_offset = time_offset_2;
-    ave_time_offset_us = ave_time_offset_us_2;
-  }
-
-
-  int32_t time_diff = (int32_t)time_offset - (int32_t)ave_time_offset_us;
-
-  // Do the busy-wait to synchronise timing.
-  restart_at = time_now + 200 - time_diff;
-  while(restart_at > time_now) {
-    time_now = time_us_64();
-    tight_loop_contents();
-  }
-
-  // Semaphore to send core1 as the synchronization event.
-  // Note that this happens soon after the busy-wait.
-  tick++;
-
-  if(last_ave_period_us != ave_period_us) {
-    update_period(ave_period_us);
-    last_ave_period_us = ave_period_us;
-  }
-}
 
 bool unpack_timing(
     struct NWBuffer* rx_buf,
@@ -454,6 +400,7 @@ void core0_main() {
   uint16_t destport_machine = 0;
 
   modbus_init();
+  timing_init();
 
   int count = 0;
   while (1) {

@@ -41,6 +41,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_weiken.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/timing.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
   ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
@@ -68,6 +69,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_weiken.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/timing.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
   ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
@@ -96,6 +98,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_weiken.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/timing.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
   ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
   ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
@@ -221,5 +224,28 @@ target_link_libraries(
 add_test(
   rpCore1Test
   rpCore1Test
+  )
+
+
+add_executable(
+  timingTest
+  ${CMAKE_CURRENT_SOURCE_DIR}/timing_test.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/timing.c
+  )
+target_compile_features(
+  timingTest PRIVATE
+  c_std_99
+  )
+target_link_libraries(
+  timingTest
+  cmocka
+  -Wl,--wrap,time_us_64
+  -Wl,--wrap,update_period
+  -Wl,--wrap,add_repeating_timer_us
+  -Wl,--wrap,cancel_repeating_timer
+  )
+add_test(
+  timingTest
+  timingTest
   )
 

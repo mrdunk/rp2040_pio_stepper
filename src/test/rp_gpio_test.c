@@ -86,7 +86,7 @@ static void test_native_gpio_set_output_values(void **state) {
         } else {
             // bank 1;
             // Configured values are same as those sent.
-            config.gpio[gpio].value = values & (0x1 << gpio);
+            config.gpio[gpio].value = values & (0x1 << (gpio % 32));
         }
     }
 

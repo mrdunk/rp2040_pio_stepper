@@ -2,6 +2,7 @@
 #define MOCKS_RP_MOCKS__H
 
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
 
@@ -50,6 +51,15 @@ struct uart_hw_t {
 };
 struct uart_hw_t *uart_get_hw(size_t *uart);
 
+
+typedef struct { int dummy; } repeating_timer_t;
+typedef bool (*repeating_timer_callback_t)(repeating_timer_t *rt);
+
+bool add_repeating_timer_us(int32_t delay_us,
+                             repeating_timer_callback_t callback,
+                             void *user_data,
+                             repeating_timer_t *out);
+bool cancel_repeating_timer(repeating_timer_t *timer);
 
 
 #endif  // MOCKS_RP_MOCKS__H
