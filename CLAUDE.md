@@ -9,19 +9,25 @@ The driver side runs on the LinuxCNC PC (`src/driver/`).
 ## Architecture
 
 - **Core0** (`src/rp2040/core0.c`): receives ~1 kHz UDP packets from LinuxCNC,
-  unpacks messages, calls `recover_clock()` after each packet.
-- **Core1** (`src/rp2040/core1.c`): busy-waits on `tick` semaphore, then drives
-  stepper PIO step generation. Core1's loop rate must match the average incoming
-  packet rate — it is the timing module's job to keep them in sync. The hardware
-  timer period is continuously adjusted to the EMA of inter-packet intervals so
-  that Core1 executes once per expected packet, independent of individual packet
-  jitter.
+  unpacks messages, writes `last_packet_tick = tick`, then calls `recover_clock()`
+  after each packet.
+- **Core1** (`src/rp2040/core1.c`): structured as five focused functions called
+  from `core1_main()`: `wait_for_tick()` blocks until `tick` changes;
+  `check_network_health()` detects loss via `tick - last_packet_tick`;
+  `handle_network_timeout()` / `handle_network_recovery()` manage joint state;
+  `step_all_joints()` drives PIO step generation. Core1's loop rate matches the
+  average incoming packet rate — the timing module keeps them in sync.
 - **timing** (`src/rp2040/timing.c`): RP2040 hardware repeating timer fires at
   the EMA-measured inter-packet period and increments `tick` ISR-style.
   No busy-wait, no ring buffers. `timing_init()` called once from `core0_main()`;
   `recover_clock()` called per packet.
 - **`tick`** (`src/rp2040/config.c`): `volatile uint32_t tick` — incremented by
   the timer ISR (Core0 side), waited on by Core1's loop.
+- **`last_packet_tick`** (`src/rp2040/config.c`): `volatile uint32_t
+  last_packet_tick` — written by Core0 once per received packet. Core1 reads it
+  to detect network loss: `(tick - last_packet_tick) > MAX_MISSED_PACKET` means
+  no packet has arrived for too long. Safe without a mutex — single writer, single
+  reader, 32-bit aligned (atomic on Cortex-M0+), same pattern as `tick`.
 
 ## Building and testing
 
@@ -51,10 +57,14 @@ failure blocks the commit.
 - Framework: **cmocka** (fetched via `libraries/FetchCMocka.cmake`).
 - SDK mocks: `src/test/mocks/rp_mocks.h` / `rp_mocks.c` — stub out all
   `pico/stdlib.h` and `pico/time.h` symbols for host builds.
-- Link-time wrapping (`-Wl,--wrap,symbol`) is used to intercept SDK calls in
-  tests (e.g. `time_us_64`, `add_repeating_timer_us`, `update_period`).
-- Test files define `volatile uint32_t tick` themselves when they don't link
-  `config.c` (pattern established in `ring_buffer_test.c` and `timing_test.c`).
+- Link-time wrapping (`-Wl,--wrap,symbol`) is used to intercept both SDK calls
+  (e.g. `time_us_64`, `add_repeating_timer_us`) and production functions
+  (e.g. `disable_joint`, `do_steps` in `rpCore1Test`). Define `__wrap_foo` in
+  the test file; the linker redirects all calls to `foo` to it.
+- Test files define `volatile uint32_t tick` themselves **only** when they do
+  not link `config.c` (pattern in `ring_buffer_test.c`, `timing_test.c`). When
+  `config.c` is linked (e.g. `rpCore1Test`), `tick` and `last_packet_tick` come
+  from there — access them via the externs in `config.h`, do not redefine them.
 - `BUILD_TESTS` preprocessor flag gates all RP2040-specific includes.
 
 ## Known pitfalls
