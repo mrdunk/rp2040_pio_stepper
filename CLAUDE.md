@@ -11,7 +11,11 @@ The driver side runs on the LinuxCNC PC (`src/driver/`).
 - **Core0** (`src/rp2040/core0.c`): receives ~1 kHz UDP packets from LinuxCNC,
   unpacks messages, calls `recover_clock()` after each packet.
 - **Core1** (`src/rp2040/core1.c`): busy-waits on `tick` semaphore, then drives
-  stepper PIO step generation at the measured average packet rate.
+  stepper PIO step generation. Core1's loop rate must match the average incoming
+  packet rate — it is the timing module's job to keep them in sync. The hardware
+  timer period is continuously adjusted to the EMA of inter-packet intervals so
+  that Core1 executes once per expected packet, independent of individual packet
+  jitter.
 - **timing** (`src/rp2040/timing.c`): RP2040 hardware repeating timer fires at
   the EMA-measured inter-packet period and increments `tick` ISR-style.
   No busy-wait, no ring buffers. `timing_init()` called once from `core0_main()`;
