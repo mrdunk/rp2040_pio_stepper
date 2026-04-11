@@ -425,6 +425,7 @@ void core0_main() {
     //}
 
     if(received_msg_count > 0) {
+      last_packet_tick = tick;
       recover_clock();
 
       time_now = time_us_64();
