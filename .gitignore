@@ -1,6 +1,7 @@
 build/
 build_rp/
 build_tests/
+.worktrees/
 
 # Ignore vim files:
 .*~
