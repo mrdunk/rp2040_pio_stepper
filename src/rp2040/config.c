@@ -25,10 +25,12 @@ mutex_t mtx_joint[MAX_JOINT];
 // Semaphore for synchronizing cores.
 volatile uint32_t tick = 0;
 volatile uint32_t last_packet_tick = 0;
+volatile bool linuxcnc_restart_detected = false;
 
 volatile struct ConfigGlobal config = {
   .last_update_id = 0,
   .last_update_time = 0,
+  .last_id_diff = 0,
   .update_time_us = 1000,    // 1000us.
   .pio_io_configured = false,
   .joint = {
@@ -147,6 +149,12 @@ uint32_t get_period() {
   return retval;
 }
 
+int32_t get_last_id_diff(void) {
+  // TODO: consider whether mtx_top is needed here (see get_period()).
+  // last_id_diff is 32-bit aligned, Core0-only; M0+ read is atomic.
+  return config.last_id_diff;
+}
+
 /* Set metrics for tracking successful update transmission and jitter. */
 void update_packet_metrics(
     struct Message_timing* message,
@@ -159,6 +167,11 @@ void update_packet_metrics(
 
   *id_diff = message->update_id - config.last_update_id;
   *time_diff = message->time - config.last_update_time;
+
+  config.last_id_diff = *id_diff;
+  if (*id_diff < 0) {
+    linuxcnc_restart_detected = true;
+  }
 
   /*
   if(*id_diff == 0) {

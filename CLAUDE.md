@@ -20,7 +20,13 @@ The driver side runs on the LinuxCNC PC (`src/driver/`).
 - **timing** (`src/rp2040/timing.c`): RP2040 hardware repeating timer fires at
   the EMA-measured inter-packet period and increments `tick` ISR-style.
   No busy-wait, no ring buffers. `timing_init()` called once from `core0_main()`;
-  `recover_clock()` called per packet.
+  `recover_clock()` called per packet. **`recover_clock()` is only called on
+  received packets** (guarded by `received_msg_count > 0` in `core0_main()`).
+  During a missed packet the timer free-runs at the current period — correct
+  behaviour. The EMA is protected against inflated samples from large gaps by
+  dividing `sample` by `last_id_diff` (per-packet elapsed time). This works
+  because the LinuxCNC driver sends packets continuously and never resets
+  `update_id`, even during outages.
 - **`tick`** (`src/rp2040/config.c`): `volatile uint32_t tick` — incremented by
   the timer ISR (Core0 side), waited on by Core1's loop.
 - **`last_packet_tick`** (`src/rp2040/config.c`): `volatile uint32_t
@@ -28,6 +34,17 @@ The driver side runs on the LinuxCNC PC (`src/driver/`).
   to detect network loss: `(tick - last_packet_tick) > MAX_MISSED_PACKET` means
   no packet has arrived for too long. Safe without a mutex — single writer, single
   reader, 32-bit aligned (atomic on Cortex-M0+), same pattern as `tick`.
+- **`linuxcnc_restart_detected`** (`src/rp2040/config.c`): `volatile bool` — set
+  by Core0 in `update_packet_metrics()` when `id_diff < 0` (sequence number
+  wrapped, meaning LinuxCNC restarted). Core1 reads it each tick; if set, clears
+  it and calls `handle_network_timeout()` to disable joints before processing
+  anything else. Same single-writer/single-reader atomic pattern as `tick` and
+  `last_packet_tick`.
+- **LinuxCNC driver config resync**: `last_joint_config` / `last_gpio_config` /
+  `last_spindle_config` in `hal_rp2040_eth.c` are statics that reset to `{0}` on
+  LinuxCNC restart. Because `configure()` diffs against these before sending, it
+  automatically resends full config (including `enable = false`) on the first
+  cycles after restart — no RP2040-side action required to force reconfiguration.
 
 ## Building and testing
 
