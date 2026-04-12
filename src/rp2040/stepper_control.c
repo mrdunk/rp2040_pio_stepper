@@ -74,7 +74,6 @@ int main() {
   gpio_set_dir(LED_PIN, GPIO_OUT);
 
   stdio_usb_init();
-  sleep_ms(2000);
   init_config();
 
   wizchip_spi_initialize();
