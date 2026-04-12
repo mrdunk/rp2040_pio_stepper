@@ -354,6 +354,7 @@ void process_received_buffer(
       case MSG_SET_SPINDLE_SPEED:
         unpack_success = unpack_success && unpack_spindle_speed(
             rx_buf, &rx_offset, received_count);
+        break;
       case MSG_SET_GPIO:
         unpack_success = unpack_success && unpack_gpio(
             rx_buf, &rx_offset, received_count);

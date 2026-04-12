@@ -20,6 +20,7 @@
 static uint32_t ave_period_us_x64   = 1000u << 6;
 static uint32_t last_timer_period_us = 0;
 static uint64_t time_last            = 0;
+static uint64_t last_restart_time    = 0;
 static bool     time_initialized     = false;
 static repeating_timer_t tick_timer;
 
@@ -66,11 +67,21 @@ void recover_clock(void) {
         ave_period_us = 1;  /* guard against zero on startup */
     }
 
+    /* Only restart the hardware timer when the period has drifted AND at least
+     * one full period has elapsed since the last restart.  Without this guard,
+     * a burst of EMA changes (each ±1 µs during convergence) would restart the
+     * timer on every packet, resetting the countdown each time and starving
+     * Core1 of ticks.
+     * Note: last_timer_period_us is updated only when we actually apply the
+     * change, so we keep tracking drift across skipped restarts. */
     if(last_timer_period_us != ave_period_us) {
-        cancel_repeating_timer(&tick_timer);
-        add_repeating_timer_us(-(int32_t)ave_period_us, tick_callback, NULL, &tick_timer);
-        update_period(ave_period_us);
-        last_timer_period_us = ave_period_us;
+        if((uint32_t)(time_now - last_restart_time) >= last_timer_period_us) {
+            cancel_repeating_timer(&tick_timer);
+            add_repeating_timer_us(-(int32_t)ave_period_us, tick_callback, NULL, &tick_timer);
+            update_period(ave_period_us);
+            last_restart_time  = time_now;
+            last_timer_period_us = ave_period_us;
+        }
     }
 }
 
@@ -79,6 +90,7 @@ void timing_reset_for_test(void) {
     ave_period_us_x64    = 1000u << 6;
     last_timer_period_us = 0;
     time_last            = 0;
+    last_restart_time    = 0;
     time_initialized     = false;
 }
 #endif

@@ -274,6 +274,28 @@ static void test_recover_clock__skips_ema_on_zero_id_diff(void **state) {
     assert_int_equal(count_before, update_period_call_count);
 }
 
+/* When the EMA is converging (each packet shifts the integer period by 1 µs),
+ * the time guard must prevent a restart on every packet.
+ *
+ * Scenario: packets at 990 µs (10 µs early).  The guard allows at most one
+ * restart per ~1000 µs elapsed, so over 20 × 990 µs ≈ 19 800 µs there can be
+ * at most ≈ 19 restarts.  Without the guard all 20 EMA changes would each
+ * restart the timer, resetting the countdown each time and starving Core1.
+ * With the guard the count must be ≤ 11 (roughly one per two packets). */
+static void test_recover_clock__rate_limits_timer_restarts(void **state) {
+    (void) state;
+    seed_at_1000us();
+
+    mock_time_step = 990;
+    int count_before = update_period_call_count;
+    for(int i = 0; i < 20; i++) {
+        recover_clock();
+    }
+
+    int restarts = update_period_call_count - count_before;
+    assert_true(restarts <= 11);
+}
+
 /* Negative id_diff (e.g. LinuxCNC restart wrapping the sequence counter) must
  * also cause the EMA update to be skipped, protecting against huge normalized
  * samples being fed into the accumulator.  After the guard fires, a second
@@ -324,6 +346,7 @@ int main(void) {
         cmocka_unit_test_setup(test_recover_clock__large_gap_normalizes_correctly, setup),
         cmocka_unit_test_setup(test_recover_clock__skips_ema_on_zero_id_diff, setup),
         cmocka_unit_test_setup(test_recover_clock__skips_ema_on_negative_id_diff, setup),
+        cmocka_unit_test_setup(test_recover_clock__rate_limits_timer_restarts, setup),
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);
