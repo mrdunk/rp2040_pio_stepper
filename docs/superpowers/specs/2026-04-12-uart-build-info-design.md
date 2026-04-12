@@ -12,7 +12,7 @@ Print the git branch name (with dirty indicator) and build timestamp to the UART
 --------------------------------
 UART up.
 Branch: dunk_core0_and_core1_refactor (dirty)
-Built:  Apr 12 2026 14:23:01
+Built:  Apr 12 2026 14:23:01 by duncan
 --------------------------------
 ```
 
@@ -25,6 +25,7 @@ Built:  Apr 12 2026 14:23:01
 | Branch name | `git rev-parse --abbrev-ref HEAD` | CMake custom command at build time |
 | Dirty flag | `git status --porcelain` (non-empty = dirty) | CMake custom command at build time |
 | Build timestamp | `__DATE__` / `__TIME__` | C compiler built-ins |
+| Username | `$ENV{USER}` | CMake custom command at build time |
 
 ### Generated header: `build_info.h`
 
@@ -32,9 +33,10 @@ A CMake script `src/rp2040/gen_build_info.cmake` runs on every `make` invocation
 
 ```c
 #define BUILD_GIT_BRANCH "dunk_core0_and_core1_refactor (dirty)"
+#define BUILD_USERNAME   "duncan"
 ```
 
-If git is unavailable or HEAD is detached, `BUILD_GIT_BRANCH` falls back to `"unknown"`.
+If git is unavailable or HEAD is detached, `BUILD_GIT_BRANCH` falls back to `"unknown"`. If `$ENV{USER}` is unset, `BUILD_USERNAME` falls back to `"unknown"`.
 
 The dirty indicator (` (dirty)`) is appended to the branch string when `git status --porcelain` produces any output.
 
@@ -52,7 +54,7 @@ After `printf("UART up.\n")`, add:
 
 ```c
 printf("Branch: %s\n", BUILD_GIT_BRANCH);
-printf("Built:  %s %s\n", __DATE__, __TIME__);
+printf("Built:  %s %s by %s\n", __DATE__, __TIME__, BUILD_USERNAME);
 ```
 
 No other source files change.
