@@ -13,6 +13,8 @@
 #include "w5x00_spi.h"
 #include "socket.h"
 
+#include "build_info.h"
+
 #else
 
 #include <stdint.h>
@@ -70,6 +72,8 @@ int main() {
   init_config();
   printf("--------------------------------\n");
   printf("UART up.\n");
+  printf("Branch: %s\n", BUILD_GIT_BRANCH);
+  printf("Built:  %s %s by %s\n", __DATE__, __TIME__, BUILD_USERNAME);
 
   wizchip_spi_initialize();
   spi_init(SPI_PORT, 48000 * 1000);
