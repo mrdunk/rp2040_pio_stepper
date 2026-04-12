@@ -61,19 +61,20 @@ int main() {
   set_clock_khz();
 
   stdio_init_all();
-
-  gpio_init(LED_PIN);
-  gpio_set_dir(LED_PIN, GPIO_OUT);
-
-
-  stdio_usb_init();
   setup_default_uart();
-  sleep_ms(2000);
-  init_config();
+
   printf("--------------------------------\n");
   printf("UART up.\n");
   printf("Branch: %s\n", BUILD_GIT_BRANCH);
   printf("Built:  %s %s by %s\n", __DATE__, __TIME__, BUILD_USERNAME);
+  printf("--------------------------------\n");
+
+  gpio_init(LED_PIN);
+  gpio_set_dir(LED_PIN, GPIO_OUT);
+
+  stdio_usb_init();
+  sleep_ms(2000);
+  init_config();
 
   wizchip_spi_initialize();
   spi_init(SPI_PORT, 48000 * 1000);
