@@ -61,8 +61,8 @@ int main() {
   set_clock_khz();
 
   stdio_init_all();
+  sleep_ms(2000);
   setup_default_uart();
-  sleep_ms(500);
 
   printf("--------------------------------\n");
   printf("UART up.\n");
