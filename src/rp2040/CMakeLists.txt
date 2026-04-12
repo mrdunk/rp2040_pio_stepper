@@ -19,6 +19,20 @@ pico_generate_pio_header(stepper_control ${CMAKE_CURRENT_LIST_DIR}/pico_stepper.
 # however, alternatively you can choose to generate it somewhere else (in this case in the source tree for check in)
 #pico_generate_pio_header(${TARGET_NAME} ${CMAKE_CURRENT_LIST_DIR}/${TARGET_NAME}.pio OUTPUT_DIR ${CMAKE_CURRENT_LIST_DIR})
 
+# Generate build_info.h on every build by querying git and $ENV{USER}.
+# stepper_control.c always recompiles so __DATE__/__TIME__ stay fresh.
+add_custom_target(
+    build_info
+    COMMAND ${CMAKE_COMMAND}
+        -DCMAKE_SOURCE_DIR=${CMAKE_SOURCE_DIR}
+        -DOUTPUT_FILE=${CMAKE_BINARY_DIR}/build_info.h
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/gen_build_info.cmake
+    BYPRODUCTS ${CMAKE_BINARY_DIR}/build_info.h
+)
+
+target_include_directories(stepper_control PRIVATE ${CMAKE_BINARY_DIR})
+add_dependencies(stepper_control build_info)
+
 target_sources(
   stepper_control PRIVATE
   stepper_control.c
