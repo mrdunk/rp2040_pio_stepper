@@ -62,6 +62,7 @@ int main() {
 
   stdio_init_all();
   setup_default_uart();
+  sleep_ms(500);
 
   printf("--------------------------------\n");
   printf("UART up.\n");
