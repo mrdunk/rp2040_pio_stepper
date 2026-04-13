@@ -183,12 +183,8 @@ bool unpack_joint_config(
   double max_accel = message->max_accel;
 
 
-  printf("%u Configuring joint: %u\n", *received_count, joint);
-  printf("\tenabled:\t%u\n", enabled);
-  printf("\tio_step:\t%i\n", io_step);
-  printf("\tio_dir: \t%i\n", io_dir);
-  printf("\tmax_velocity:\t%f\n", max_velocity);
-  printf("\tmax_accel:\t%u\n", max_accel);
+  printf("%u Cfg joint %u: en=%u step=%i dir=%i vel=%f acc=%f\n",
+      *received_count, joint, enabled, io_step, io_dir, max_velocity, max_accel);
   update_joint_config(
       joint,
       CORE0,
@@ -252,8 +248,7 @@ bool unpack_gpio_config(
   uint8_t index = message->index;
   uint8_t address = message->address;
 
-  printf("Configuring gpio. type: %u\tindex: %u\taddress: %u\tcount: %u\n",
-      gpio_type, index, address, gpio_count);
+  printf("Cfg gpio t=%u i=%u a=%u c=%u\n", gpio_type, index, address, gpio_count);
 
   config.gpio[gpio_count].type = gpio_type;
   config.gpio[gpio_count].index = index;
@@ -265,14 +260,14 @@ bool unpack_gpio_config(
       ;  // This semicolon is required. It's a C syntax thing related to multiple
          // `case` statments at the start.
       // Remember HAL's definition of IN and OUT are opposite of RPs.
-      printf("Setting RP native IO to RP OUT: %u\n", index);
+      printf("GPIO %u OUT\n", index);
       gpio_init(index);
       gpio_set_dir(index, GPIO_OUT);
       break;
     case GPIO_TYPE_NATIVE_IN:
     case GPIO_TYPE_NATIVE_IN_DEBUG:
       // Remember HAL's definition of IN and OUT are opposite of RPs.
-      printf("Setting RP native IO to RP IN: %u\n", index);
+      printf("GPIO %u IN\n", index);
       gpio_init(index);
       gpio_set_dir(index, GPIO_IN);
       gpio_pull_up(index);

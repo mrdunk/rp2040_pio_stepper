@@ -163,6 +163,7 @@ struct Reply_joint_metrics {
   uint8_t type;
   int32_t velocity_requested_tm1[MAX_JOINT];
   int32_t step_len_ticks[MAX_JOINT];
+  uint32_t stale_packet_count[MAX_JOINT]; /* Packets discarded as stale (updated_from_c0 > 1). */
 };
 
 struct Reply_gpio {

@@ -122,6 +122,11 @@ net metrics-rp-update-len   rp2040_eth.0.metrics-rp-update-len
 net metrics-missed-packets  rp2040_eth.0.metrics-missed-packets
 net metrics-eth-state       rp2040_eth.0.metrics-eth-state
 
+net joint-0-stale-packets   rp2040_eth.0.joint.0.fb-stale-packets
+net joint-1-stale-packets   rp2040_eth.0.joint.1.fb-stale-packets
+net joint-2-stale-packets   rp2040_eth.0.joint.2.fb-stale-packets
+net joint-3-stale-packets   rp2040_eth.0.joint.3.fb-stale-packets
+
 net spindle-fwd spindle.0.forward => rp2040_eth.0.spindle.0.fwd
 net spindle-rev spindle.0.reverse => rp2040_eth.0.spindle.0.rev
 net spindle-speed-out spindle.0.speed-out => rp2040_eth.0.spindle.0.speed-in

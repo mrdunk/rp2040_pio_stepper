@@ -48,6 +48,7 @@ typedef struct {
   hal_float_t* joint_velocity_feedback[MAX_JOINT];
   // Difference between requested position and actual position on RP.
   hal_s32_t* joint_pos_error[MAX_JOINT];
+  hal_u32_t* joint_stale_packets[MAX_JOINT];
 
   // For IN pins, HAL sets this to the value we want the IO pin set to on the RP.
   // For OUT pins, this is the value the RP pin is reported via the network update.
@@ -306,6 +307,9 @@ int rtapi_app_main(void)
       return -1;
     }
     if(!init_hal_pin(FLOAT, HAL_OUT, &(port_data_array->joint_pos_error[num_joint]), component_id, device_num, "joint", num_joint, 1, "fb-pos-error")) {
+      return -1;
+    }
+    if(!init_hal_pin(U32, HAL_OUT, &(port_data_array->joint_stale_packets[num_joint]), component_id, device_num, "joint", num_joint, 1, "fb-stale-packets")) {
       return -1;
     }
   }

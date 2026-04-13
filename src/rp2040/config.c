@@ -315,6 +315,9 @@ uint32_t get_joint_config(
     case CORE1:
       updated_by_other_core = config.joint[joint].updated_from_c0;
       config.joint[joint].updated_from_c0 = 0;
+      if(updated_by_other_core > 1) {
+        config.joint[joint].stale_packet_count += updated_by_other_core - 1;
+      }
       break;
   }
 
@@ -358,6 +361,17 @@ uint32_t get_joint_config(
   mutex_exit(&mtx_joint[joint]);
 
   return updated_by_other_core;
+}
+
+uint32_t get_and_reset_stale_count(const uint8_t joint) {
+  if(joint >= MAX_JOINT) {
+    return 0;
+  }
+  mutex_enter_blocking(&mtx_joint[joint]);
+  uint32_t count = config.joint[joint].stale_packet_count;
+  config.joint[joint].stale_packet_count = 0;
+  mutex_exit(&mtx_joint[joint]);
+  return count;
 }
 
 void disable_joint(const uint8_t joint, const uint8_t core) {
@@ -431,10 +445,6 @@ bool serialise_joint_movement(
           &position_error
           );
     } while(updated == 0 && wait_for_data);
-
-    if(updated > 1) {
-      printf("WC0, mult ud: %u \t%lu\n", joint, updated);
-    }
 
     reply.abs_pos_achieved[joint] = abs_pos_achieved;
     reply.velocity_achieved[joint] = velocity_achieved;
@@ -577,6 +587,7 @@ bool serialise_joint_metrics(struct NWBuffer* tx_buf) {
 
     reply.velocity_requested_tm1[joint] = velocity_requested_tm1;
     reply.step_len_ticks[joint] = step_len_ticks;
+    reply.stale_packet_count[joint] = get_and_reset_stale_count(joint);
   }
 
   uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));

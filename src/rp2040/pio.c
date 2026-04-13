@@ -166,7 +166,6 @@ double get_velocity(
 /* Generate step counts and send to PIOs. */
 uint8_t do_steps(const uint8_t joint) {
   uint32_t update_period_us = get_period();
-  static uint32_t failcount = 0;
   static uint32_t count = 0;
   static int32_t last_pos_requested[MAX_JOINT] = {0, 0, 0, 0};
   static int32_t last_pos_achieved[MAX_JOINT] = {0, 0, 0, 0};
@@ -214,14 +213,6 @@ uint8_t do_steps(const uint8_t joint) {
       );
 
   count++;
-
-  if(updated > 2) {
-    if(enabled && last_enabled[joint]) {
-      failcount++;
-      printf("WC1: multi update: %u \t%lu \t%f\n",
-          joint, updated, (double)failcount / (double)count);
-    }
-  }
 
   if(enabled != last_enabled[joint]) {
     last_enabled[joint] = enabled;

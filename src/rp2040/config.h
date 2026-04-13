@@ -31,6 +31,7 @@ extern volatile bool linuxcnc_restart_detected;
 struct ConfigAxis {
   uint8_t updated_from_c0;        // Data was updated on core 0.
   uint8_t updated_from_c1;        // Data was updated on core 1.
+  uint32_t stale_packet_count;    // Extra Core0 updates discarded as stale (updated_from_c0 - 1, summed).
   int8_t enabled;
   int8_t io_pos_step;             // Physical step IO pin.
   int8_t io_pos_dir;              // Physical direction IO pin.
@@ -95,6 +96,11 @@ void update_packet_metrics(
     int32_t* time_diff);
 
 uint8_t has_new_c0_data(const uint8_t joint);
+
+/* Read and atomically reset the stale packet counter for a joint.
+ * Stale count = sum of (updated_from_c0 - 1) for each tick where Core1
+ * found more than one pending Core0 update. */
+uint32_t get_and_reset_stale_count(const uint8_t joint);
 
 void update_joint_config(
     const uint8_t joint,

@@ -26,6 +26,7 @@ hal_float_t joint_velocity_cmd[4];
 hal_float_t joint_accel_cmd[4];
 hal_float_t joint_velocity_feedback[4];
 hal_s32_t joint_pos_error[4];
+hal_u32_t joint_stale_packets[4];
 
 void setup_data(skeleton_t* data) {
   data->metric_update_id = &metric_update_id;
@@ -45,6 +46,7 @@ void setup_data(skeleton_t* data) {
     data->joint_accel_cmd[joint] = &(joint_accel_cmd[joint]);
     data->joint_velocity_feedback[joint] = &(joint_velocity_feedback[joint]);
     data->joint_pos_error[joint] = &(joint_pos_error[joint]);
+    data->joint_stale_packets[joint] = &(joint_stale_packets[joint]);
   }
 }
 
@@ -181,7 +183,8 @@ static void test_joint_metrics(void **state) {
     struct Reply_joint_metrics message = {
         .type = REPLY_JOINT_METRICS,
         .velocity_requested_tm1 = {3456, 7890, 1234, 5678},
-        .step_len_ticks = {1357, 2468, 3579, 4680}
+        .step_len_ticks = {1357, 2468, 3579, 4680},
+        .stale_packet_count = {10, 20, 30, 40}
     };
 
     memcpy(buffer.payload, &message, sizeof(message));
@@ -201,6 +204,7 @@ static void test_joint_metrics(void **state) {
     for(size_t joint = 0; joint < MAX_JOINT; joint++) {
       assert_int_equal(*(data.joint_step_len_ticks[joint]), message.step_len_ticks[joint]);
       assert_int_equal(*(data.joint_velocity_cmd[joint]), message.velocity_requested_tm1[joint]);
+      assert_int_equal(*(data.joint_stale_packets[joint]), message.stale_packet_count[joint]);
     }
 }
 
