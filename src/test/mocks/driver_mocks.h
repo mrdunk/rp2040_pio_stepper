@@ -22,8 +22,8 @@ typedef struct {
   hal_u32_t* metric_rp_update_len;
   hal_u32_t* metric_missed_packets;
   hal_bit_t* metric_eth_state;
+  hal_bit_t* machine_enable_out;
   hal_bit_t* joint_enable[MAX_JOINT];
-  hal_bit_t* joint_velocity_mode[MAX_JOINT];
   hal_s32_t* joint_gpio_step[MAX_JOINT];
   hal_s32_t* joint_gpio_dir[MAX_JOINT];
   hal_float_t* joint_max_velocity[MAX_JOINT];
@@ -43,6 +43,8 @@ typedef struct {
   hal_bit_t* gpio_data_out[MAX_GPIO];
   hal_bit_t* gpio_data_out_invert[MAX_GPIO];
   hal_u32_t* gpio_type[MAX_GPIO];
+  hal_u32_t* gpio_index[MAX_GPIO];
+  hal_u32_t* gpio_address[MAX_GPIO];
   hal_u32_t gpio_data_received[MAX_GPIO_BANK];
   hal_bit_t gpio_confirmation_pending[MAX_GPIO_BANK];
   
