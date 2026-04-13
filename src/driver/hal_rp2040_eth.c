@@ -184,13 +184,16 @@ bool init_hal_pin(
 
 #define ARRAY_SIZE(a) ((int)(sizeof(a) / sizeof((a)[0])))
 
+/* Per-channel pointer fields in skeleton_t are plain arrays of pointers with no
+ * padding between elements. stride = sizeof(ptr) steps correctly through them. */
 typedef struct {
     enum t_types   type;
     hal_pin_dir_t  dir;
     size_t         offset;
     size_t         stride;
     const char*    io_type;
-    int            chan_num;       /* -1 = scalar pin (no channel suffix) */
+    int            chan_num;       /* -1 = scalar (no channel suffix); ignored for
+                                     per-channel tables — loop variable used instead */
     int            chan_num_len;
     const char*    specific_name;
 } PinDef;
@@ -282,6 +285,8 @@ int rtapi_app_main(void)
       }
     }
   }
+  /* Default values written after all pins are registered (equivalent to the
+   * original interleaved approach since goto port_error fires on any failure). */
   for (int i = 0; i < MAX_GPIO; i++) {
     *port_data_array->gpio_data_in[i]         = true;
     *port_data_array->gpio_data_in_not[i]     = false;
