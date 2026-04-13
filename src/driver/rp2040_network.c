@@ -15,6 +15,9 @@
 
 #endif  // BUILD_TESTS
 
+#define UNPACK_MSG(T, var, buf, offset) \
+    T* var = unpack_nw_buff((buf), *(offset), (offset), NULL, sizeof(T)); \
+    if (!(var)) return false;
 
 /* Network globals. */
 struct sockaddr_in remote_addr[MAX_DEVICES];
@@ -318,14 +321,7 @@ bool unpack_timing(
     size_t* received_count,
     skeleton_t* data
 ) {
-  void* data_p = unpack_nw_buff(
-      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_timing));
-
-  if(! data_p) {
-    return false;
-  }
-
-  struct Reply_timing* reply = data_p;
+  UNPACK_MSG(struct Reply_timing, reply, rx_buf, rx_offset);
   *data->metric_update_id = reply->update_id;
   *data->metric_time_diff = reply->time_diff;
   *data->metric_rp_update_len = reply->rp_update_len;
@@ -341,14 +337,7 @@ bool unpack_joint_movement(
     size_t* received_count,
     skeleton_t* data
 ) {
-  void* data_p = unpack_nw_buff(
-      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_joint_movement));
-
-  if(! data_p) {
-    return false;
-  }
-
-  struct Reply_joint_movement* reply = data_p;
+  UNPACK_MSG(struct Reply_joint_movement, reply, rx_buf, rx_offset);
 
   for(size_t joint = 0; joint < MAX_JOINT; joint++) {
     *data->joint_pos_feedback[joint] =
@@ -371,14 +360,7 @@ bool unpack_joint_config(
     size_t* received_count,
     struct Message_joint_config* last_joint_config
 ) {
-  void* data_p = unpack_nw_buff(
-      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_joint_config));
-
-  if(! data_p) {
-    return false;
-  }
-
-  struct Reply_joint_config* reply = data_p;
+  UNPACK_MSG(struct Reply_joint_config, reply, rx_buf, rx_offset);
   size_t joint = reply->joint;
 
   printf("INFO: Received confirmation of config received by RP for joint: %u\n", joint);
@@ -405,14 +387,7 @@ bool unpack_gpio_config(
     size_t* received_count,
     struct Message_gpio_config* last_gpio_config
 ) {
-  void* data_p = unpack_nw_buff(
-      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_gpio_config));
-
-  if(! data_p) {
-    return false;
-  }
-
-  struct Reply_gpio_config* reply = data_p;
+  UNPACK_MSG(struct Reply_gpio_config, reply, rx_buf, rx_offset);
   size_t gpio = reply->gpio_count;
 
   printf("INFO: Received confirmation of config received by RP for gpio: %u\n", gpio);
@@ -435,14 +410,7 @@ bool unpack_joint_metrics(
     size_t* received_count,
     skeleton_t* data
 ) {
-  void* data_p = unpack_nw_buff(
-      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_joint_metrics));
-
-  if(! data_p) {
-    return false;
-  }
-
-  struct Reply_joint_metrics* reply = data_p;
+  UNPACK_MSG(struct Reply_joint_metrics, reply, rx_buf, rx_offset);
   for(size_t joint = 0; joint < MAX_JOINT; joint++) {
     *data->joint_step_len_ticks[joint] = reply->step_len_ticks[joint];
     *data->joint_stale_packets[joint] += reply->stale_packet_count[joint];
@@ -463,14 +431,7 @@ bool unpack_spindle_speed(
     size_t* received_count,
     skeleton_t* data
 ) {
-  void* data_p = unpack_nw_buff(
-      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_spindle_speed));
-
-  if(! data_p) {
-    return false;
-  }
-
-  struct Reply_spindle_speed *reply = data_p;
+  UNPACK_MSG(struct Reply_spindle_speed, reply, rx_buf, rx_offset);
 
   uint8_t spindle = reply->spindle_index;
 
@@ -490,14 +451,7 @@ bool unpack_spindle_config(
     size_t* received_count,
     struct Message_spindle_config* last_spindle_config
 ) {
-  void* data_p = unpack_nw_buff(
-      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_spindle_config));
-
-  if(! data_p) {
-    return false;
-  }
-
-  struct Reply_spindle_config* reply = data_p;
+  UNPACK_MSG(struct Reply_spindle_config, reply, rx_buf, rx_offset);
   size_t spindle_index = reply->spindle_index;
 
   printf("INFO: Received confirmation of config received by RP for spindle: %u\n", spindle_index);
@@ -520,14 +474,7 @@ bool unpack_gpio(
     size_t* received_count,
     skeleton_t* data
 ) {
-  void* data_p = unpack_nw_buff(
-      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Reply_gpio));
-
-  if(! data_p) {
-    return false;
-  }
-
-  struct Reply_gpio* reply = data_p;
+  UNPACK_MSG(struct Reply_gpio, reply, rx_buf, rx_offset);
   size_t bank = reply->bank;
   uint32_t values = reply->values;
 
