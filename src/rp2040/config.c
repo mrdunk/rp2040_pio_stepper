@@ -126,31 +126,20 @@ void init_config()
 /* Update the period of the main timing loop.
  * This should closely match the rate at which we receive joint position data. */
 void update_period(uint32_t update_time_us) {
-  // TODO: The mutex probably isn't needed here.
-  // Remove and test.
-  mutex_enter_blocking(&mtx_top);
-
+  // update_time_us is a 32-bit aligned uint32_t in a volatile struct.
+  // Reads and writes are atomic on Cortex-M0+; no mutex needed.
   config.update_time_us = update_time_us;
-
-  mutex_exit(&mtx_top);
 }
 
 /* Get the period of the main timing loop.
  * This should closely match the rate at which we receive joint position data. */
 uint32_t get_period() {
-  // TODO: The mutex probably isn't needed here.
-  // Remove and test.
-  mutex_enter_blocking(&mtx_top);
-
-  uint32_t retval = config.update_time_us;
-
-  mutex_exit(&mtx_top);
-
-  return retval;
+  // update_time_us is a 32-bit aligned uint32_t in a volatile struct.
+  // Reads and writes are atomic on Cortex-M0+; no mutex needed.
+  return config.update_time_us;
 }
 
 int32_t get_last_id_diff(void) {
-  // TODO: consider whether mtx_top is needed here (see get_period()).
   // last_id_diff is 32-bit aligned, Core0-only; M0+ read is atomic.
   return config.last_id_diff;
 }
@@ -161,8 +150,6 @@ void update_packet_metrics(
     int32_t* id_diff,
     int32_t* time_diff
 ) {
-  //static bool out_of_sequence = false;
-
   mutex_enter_blocking(&mtx_top);
 
   *id_diff = message->update_id - config.last_update_id;
@@ -172,26 +159,6 @@ void update_packet_metrics(
   if (*id_diff < 0) {
     linuxcnc_restart_detected = true;
   }
-
-  /*
-  if(*id_diff == 0) {
-      printf("LinuxCNC started.\n");
-  } else if(*id_diff != 1) {
-    if(! out_of_sequence) {
-      printf("WARNING: Updates out of sequence. %i %i %i\n",
-          config.last_update_id, update_id, *id_diff);
-      if(update_id == 0) {
-        printf("Reason: LinuxCNC restarted.\n");
-      } else if(config.last_update_id == 0) {
-        printf("Reason: RP restarted.\n");
-      }
-      out_of_sequence = true;
-    }
-  } else if(out_of_sequence) {
-    printf("       Recovered. %i\n", update_id);
-    out_of_sequence = false;
-  }
-  */
 
   config.last_update_id = message->update_id;
   config.last_update_time = message->time;
@@ -228,7 +195,6 @@ void update_joint_config(
     return;
   }
 
-  //printf("Setting CORE%i:%i\n", core, joint);
   mutex_enter_blocking(&mtx_joint[joint]);
 
   if(enabled != NULL) {
@@ -302,9 +268,6 @@ uint32_t get_joint_config(
   }
 
   mutex_enter_blocking(&mtx_joint[joint]);
-  //if(mutex_try_enter(&mtx_joint[joint], NULL) == false) {
-  //  return 0;
-  //}
 
   int32_t updated_by_other_core;
   switch(core) {

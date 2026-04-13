@@ -49,9 +49,6 @@ typedef struct {
   // Difference between requested position and actual position on RP.
   hal_s32_t* joint_pos_error[MAX_JOINT];
   hal_u32_t* joint_stale_packets[MAX_JOINT];
-
-  // For IN pins, HAL sets this to the value we want the IO pin set to on the RP.
-  // For OUT pins, this is the value the RP pin is reported via the network update.
   hal_bit_t* gpio_data_in[MAX_GPIO];
   hal_bit_t* gpio_data_in_not[MAX_GPIO];
   hal_bit_t* gpio_data_out[MAX_GPIO];

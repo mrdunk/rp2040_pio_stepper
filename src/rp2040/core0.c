@@ -414,11 +414,6 @@ void core0_main() {
     }
 
     process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, data_received);
-    //if(received_msg_count != 9) {
-      // Not the standard number of received packets.
-      // This likely was a config update.
-    //  printf("Received msgs: %u\t%u\n", received_msg_count, data_received);
-    //}
 
     if(received_msg_count > 0) {
       last_packet_tick = tick;

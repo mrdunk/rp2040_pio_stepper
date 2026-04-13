@@ -171,10 +171,7 @@ uint8_t do_steps(const uint8_t joint) {
   static int32_t last_pos_achieved[MAX_JOINT] = {0, 0, 0, 0};
   static double last_velocity[MAX_JOINT] = {0, 0, 0, 0};
   static uint32_t last_enabled[MAX_JOINT] = {0, 0, 0, 0};
-
-  //uint32_t clock_multiplier = clock_get_hz(clk_sys) / 1000000;
   static const uint32_t clock_multiplier = 133;
-
   static size_t dir_change_count[MAX_JOINT] = {0, 0, 0, 0};
   static uint32_t last_direction[MAX_JOINT] = {0, 0, 0, 0};
 
@@ -252,13 +249,6 @@ uint8_t do_steps(const uint8_t joint) {
 
   max_velocity /= update_period_us;
   max_accel /= update_period_us;
-
-  //double accel = velocity - last_velocity[joint];
-  //if(accel > max_accel) {
-  //  velocity = last_velocity[joint] + max_accel;
-  //} else if(accel < (-max_accel)) {
-  //  velocity = last_velocity[joint] - max_accel;
-  //}
 
   double step_count = fabs(velocity);
   int32_t step_len_ticks = 0;
