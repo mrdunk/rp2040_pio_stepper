@@ -134,6 +134,22 @@ Spindle `hal_param_*` calls are also converted to `goto port_error` (they alread
 
 ---
 
+## 4. Pre-refactor Tests
+
+Add tests for the three `unpack_*` functions currently without coverage, before applying `UNPACK_MSG`. This ensures any regression from the macro is caught immediately.
+
+| Function | Test file | What to assert |
+|---|---|---|
+| `unpack_gpio_config` | `driver_gpio_test.c` | `last_gpio_config[gpio].gpio_type`, `.index`, `.address` updated from `Reply_gpio_config` |
+| `unpack_spindle_speed` | `driver_network_RPtoPC_test.c` | `spindle_speed_out` and `spindle_at_speed` set correctly from `Reply_spindle_speed` |
+| `unpack_spindle_config` | `driver_network_RPtoPC_test.c` | `last_spindle_config[n].modbus_address`, `.vfd_type`, `.bitrate` updated from `Reply_spindle_config` |
+
+Each test follows the same pattern as existing unpack tests: build a reply struct, `memcpy` into a `NWBuffer`, call `process_data`, assert fields.
+
+`setup_data()` in `driver_network_RPtoPC_test.c` will need spindle fields wired up (`spindle_speed_out`, `spindle_at_speed`, `spindle_speed_in`, `spindle_poles`).
+
+---
+
 ## Out of scope
 
 - `frankencnc.hal` wiring blocks — left unrolled by design.

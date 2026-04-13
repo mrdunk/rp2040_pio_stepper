@@ -9,10 +9,21 @@ I use a straight point-to-point ethernet connecton to an empty network interface
 I use 192.168.12.1 for the LinuxCNC host.
 
 # Configuration
-There's a sample LinuxCNC .hal and .ini file in the src/driver/ folder.
+Machine-specific LinuxCNC config files live in `config/<machine-name>/`:
 
-The KP value in the .ini file governs the ammount of software smoothing applied to step generation.
-Technically valid ranges are from 1.0 - 0.0 but at 1.0 osilations are too large to be usable and at 0.0 no actual update will occur.
+```
+config/
+  frankencnc/
+    frankencnc.ini    -- LinuxCNC machine config
+    frankencnc.hal    -- HAL wiring for joints, GPIO, spindle
+```
+
+To launch LinuxCNC with a config: `linuxcnc config/frankencnc/frankencnc.ini`
+
+`rp2040_gpio_types.ini` lives in `src/driver/` and is included by the machine `.ini` via `#INCLUDE`. LinuxCNC resolves `#INCLUDE` paths relative to the including file's directory.
+
+The KP value in the .ini file governs the amount of software smoothing applied to step generation.
+Technically valid ranges are from 1.0 - 0.0 but at 1.0 oscillations are too large to be usable and at 0.0 no actual update will occur.
 `KP = 0.2` is a good balance between smoothing with very little added latency.
 
 # Wishlist
