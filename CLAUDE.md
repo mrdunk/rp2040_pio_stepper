@@ -134,6 +134,29 @@ and `driver_gpio_test.c` must wire it up. The mismatch won't be caught at
 configure time — it surfaces as a compile error only when a driver test is
 built.
 
+### Adding a HAL pin — use the PinDef tables
+
+`rtapi_app_main` no longer contains individual `init_hal_pin()` calls. New pins
+must be added as rows in the appropriate static table in `hal_rp2040_eth.c`:
+
+- `gpio_pins[]` — per-GPIO pins (`MAX_GPIO` channels)
+- `joint_pins[]` — per-joint pins (`MAX_JOINT` channels)
+- `spindle_pins[]` — per-spindle pins (`MAX_SPINDLE` channels)
+- `scalar_pins[]` — single-instance pins (use `chan_num = -1`, `stride = 0`)
+
+The pointer is computed as `(char*)port_data_array + offset + i * stride`, where
+`stride = sizeof(field_element_type*)` for per-channel arrays. Also add the
+corresponding field to `skeleton_t` in both `hal_rp2040_eth.c` and the
+hand-maintained copy in `src/test/mocks/driver_mocks.h` (see pitfall below).
+
+### `UNPACK_MSG` macro expands to two statements
+
+`UNPACK_MSG(T, var, buf, offset)` in `rp2040_network.c` expands to a
+declaration plus an `if` — two statements. It must appear at the top of a
+function body, never inside a bare `if/else` branch (which would only govern
+the first statement, silently skipping the null check). All eight `unpack_*`
+functions use it safely; keep this constraint when adding new ones.
+
 ### Recompile the LinuxCNC driver after changing `messages.h`
 
 Any change to a reply struct in `src/shared/messages.h` changes the wire
