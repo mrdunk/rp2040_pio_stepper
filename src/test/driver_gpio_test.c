@@ -370,13 +370,45 @@ static void test_unpack_gpio(void **state) {
     assert_int_equal(rx_offset, original_rx_offset += sizeof(reply));
 }
 
+static void test_unpack_gpio_config(void **state) {
+    (void) state;
+
+    skeleton_t data = {0};
+    setup_data(&data);
+
+    size_t rx_offset = 0;
+    size_t received_count = 0;
+    struct Message_gpio_config last_gpio_config[MAX_GPIO] = {0};
+
+    struct NWBuffer buffer = {0};
+    struct Reply_gpio_config reply = {
+        .type      = REPLY_GPIO_CONFIG,
+        .gpio_count = 3,
+        .gpio_type = GPIO_TYPE_NATIVE_IN,
+        .index     = 7,
+        .address   = 42,
+    };
+    memcpy(buffer.payload, &reply, sizeof(reply));
+    buffer.length = 8;  // 32-bit aligned size of Reply_gpio_config
+
+    bool result = unpack_gpio_config(&buffer, &rx_offset, &received_count, last_gpio_config);
+
+    assert_true(result);
+    assert_int_equal(received_count, 1);
+    assert_int_equal(rx_offset, 8);
+    assert_int_equal(last_gpio_config[3].gpio_type, GPIO_TYPE_NATIVE_IN);
+    assert_int_equal(last_gpio_config[3].index, 7);
+    assert_int_equal(last_gpio_config[3].address, 42);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_serialize_gpio_out_change),
         cmocka_unit_test(test_serialize_gpio_in_change),
         cmocka_unit_test(test_serialize_gpio_confirmation_pending),
         cmocka_unit_test(test_serialize_gpio_nothing_to_do),
-        cmocka_unit_test(test_unpack_gpio)
+        cmocka_unit_test(test_unpack_gpio),
+        cmocka_unit_test(test_unpack_gpio_config)
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);
