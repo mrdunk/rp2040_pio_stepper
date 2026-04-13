@@ -6,6 +6,7 @@
 #include "hal.h"        /* HAL public API decls */
 
 #include <limits.h>
+#include <stddef.h>
 
 #include "rp2040_defines.h"
 #include "../shared/messages.h"
@@ -181,6 +182,64 @@ bool init_hal_pin(
 }
 
 
+#define ARRAY_SIZE(a) ((int)(sizeof(a) / sizeof((a)[0])))
+
+typedef struct {
+    enum t_types   type;
+    hal_pin_dir_t  dir;
+    size_t         offset;
+    size_t         stride;
+    const char*    io_type;
+    int            chan_num;       /* -1 = scalar pin (no channel suffix) */
+    int            chan_num_len;
+    const char*    specific_name;
+} PinDef;
+
+static const PinDef gpio_pins[] = {
+    { PIN, HAL_OUT, offsetof(skeleton_t, gpio_data_in),         sizeof(hal_bit_t*),   "gpio", 0, 2, "in"         },
+    { PIN, HAL_OUT, offsetof(skeleton_t, gpio_data_in_not),     sizeof(hal_bit_t*),   "gpio", 0, 2, "in-not"     },
+    { PIN, HAL_IN,  offsetof(skeleton_t, gpio_data_out),        sizeof(hal_bit_t*),   "gpio", 0, 2, "out"        },
+    { PIN, HAL_IN,  offsetof(skeleton_t, gpio_data_out_invert), sizeof(hal_bit_t*),   "gpio", 0, 2, "out-invert" },
+    { U32, HAL_IN,  offsetof(skeleton_t, gpio_type),            sizeof(hal_u32_t*),   "gpio", 0, 2, "type"       },
+    { U32, HAL_IN,  offsetof(skeleton_t, gpio_index),           sizeof(hal_u32_t*),   "gpio", 0, 2, "index"      },
+    { U32, HAL_IN,  offsetof(skeleton_t, gpio_address),         sizeof(hal_u32_t*),   "gpio", 0, 2, "address"    },
+};
+
+static const PinDef joint_pins[] = {
+    { PIN,   HAL_IN,  offsetof(skeleton_t, joint_enable),            sizeof(hal_bit_t*),   "joint", 0, 1, "enable"           },
+    { S32,   HAL_IN,  offsetof(skeleton_t, joint_gpio_step),         sizeof(hal_s32_t*),   "joint", 0, 1, "gpio-step"        },
+    { S32,   HAL_IN,  offsetof(skeleton_t, joint_gpio_dir),          sizeof(hal_s32_t*),   "joint", 0, 1, "gpio-dir"         },
+    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_max_velocity),      sizeof(hal_float_t*), "joint", 0, 1, "max-velocity"     },
+    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_max_accel),         sizeof(hal_float_t*), "joint", 0, 1, "max-accel"        },
+    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_scale),             sizeof(hal_float_t*), "joint", 0, 1, "scale"            },
+    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_position),          sizeof(hal_float_t*), "joint", 0, 1, "pos-cmd"          },
+    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_velocity),          sizeof(hal_float_t*), "joint", 0, 1, "vel-cmd"          },
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_pos_feedback),      sizeof(hal_float_t*), "joint", 0, 1, "fb-pos"           },
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_step_len_ticks),    sizeof(hal_s32_t*),   "joint", 0, 1, "fb-step-len"      },
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_velocity_cmd),      sizeof(hal_float_t*), "joint", 0, 1, "fb-velocity-cmd"  },
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_accel_cmd),         sizeof(hal_float_t*), "joint", 0, 1, "fb-accel-cmd"     },
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_velocity_feedback), sizeof(hal_float_t*), "joint", 0, 1, "fb-velocity"      },
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_pos_error),         sizeof(hal_s32_t*),   "joint", 0, 1, "fb-pos-error"     },
+    { U32,   HAL_OUT, offsetof(skeleton_t, joint_stale_packets),     sizeof(hal_u32_t*),   "joint", 0, 1, "fb-stale-packets" },
+};
+
+static const PinDef spindle_pins[] = {
+    { PIN,   HAL_IN,  offsetof(skeleton_t, spindle_fwd),       sizeof(hal_bit_t*),   "spindle", 0, 1, "fwd"       },
+    { PIN,   HAL_IN,  offsetof(skeleton_t, spindle_rev),       sizeof(hal_bit_t*),   "spindle", 0, 1, "rev"       },
+    { FLOAT, HAL_IN,  offsetof(skeleton_t, spindle_speed_in),  sizeof(hal_float_t*), "spindle", 0, 1, "speed-in"  },
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, spindle_speed_out), sizeof(hal_float_t*), "spindle", 0, 1, "speed-out" },
+    { PIN,   HAL_OUT, offsetof(skeleton_t, spindle_at_speed),  sizeof(hal_bit_t*),   "spindle", 0, 1, "at-speed"  },
+};
+
+static const PinDef scalar_pins[] = {
+    { PIN, HAL_OUT, offsetof(skeleton_t, machine_enable_out),    0, "machine-enable-out",     -1, 1, NULL },
+    { S32, HAL_IN,  offsetof(skeleton_t, metric_time_diff),      0, "metrics-time-diff",      -1, 0, NULL },
+    { U32, HAL_IN,  offsetof(skeleton_t, metric_update_id),      0, "metrics-update-id",      -1, 0, NULL },
+    { U32, HAL_IN,  offsetof(skeleton_t, metric_rp_update_len),  0, "metrics-rp-update-len",  -1, 0, NULL },
+    { U32, HAL_IN,  offsetof(skeleton_t, metric_missed_packets), 0, "metrics-missed-packets", -1, 0, NULL },
+    { PIN, HAL_IN,  offsetof(skeleton_t, metric_eth_state),      0, "metrics-eth-state",      -1, 0, NULL },
+};
+
 int rtapi_app_main(void)
 {
   char name[HAL_NAME_LEN + 1];
@@ -202,8 +261,7 @@ int rtapi_app_main(void)
   if (port_data_array == 0) {
     rtapi_print_msg(RTAPI_MSG_ERR,
         "SKELETON: ERROR: hal_malloc() failed\n");
-    hal_exit(component_id);
-    return -1;
+    goto port_error;
   }
 
   /* Set some default values. */
@@ -213,169 +271,89 @@ int rtapi_app_main(void)
   }
 
 
-  /* Set up the HAL pins. */
-
-  for(int gpio_num = 0; gpio_num < MAX_GPIO; gpio_num++) {
-    /* Export the GPIO */
-    // Physical RP2040 input pin.
-    if(!init_hal_pin(PIN, HAL_OUT, &(port_data_array->gpio_data_in[gpio_num]), component_id, device_num, "gpio", gpio_num, 2, "in")) {
-      return -1;
-    }
-    if(!init_hal_pin(PIN, HAL_OUT, &(port_data_array->gpio_data_in_not[gpio_num]), component_id, device_num, "gpio", gpio_num, 2, "in-not")) {
-      return -1;
-    }
-    *port_data_array->gpio_data_in[gpio_num] = true;
-    *port_data_array->gpio_data_in_not[gpio_num] = false;
-
-    // Physical RP2040 output pin.
-    if(!init_hal_pin(PIN, HAL_IN, &(port_data_array->gpio_data_out[gpio_num]), component_id, device_num, "gpio", gpio_num, 2, "out")) {
-      return -1;
-    }
-    if(!init_hal_pin(PIN, HAL_IN, &(port_data_array->gpio_data_out_invert[gpio_num]), component_id, device_num, "gpio", gpio_num, 2, "out-invert")) {
-      return -1;
-    }
-    *port_data_array->gpio_data_out[gpio_num] = false;
-    *port_data_array->gpio_data_out_invert[gpio_num] = false;
-
-    if(!init_hal_pin(U32, HAL_IN, &(port_data_array->gpio_type[gpio_num]), component_id, device_num, "gpio", gpio_num, 2, "type")) {
-      return -1;
-    }
-    *port_data_array->gpio_type[gpio_num] = GPIO_TYPE_NOT_SET;
-
-    if(!init_hal_pin(U32, HAL_IN, &(port_data_array->gpio_index[gpio_num]), component_id, device_num, "gpio", gpio_num, 2, "index")) {
-      return -1;
-    }
-    if(!init_hal_pin(U32, HAL_IN, &(port_data_array->gpio_address[gpio_num]), component_id, device_num, "gpio", gpio_num, 2, "address")) {
-      return -1;
+  /* Set up the HAL pins via descriptor tables. */
+  for (int i = 0; i < MAX_GPIO; i++) {
+    for (int j = 0; j < ARRAY_SIZE(gpio_pins); j++) {
+      const PinDef* def = &gpio_pins[j];
+      void* fp = (void*)((char*)port_data_array + def->offset + i * def->stride);
+      if (!init_hal_pin(def->type, def->dir, fp, component_id, device_num,
+                        def->io_type, i, def->chan_num_len, def->specific_name)) {
+        goto port_error;
+      }
     }
   }
+  for (int i = 0; i < MAX_GPIO; i++) {
+    *port_data_array->gpio_data_in[i]         = true;
+    *port_data_array->gpio_data_in_not[i]     = false;
+    *port_data_array->gpio_data_out[i]        = false;
+    *port_data_array->gpio_data_out_invert[i] = false;
+    *port_data_array->gpio_type[i]            = GPIO_TYPE_NOT_SET;
+  }
 
-  if(!init_hal_pin(PIN, HAL_OUT, &(port_data_array->machine_enable_out), component_id, device_num, "machine-enable-out", -1, 1, NULL)) {
-    return -1;
+  for (int j = 0; j < ARRAY_SIZE(scalar_pins); j++) {
+    const PinDef* def = &scalar_pins[j];
+    void* fp = (void*)((char*)port_data_array + def->offset);
+    if (!init_hal_pin(def->type, def->dir, fp, component_id, device_num,
+                      def->io_type, def->chan_num, def->chan_num_len, def->specific_name)) {
+      goto port_error;
+    }
   }
   *port_data_array->machine_enable_out = false;
 
-  for(int num_joint = 0; num_joint < MAX_JOINT; num_joint++) {
-    /* Export the joint position pin(s) */
-    if(!init_hal_pin(PIN, HAL_IN, &(port_data_array->joint_enable[num_joint]), component_id, device_num, "joint", num_joint, 1, "enable")) {
-      return -1;
-    }
-    *port_data_array->joint_enable[num_joint] = false;
-    
-    if(!init_hal_pin(S32, HAL_IN, &(port_data_array->joint_gpio_step[num_joint]), component_id, device_num, "joint", num_joint, 1, "gpio-step")) {
-      return -1;
-    }
-    *port_data_array->joint_gpio_step[num_joint] = -1;
-
-    if(!init_hal_pin(S32, HAL_IN, &(port_data_array->joint_gpio_dir[num_joint]), component_id, device_num, "joint", num_joint, 1, "gpio-dir")) {
-      return -1;
-    }
-    *port_data_array->joint_gpio_dir[num_joint] = -1;
-    
-    if(!init_hal_pin(FLOAT, HAL_IN, &(port_data_array->joint_max_velocity[num_joint]), component_id, device_num, "joint", num_joint, 1, "max-velocity")) {
-      return -1;
-    }
-    if(!init_hal_pin(FLOAT, HAL_IN, &(port_data_array->joint_max_accel[num_joint]), component_id, device_num, "joint", num_joint, 1, "max-accel")) {
-      return -1;
-    }
-    if(!init_hal_pin(FLOAT, HAL_IN, &(port_data_array->joint_scale[num_joint]), component_id, device_num, "joint", num_joint, 1, "scale")) {
-      return -1;
-    }
-    if(!init_hal_pin(FLOAT, HAL_IN, &(port_data_array->joint_position[num_joint]), component_id, device_num, "joint", num_joint, 1, "pos-cmd")) {
-      return -1;
-    }
-    if(!init_hal_pin(FLOAT, HAL_IN, &(port_data_array->joint_velocity[num_joint]), component_id, device_num, "joint", num_joint, 1, "vel-cmd")) {
-      return -1;
-    }
-
-    if(!init_hal_pin(FLOAT, HAL_OUT, &(port_data_array->joint_pos_feedback[num_joint]), component_id, device_num, "joint", num_joint, 1, "fb-pos")) {
-      return -1;
-    }
-    if(!init_hal_pin(FLOAT, HAL_OUT, &(port_data_array->joint_step_len_ticks[num_joint]), component_id, device_num, "joint", num_joint, 1, "fb-step-len")) {
-      return -1;
-    }
-    if(!init_hal_pin(FLOAT, HAL_OUT, &(port_data_array->joint_velocity_cmd[num_joint]), component_id, device_num, "joint", num_joint, 1, "fb-velocity-cmd")) {
-      return -1;
-    }
-    if(!init_hal_pin(FLOAT, HAL_OUT, &(port_data_array->joint_accel_cmd[num_joint]), component_id, device_num, "joint", num_joint, 1, "fb-accel-cmd")) {
-      return -1;
-    }
-    if(!init_hal_pin(FLOAT, HAL_OUT, &(port_data_array->joint_velocity_feedback[num_joint]), component_id, device_num, "joint", num_joint, 1, "fb-velocity")) {
-      return -1;
-    }
-    if(!init_hal_pin(FLOAT, HAL_OUT, &(port_data_array->joint_pos_error[num_joint]), component_id, device_num, "joint", num_joint, 1, "fb-pos-error")) {
-      return -1;
-    }
-    if(!init_hal_pin(U32, HAL_OUT, &(port_data_array->joint_stale_packets[num_joint]), component_id, device_num, "joint", num_joint, 1, "fb-stale-packets")) {
-      return -1;
+  for (int i = 0; i < MAX_JOINT; i++) {
+    for (int j = 0; j < ARRAY_SIZE(joint_pins); j++) {
+      const PinDef* def = &joint_pins[j];
+      void* fp = (void*)((char*)port_data_array + def->offset + i * def->stride);
+      if (!init_hal_pin(def->type, def->dir, fp, component_id, device_num,
+                        def->io_type, i, def->chan_num_len, def->specific_name)) {
+        goto port_error;
+      }
     }
   }
+  for (int i = 0; i < MAX_JOINT; i++) {
+    *port_data_array->joint_enable[i]    = false;
+    *port_data_array->joint_gpio_step[i] = -1;
+    *port_data_array->joint_gpio_dir[i]  = -1;
+  }
 
-  /* Export spindle pins, */
-  for(uint8_t num_spindle = 0; num_spindle < MAX_SPINDLE; num_spindle++) {
-    if(!init_hal_pin(PIN, HAL_IN, &(port_data_array->spindle_fwd[num_spindle]), component_id, device_num, "spindle", num_spindle, 1, "fwd")) {
-      return -1;
-    }
-    if(!init_hal_pin(PIN, HAL_IN, &(port_data_array->spindle_rev[num_spindle]), component_id, device_num, "spindle", num_spindle, 1, "rev")) {
-      return -1;
-    }
-
-    if(!init_hal_pin(FLOAT, HAL_IN, &(port_data_array->spindle_speed_in[num_spindle]), component_id, device_num, "spindle", num_spindle, 1, "speed-in")) {
-      return -1;
-    }
-    if(!init_hal_pin(FLOAT, HAL_OUT, &(port_data_array->spindle_speed_out[num_spindle]), component_id, device_num, "spindle", num_spindle, 1, "speed-out")) {
-      return -1;
-    }
-
-    if(!init_hal_pin(PIN, HAL_OUT, &(port_data_array->spindle_at_speed[num_spindle]), component_id, device_num, "spindle", num_spindle, 1, "at-speed")) {
-      return -1;
+  /* Export spindle pins. */
+  for (int i = 0; i < MAX_SPINDLE; i++) {
+    for (int j = 0; j < ARRAY_SIZE(spindle_pins); j++) {
+      const PinDef* def = &spindle_pins[j];
+      void* fp = (void*)((char*)port_data_array + def->offset + i * def->stride);
+      if (!init_hal_pin(def->type, def->dir, fp, component_id, device_num,
+                        def->io_type, i, def->chan_num_len, def->specific_name)) {
+        goto port_error;
+      }
     }
 
-    retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_vfd_type[num_spindle]),
-        component_id, "rp2040_eth.%d.spindle.%d.vfd-type", device_num, num_spindle);
+    retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_vfd_type[i]),
+        component_id, "rp2040_eth.%d.spindle.%d.vfd-type", device_num, i);
     if (retval < 0) {
       goto port_error;
     }
-    port_data_array->spindle_vfd_type[num_spindle] = MODBUS_TYPE_NOT_SET;
+    port_data_array->spindle_vfd_type[i] = MODBUS_TYPE_NOT_SET;
 
-    retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_address[num_spindle]),
-        component_id, "rp2040_eth.%d.spindle.%d.address", device_num, num_spindle);
+    retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_address[i]),
+        component_id, "rp2040_eth.%d.spindle.%d.address", device_num, i);
     if (retval < 0) {
       goto port_error;
     }
-    port_data_array->spindle_address[num_spindle] = 1;
+    port_data_array->spindle_address[i] = 1;
 
-    retval = hal_param_float_newf(HAL_RW, &(port_data_array->spindle_poles[num_spindle]),
-        component_id, "rp2040_eth.%d.spindle.%d.poles", device_num, num_spindle);
+    retval = hal_param_float_newf(HAL_RW, &(port_data_array->spindle_poles[i]),
+        component_id, "rp2040_eth.%d.spindle.%d.poles", device_num, i);
     if (retval < 0) {
       goto port_error;
     }
-    port_data_array->spindle_poles[num_spindle] = 2;
+    port_data_array->spindle_poles[i] = 2;
 
-    retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_bitrate[num_spindle]),
-        component_id, "rp2040_eth.%d.spindle.%d.bitrate", device_num, num_spindle);
+    retval = hal_param_u32_newf(HAL_RW, &(port_data_array->spindle_bitrate[i]),
+        component_id, "rp2040_eth.%d.spindle.%d.bitrate", device_num, i);
     if (retval < 0) {
       goto port_error;
     }
-    port_data_array->spindle_bitrate[num_spindle] = 9600;
-  }
-
-  /* Export metrics pins, */
-  if(!init_hal_pin(S32, HAL_IN, &(port_data_array->metric_time_diff), component_id, device_num, "metrics-time-diff", -1, 0, NULL)) {
-    return -1;
-  }
-  if(!init_hal_pin(U32, HAL_IN, &(port_data_array->metric_update_id), component_id, device_num, "metrics-update-id", -1, 0, NULL)) {
-    return -1;
-  }
-  if(!init_hal_pin(U32, HAL_IN, &(port_data_array->metric_rp_update_len), component_id, device_num, "metrics-rp-update-len", -1, 0, NULL)) {
-    return -1;
-  }
-  if(!init_hal_pin(U32, HAL_IN, &(port_data_array->metric_missed_packets), component_id, device_num, "metrics-missed-packets", -1, 0, NULL)) {
-    return -1;
-  }
-
-  if(!init_hal_pin(PIN, HAL_IN, &(port_data_array->metric_eth_state), component_id, device_num, "metrics-eth-state", -1, 0, NULL)) {
-    return -1;
+    port_data_array->spindle_bitrate[i] = 9600;
   }
 
   /* STEP 4: export write function */
@@ -386,8 +364,7 @@ int rtapi_app_main(void)
     rtapi_print_msg(RTAPI_MSG_ERR,
         "SKELETON: ERROR: port %d write funct export failed\n",
         device_num);
-    hal_exit(component_id);
-    return -1;
+    goto port_error;
   }
 
   retval = init_eth(device_num);
@@ -396,8 +373,7 @@ int rtapi_app_main(void)
     rtapi_print_msg(RTAPI_MSG_ERR,
         "SKELETON: ERROR: Failed to find device %d on the network.\n",
         device_num);
-    hal_exit(component_id);
-    return -1;
+    goto port_error;
   }
 
   rtapi_print_msg(RTAPI_MSG_INFO,
