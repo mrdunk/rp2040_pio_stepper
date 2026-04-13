@@ -209,12 +209,53 @@ static void test_joint_metrics(void **state) {
 }
 
 
+/* stale_packet_count uses += so counts accumulate across servo cycles. */
+static void test_joint_metrics_stale_accumulates(void **state) {
+    (void) state;
+
+    struct NWBuffer buffer = {0};
+    size_t mess_received_count = 0;
+
+    memset(joint_stale_packets, 0, sizeof(joint_stale_packets));
+    skeleton_t data = {0};
+    setup_data(&data);
+
+    struct Reply_joint_metrics message = {
+        .type = REPLY_JOINT_METRICS,
+        .stale_packet_count = {5, 0, 3, 1}
+    };
+
+    /* First servo cycle. */
+    memcpy(buffer.payload, &message, sizeof(message));
+    buffer.length = sizeof(message);
+    buffer.checksum = checksum(0, 0, buffer.length, buffer.payload);
+    process_data(&buffer, &data, &mess_received_count,
+                 sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum),
+                 NULL, NULL, NULL);
+
+    /* Second servo cycle with same counts. */
+    mess_received_count = 0;
+    memcpy(buffer.payload, &message, sizeof(message));
+    buffer.length = sizeof(message);
+    buffer.checksum = checksum(0, 0, buffer.length, buffer.payload);
+    process_data(&buffer, &data, &mess_received_count,
+                 sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum),
+                 NULL, NULL, NULL);
+
+    /* HAL pin holds the running total across both cycles. */
+    for (size_t joint = 0; joint < MAX_JOINT; joint++) {
+        assert_int_equal(*(data.joint_stale_packets[joint]),
+                         message.stale_packet_count[joint] * 2);
+    }
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_timing),
         cmocka_unit_test(test_joint_movement),
         cmocka_unit_test(test_joint_config),
-        cmocka_unit_test(test_joint_metrics)
+        cmocka_unit_test(test_joint_metrics),
+        cmocka_unit_test(test_joint_metrics_stale_accumulates)
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);

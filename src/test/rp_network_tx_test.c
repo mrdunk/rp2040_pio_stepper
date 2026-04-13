@@ -112,6 +112,30 @@ static void test_serialise_joint_movement(void **state) {
     }
 }
 
+static void test_serialise_joint_metrics(void **state) {
+    (void) state;
+
+    struct NWBuffer tx_buf = {0};
+
+    /* Seed stale counts for each joint via simulated Core0 double-writes. */
+    for (size_t j = 0; j < MAX_JOINT; j++) {
+        config.joint[j].updated_from_c0  = 0;
+        config.joint[j].stale_packet_count = j + 1;  /* 1, 2, 3, 4 */
+    }
+
+    bool result = serialise_joint_metrics(&tx_buf);
+    assert_true(result);
+    assert_int_equal(tx_buf.length, sizeof(struct Reply_joint_metrics));
+
+    struct Reply_joint_metrics* reply = (void*)tx_buf.payload;
+    assert_int_equal(reply->type, REPLY_JOINT_METRICS);
+    for (size_t j = 0; j < MAX_JOINT; j++) {
+        assert_int_equal(reply->stale_packet_count[j], j + 1);
+        /* get_and_reset_stale_count() resets to zero after serialise. */
+        assert_int_equal(config.joint[j].stale_packet_count, 0);
+    }
+}
+
 /* Out of space in the buffer causes error. */
 static void test_serialise_overflow(void **state) {
     (void) state; /* unused */
@@ -140,6 +164,7 @@ int main(void) {
         cmocka_unit_test(test_serialise_timing),
         cmocka_unit_test(test_serialise_timing_overflow),
         cmocka_unit_test(test_serialise_joint_movement),
+        cmocka_unit_test(test_serialise_joint_metrics),
         cmocka_unit_test(test_serialise_overflow)
     };
 

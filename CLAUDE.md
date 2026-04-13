@@ -105,3 +105,38 @@ for (int i = bank_offset; i < 32 + bank_offset; i++) {
 The mock returns 0 on the first call. Guards like `if (time_last > 0)` fail
 when the real first timestamp is 0. Use a dedicated `bool time_initialized`
 flag instead (see `timing.c`).
+
+### `init_config()` does not reset `ConfigAxis` fields
+
+`init_config()` initialises mutexes and GPIO state but does **not** reset the
+`config.joint[]` array. Tests that depend on a clean per-joint state (e.g.
+`updated_from_c0`, `stale_packet_count`) must zero those fields explicitly in
+their setup function:
+
+```c
+for (size_t j = 0; j < MAX_JOINT; j++) {
+    config.joint[j].updated_from_c0    = 0;
+    config.joint[j].updated_from_c1    = 0;
+    config.joint[j].stale_packet_count = 0;
+}
+```
+
+Failing to do this causes state from earlier tests to leak (symptom: counters
+accumulate to unexpectedly large values).
+
+### `driver_mocks.h` `skeleton_t` must mirror `hal_rp2040_eth.c`
+
+`src/test/mocks/driver_mocks.h` contains a hand-maintained copy of
+`skeleton_t`. It is **not** auto-generated. Any field added to the real
+`skeleton_t` in `hal_rp2040_eth.c` must also be added here, and the
+corresponding test `setup_data()` functions in `driver_network_RPtoPC_test.c`
+and `driver_gpio_test.c` must wire it up. The mismatch won't be caught at
+configure time — it surfaces as a compile error only when a driver test is
+built.
+
+### Recompile the LinuxCNC driver after changing `messages.h`
+
+Any change to a reply struct in `src/shared/messages.h` changes the wire
+format. The LinuxCNC driver binary must be recompiled and reinstalled after
+such a change. Symptom of a stale binary: "WARN: Unconsumed RX buffer
+remainder: N bytes" where N equals the size of the new field(s).
