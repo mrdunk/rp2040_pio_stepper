@@ -1,5 +1,9 @@
 #ifndef DRIVER_MOCKS__H
 #define DRIVER_MOCKS__H
+/* Hand-maintained mock for host-side driver tests. skeleton_t here must mirror
+ * the production skeleton_t in src/driver/hal_rp2040_eth.c — it is NOT
+ * auto-generated. Add any new field to both structs and wire it up in the
+ * setup_data() functions in driver_network_RPtoPC_test.c and driver_gpio_test.c. */
 
 #include <errno.h>
 #include <stdbool.h>

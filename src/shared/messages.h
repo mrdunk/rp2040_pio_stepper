@@ -5,7 +5,12 @@
 #include <stdint.h>
 
 /* This file contains objects that are passed over Ethernet UDP between host and RP2040.
- * Multiple structs can be packed in an array. */
+ * Multiple structs can be packed in an array.
+ *
+ * IMPORTANT: Any change to a struct here changes the wire format. After editing,
+ * recompile and reinstall the LinuxCNC driver (hal_rp2040_eth.so) and reflash the
+ * RP2040 firmware. A stale driver binary shows: "WARN: Unconsumed RX buffer
+ * remainder: N bytes" where N equals the size of the new/changed field(s). */
 
 #ifdef BUILD_TESTS
 
