@@ -28,6 +28,10 @@ hal_float_t joint_velocity_feedback[4];
 hal_s32_t joint_pos_error[4];
 hal_u32_t joint_stale_packets[4];
 
+hal_float_t spindle_speed_out[MAX_SPINDLE];
+hal_float_t spindle_speed_in[MAX_SPINDLE];
+hal_bit_t   spindle_at_speed[MAX_SPINDLE];
+
 void setup_data(skeleton_t* data) {
   data->metric_update_id = &metric_update_id;
   data->metric_time_diff = &metric_time_diff;
@@ -47,6 +51,13 @@ void setup_data(skeleton_t* data) {
     data->joint_velocity_feedback[joint] = &(joint_velocity_feedback[joint]);
     data->joint_pos_error[joint] = &(joint_pos_error[joint]);
     data->joint_stale_packets[joint] = &(joint_stale_packets[joint]);
+  }
+
+  for (size_t s = 0; s < MAX_SPINDLE; s++) {
+    data->spindle_speed_out[s] = &spindle_speed_out[s];
+    data->spindle_speed_in[s]  = &spindle_speed_in[s];
+    data->spindle_at_speed[s]  = &spindle_at_speed[s];
+    data->spindle_poles[s]     = 4.0;
   }
 }
 
@@ -249,13 +260,109 @@ static void test_joint_metrics_stale_accumulates(void **state) {
     }
 }
 
+static void test_unpack_spindle_speed(void **state) {
+    (void) state;
+
+    skeleton_t data = {0};
+    memset(spindle_speed_out, 0, sizeof(spindle_speed_out));
+    memset(spindle_speed_in,  0, sizeof(spindle_speed_in));
+    memset(spindle_at_speed,  0, sizeof(spindle_at_speed));
+    setup_data(&data);
+
+    size_t rx_offset = 0;
+    size_t received_count = 0;
+
+    /* poles=4, speed=50.0 Hz → rpm = 50 * 120 / 4 = 1500 */
+    struct NWBuffer buffer = {0};
+    struct Reply_spindle_speed reply = {
+        .type          = REPLY_SPINDLE_SPEED,
+        .spindle_index = 0,
+        .speed         = 50.0,
+    };
+    *data.spindle_speed_in[0] = 1500.0;
+
+    memcpy(buffer.payload, &reply, sizeof(reply));
+    buffer.length = sizeof(reply);  /* sizeof = 24, alligned32(24) = 24 */
+
+    bool result = unpack_spindle_speed(&buffer, &rx_offset, &received_count, &data);
+
+    assert_true(result);
+    assert_int_equal(received_count, 1);
+    assert_double_equal(*data.spindle_speed_out[0], 1500.0, 0.01);
+    assert_true(*data.spindle_at_speed[0]);  /* |1500 - 1500| < 10 */
+    assert_int_equal(rx_offset, 24);  /* sizeof(Reply_spindle_speed) = 24 = alligned32(24) */
+}
+
+static void test_unpack_spindle_not_at_speed(void **state) {
+    (void) state;
+
+    skeleton_t data = {0};
+    memset(spindle_speed_out, 0, sizeof(spindle_speed_out));
+    memset(spindle_speed_in,  0, sizeof(spindle_speed_in));
+    memset(spindle_at_speed,  0, sizeof(spindle_at_speed));
+    setup_data(&data);
+
+    size_t rx_offset = 0;
+    size_t received_count = 0;
+
+    /* poles=4, speed=50.0 Hz → rpm = 1500; commanded = 1520 → |diff| = 20 > 10 */
+    struct NWBuffer buffer = {0};
+    struct Reply_spindle_speed reply = {
+        .type          = REPLY_SPINDLE_SPEED,
+        .spindle_index = 0,
+        .speed         = 50.0,
+    };
+    *data.spindle_speed_in[0] = 1520.0;
+
+    memcpy(buffer.payload, &reply, sizeof(reply));
+    buffer.length = sizeof(reply);
+
+    bool result = unpack_spindle_speed(&buffer, &rx_offset, &received_count, &data);
+
+    assert_true(result);
+    assert_int_equal(received_count, 1);
+    assert_double_equal(*data.spindle_speed_out[0], 1500.0, 0.01);
+    assert_false(*data.spindle_at_speed[0]);  /* |1500 - 1520| = 20 >= 10 */
+}
+
+static void test_unpack_spindle_config(void **state) {
+    (void) state;
+
+    size_t rx_offset = 0;
+    size_t received_count = 0;
+    struct Message_spindle_config last_spindle_config[MAX_SPINDLE] = {0};
+
+    struct NWBuffer buffer = {0};
+    struct Reply_spindle_config reply = {
+        .type           = REPLY_SPINDLE_CONFIG,
+        .spindle_index  = 0,
+        .modbus_address = 2,
+        .vfd_type       = 1,
+        .bitrate        = 19200,
+    };
+    memcpy(buffer.payload, &reply, sizeof(reply));
+    buffer.length = 8;  /* sizeof(reply) = 6, alligned32(6) = 8 */
+
+    bool result = unpack_spindle_config(&buffer, &rx_offset, &received_count, last_spindle_config);
+
+    assert_true(result);
+    assert_int_equal(received_count, 1);
+    assert_int_equal(rx_offset, 8);  /* alligned32(sizeof(reply)) = 8 */
+    assert_int_equal(last_spindle_config[0].modbus_address, 2);
+    assert_int_equal(last_spindle_config[0].vfd_type, 1);
+    assert_int_equal(last_spindle_config[0].bitrate, 19200);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_timing),
         cmocka_unit_test(test_joint_movement),
         cmocka_unit_test(test_joint_config),
         cmocka_unit_test(test_joint_metrics),
-        cmocka_unit_test(test_joint_metrics_stale_accumulates)
+        cmocka_unit_test(test_joint_metrics_stale_accumulates),
+        cmocka_unit_test(test_unpack_spindle_speed),
+        cmocka_unit_test(test_unpack_spindle_not_at_speed),
+        cmocka_unit_test(test_unpack_spindle_config)
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);
