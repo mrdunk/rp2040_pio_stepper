@@ -15,6 +15,8 @@
 
 #endif  // BUILD_TESTS
 
+/* Declare and null-check an unpacked message. Must be used at the top of a
+ * function body, not inside a bare if/else — it expands to two statements. */
 #define UNPACK_MSG(T, var, buf, offset) \
     T* var = unpack_nw_buff((buf), *(offset), (offset), NULL, sizeof(T)); \
     if (!(var)) return false;
