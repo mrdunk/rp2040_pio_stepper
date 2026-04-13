@@ -147,7 +147,7 @@ must be added as rows in the appropriate static table in `hal_rp2040_eth.c`:
 The pointer is computed as `(char*)port_data_array + offset + i * stride`, where
 `stride = sizeof(field_element_type*)` for per-channel arrays. Also add the
 corresponding field to `skeleton_t` in both `hal_rp2040_eth.c` and the
-hand-maintained copy in `src/test/mocks/driver_mocks.h` (see pitfall below).
+hand-maintained copy in `src/test/mocks/driver_mocks.h` (see pitfall above).
 
 ### `UNPACK_MSG` macro expands to two statements
 
