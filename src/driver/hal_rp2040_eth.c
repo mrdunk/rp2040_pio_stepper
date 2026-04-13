@@ -173,7 +173,7 @@ bool init_hal_pin(
     }
     if (retval < 0) {
       rtapi_print_msg(RTAPI_MSG_ERR,
-                      "SKELETON: ERROR: var export failed with err=%i\n",
+                      "RP2040: ERROR: var export failed with err=%i\n",
                       retval);
       hal_exit(component_id);
       return false;
@@ -255,7 +255,7 @@ int rtapi_app_main(void)
   component_id = hal_init("hal_rp2040_eth");
   if (component_id < 0) {
     rtapi_print_msg(RTAPI_MSG_ERR,
-        "SKELETON: ERROR: hal_init() failed\n");
+        "RP2040: ERROR: hal_init() failed\n");
     return -1;
   }
 
@@ -263,7 +263,7 @@ int rtapi_app_main(void)
   port_data_array = hal_malloc(sizeof(skeleton_t));
   if (port_data_array == 0) {
     rtapi_print_msg(RTAPI_MSG_ERR,
-        "SKELETON: ERROR: hal_malloc() failed\n");
+        "RP2040: ERROR: hal_malloc() failed\n");
     goto port_error;
   }
 
@@ -367,7 +367,7 @@ int rtapi_app_main(void)
       component_id);
   if (retval < 0) {
     rtapi_print_msg(RTAPI_MSG_ERR,
-        "SKELETON: ERROR: port %d write funct export failed\n",
+        "RP2040: ERROR: port %d write funct export failed\n",
         device_num);
     goto port_error;
   }
@@ -376,19 +376,19 @@ int rtapi_app_main(void)
 
   if (retval < 0) {
     rtapi_print_msg(RTAPI_MSG_ERR,
-        "SKELETON: ERROR: Failed to find device %d on the network.\n",
+        "RP2040: ERROR: Failed to find device %d on the network.\n",
         device_num);
     goto port_error;
   }
 
   rtapi_print_msg(RTAPI_MSG_INFO,
-      "SKELETON: installed driver.\n");
+      "RP2040: installed driver.\n");
   hal_ready(component_id);
   return 0;
 
 port_error:
     rtapi_print_msg(RTAPI_MSG_ERR,
-        "SKELETON: ERROR: port %d var export failed with err=%i\n",
+        "RP2040: ERROR: port %d var export failed with err=%i\n",
         device_num, retval);
     hal_exit(component_id);
     return -1;
@@ -495,7 +495,6 @@ bool configure_spindle(
         ||
         last_spindle_config[spindle].bitrate != data->spindle_bitrate[spindle]
     ) {
-      //printf("Configuring spindle: %u\t%u\n", spindle, data->spindle_vfd_type[spindle]);
       pack_success = pack_success && serialise_spindle_config(
           tx_buffer,
           spindle,
@@ -559,8 +558,8 @@ static void write_port(void *arg, long period)
   pack_success = pack_success && serialize_timing(&buffer, count, rtapi_get_time());
 
   // Put GPIO values in network buffer.
-  //pack_success &= serialize_gpio(&buffer, data);
-  // TODO: Fix feedback of serialize_gpio.
+  // serialize_gpio() return value is not checked: a failed pack still allows
+  // the rest of the buffer to be sent with whatever was packed.
   serialize_gpio(&buffer, data);
 
   // Send configuration data to RP.
@@ -570,13 +569,6 @@ static void write_port(void *arg, long period)
   pack_success = pack_success && serialize_joint_pos(&buffer, data);
 
   // No need to update each spindle every cycle.
-  //if(count % 100 < MAX_SPINDLE) {
-  //  size_t spindle = count % 100;
-  //  if(data->spindle_vfd_type[spindle] != MODBUS_TYPE_NOT_SET) {
-  //    float speed = *data->spindle_speed_in[spindle] / (120.0 / data->spindle_poles[spindle]);
-  //    pack_success = pack_success && serialise_spindle_speed_in(&buffer, spindle, speed);
-  //  }
-  //}
   if(count % 100 == 0) {
     pack_success = pack_success && serialise_spindle_speed_in(&buffer, data);
   }

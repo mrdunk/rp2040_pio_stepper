@@ -160,7 +160,7 @@ bool serialise_spindle_speed_in(
     skeleton_t* data
 )
 {
-  bool at_least_one_eneabled = false;
+  bool at_least_one_enabled = false;
 
   struct Message_spindle_speed message;
   message.type = MSG_SET_SPINDLE_SPEED;
@@ -171,14 +171,14 @@ bool serialise_spindle_speed_in(
     if(data->spindle_vfd_type[spindle] == MODBUS_TYPE_NOT_SET) {
       continue;
     }
-    at_least_one_eneabled = true;
+    at_least_one_enabled = true;
 
     speed =
       *data->spindle_speed_in[spindle] / (120.0 / data->spindle_poles[spindle]);
     message.speed[spindle] = speed;
   }
 
-  if(at_least_one_eneabled) {
+  if(at_least_one_enabled) {
     return pack_nw_buff(tx_buf, &message, sizeof(message));
   }
   return true;
@@ -482,9 +482,7 @@ bool unpack_gpio(
 
   data->gpio_confirmation_pending[bank] = reply->confirmation_pending;
 
-  for(size_t gpio_per_bank = 0; gpio_per_bank < 32; gpio_per_bank++) {
-    data->gpio_data_received[bank] = values;
-  }
+  data->gpio_data_received[bank] = values;
   (*received_count)++;
   return true;
 }
@@ -499,7 +497,6 @@ void process_data(
     struct Message_gpio_config* last_gpio_config,
     struct Message_spindle_config* last_spindle_config
 ) {
-  // TODO: Pass in receive_count.
   size_t rx_offset = 0;
 
   if(rx_buf->length + sizeof(rx_buf->length) + sizeof(rx_buf->checksum) != expected_length) {
