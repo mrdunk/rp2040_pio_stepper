@@ -29,7 +29,7 @@ hal_s32_t joint_pos_error[4];
 hal_u32_t joint_overrun_count[4];
 hal_u32_t joint_underrun_count[4];
 hal_float_t metric_overrun_ratio;
-hal_float_t metric_overrun_vs_underrun;
+hal_float_t metric_underrun_ratio;
 
 hal_float_t spindle_speed_out[MAX_SPINDLE];
 hal_float_t spindle_speed_in[MAX_SPINDLE];
@@ -57,7 +57,7 @@ void setup_data(skeleton_t* data) {
     data->joint_underrun_count[joint] = &(joint_underrun_count[joint]);
   }
   data->metric_overrun_ratio       = &metric_overrun_ratio;
-  data->metric_overrun_vs_underrun = &metric_overrun_vs_underrun;
+  data->metric_underrun_ratio = &metric_underrun_ratio;
 
   for (size_t s = 0; s < MAX_SPINDLE; s++) {
     data->spindle_speed_out[s] = &spindle_speed_out[s];
@@ -280,7 +280,7 @@ static void test_joint_metrics_ema_ratios(void **state) {
     memset(joint_overrun_count,  0, sizeof(joint_overrun_count));
     memset(joint_underrun_count, 0, sizeof(joint_underrun_count));
     metric_overrun_ratio       = 0.0;
-    metric_overrun_vs_underrun = 0.0;
+    metric_underrun_ratio = 0.0;
 
     skeleton_t data = {0};
     setup_data(&data);
@@ -303,25 +303,23 @@ static void test_joint_metrics_ema_ratios(void **state) {
                  NULL, NULL, NULL);
 
     /* After one EMA step with total_overrun=4, total_underrun=0:
-     *   ema_overrun  = 2.0 * (1 - α) + 4 * α  ≈ 2.0  (α is tiny)
-     *   ema_underrun = 2.0 * (1 - α) + 0 * α  ≈ 2.0
-     * Ratio ≈ 0.5, overrun_ratio ≈ 2.0
-     * We only test direction: overrun_ratio > 0, overrun_vs_underrun in (0, 1). */
+     *   ema_overrun  = 2.0 * (1 - α) + 4 * α  (α = 1/1000, so ≈ 2.002)
+     *   ema_underrun = 2.0 * (1 - α) + 0 * α  (≈ 1.998)
+     * Both ratios reflect their respective EMA values. */
     assert_true(*data.metric_overrun_ratio > 0.0);
-    assert_true(*data.metric_overrun_vs_underrun > 0.0);
-    assert_true(*data.metric_overrun_vs_underrun < 1.0);
+    assert_true(*data.metric_underrun_ratio > 0.0);
 
-    /* With ema_overrun >> ema_underrun, ratio should approach 1. */
+    /* With ema_underrun = 0 and zero underrun counts, underrun_ratio → 0. */
     data.ema_overrun  = 1000.0;
-    data.ema_underrun = 0.001;
+    data.ema_underrun = 0.0;
     memcpy(buffer.payload, &message, sizeof(message));
     buffer.checksum = checksum(0, 0, buffer.length, buffer.payload);
     process_data(&buffer, &data, &mess_received_count,
                  sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum),
                  NULL, NULL, NULL);
-    assert_true(*data.metric_overrun_vs_underrun > 0.99);
+    assert_true(*data.metric_underrun_ratio < 0.01);
 
-    /* With both EMA zero and zero counts, ratio should be 0.5. */
+    /* With both EMA zero and zero counts, both ratios should be 0. */
     data.ema_overrun  = 0.0;
     data.ema_underrun = 0.0;
     struct Reply_joint_metrics zero_msg = { .type = REPLY_JOINT_METRICS };
@@ -331,7 +329,7 @@ static void test_joint_metrics_ema_ratios(void **state) {
     process_data(&buffer, &data, &mess_received_count,
                  sizeof(zero_msg) + sizeof(buffer.length) + sizeof(buffer.checksum),
                  NULL, NULL, NULL);
-    assert_float_equal(*data.metric_overrun_vs_underrun, 0.5, 1e-9);
+    assert_float_equal(*data.metric_underrun_ratio, 0.0, 1e-9);
 }
 
 static void test_unpack_spindle_speed(void **state) {

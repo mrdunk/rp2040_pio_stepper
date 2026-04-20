@@ -149,6 +149,14 @@ The pointer is computed as `(char*)port_data_array + offset + i * stride`, where
 corresponding field to `skeleton_t` in both `hal_rp2040_eth.c` and the
 hand-maintained copy in `src/test/mocks/driver_mocks.h` (see pitfall above).
 
+### Scalar HAL metric pins (`fb-overrun-ratio`, `fb-underrun-ratio`)
+
+Both are 1-second EMA (α = 1/1000 at nominal 1 kHz) of cumulative overrun /
+underrun counts summed across all joints per tick. They output `ema_overrun` and
+`ema_underrun` respectively from `skeleton_t`. State lives in `skeleton_t`
+(`ema_overrun`, `ema_underrun` double fields); updated in `unpack_joint_metrics()`
+in `rp2040_network.c`. `EMA_ALPHA` is defined there and must match the servo rate.
+
 ### Recompile the LinuxCNC driver after changing `messages.h`
 
 See warning comment at the top of `src/shared/messages.h`. Symptom of a stale

@@ -53,7 +53,7 @@ typedef struct {
   hal_u32_t* joint_underrun_count[MAX_JOINT];
 
   hal_float_t* metric_overrun_ratio;
-  hal_float_t* metric_overrun_vs_underrun;
+  hal_float_t* metric_underrun_ratio;
 
   double ema_overrun;
   double ema_underrun;
@@ -251,7 +251,7 @@ static const PinDef scalar_pins[] = {
     { U32, HAL_IN,  offsetof(skeleton_t, metric_missed_packets), 0, "metrics-missed-packets", -1, 0, NULL },
     { PIN,   HAL_IN,  offsetof(skeleton_t, metric_eth_state),             0, "metrics-eth-state",      -1, 0, NULL },
     { FLOAT, HAL_OUT, offsetof(skeleton_t, metric_overrun_ratio),        0, "fb-overrun-ratio",       -1, 0, NULL },
-    { FLOAT, HAL_OUT, offsetof(skeleton_t, metric_overrun_vs_underrun),  0, "fb-overrun-vs-underrun", -1, 0, NULL },
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, metric_underrun_ratio),       0, "fb-underrun-ratio",      -1, 0, NULL },
 };
 
 int rtapi_app_main(void)

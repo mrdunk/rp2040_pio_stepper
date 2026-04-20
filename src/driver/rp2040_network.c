@@ -405,8 +405,8 @@ bool unpack_gpio_config(
   return true;
 }
 
-/* EMA time constant: τ = 60 s at the nominal 1 kHz servo rate. */
-#define EMA_ALPHA (1.0 / 60000.0)
+/* EMA time constant: τ = 1 s at the nominal 1 kHz servo rate. */
+#define EMA_ALPHA (1.0 / 1000.0)
 
 /* Process received update containing metrics data. */
 bool unpack_joint_metrics(
@@ -434,10 +434,8 @@ bool unpack_joint_metrics(
   data->ema_overrun  = data->ema_overrun  * (1.0 - EMA_ALPHA) + total_overrun  * EMA_ALPHA;
   data->ema_underrun = data->ema_underrun * (1.0 - EMA_ALPHA) + total_underrun * EMA_ALPHA;
 
-  double total_ema = data->ema_overrun + data->ema_underrun;
-  *data->metric_overrun_ratio       = (hal_float_t)data->ema_overrun;
-  *data->metric_overrun_vs_underrun = (hal_float_t)(
-      total_ema > 1e-9 ? data->ema_overrun / total_ema : 0.5);
+  *data->metric_overrun_ratio  = (hal_float_t)data->ema_overrun;
+  *data->metric_underrun_ratio = (hal_float_t)data->ema_underrun;
 
   (*received_count)++;
   return true;
