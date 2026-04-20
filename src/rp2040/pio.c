@@ -28,12 +28,21 @@
 static uint32_t sm0[MAX_JOINT];
 static uint32_t sm1[MAX_JOINT];
 
+/* File-scope statics (promoted from function-local for test reset access). */
+static bool     init_done[MAX_JOINT]          = {false, false, false, false};
+static uint32_t offset_pio0                   = 0;
+static uint32_t offset_pio1                   = 0;
+static uint8_t  programs_loaded               = 0;
+static int32_t  holdoff[MAX_JOINT]            = {0, 0, 0, 0};
+static uint32_t count                         = 0;
+static int32_t  last_pos_requested[MAX_JOINT] = {0, 0, 0, 0};
+static int32_t  last_pos_achieved[MAX_JOINT]  = {0, 0, 0, 0};
+static uint32_t last_enabled[MAX_JOINT]       = {0, 0, 0, 0};
+static size_t   dir_change_count[MAX_JOINT]   = {0, 0, 0, 0};
+static uint32_t last_direction[MAX_JOINT]     = {0, 0, 0, 0};
+
 void init_pio(const uint32_t joint)
 {
-  static bool init_done[MAX_JOINT] = {false, false, false, false};
-  static uint32_t offset_pio0 = 0;
-  static uint32_t offset_pio1 = 0;
-  static uint8_t programs_loaded = 0;
 
   if(init_done[joint]) {
     return;
@@ -129,8 +138,6 @@ double get_velocity(
     const double abs_pos_requested,
     const double expected_velocity)
 {
-  static int32_t holdoff[MAX_JOINT] = {0, 0, 0, 0};
-
   double position_diff = (abs_pos_requested - (double)abs_pos_achieved);
   double velocity = (expected_velocity / (double)update_period_us);
   double combined_vel = position_diff * POSITION_BIAS + velocity * VELOCITY_BIAS;
@@ -166,13 +173,7 @@ double get_velocity(
 /* Generate step counts and send to PIOs. */
 uint8_t do_steps(const uint8_t joint) {
   uint32_t update_period_us = get_period();
-  static uint32_t count = 0;
-  static int32_t last_pos_requested[MAX_JOINT] = {0, 0, 0, 0};
-  static int32_t last_pos_achieved[MAX_JOINT] = {0, 0, 0, 0};
-  static uint32_t last_enabled[MAX_JOINT] = {0, 0, 0, 0};
   static const uint32_t clock_multiplier = 133;
-  static size_t dir_change_count[MAX_JOINT] = {0, 0, 0, 0};
-  static uint32_t last_direction[MAX_JOINT] = {0, 0, 0, 0};
 
   uint8_t enabled;
   int32_t abs_pos_achieved = 0;
@@ -313,3 +314,22 @@ uint8_t do_steps(const uint8_t joint) {
   return updated;
 }
 
+#ifdef BUILD_TESTS
+void pio_reset_for_test(void) {
+    for (int j = 0; j < MAX_JOINT; j++) {
+        sm0[j]                = 0;
+        sm1[j]                = 0;
+        init_done[j]          = false;
+        holdoff[j]            = 0;
+        last_pos_requested[j] = 0;
+        last_pos_achieved[j]  = 0;
+        last_enabled[j]       = 0;
+        dir_change_count[j]   = 0;
+        last_direction[j]     = 0;
+    }
+    offset_pio0     = 0;
+    offset_pio1     = 0;
+    programs_loaded = 0;
+    count           = 0;
+}
+#endif  // BUILD_TESTS
