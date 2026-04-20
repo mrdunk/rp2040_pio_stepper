@@ -130,6 +130,17 @@ void init_pio(const uint32_t joint)
 #define VELOCITY_BIAS 0.85
 #define MIN_STEP_COUNT 0.0625   // 1/16
 
+/* Drain PIO1's RX FIFO and return the last feedback position received.
+ * Returns current_pos unchanged if the FIFO is empty. */
+int32_t drain_rx_fifo(uint32_t sm, int32_t current_pos) {
+    uint8_t fifo_len = pio_sm_get_rx_fifo_level(pio1, sm);
+    while (fifo_len > 0) {
+        current_pos = pio_sm_get_blocking(pio1, sm);
+        fifo_len--;
+    }
+    return current_pos;
+}
+
 /* Convert step command from LinuxCNC and Feedback from PIO into a desired velocity. */
 double get_velocity(
     const uint32_t update_period_us,
@@ -233,12 +244,7 @@ uint8_t do_steps(const uint8_t joint) {
     return 0;
   }
 
-  // Drain rx_fifo of PIO feedback data and keep the last value received.
-  uint8_t fifo_len = pio_sm_get_rx_fifo_level(pio1, sm1[joint]);
-  while(fifo_len > 0) {
-    abs_pos_achieved = pio_sm_get_blocking(pio1, sm1[joint]);
-    fifo_len--;
-  }
+  abs_pos_achieved = drain_rx_fifo(sm1[joint], abs_pos_achieved);
 
   double velocity = get_velocity(
       update_period_us,

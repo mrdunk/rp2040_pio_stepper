@@ -67,15 +67,39 @@ static int test_setup(void **state) {
     return 0;
 }
 
-/* placeholder — tests added in subsequent tasks */
-static void test_placeholder(void **state) {
+/* drain_rx_fifo: FIFO is empty -> returns current_pos unchanged */
+static void test_drain_rx_fifo_empty_returns_current(void **state) {
     (void)state;
-    assert_true(1);
+    mock_rx_fifo_level = 0;
+    int32_t result = drain_rx_fifo(0, 42);
+    assert_int_equal(result, 42);
+}
+
+/* drain_rx_fifo: single entry -> returns that value */
+static void test_drain_rx_fifo_single_entry(void **state) {
+    (void)state;
+    mock_rx_fifo_level  = 1;
+    mock_rx_values[0]   = 99;
+    int32_t result = drain_rx_fifo(0, 0);
+    assert_int_equal(result, 99);
+}
+
+/* drain_rx_fifo: multiple entries -> returns only the last */
+static void test_drain_rx_fifo_keeps_last(void **state) {
+    (void)state;
+    mock_rx_fifo_level  = 3;
+    mock_rx_values[0]   = 10;
+    mock_rx_values[1]   = 20;
+    mock_rx_values[2]   = 30;
+    int32_t result = drain_rx_fifo(0, 0);
+    assert_int_equal(result, 30);
 }
 
 int main(void) {
     const struct CMUnitTest tests[] = {
-        cmocka_unit_test_setup(test_placeholder, test_setup),
+        cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
+        cmocka_unit_test_setup(test_drain_rx_fifo_single_entry,          test_setup),
+        cmocka_unit_test_setup(test_drain_rx_fifo_keeps_last,            test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
