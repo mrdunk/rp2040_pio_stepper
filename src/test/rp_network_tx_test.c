@@ -117,10 +117,10 @@ static void test_serialise_joint_metrics(void **state) {
 
     struct NWBuffer tx_buf = {0};
 
-    /* Seed stale counts for each joint via simulated Core0 double-writes. */
     for (size_t j = 0; j < MAX_JOINT; j++) {
-        config.joint[j].updated_from_c0  = 0;
-        config.joint[j].stale_packet_count = j + 1;  /* 1, 2, 3, 4 */
+        config.joint[j].updated_from_c0 = 0;
+        config.joint[j].overrun_count   = j + 1;  /* 1, 2, 3, 4 */
+        config.joint[j].underrun_count  = j + 5;  /* 5, 6, 7, 8 */
     }
 
     bool result = serialise_joint_metrics(&tx_buf);
@@ -130,9 +130,10 @@ static void test_serialise_joint_metrics(void **state) {
     struct Reply_joint_metrics* reply = (void*)tx_buf.payload;
     assert_int_equal(reply->type, REPLY_JOINT_METRICS);
     for (size_t j = 0; j < MAX_JOINT; j++) {
-        assert_int_equal(reply->stale_packet_count[j], j + 1);
-        /* get_and_reset_stale_count() resets to zero after serialise. */
-        assert_int_equal(config.joint[j].stale_packet_count, 0);
+        assert_int_equal(reply->overrun_count[j],  j + 1);
+        assert_int_equal(reply->underrun_count[j], j + 5);
+        assert_int_equal(config.joint[j].overrun_count,  0);
+        assert_int_equal(config.joint[j].underrun_count, 0);
     }
 }
 

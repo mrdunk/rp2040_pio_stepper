@@ -278,8 +278,10 @@ uint32_t get_joint_config(
     case CORE1:
       updated_by_other_core = config.joint[joint].updated_from_c0;
       config.joint[joint].updated_from_c0 = 0;
-      if(updated_by_other_core > 1) {
-        config.joint[joint].stale_packet_count += updated_by_other_core - 1;
+      if(updated_by_other_core == 0) {
+        config.joint[joint].underrun_count++;
+      } else if(updated_by_other_core > 1) {
+        config.joint[joint].overrun_count += updated_by_other_core - 1;
       }
       break;
   }
@@ -326,13 +328,24 @@ uint32_t get_joint_config(
   return updated_by_other_core;
 }
 
-uint32_t get_and_reset_stale_count(const uint8_t joint) {
+uint32_t get_and_reset_overrun_count(const uint8_t joint) {
   if(joint >= MAX_JOINT) {
     return 0;
   }
   mutex_enter_blocking(&mtx_joint[joint]);
-  uint32_t count = config.joint[joint].stale_packet_count;
-  config.joint[joint].stale_packet_count = 0;
+  uint32_t count = config.joint[joint].overrun_count;
+  config.joint[joint].overrun_count = 0;
+  mutex_exit(&mtx_joint[joint]);
+  return count;
+}
+
+uint32_t get_and_reset_underrun_count(const uint8_t joint) {
+  if(joint >= MAX_JOINT) {
+    return 0;
+  }
+  mutex_enter_blocking(&mtx_joint[joint]);
+  uint32_t count = config.joint[joint].underrun_count;
+  config.joint[joint].underrun_count = 0;
   mutex_exit(&mtx_joint[joint]);
   return count;
 }
@@ -550,7 +563,8 @@ bool serialise_joint_metrics(struct NWBuffer* tx_buf) {
 
     reply.velocity_requested_tm1[joint] = velocity_requested_tm1;
     reply.step_len_ticks[joint] = step_len_ticks;
-    reply.stale_packet_count[joint] = get_and_reset_stale_count(joint);
+    reply.overrun_count[joint]  = get_and_reset_overrun_count(joint);
+    reply.underrun_count[joint] = get_and_reset_underrun_count(joint);
   }
 
   uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));

@@ -41,7 +41,8 @@ typedef struct {
   hal_float_t* joint_accel_cmd[MAX_JOINT];
   hal_float_t* joint_velocity_feedback[MAX_JOINT];
   hal_s32_t* joint_pos_error[MAX_JOINT];
-  hal_u32_t* joint_stale_packets[MAX_JOINT];
+  hal_u32_t* joint_overrun_count[MAX_JOINT];
+  hal_u32_t* joint_underrun_count[MAX_JOINT];
   hal_bit_t* gpio_data_in[MAX_GPIO];
   hal_bit_t* gpio_data_in_not[MAX_GPIO];
   hal_bit_t* gpio_data_out[MAX_GPIO];

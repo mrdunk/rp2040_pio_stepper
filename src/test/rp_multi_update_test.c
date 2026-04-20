@@ -1,13 +1,15 @@
 /* rp_multi_update_test.c
  *
- * Regression tests for stale packet counting.
+ * Regression tests for overrun/underrun counting.
  *
- * When Core0 drains multiple queued W5500 packets between timer ticks,
- * updated_from_c0 accumulates to N before Core1 reads.  The N-1 extra
- * packets are stale (only the latest position/velocity data matters).
- * get_joint_config(CORE1) detects this and accumulates the count in
- * ConfigAxis.stale_packet_count, which is returned to LinuxCNC via
- * Reply_joint_metrics.stale_packet_count.
+ * overrun:  Core0 drains N queued W5500 packets between ticks — updated_from_c0
+ *           accumulates to N before Core1 reads.  N-1 packets are discarded
+ *           (only the latest position/velocity matters); overrun_count += N-1.
+ *
+ * underrun: Core1 fires but Core0 has not yet received a new packet —
+ *           updated_from_c0 == 0; underrun_count++.
+ *
+ * Both counts are returned to LinuxCNC via Reply_joint_metrics.
  */
 
 #include <stdarg.h>
@@ -54,15 +56,14 @@ static int test_setup(void **state) {
     for (size_t j = 0; j < MAX_JOINT; j++) {
         config.joint[j].updated_from_c0  = 0;
         config.joint[j].updated_from_c1  = 0;
-        config.joint[j].stale_packet_count = 0;
+        config.joint[j].overrun_count  = 0;
+        config.joint[j].underrun_count = 0;
     }
     return 0;
 }
 
-/* After N packets are processed by Core0 and then Core1 reads via
- * get_joint_config(CORE1), stale_packet_count should equal N-1 (the N-1
- * extra packets that were discarded as stale). */
-static void test_stale_count_accumulates_when_core1_reads(void **state) {
+/* After N packets arrive and Core1 reads once, overrun_count == N-1. */
+static void test_overrun_count_accumulates_when_core1_reads(void **state) {
     (void)state;
 
     const int N = 9;
@@ -78,19 +79,15 @@ static void test_stale_count_accumulates_when_core1_reads(void **state) {
         process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, expected_length);
     }
 
-    /* Simulate Core1 reading joint 0 — this is what triggers stale counting. */
     get_joint_config(0, CORE1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
                      NULL, NULL, NULL, NULL);
 
-    /* N packets arrived; Core1 consumed 1 read → N-1 were stale. */
-    assert_int_equal(get_and_reset_stale_count(0), N - 1);
-
-    /* Counter resets to zero on read. */
-    assert_int_equal(get_and_reset_stale_count(0), 0);
+    assert_int_equal(get_and_reset_overrun_count(0), N - 1);
+    assert_int_equal(get_and_reset_overrun_count(0), 0);  /* resets on read */
 }
 
-/* A single packet followed by one Core1 read produces no stale count. */
-static void test_no_stale_count_when_one_packet_per_tick(void **state) {
+/* One packet per tick: no overrun, no underrun. */
+static void test_no_overrun_when_one_packet_per_tick(void **state) {
     (void)state;
 
     struct NWBuffer rx_buf;
@@ -103,15 +100,31 @@ static void test_no_stale_count_when_one_packet_per_tick(void **state) {
     get_joint_config(0, CORE1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
                      NULL, NULL, NULL, NULL);
 
-    assert_int_equal(get_and_reset_stale_count(0), 0);
+    assert_int_equal(get_and_reset_overrun_count(0), 0);
+    assert_int_equal(get_and_reset_underrun_count(0), 0);
+}
+
+/* Core1 reads before any packet arrives: underrun_count increments. */
+static void test_underrun_count_when_core1_reads_before_packet(void **state) {
+    (void)state;
+
+    /* No packets sent — updated_from_c0 stays 0. */
+    get_joint_config(0, CORE1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                     NULL, NULL, NULL, NULL);
+
+    assert_int_equal(get_and_reset_underrun_count(0), 1);
+    assert_int_equal(get_and_reset_underrun_count(0), 0);  /* resets on read */
+    assert_int_equal(get_and_reset_overrun_count(0), 0);   /* overrun unaffected */
 }
 
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(
-            test_stale_count_accumulates_when_core1_reads, test_setup),
+            test_overrun_count_accumulates_when_core1_reads, test_setup),
         cmocka_unit_test_setup(
-            test_no_stale_count_when_one_packet_per_tick, test_setup),
+            test_no_overrun_when_one_packet_per_tick, test_setup),
+        cmocka_unit_test_setup(
+            test_underrun_count_when_core1_reads_before_packet, test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
