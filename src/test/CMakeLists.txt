@@ -271,3 +271,33 @@ add_test(
   timingTest
   )
 
+
+add_executable(
+  rpPioTest
+  ${CMAKE_CURRENT_SOURCE_DIR}/rp_pio_test.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/pio.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_fuling.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_huanyang.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus_weiken.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
+  ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
+  ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/pio_mocks.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
+)
+target_link_libraries(
+  rpPioTest
+  cmocka
+  m
+  -Wl,--wrap=pio_sm_get_rx_fifo_level
+  -Wl,--wrap=pio_sm_get_blocking
+  -Wl,--wrap=pio_sm_put
+  -Wl,--wrap=pio_sm_is_tx_fifo_empty
+)
+add_test(
+  rpPioTest
+  rpPioTest
+)
+
