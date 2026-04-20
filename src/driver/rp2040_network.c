@@ -76,7 +76,7 @@ int init_eth(int device) {
 
 /* Send data via UDP.*/
 int send_data(int device, struct NWBuffer* buffer) {
-  int addr_len = sizeof(remote_addr[device]);
+  socklen_t addr_len = sizeof(remote_addr[device]);
   int n = sendto(
       sockfd[device],
       (void*)buffer,
@@ -92,7 +92,7 @@ int send_data(int device, struct NWBuffer* buffer) {
 
 /* Get data via UDP. */
 size_t get_reply_non_block(int device, void* receive_buffer) {
-  int addr_len;
+  socklen_t addr_len = sizeof(remote_addr[device]);
   int flags = MSG_DONTWAIT | MSG_DONTROUTE;
   ssize_t receive_count = recvfrom(
       sockfd[device],
@@ -100,7 +100,7 @@ size_t get_reply_non_block(int device, void* receive_buffer) {
       NW_BUF_LEN,
       flags,
       (struct sockaddr *)&remote_addr[device],
-      (socklen_t *)&addr_len);
+      &addr_len);
   if (receive_count < 0) {
     return 0;
   }
@@ -236,7 +236,7 @@ size_t serialize_gpio_config(
 }
 
 uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
-  size_t return_val = 0;
+  uint16_t return_val = 0;
   bool confirmation_pending[MAX_GPIO_BANK];
   uint32_t to_send[MAX_GPIO_BANK];
 
@@ -296,7 +296,7 @@ uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
       }
     }
 
-    to_send[bank] |= (current_value << gpio_per_bank);
+    to_send[bank] |= ((uint32_t)current_value << gpio_per_bank);
   }
 
   for(int bank = 0; bank < MAX_GPIO_BANK; bank++) {
