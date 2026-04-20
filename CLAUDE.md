@@ -110,14 +110,15 @@ flag instead (see `timing.c`).
 
 `init_config()` initialises mutexes and GPIO state but does **not** reset the
 `config.joint[]` array. Tests that depend on a clean per-joint state (e.g.
-`updated_from_c0`, `stale_packet_count`) must zero those fields explicitly in
-their setup function:
+`updated_from_c0`, `overrun_count`, `underrun_count`) must zero those fields
+explicitly in their setup function:
 
 ```c
 for (size_t j = 0; j < MAX_JOINT; j++) {
-    config.joint[j].updated_from_c0    = 0;
-    config.joint[j].updated_from_c1    = 0;
-    config.joint[j].stale_packet_count = 0;
+    config.joint[j].updated_from_c0 = 0;
+    config.joint[j].updated_from_c1 = 0;
+    config.joint[j].overrun_count   = 0;
+    config.joint[j].underrun_count  = 0;
 }
 ```
 
