@@ -125,6 +125,39 @@ static void test_calculate_step_len_below_threshold(void **state) {
     assert_int_equal(result, 0);
 }
 
+/* get_velocity: near-zero position diff -> returns 0 */
+static void test_get_velocity_zero_pos_diff(void **state) {
+    (void)state;
+    double v = get_velocity(1000, 0, 10, 10.0, 5.0);
+    assert_true(v == 0.0);
+}
+
+/* get_velocity: direction disagreement -> returns 0 */
+static void test_get_velocity_direction_disagreement(void **state) {
+    (void)state;
+    /* position_diff = +10 (forward), velocity = -5000/1000 (backward) */
+    double v = get_velocity(1000, 0, 0, 10.0, -5000.0);
+    assert_true(v == 0.0);
+}
+
+/* get_velocity: normal forward motion -> returns positive combined velocity */
+static void test_get_velocity_normal_forward(void **state) {
+    (void)state;
+    /* combined = 10*0.1 + 5.0*0.85 = 5.25 */
+    double v = get_velocity(1000, 0, 0, 10.0, 5000.0);
+    assert_true(v > 0.0);
+}
+
+/* get_velocity: slow step triggers holdoff; next call returns 0 */
+static void test_get_velocity_holdoff(void **state) {
+    (void)state;
+    /* combined = 0.5*0.1 + 0.001*0.85 = 0.05085 < 1.0 -> holdoff set */
+    double v1 = get_velocity(1000, 0, 0, 0.5, 1.0);
+    assert_true(v1 > 0.0);    /* first call returns combined_vel */
+    double v2 = get_velocity(1000, 0, 0, 0.5, 1.0);
+    assert_true(v2 == 0.0);   /* holdoff active */
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -133,6 +166,10 @@ int main(void) {
         cmocka_unit_test_setup(test_calculate_step_len_normal,          test_setup),
         cmocka_unit_test_setup(test_calculate_step_len_clamped,         test_setup),
         cmocka_unit_test_setup(test_calculate_step_len_below_threshold, test_setup),
+        cmocka_unit_test_setup(test_get_velocity_zero_pos_diff,          test_setup),
+        cmocka_unit_test_setup(test_get_velocity_direction_disagreement, test_setup),
+        cmocka_unit_test_setup(test_get_velocity_normal_forward,         test_setup),
+        cmocka_unit_test_setup(test_get_velocity_holdoff,                test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
