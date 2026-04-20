@@ -43,6 +43,13 @@ typedef struct {
   hal_s32_t* joint_pos_error[MAX_JOINT];
   hal_u32_t* joint_overrun_count[MAX_JOINT];
   hal_u32_t* joint_underrun_count[MAX_JOINT];
+
+  hal_float_t* metric_overrun_ratio;
+  hal_float_t* metric_overrun_vs_underrun;
+
+  double ema_overrun;
+  double ema_underrun;
+
   hal_bit_t* gpio_data_in[MAX_GPIO];
   hal_bit_t* gpio_data_in_not[MAX_GPIO];
   hal_bit_t* gpio_data_out[MAX_GPIO];

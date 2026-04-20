@@ -405,6 +405,9 @@ bool unpack_gpio_config(
   return true;
 }
 
+/* EMA time constant: τ = 60 s at the nominal 1 kHz servo rate. */
+#define EMA_ALPHA (1.0 / 60000.0)
+
 /* Process received update containing metrics data. */
 bool unpack_joint_metrics(
     struct NWBuffer* rx_buf,
@@ -413,15 +416,28 @@ bool unpack_joint_metrics(
     skeleton_t* data
 ) {
   UNPACK_MSG(struct Reply_joint_metrics, reply, rx_buf, rx_offset);
+
+  uint32_t total_overrun  = 0;
+  uint32_t total_underrun = 0;
   for(size_t joint = 0; joint < MAX_JOINT; joint++) {
     *data->joint_step_len_ticks[joint] = reply->step_len_ticks[joint];
     *data->joint_overrun_count[joint]  = reply->overrun_count[joint];
     *data->joint_underrun_count[joint] = reply->underrun_count[joint];
+    total_overrun  += reply->overrun_count[joint];
+    total_underrun += reply->underrun_count[joint];
 
     *data->joint_accel_cmd[joint] =
       reply->velocity_requested_tm1[joint] - *data->joint_velocity_cmd[joint];
     *data->joint_velocity_cmd[joint] = reply->velocity_requested_tm1[joint];
   }
+
+  data->ema_overrun  = data->ema_overrun  * (1.0 - EMA_ALPHA) + total_overrun  * EMA_ALPHA;
+  data->ema_underrun = data->ema_underrun * (1.0 - EMA_ALPHA) + total_underrun * EMA_ALPHA;
+
+  double total_ema = data->ema_overrun + data->ema_underrun;
+  *data->metric_overrun_ratio       = (hal_float_t)data->ema_overrun;
+  *data->metric_overrun_vs_underrun = (hal_float_t)(
+      total_ema > 1e-9 ? data->ema_overrun / total_ema : 0.5);
 
   (*received_count)++;
   return true;
