@@ -195,6 +195,15 @@ int32_t calculate_step_len(double step_count, double update_period_ticks,
     return len < min_len ? min_len : len;
 }
 
+/* Write the packed step command to PIO0's TX FIFO if it is empty.
+ * Encoding: lower bit = direction, upper bits = half-period in ticks. */
+static void issue_pio_step(uint32_t joint, int32_t step_len_ticks,
+                           uint32_t direction) {
+    if (pio_sm_is_tx_fifo_empty(pio0, sm0[joint])) {
+        pio_sm_put(pio0, sm0[joint], ((uint32_t)step_len_ticks << 1) | direction);
+    }
+}
+
 /* Generate step counts and send to PIOs. */
 uint8_t do_steps(const uint8_t joint) {
   uint32_t update_period_us = get_period();
@@ -292,10 +301,7 @@ uint8_t do_steps(const uint8_t joint) {
     dir_change_count[joint] = 0;
   }
 
-  // Request steps from PIO.
-  if(pio_sm_is_tx_fifo_empty(pio0, sm0[joint])) {
-    pio_sm_put(pio0, sm0[joint], (step_len_ticks << 1) | direction);
-  }
+  issue_pio_step(joint, step_len_ticks, direction);
 
   velocity_achieved = abs_pos_achieved - last_pos_achieved[joint];
   int32_t velocity_requested_tm1 = (int32_t)velocity;
