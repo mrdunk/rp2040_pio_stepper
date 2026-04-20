@@ -169,7 +169,6 @@ uint8_t do_steps(const uint8_t joint) {
   static uint32_t count = 0;
   static int32_t last_pos_requested[MAX_JOINT] = {0, 0, 0, 0};
   static int32_t last_pos_achieved[MAX_JOINT] = {0, 0, 0, 0};
-  static double last_velocity[MAX_JOINT] = {0, 0, 0, 0};
   static uint32_t last_enabled[MAX_JOINT] = {0, 0, 0, 0};
   static const uint32_t clock_multiplier = 133;
   static size_t dir_change_count[MAX_JOINT] = {0, 0, 0, 0};
@@ -289,7 +288,7 @@ uint8_t do_steps(const uint8_t joint) {
   }
 
   velocity_achieved = abs_pos_achieved - last_pos_achieved[joint];
-  int32_t velocity_requested_tm1 = velocity;
+  int32_t velocity_requested_tm1 = (int32_t)velocity;
   int32_t position_error = abs_pos_achieved - last_pos_requested[joint];
 
   update_joint_config(
@@ -310,7 +309,6 @@ uint8_t do_steps(const uint8_t joint) {
 
   last_pos_requested[joint] = abs_pos_requested;
   last_pos_achieved[joint] = abs_pos_achieved;
-  last_velocity[joint] = velocity;
 
   return updated;
 }
