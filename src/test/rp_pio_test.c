@@ -158,6 +158,56 @@ static void test_get_velocity_holdoff(void **state) {
     assert_true(v2 == 0.0);   /* holdoff active */
 }
 
+/* do_steps: update_period == 0 -> puts 0 to FIFO, returns 0 */
+static void test_do_steps_zero_period(void **state) {
+    (void)state;
+    config.update_time_us = 0;
+    uint8_t result = do_steps(0);
+    assert_int_equal(result, 0);
+    assert_int_equal(last_pio_put_value, 0);
+}
+
+/* do_steps: joint disabled -> puts 0 to FIFO when empty, returns 0 */
+static void test_do_steps_disabled(void **state) {
+    (void)state;
+    config.joint[0].enabled         = 0;
+    config.joint[0].updated_from_c0 = 1;
+    mock_tx_fifo_empty               = 1;
+    uint8_t result = do_steps(0);
+    assert_int_equal(result, 0);
+    assert_int_equal(last_pio_put_value, 0);
+}
+
+/* do_steps: no new core0 data (updated == 0) -> returns 0 */
+static void test_do_steps_no_update(void **state) {
+    (void)state;
+    config.joint[0].enabled         = 1;
+    config.joint[0].updated_from_c0 = 0;
+    mock_tx_fifo_empty               = 1;
+    uint8_t result = do_steps(0);
+    assert_int_equal(result, 0);
+}
+
+/* do_steps: valid position request + empty FIFO -> non-zero step written to PIO */
+static void test_do_steps_normal_step(void **state) {
+    (void)state;
+    config.joint[0].enabled            = 1;
+    config.joint[0].abs_pos_requested  = 10.0;
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].velocity_requested = 5000.0;
+    config.joint[0].max_velocity       = 50.0;
+    config.joint[0].updated_from_c0    = 1;
+    mock_tx_fifo_empty                  = 1;
+    mock_rx_fifo_level                  = 0;
+
+    uint8_t result = do_steps(0);
+
+    assert_true(result > 0);
+    assert_true(last_pio_put_value != 0);
+    /* direction bit (LSB) should be 1 (forward) */
+    assert_int_equal(last_pio_put_value & 1, 1);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -170,6 +220,10 @@ int main(void) {
         cmocka_unit_test_setup(test_get_velocity_direction_disagreement, test_setup),
         cmocka_unit_test_setup(test_get_velocity_normal_forward,         test_setup),
         cmocka_unit_test_setup(test_get_velocity_holdoff,                test_setup),
+        cmocka_unit_test_setup(test_do_steps_zero_period,               test_setup),
+        cmocka_unit_test_setup(test_do_steps_disabled,                  test_setup),
+        cmocka_unit_test_setup(test_do_steps_no_update,                 test_setup),
+        cmocka_unit_test_setup(test_do_steps_normal_step,               test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
