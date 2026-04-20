@@ -95,11 +95,44 @@ static void test_drain_rx_fifo_keeps_last(void **state) {
     assert_int_equal(result, 30);
 }
 
+/* calculate_step_len: normal step count -> positive result */
+static void test_calculate_step_len_normal(void **state) {
+    (void)state;
+    /* step_count=2.0, period_ticks=133000, max_velocity=50.0
+     * expected = (133000 / (2.0 * 2.0)) - 9.0 = 33241
+     * min      = (133000 / (50.0 * 2.0)) - 9.0 = 1321
+     * result   = max(33241, 1321) = 33241 */
+    int32_t result = calculate_step_len(2.0, 133000.0, 50.0);
+    assert_int_equal(result, 33241);
+}
+
+/* calculate_step_len: step_count exceeds max_velocity -> clamped to min */
+static void test_calculate_step_len_clamped(void **state) {
+    (void)state;
+    /* step_count=200.0 (very fast), period_ticks=133000, max_velocity=50.0
+     * unclamped = (133000 / (200.0 * 2.0)) - 9.0 = 323.5 -> (int32_t)323
+     * min       = (133000 / (50.0 * 2.0)) - 9.0  = 1321
+     * result    = max(323, 1321) = 1321 */
+    int32_t result = calculate_step_len(200.0, 133000.0, 50.0);
+    assert_int_equal(result, 1321);
+}
+
+/* calculate_step_len: below MIN_STEP_COUNT threshold -> 0 */
+static void test_calculate_step_len_below_threshold(void **state) {
+    (void)state;
+    /* MIN_STEP_COUNT = 0.0625; 0.05 < 0.0625 -> returns 0 */
+    int32_t result = calculate_step_len(0.05, 133000.0, 50.0);
+    assert_int_equal(result, 0);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
         cmocka_unit_test_setup(test_drain_rx_fifo_single_entry,          test_setup),
         cmocka_unit_test_setup(test_drain_rx_fifo_keeps_last,            test_setup),
+        cmocka_unit_test_setup(test_calculate_step_len_normal,          test_setup),
+        cmocka_unit_test_setup(test_calculate_step_len_clamped,         test_setup),
+        cmocka_unit_test_setup(test_calculate_step_len_below_threshold, test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

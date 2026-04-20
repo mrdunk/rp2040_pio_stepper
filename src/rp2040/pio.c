@@ -181,6 +181,20 @@ double get_velocity(
   return combined_vel;
 }
 
+/* Compute the PIO step-timer length in clock ticks.
+ * Returns 0 if step_count is below MIN_STEP_COUNT (too slow to drive PIO). */
+int32_t calculate_step_len(double step_count, double update_period_ticks,
+                           double max_velocity) {
+    if (step_count <= MIN_STEP_COUNT) {
+        return 0;
+    }
+    int32_t len = (int32_t)((update_period_ticks / (step_count * STEP_PIO_MULTIPLIER))
+                            - STEP_PIO_LEN_OVERHEAD);
+    int32_t min_len = (int32_t)((update_period_ticks / (fabs(max_velocity) * STEP_PIO_MULTIPLIER))
+                                - STEP_PIO_LEN_OVERHEAD);
+    return len < min_len ? min_len : len;
+}
+
 /* Generate step counts and send to PIOs. */
 uint8_t do_steps(const uint8_t joint) {
   uint32_t update_period_us = get_period();
@@ -257,23 +271,12 @@ uint8_t do_steps(const uint8_t joint) {
   max_accel /= update_period_us;
 
   double step_count = fabs(velocity);
-  int32_t step_len_ticks = 0;
   double update_period_ticks = update_period_us * clock_multiplier;
-
 
   // The PIO FIFO will only report step counts between steps.
   // If too small a step_count is allowed here, the steps can get very long and
   // block further updates.
-  if(step_count > MIN_STEP_COUNT) {
-    step_len_ticks =
-      (update_period_ticks / (step_count * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
-
-    int32_t min_step_len_ticks =
-      (update_period_ticks / (fabs(max_velocity) * STEP_PIO_MULTIPLIER)) - STEP_PIO_LEN_OVERHEAD;
-    if(step_len_ticks < min_step_len_ticks) {
-      step_len_ticks = min_step_len_ticks;
-    }
-  }
+  int32_t step_len_ticks = calculate_step_len(step_count, update_period_ticks, max_velocity);
 
   uint32_t direction = (velocity > 0);
 
