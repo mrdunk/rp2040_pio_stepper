@@ -20,6 +20,7 @@
 
 #define STEP_PIO_LEN_OVERHEAD 9.0
 #define STEP_PIO_MULTIPLIER 2.0
+#define RP2040_CLOCK_MHZ 133
 
 
 /* Initialize a pair of PIO programmes.
@@ -34,12 +35,9 @@ static uint32_t offset_pio0                   = 0;
 static uint32_t offset_pio1                   = 0;
 static uint8_t  programs_loaded               = 0;
 static int32_t  holdoff[MAX_JOINT]            = {0, 0, 0, 0};
-static uint32_t count                         = 0;
 static int32_t  last_pos_requested[MAX_JOINT] = {0, 0, 0, 0};
 static int32_t  last_pos_achieved[MAX_JOINT]  = {0, 0, 0, 0};
 static uint32_t last_enabled[MAX_JOINT]       = {0, 0, 0, 0};
-static size_t   dir_change_count[MAX_JOINT]   = {0, 0, 0, 0};
-static uint32_t last_direction[MAX_JOINT]     = {0, 0, 0, 0};
 
 void init_pio(const uint32_t joint)
 {
@@ -207,7 +205,6 @@ static void issue_pio_step(uint32_t joint, int32_t step_len_ticks,
 /* Generate step counts and send to PIOs. */
 uint8_t do_steps(const uint8_t joint) {
   uint32_t update_period_us = get_period();
-  static const uint32_t clock_multiplier = 133;
 
   uint8_t enabled;
   int32_t abs_pos_achieved = 0;
@@ -243,8 +240,6 @@ uint8_t do_steps(const uint8_t joint) {
       NULL  // &position_error
       );
 
-  count++;
-
   if(enabled != last_enabled[joint]) {
     last_enabled[joint] = enabled;
     if(enabled) {
@@ -263,7 +258,7 @@ uint8_t do_steps(const uint8_t joint) {
     return 0;
   }
 
-  if(updated <= 0) {
+  if(updated == 0) {
     return 0;
   }
 
@@ -280,7 +275,7 @@ uint8_t do_steps(const uint8_t joint) {
   max_accel /= update_period_us;
 
   double step_count = fabs(velocity);
-  double update_period_ticks = update_period_us * clock_multiplier;
+  double update_period_ticks = update_period_us * (uint32_t)RP2040_CLOCK_MHZ;
 
   // The PIO FIFO will only report step counts between steps.
   // If too small a step_count is allowed here, the steps can get very long and
@@ -327,12 +322,9 @@ void pio_reset_for_test(void) {
         last_pos_requested[j] = 0;
         last_pos_achieved[j]  = 0;
         last_enabled[j]       = 0;
-        dir_change_count[j]   = 0;
-        last_direction[j]     = 0;
     }
     offset_pio0     = 0;
     offset_pio1     = 0;
     programs_loaded = 0;
-    count           = 0;
 }
 #endif  // BUILD_TESTS
