@@ -191,7 +191,10 @@ int32_t calculate_step_len(double step_count, double update_period_ticks,
                             - STEP_PIO_LEN_OVERHEAD);
     int32_t min_len = (int32_t)((update_period_ticks / (fabs(max_velocity) * STEP_PIO_MULTIPLIER))
                                 - STEP_PIO_LEN_OVERHEAD);
-    return len < min_len ? min_len : len;
+    int32_t max_len = (int32_t)(update_period_ticks / STEP_PIO_MULTIPLIER
+                                - STEP_PIO_LEN_OVERHEAD);
+    int32_t clamped = len < min_len ? min_len : len;
+    return clamped > max_len ? max_len : clamped;
 }
 
 /* Write the packed step command to PIO0's TX FIFO if it is empty.

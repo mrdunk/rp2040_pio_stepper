@@ -125,6 +125,18 @@ static void test_calculate_step_len_below_threshold(void **state) {
     assert_int_equal(result, 0);
 }
 
+/* calculate_step_len: very slow step_count -> clamped to max_len */
+static void test_calculate_step_len_upper_clamp(void **state) {
+    (void)state;
+    /* step_count=0.1, period_ticks=133000, max_velocity=50.0
+     * raw     = (133000 / (0.1 * 2.0)) - 9.0 = 665000 - 9 = 664991
+     * min_len = (133000 / (50.0 * 2.0)) - 9.0 = 1330 - 9 = 1321
+     * max_len = (133000 / 2.0) - 9.0 = 66500 - 9 = 66491
+     * result  = 66491 (clamped to max_len) */
+    int32_t result = calculate_step_len(0.1, 133000.0, 50.0);
+    assert_int_equal(result, 66491);
+}
+
 /* clamp_accel: velocity unchanged -> returns same velocity */
 static void test_clamp_accel_no_change(void **state) {
     (void)state;
@@ -296,6 +308,7 @@ int main(void) {
         cmocka_unit_test_setup(test_calculate_step_len_normal,          test_setup),
         cmocka_unit_test_setup(test_calculate_step_len_clamped,         test_setup),
         cmocka_unit_test_setup(test_calculate_step_len_below_threshold, test_setup),
+        cmocka_unit_test_setup(test_calculate_step_len_upper_clamp,    test_setup),
         cmocka_unit_test_setup(test_clamp_accel_no_change,              test_setup),
         cmocka_unit_test_setup(test_clamp_accel_under_limit,            test_setup),
         cmocka_unit_test_setup(test_clamp_accel_over_limit_positive,    test_setup),
