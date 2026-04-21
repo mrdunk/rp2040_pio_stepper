@@ -197,9 +197,9 @@ static void test_plan_steps_total_over_ten_periods(void **state) {
 /* plan_steps: excess steps returned to accumulator when max_steps limits output */
 static void test_plan_steps_excess_returned_to_accumulator(void **state) {
     (void)state;
-    /* step_len=24991: step_period=2*(24991+9)=50000
-     * max_steps = floor(133000/50000) = 2
-     * velocity=3.0 -> desired=3, capped to 2, excess 1 returned
+    /* step_len=24991: step_period=(int32_t)(2.0*(24991+9))=50000
+     * max_steps = (int32_t)(133000.0/50000) = 2
+     * velocity=3.0 -> desired=3, capped to 2, excess 1 returned to accumulator
      * next call velocity=0.0 -> acc=1.0 -> n=1 */
     assert_int_equal(plan_steps(3.0, 0, 133000.0, 24991), 2);
     assert_int_equal(plan_steps(0.0, 0, 133000.0, 24991), 1);
