@@ -416,6 +416,10 @@ void core0_main() {
     process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, data_received);
 
     if(received_msg_count > 0) {
+      /* Serialise before waking Core1 — avoids joint mutex contention. */
+      serialise_joint_movement(&tx_buf, false);
+      serialise_joint_metrics(&tx_buf);
+
       packet_generation++;   /* all joint configs from this packet are now written */
       last_packet_tick = tick;
       recover_clock();
@@ -423,10 +427,6 @@ void core0_main() {
       time_now = time_us_64();
       gpio_put(LED_PIN, (time_now / 1000000) % 2);
       received_msg_count = 0;
-
-      // Get data from config and put in TX buffer.
-      serialise_joint_movement(&tx_buf, false);
-      serialise_joint_metrics(&tx_buf);
 
       // No need to update each spindle every cycle.
       if(count % 100 == 0) {
