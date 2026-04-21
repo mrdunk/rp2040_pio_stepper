@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <math.h>
+#include <stdlib.h>
 #include <string.h>
 
 #ifdef BUILD_TESTS
@@ -19,9 +19,12 @@
 #include "pio.h"
 #include "config.h"
 
-#define STEP_PIO_LEN_OVERHEAD 9.0
-#define STEP_PIO_MULTIPLIER 2.0
-#define RP2040_CLOCK_MHZ 133
+#define STEP_PIO_LEN_OVERHEAD  9
+#define RP2040_CLOCK_MHZ       133
+#define POSITION_BIAS_Q        6554    /* round(0.1  * 65536) */
+#define VELOCITY_BIAS_Q        55706   /* round(0.85 * 65536) */
+#define MIN_STEP_COUNT_Q       4096    /* 0.0625 * 65536 */
+#define STOP_THRESHOLD_Q       65536   /* 1.0 * 65536 */
 
 
 typedef struct {
@@ -31,8 +34,8 @@ typedef struct {
     int32_t  last_pos_requested;
     int32_t  last_pos_achieved;
     uint32_t last_enabled;
-    double   last_velocity;
-    double   step_accumulator;
+    int32_t  last_velocity_q;
+    int32_t  step_accumulator_q;
 } JointPioState;
 
 static JointPioState joint_state[MAX_JOINT];
@@ -123,13 +126,6 @@ void init_pio(const uint32_t joint)
   joint_state[joint].init_done = true;
 }
 
-// These POSITION_BIAS and VELOCITY_BIAS should add up to 1.0 or slightly less. eg: 0.95
-// The slight delay smooths output. More delay = smoother but more latency.
-#define POSITION_BIAS 0.1
-#define VELOCITY_BIAS 0.85
-#define MIN_STEP_COUNT 0.0625   // 1/16
-#define STOP_THRESHOLD  1.0     /* steps/period: stop PIO on underrun below this velocity */
-
 /* Drain PIO1's RX FIFO and return the last feedback position received.
  * Returns current_pos unchanged if the FIFO is empty. */
 int32_t drain_rx_fifo(uint32_t sm, int32_t current_pos) {
@@ -142,79 +138,60 @@ int32_t drain_rx_fifo(uint32_t sm, int32_t current_pos) {
 }
 
 /* Convert step command from LinuxCNC and Feedback from PIO into a desired velocity. */
-double get_velocity(
-    const uint32_t update_period_us,
-    const uint8_t joint,
-    const int32_t abs_pos_achieved,
-    const double abs_pos_requested,
-    const double expected_velocity)
-{
-  double position_diff = (abs_pos_requested - (double)abs_pos_achieved);
-  double velocity = (expected_velocity / (double)update_period_us);
-  double combined_vel = position_diff * POSITION_BIAS + velocity * VELOCITY_BIAS;
-
-  // Skip very slow speeds.
-  // Try again next cycle.
-  if(fabs(position_diff) < 0.001) {
-    return 0.0;
-  }
-
-  // Different opinions on which direction to turn. Implies low speed jitter.
-  // Try again next cycle.
-  if((position_diff >= 0.0 && velocity <= 0.0) || (position_diff <= 0.0 && velocity >= 0.0)) {
-    return 0.0;
-  }
-
-  return combined_vel;
+int32_t get_velocity(int32_t pos_diff_q, int32_t vel_req_q) {
+    if (abs(pos_diff_q) < 66) {
+        return 0;
+    }
+    if ((pos_diff_q > 0 && vel_req_q < 0) || (pos_diff_q < 0 && vel_req_q > 0)) {
+        return 0;
+    }
+    return (int32_t)(((int64_t)pos_diff_q * POSITION_BIAS_Q
+                      + (int64_t)vel_req_q * VELOCITY_BIAS_Q) >> 16);
 }
 
 /* Compute the PIO step-timer length in clock ticks.
- * Returns 0 if step_count is below MIN_STEP_COUNT (too slow to drive PIO). */
-int32_t calculate_step_len(double step_count, double update_period_ticks,
-                           double max_velocity) {
-    if (step_count <= MIN_STEP_COUNT) {
+ * Returns 0 if step_count_q is below MIN_STEP_COUNT_Q (too slow to drive PIO). */
+int32_t calculate_step_len(int32_t step_count_q, int32_t period_ticks, int32_t max_vel_q) {
+    if (step_count_q <= MIN_STEP_COUNT_Q) {
         return 0;
     }
-    int32_t len = (int32_t)((update_period_ticks / (step_count * STEP_PIO_MULTIPLIER))
-                            - STEP_PIO_LEN_OVERHEAD);
-    int32_t min_len = (int32_t)((update_period_ticks / (fabs(max_velocity) * STEP_PIO_MULTIPLIER))
-                                - STEP_PIO_LEN_OVERHEAD);
-    int32_t max_len = (int32_t)(update_period_ticks / STEP_PIO_MULTIPLIER
-                                - STEP_PIO_LEN_OVERHEAD);
+    int32_t len = (int32_t)((int64_t)period_ticks * 65536
+                            / ((int64_t)step_count_q << 1) - STEP_PIO_LEN_OVERHEAD);
+    int32_t min_len = (int32_t)((int64_t)period_ticks * 65536
+                                / ((int64_t)max_vel_q << 1) - STEP_PIO_LEN_OVERHEAD);
+    int32_t max_len = period_ticks / 2 - STEP_PIO_LEN_OVERHEAD;
     int32_t clamped = len < min_len ? min_len : len;
     return clamped > max_len ? max_len : clamped;
 }
 
-/* Clamp velocity change to at most max_accel per period.
- * Returns velocity unchanged if max_accel <= 0 (no limiting). */
-double clamp_accel(double velocity, double last_velocity, double max_accel) {
-    if (max_accel <= 0.0) {
-        return velocity;
+/* Clamp velocity change to at most max_accel_q per period.
+ * Returns velocity unchanged if max_accel_q <= 0 (no limiting). */
+int32_t clamp_accel(int32_t velocity_q, int32_t last_velocity_q, int32_t max_accel_q) {
+    if (max_accel_q <= 0) {
+        return velocity_q;
     }
-    double delta = velocity - last_velocity;
-    if (delta > max_accel) {
-        return last_velocity + max_accel;
+    int32_t delta = velocity_q - last_velocity_q;
+    if (delta > max_accel_q) {
+        return last_velocity_q + max_accel_q;
     }
-    if (delta < -max_accel) {
-        return last_velocity - max_accel;
+    if (delta < -max_accel_q) {
+        return last_velocity_q - max_accel_q;
     }
-    return velocity;
+    return velocity_q;
 }
 
-int32_t plan_steps(double velocity, uint8_t joint,
-                   double period_ticks, int32_t step_len) {
-    joint_state[joint].step_accumulator += fabs(velocity);
-    int32_t n_steps_desired = (int32_t)floor(joint_state[joint].step_accumulator);
-    joint_state[joint].step_accumulator -= (double)n_steps_desired;
+int32_t plan_steps(int32_t velocity_q, uint8_t joint,
+                   int32_t period_ticks, int32_t step_len) {
+    joint_state[joint].step_accumulator_q += abs(velocity_q);
+    int32_t n_steps_desired = joint_state[joint].step_accumulator_q >> 16;
+    joint_state[joint].step_accumulator_q -= n_steps_desired << 16;
 
-    int32_t step_period = (int32_t)(2.0 * (step_len + STEP_PIO_LEN_OVERHEAD));
-    int32_t max_steps = (step_period > 0)
-        ? (int32_t)(period_ticks / (double)step_period)
-        : 0;
+    int32_t step_period = 2 * (step_len + STEP_PIO_LEN_OVERHEAD);
+    int32_t max_steps = (step_period > 0) ? period_ticks / step_period : 0;
     if (max_steps < 0) max_steps = 0;
 
     int32_t n_steps = n_steps_desired < max_steps ? n_steps_desired : max_steps;
-    joint_state[joint].step_accumulator += (double)(n_steps_desired - n_steps);
+    joint_state[joint].step_accumulator_q += (n_steps_desired - n_steps) << 16;
 
     return n_steps;
 }
@@ -257,7 +234,7 @@ uint8_t do_steps(const uint8_t joint) {
       );
 
   if(updated == 0 || update_period_us == 0) {
-    if (fabs(joint_state[joint].last_velocity) < STOP_THRESHOLD &&
+    if (abs(joint_state[joint].last_velocity_q) < STOP_THRESHOLD_Q &&
         pio_sm_is_tx_fifo_empty(pio0, joint_state[joint].sm0)) {
       pio_sm_put(pio0, joint_state[joint].sm0, 0);
     }
@@ -284,25 +261,21 @@ uint8_t do_steps(const uint8_t joint) {
 
   abs_pos_achieved = drain_rx_fifo(joint_state[joint].sm1, abs_pos_achieved);
 
-  double velocity = get_velocity(
-      update_period_us,
-      joint,
-      abs_pos_achieved,
-      abs_pos_requested,
-      velocity_requested);
+  int32_t pos_diff_q   = (int32_t)((abs_pos_requested - (double)abs_pos_achieved) * 65536.0);
+  int32_t vel_req_q    = (int32_t)((velocity_requested / (double)update_period_us) * 65536.0);
+  int32_t max_vel_q    = (int32_t)((max_velocity / (double)update_period_us) * 65536.0);
+  int32_t max_accel_q  = (int32_t)((max_accel / (double)update_period_us) * 65536.0);
+  int32_t period_ticks = (int32_t)update_period_us * RP2040_CLOCK_MHZ;
 
-  max_velocity /= update_period_us;
-  max_accel /= update_period_us;
-  velocity = clamp_accel(velocity, joint_state[joint].last_velocity, max_accel);
-  joint_state[joint].last_velocity = velocity;
+  int32_t velocity_q = get_velocity(pos_diff_q, vel_req_q);
+  velocity_q = clamp_accel(velocity_q, joint_state[joint].last_velocity_q, max_accel_q);
+  joint_state[joint].last_velocity_q = velocity_q;
 
-  double step_count = fabs(velocity);
-  double update_period_ticks = update_period_us * RP2040_CLOCK_MHZ;
+  int32_t step_count_q   = abs(velocity_q);
+  int32_t step_len_ticks = calculate_step_len(step_count_q, period_ticks, max_vel_q);
+  int32_t n_steps        = plan_steps(velocity_q, joint, period_ticks, step_len_ticks);
 
-  int32_t step_len_ticks = calculate_step_len(step_count, update_period_ticks, max_velocity);
-  int32_t n_steps = plan_steps(velocity, joint, update_period_ticks, step_len_ticks);
-
-  uint32_t direction = (velocity > 0);
+  uint32_t direction = (velocity_q > 0);
 
   if (n_steps > 0) {
     issue_pio_step(joint, step_len_ticks, direction);
@@ -311,7 +284,7 @@ uint8_t do_steps(const uint8_t joint) {
   }
 
   velocity_achieved = abs_pos_achieved - joint_state[joint].last_pos_achieved;
-  int32_t velocity_requested_tm1 = (int32_t)velocity;
+  int32_t velocity_requested_tm1 = velocity_q >> 16;
   int32_t position_error = abs_pos_achieved - joint_state[joint].last_pos_requested;
 
   update_joint_config(

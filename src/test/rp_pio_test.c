@@ -93,98 +93,93 @@ static void test_drain_rx_fifo_keeps_last(void **state) {
 /* calculate_step_len: normal step count -> positive result */
 static void test_calculate_step_len_normal(void **state) {
     (void)state;
-    /* step_count=2.0, period_ticks=133000, max_velocity=50.0
-     * expected = (133000 / (2.0 * 2.0)) - 9.0 = 33241
-     * min      = (133000 / (50.0 * 2.0)) - 9.0 = 1321
-     * result   = max(33241, 1321) = 33241 */
-    int32_t result = calculate_step_len(2.0, 133000.0, 50.0);
+    /* step_count=2.0 -> Q16.16=131072, period=133000, max_vel=50.0 -> Q16.16=3276800
+     * 133000*65536=8716288000; 8716288000/(131072*2)=8716288000/262144=33250 exactly
+     * 33250-9=33241 */
+    int32_t result = calculate_step_len(131072, 133000, 3276800);
     assert_int_equal(result, 33241);
 }
 
 /* calculate_step_len: step_count exceeds max_velocity -> clamped to min */
 static void test_calculate_step_len_clamped(void **state) {
     (void)state;
-    /* step_count=200.0 (very fast), period_ticks=133000, max_velocity=50.0
-     * unclamped = (133000 / (200.0 * 2.0)) - 9.0 = 323.5 -> (int32_t)323
-     * min       = (133000 / (50.0 * 2.0)) - 9.0  = 1321
-     * result    = max(323, 1321) = 1321 */
-    int32_t result = calculate_step_len(200.0, 133000.0, 50.0);
+    /* step_count=200.0, max_vel=50.0, both in Q16.16 */
+    int32_t result = calculate_step_len(13107200, 133000, 3276800);
+    /* len=323, min=1321, result=1321 */
     assert_int_equal(result, 1321);
 }
 
 /* calculate_step_len: below MIN_STEP_COUNT threshold -> 0 */
 static void test_calculate_step_len_below_threshold(void **state) {
     (void)state;
-    /* MIN_STEP_COUNT = 0.0625; 0.05 < 0.0625 -> returns 0 */
-    int32_t result = calculate_step_len(0.05, 133000.0, 50.0);
+    /* 0.05 * 65536 = 3276.8 -> 3276; MIN_STEP_COUNT_Q=4096; 3276<=4096 -> 0 */
+    int32_t result = calculate_step_len(3276, 133000, 3276800);
     assert_int_equal(result, 0);
 }
 
 /* calculate_step_len: very slow step_count -> clamped to max_len */
 static void test_calculate_step_len_upper_clamp(void **state) {
     (void)state;
-    /* step_count=0.1, period_ticks=133000, max_velocity=50.0
-     * raw     = (133000 / (0.1 * 2.0)) - 9.0 = 665000 - 9 = 664991
-     * min_len = (133000 / (50.0 * 2.0)) - 9.0 = 1330 - 9 = 1321
-     * max_len = (133000 / 2.0) - 9.0 = 66500 - 9 = 66491
-     * result  = 66491 (clamped to max_len) */
-    int32_t result = calculate_step_len(0.1, 133000.0, 50.0);
+    /* 0.1 * 65536 = 6553.6 -> 6553; raw len >> max_len; clamped to max_len */
+    int32_t result = calculate_step_len(6553, 133000, 3276800);
+    /* max_len = 133000/2 - 9 = 66491 */
     assert_int_equal(result, 66491);
 }
 
 /* clamp_accel: velocity unchanged -> returns same velocity */
 static void test_clamp_accel_no_change(void **state) {
     (void)state;
-    double result = clamp_accel(5.0, 5.0, 2.0);
-    assert_double_equal(result, 5.0, 1e-9);
+    int32_t result = clamp_accel(327680, 327680, 131072);
+    assert_int_equal(result, 327680);  /* 5.0 unchanged */
 }
 
 /* clamp_accel: acceleration under limit -> returns requested velocity */
 static void test_clamp_accel_under_limit(void **state) {
     (void)state;
-    double result = clamp_accel(7.0, 5.0, 3.0);
-    assert_double_equal(result, 7.0, 1e-9);
+    int32_t result = clamp_accel(458752, 327680, 196608);
+    assert_int_equal(result, 458752);  /* delta=131072 < max_accel=196608, not clamped */
 }
 
 /* clamp_accel: acceleration over limit positive -> clamped to max_accel */
 static void test_clamp_accel_over_limit_positive(void **state) {
     (void)state;
-    double result = clamp_accel(10.0, 5.0, 2.0);
-    assert_double_equal(result, 7.0, 1e-9);
+    int32_t result = clamp_accel(655360, 327680, 131072);
+    assert_int_equal(result, 458752);  /* 5.0 + 2.0 = 7.0 */
 }
 
 /* clamp_accel: deceleration over limit -> clamped to max_accel */
 static void test_clamp_accel_over_limit_negative(void **state) {
     (void)state;
-    double result = clamp_accel(1.0, 5.0, 2.0);
-    assert_double_equal(result, 3.0, 1e-9);
+    int32_t result = clamp_accel(65536, 327680, 131072);
+    assert_int_equal(result, 196608);  /* 5.0 - 2.0 = 3.0 */
 }
 
 /* clamp_accel: zero max_accel -> returns requested velocity unchanged */
 static void test_clamp_accel_zero_max(void **state) {
     (void)state;
-    double result = clamp_accel(100.0, 0.0, 0.0);
-    assert_double_equal(result, 100.0, 1e-9);
+    int32_t result = clamp_accel(6553600, 0, 0);
+    assert_int_equal(result, 6553600);  /* max_accel=0 -> no limit */
 }
 
 /* plan_steps: fractional accumulation -> step fires on 4th call */
 static void test_plan_steps_fractional_accumulation(void **state) {
     (void)state;
-    /* velocity=0.3, step_len=1 (tiny: max_steps >> desired, not the limiter)
-     * acc after calls: 0.3, 0.6, 0.9, 1.2 -> n=0,0,0,1 */
-    assert_int_equal(plan_steps(0.3, 0, 133000.0, 1), 0);
-    assert_int_equal(plan_steps(0.3, 0, 133000.0, 1), 0);
-    assert_int_equal(plan_steps(0.3, 0, 133000.0, 1), 0);
-    assert_int_equal(plan_steps(0.3, 0, 133000.0, 1), 1);
+    /* velocity_q = (int32_t)(0.3 * 65536) = 19660 (C truncates toward zero)
+     * acc: 19660, 39320, 58980, 78640 -> steps: 0,0,0,1 */
+    int32_t vq = (int32_t)(0.3 * 65536);
+    assert_int_equal(plan_steps(vq, 0, 133000, 1), 0);
+    assert_int_equal(plan_steps(vq, 0, 133000, 1), 0);
+    assert_int_equal(plan_steps(vq, 0, 133000, 1), 0);
+    assert_int_equal(plan_steps(vq, 0, 133000, 1), 1);
 }
 
 /* plan_steps: correct total over 10 periods for fractional velocity */
 static void test_plan_steps_total_over_ten_periods(void **state) {
     (void)state;
-    /* velocity=2.7, step_len=1 -> 10 periods should produce 27 steps total */
+    /* Use 2.75 (= 180224 in Q16.16, exactly representable); 10 periods -> 27 steps */
     int32_t total = 0;
     for (int i = 0; i < 10; i++) {
-        total += plan_steps(2.7, 0, 133000.0, 1);
+        total += plan_steps(180224, 0, 133000, 1);
     }
     assert_int_equal(total, 27);
 }
@@ -192,42 +187,41 @@ static void test_plan_steps_total_over_ten_periods(void **state) {
 /* plan_steps: excess steps returned to accumulator when max_steps limits output */
 static void test_plan_steps_excess_returned_to_accumulator(void **state) {
     (void)state;
-    /* step_len=24991: step_period=(int32_t)(2.0*(24991+9))=50000
-     * max_steps = (int32_t)(133000.0/50000) = 2
-     * velocity=3.0 -> desired=3, capped to 2, excess 1 returned to accumulator
-     * next call velocity=0.0 -> acc=1.0 -> n=1 */
-    assert_int_equal(plan_steps(3.0, 0, 133000.0, 24991), 2);
-    assert_int_equal(plan_steps(0.0, 0, 133000.0, 24991), 1);
+    /* velocity_q=196608 (3.0), step_period=50000, max_steps=133000/50000=2
+     * desired=3, capped to 2, excess=1 returned; next call vel=0, acc=1.0 -> 1 step */
+    assert_int_equal(plan_steps(196608, 0, 133000, 24991), 2);
+    assert_int_equal(plan_steps(0,      0, 133000, 24991), 1);
 }
 
 /* plan_steps: zero velocity -> no steps, accumulator stays 0 */
 static void test_plan_steps_zero_velocity(void **state) {
     (void)state;
-    assert_int_equal(plan_steps(0.0, 0, 133000.0, 13291), 0);
-    assert_int_equal(plan_steps(0.0, 0, 133000.0, 13291), 0);
+    assert_int_equal(plan_steps(0, 0, 133000, 13291), 0);
+    assert_int_equal(plan_steps(0, 0, 133000, 13291), 0);
 }
 
 /* get_velocity: near-zero position diff -> returns 0 */
 static void test_get_velocity_zero_pos_diff(void **state) {
     (void)state;
-    double v = get_velocity(1000, 0, 10, 10.0, 5.0);
-    assert_true(v == 0.0);
+    /* pos_diff=0 steps -> abs(0) < 66 -> return 0 */
+    int32_t v = get_velocity(0, (int32_t)(5.0 * 65536));
+    assert_true(v == 0);
 }
 
 /* get_velocity: direction disagreement -> returns 0 */
 static void test_get_velocity_direction_disagreement(void **state) {
     (void)state;
-    /* position_diff = +10 (forward), velocity = -5000/1000 (backward) */
-    double v = get_velocity(1000, 0, 0, 10.0, -5000.0);
-    assert_true(v == 0.0);
+    /* pos_diff=+10 steps (forward), vel_req=-5.0 steps/period (backward) -> return 0 */
+    int32_t v = get_velocity((int32_t)(10.0 * 65536), (int32_t)(-5.0 * 65536));
+    assert_true(v == 0);
 }
 
 /* get_velocity: normal forward motion -> returns positive combined velocity */
 static void test_get_velocity_normal_forward(void **state) {
     (void)state;
-    /* combined = 10*0.1 + 5.0*0.85 = 5.25 */
-    double v = get_velocity(1000, 0, 0, 10.0, 5000.0);
-    assert_true(v > 0.0);
+    /* pos_diff=+10, vel_req=+5.0 -> combined > 0 */
+    int32_t v = get_velocity((int32_t)(10.0 * 65536), (int32_t)(5.0 * 65536));
+    assert_true(v > 0);
 }
 
 /* do_steps: update_period == 0, enabled joint -> returns 0 without dividing */
@@ -352,9 +346,9 @@ static void test_do_steps_no_motion(void **state) {
 /* do_steps: underrun (no new data) with slow last_velocity (<1.0) -> writes 0 to PIO */
 static void test_do_steps_underrun_slow_stops_pio(void **state) {
     (void)state;
-    /* Prime last_velocity to ~0.475 (<1.0) via a normal do_steps() call.
-     * get_velocity: position_diff=0.5, velocity=500/1000=0.5
-     * combined = 0.5*0.1 + 0.5*0.85 = 0.475 */
+    /* Prime last_velocity_q to a value < STOP_THRESHOLD_Q (65536) via a normal do_steps() call.
+     * get_velocity: pos_diff=0.5*65536=32768, vel_req=500/1000*65536=32768
+     * combined = (32768*6554 + 32768*55706) >> 16 = 32768*62260 >> 16 = ~31130 < 65536 */
     config.joint[0].enabled            = 1;
     config.joint[0].abs_pos_requested  = 0.5;
     config.joint[0].abs_pos_achieved   = 0;
@@ -363,7 +357,7 @@ static void test_do_steps_underrun_slow_stops_pio(void **state) {
     config.joint[0].max_accel          = 0.0;
     config.joint[0].updated_from_c0    = 1;
     mock_tx_fifo_empty                  = 1;
-    do_steps(0);   /* primes last_velocity ~0.475 */
+    do_steps(0);   /* primes last_velocity_q to a value < STOP_THRESHOLD_Q */
 
     /* Now simulate underrun: no new data from Core0. */
     config.joint[0].updated_from_c0 = 0;
@@ -380,9 +374,9 @@ static void test_do_steps_underrun_slow_stops_pio(void **state) {
 /* do_steps: underrun (no new data) with medium last_velocity (>=1.0) -> PIO untouched */
 static void test_do_steps_underrun_medium_leaves_pio_running(void **state) {
     (void)state;
-    /* Prime last_velocity to ~5.25 (>=1.0) via a normal do_steps() call.
-     * get_velocity: position_diff=10, velocity=5000/1000=5.0
-     * combined = 10*0.1 + 5.0*0.85 = 5.25 */
+    /* Prime last_velocity_q to a value >= STOP_THRESHOLD_Q (65536) via a normal do_steps() call.
+     * get_velocity: pos_diff=10*65536=655360, vel_req=5000/1000*65536=327680
+     * combined = (655360*6554 + 327680*55706) >> 16 >> STOP_THRESHOLD_Q */
     config.joint[0].enabled            = 1;
     config.joint[0].abs_pos_requested  = 10.0;
     config.joint[0].abs_pos_achieved   = 0;
@@ -391,7 +385,7 @@ static void test_do_steps_underrun_medium_leaves_pio_running(void **state) {
     config.joint[0].max_accel          = 0.0;
     config.joint[0].updated_from_c0    = 1;
     mock_tx_fifo_empty                  = 1;
-    do_steps(0);   /* primes last_velocity ~5.25 */
+    do_steps(0);   /* primes last_velocity_q >= STOP_THRESHOLD_Q */
 
     /* Now simulate underrun: no new data from Core0. */
     config.joint[0].updated_from_c0 = 0;
