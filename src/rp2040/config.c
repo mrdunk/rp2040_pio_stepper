@@ -120,6 +120,10 @@ void init_config()
 
   for(uint8_t joint = 0; joint < MAX_JOINT; joint++) {
     mutex_init(&mtx_joint[joint]);
+    memset((void*)&config.joint[joint], 0, sizeof(config.joint[joint]));
+    config.joint[joint].io_pos_step = -1;
+    config.joint[joint].io_pos_dir  = -1;
+    config.joint[joint].max_accel   = 1.0;
   }
 }
 

@@ -118,9 +118,8 @@ static void test_serialise_joint_metrics(void **state) {
     struct NWBuffer tx_buf = {0};
 
     for (size_t j = 0; j < MAX_JOINT; j++) {
-        config.joint[j].updated_from_c0 = 0;
-        config.joint[j].overrun_count   = j + 1;  /* 1, 2, 3, 4 */
-        config.joint[j].underrun_count  = j + 5;  /* 5, 6, 7, 8 */
+        config.joint[j].overrun_count  = j + 1;  /* 1, 2, 3, 4 */
+        config.joint[j].underrun_count = j + 5;  /* 5, 6, 7, 8 */
     }
 
     bool result = serialise_joint_metrics(&tx_buf);

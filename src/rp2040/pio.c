@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <math.h>
+#include <string.h>
 
 #ifdef BUILD_TESTS
 
@@ -23,27 +24,26 @@
 #define RP2040_CLOCK_MHZ 133
 
 
-/* Initialize a pair of PIO programmes.
- * One for step generation on pio0 and one for counting said steps on pio1.
- */
-static uint32_t sm0[MAX_JOINT];
-static uint32_t sm1[MAX_JOINT];
+typedef struct {
+    uint32_t sm0;
+    uint32_t sm1;
+    bool     init_done;
+    int32_t  last_pos_requested;
+    int32_t  last_pos_achieved;
+    uint32_t last_enabled;
+    double   last_velocity;
+    double   step_accumulator;
+} JointPioState;
 
-/* File-scope statics (promoted from function-local for test reset access). */
-static bool     init_done[MAX_JOINT]          = {false, false, false, false};
-static uint32_t offset_pio0                   = 0;
-static uint32_t offset_pio1                   = 0;
-static uint8_t  programs_loaded               = 0;
-static int32_t  last_pos_requested[MAX_JOINT] = {0, 0, 0, 0};
-static int32_t  last_pos_achieved[MAX_JOINT]  = {0, 0, 0, 0};
-static uint32_t last_enabled[MAX_JOINT]       = {0, 0, 0, 0};
-static double   last_velocity[MAX_JOINT]      = {0.0, 0.0, 0.0, 0.0};
-static double   step_accumulator[MAX_JOINT]   = {0.0, 0.0, 0.0, 0.0};
+static JointPioState joint_state[MAX_JOINT];
+static uint32_t offset_pio0     = 0;
+static uint32_t offset_pio1     = 0;
+static uint8_t  programs_loaded = 0;
 
 void init_pio(const uint32_t joint)
 {
 
-  if(init_done[joint]) {
+  if(joint_state[joint].init_done) {
     return;
   }
 
@@ -91,36 +91,36 @@ void init_pio(const uint32_t joint)
     offset_pio1 = pio_add_program(pio1, &step_count_program);
 
     for(int8_t a = 0; a < MAX_JOINT; a++) {
-      sm0[a] = pio_claim_unused_sm(pio0, true);
-      sm1[a] = pio_claim_unused_sm(pio1, true);
+      joint_state[a].sm0 = pio_claim_unused_sm(pio0, true);
+      joint_state[a].sm1 = pio_claim_unused_sm(pio1, true);
     }
 
     programs_loaded = 1;
   }
 
   // The stepping PIO program.
-  pio_sm_set_enabled(pio0, sm0[joint], false);
+  pio_sm_set_enabled(pio0, joint_state[joint].sm0, false);
   // From pico_axs.pio
-  step_gen_program_init(pio0, sm0[joint], offset_pio0, io_pos_step, io_pos_dir);
-  pio_sm_set_enabled(pio0, sm0[joint], true);
+  step_gen_program_init(pio0, joint_state[joint].sm0, offset_pio0, io_pos_step, io_pos_dir);
+  pio_sm_set_enabled(pio0, joint_state[joint].sm0, true);
 
-  if(sm0[joint] != joint) {
+  if(joint_state[joint].sm0 != joint) {
     printf("ERROR: Incorrect PIO initialization order for pio0. joint: %u  sm0[joint]: %u",
-        joint, sm0[joint]);
+        joint, joint_state[joint].sm0);
   }
 
   // The counting PIO program.
-  pio_sm_set_enabled(pio1, sm1[joint], false);
+  pio_sm_set_enabled(pio1, joint_state[joint].sm1, false);
   // From pico_axs.pio
-  step_count_program_init(pio1, sm1[joint], offset_pio1, io_pos_step, io_pos_dir);
-  pio_sm_set_enabled(pio1, sm1[joint], true);
+  step_count_program_init(pio1, joint_state[joint].sm1, offset_pio1, io_pos_step, io_pos_dir);
+  pio_sm_set_enabled(pio1, joint_state[joint].sm1, true);
 
-  if(sm1[joint] != joint) {
+  if(joint_state[joint].sm1 != joint) {
     printf("ERROR: Incorrect PIO initialization order for pio1. joint: %u  sm1[joint]: %u",
-        joint, sm1[joint]);
+        joint, joint_state[joint].sm1);
   }
 
-  init_done[joint] = true;
+  joint_state[joint].init_done = true;
 }
 
 // These POSITION_BIAS and VELOCITY_BIAS should add up to 1.0 or slightly less. eg: 0.95
@@ -202,9 +202,9 @@ double clamp_accel(double velocity, double last_velocity, double max_accel) {
 
 int32_t plan_steps(double velocity, uint8_t joint,
                    double period_ticks, int32_t step_len) {
-    step_accumulator[joint] += fabs(velocity);
-    int32_t n_steps_desired = (int32_t)floor(step_accumulator[joint]);
-    step_accumulator[joint] -= (double)n_steps_desired;
+    joint_state[joint].step_accumulator += fabs(velocity);
+    int32_t n_steps_desired = (int32_t)floor(joint_state[joint].step_accumulator);
+    joint_state[joint].step_accumulator -= (double)n_steps_desired;
 
     int32_t step_period = (int32_t)(2.0 * (step_len + STEP_PIO_LEN_OVERHEAD));
     int32_t max_steps = (step_period > 0)
@@ -213,7 +213,7 @@ int32_t plan_steps(double velocity, uint8_t joint,
     if (max_steps < 0) max_steps = 0;
 
     int32_t n_steps = n_steps_desired < max_steps ? n_steps_desired : max_steps;
-    step_accumulator[joint] += (double)(n_steps_desired - n_steps);
+    joint_state[joint].step_accumulator += (double)(n_steps_desired - n_steps);
 
     return n_steps;
 }
@@ -222,8 +222,8 @@ int32_t plan_steps(double velocity, uint8_t joint,
  * Encoding: lower bit = direction, upper bits = half-period in ticks. */
 static void issue_pio_step(uint32_t joint, int32_t step_len_ticks,
                            uint32_t direction) {
-    if (pio_sm_is_tx_fifo_empty(pio0, sm0[joint])) {
-        pio_sm_put(pio0, sm0[joint], ((uint32_t)step_len_ticks << 1) | direction);
+    if (pio_sm_is_tx_fifo_empty(pio0, joint_state[joint].sm0)) {
+        pio_sm_put(pio0, joint_state[joint].sm0, ((uint32_t)step_len_ticks << 1) | direction);
     }
 }
 
@@ -259,8 +259,8 @@ uint8_t do_steps(const uint8_t joint) {
     return 0;
   }
 
-  if(enabled != last_enabled[joint]) {
-    last_enabled[joint] = enabled;
+  if(enabled != joint_state[joint].last_enabled) {
+    joint_state[joint].last_enabled = enabled;
     if(enabled) {
       printf("Joint %u was enabled.\n", joint);
       init_pio(joint);
@@ -271,13 +271,13 @@ uint8_t do_steps(const uint8_t joint) {
 
   if(!enabled) {
     // Switch off PIO stepgen.
-    if(pio_sm_is_tx_fifo_empty(pio0, sm0[joint])) {
-      pio_sm_put(pio0, sm0[joint], 0);
+    if(pio_sm_is_tx_fifo_empty(pio0, joint_state[joint].sm0)) {
+      pio_sm_put(pio0, joint_state[joint].sm0, 0);
     }
     return 0;
   }
 
-  abs_pos_achieved = drain_rx_fifo(sm1[joint], abs_pos_achieved);
+  abs_pos_achieved = drain_rx_fifo(joint_state[joint].sm1, abs_pos_achieved);
 
   double velocity = get_velocity(
       update_period_us,
@@ -288,8 +288,8 @@ uint8_t do_steps(const uint8_t joint) {
 
   max_velocity /= update_period_us;
   max_accel /= update_period_us;
-  velocity = clamp_accel(velocity, last_velocity[joint], max_accel);
-  last_velocity[joint] = velocity;
+  velocity = clamp_accel(velocity, joint_state[joint].last_velocity, max_accel);
+  joint_state[joint].last_velocity = velocity;
 
   double step_count = fabs(velocity);
   double update_period_ticks = update_period_us * RP2040_CLOCK_MHZ;
@@ -301,13 +301,13 @@ uint8_t do_steps(const uint8_t joint) {
 
   if (n_steps > 0) {
     issue_pio_step(joint, step_len_ticks, direction);
-  } else if (pio_sm_is_tx_fifo_empty(pio0, sm0[joint])) {
-    pio_sm_put(pio0, sm0[joint], 0);
+  } else if (pio_sm_is_tx_fifo_empty(pio0, joint_state[joint].sm0)) {
+    pio_sm_put(pio0, joint_state[joint].sm0, 0);
   }
 
-  velocity_achieved = abs_pos_achieved - last_pos_achieved[joint];
+  velocity_achieved = abs_pos_achieved - joint_state[joint].last_pos_achieved;
   int32_t velocity_requested_tm1 = (int32_t)velocity;
-  int32_t position_error = abs_pos_achieved - last_pos_requested[joint];
+  int32_t position_error = abs_pos_achieved - joint_state[joint].last_pos_requested;
 
   update_joint_config(
       joint,
@@ -325,24 +325,15 @@ uint8_t do_steps(const uint8_t joint) {
       &step_len_ticks,
       &position_error);
 
-  last_pos_requested[joint] = abs_pos_requested;
-  last_pos_achieved[joint] = abs_pos_achieved;
+  joint_state[joint].last_pos_requested = abs_pos_requested;
+  joint_state[joint].last_pos_achieved  = abs_pos_achieved;
 
   return updated;
 }
 
 #ifdef BUILD_TESTS
 void pio_reset_for_test(void) {
-    for (int j = 0; j < MAX_JOINT; j++) {
-        sm0[j]                = 0;
-        sm1[j]                = 0;
-        init_done[j]          = false;
-        last_pos_requested[j] = 0;
-        last_pos_achieved[j]  = 0;
-        last_enabled[j]       = 0;
-        last_velocity[j]      = 0.0;
-        step_accumulator[j]   = 0.0;
-    }
+    memset(joint_state, 0, sizeof(joint_state));
     offset_pio0     = 0;
     offset_pio1     = 0;
     programs_loaded = 0;

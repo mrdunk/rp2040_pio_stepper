@@ -52,13 +52,6 @@ static size_t build_abs_pos_packet(
 static int test_setup(void **state) {
     (void)state;
     init_config();
-    /* init_config() doesn't reset joint data — clear what this test cares about. */
-    for (size_t j = 0; j < MAX_JOINT; j++) {
-        config.joint[j].updated_from_c0  = 0;
-        config.joint[j].updated_from_c1  = 0;
-        config.joint[j].overrun_count  = 0;
-        config.joint[j].underrun_count = 0;
-    }
     return 0;
 }
 

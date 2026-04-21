@@ -47,17 +47,9 @@ static int test_setup(void **state) {
     init_config();
     config.update_time_us = 1000;  /* init_config() does not reset this */
     for (size_t j = 0; j < MAX_JOINT; j++) {
-        config.joint[j].updated_from_c0  = 0;
-        config.joint[j].updated_from_c1  = 0;
-        config.joint[j].overrun_count    = 0;
-        config.joint[j].underrun_count   = 0;
-        config.joint[j].enabled          = 0;
-        config.joint[j].io_pos_step      = 1;  /* valid pin (0-31) */
-        config.joint[j].io_pos_dir       = 2;  /* valid pin (0-31) */
-        config.joint[j].abs_pos_requested  = 0;
-        config.joint[j].abs_pos_achieved   = 0;
-        config.joint[j].velocity_requested = 0;
-        config.joint[j].max_velocity       = 50.0;
+        config.joint[j].io_pos_step = 1;  /* valid pin (0-31) */
+        config.joint[j].io_pos_dir  = 2;  /* valid pin (0-31) */
+        config.joint[j].max_velocity = 50.0;
     }
     mock_rx_fifo_level = 0;
     mock_rx_index      = 0;

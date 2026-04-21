@@ -97,55 +97,6 @@ failure blocks the commit.
 
 ## Known pitfalls
 
-### UB left-shift with `-Ofast`
-
-Test helpers that iterate over GPIO banks (0 and 1) must shift by
-`(i - bank_offset)`, not by `i`. With `-Ofast`, GCC treats `0x1 << i` as
-undefined behaviour when `i >= 32` (int overflow) and may optimise it to 0,
-silently zeroing all bank-1 GPIO values. Pattern to use:
-
-```c
-int bank_offset = bank * 32;
-for (int i = bank_offset; i < 32 + bank_offset; i++) {
-    bool value = values & (0x1 << (i - bank_offset));  // correct
-}
-```
-
-### `time_us_64()` can return 0
-
-The mock returns 0 on the first call. Guards like `if (time_last > 0)` fail
-when the real first timestamp is 0. Use a dedicated `bool time_initialized`
-flag instead (see `timing.c`).
-
-### `init_config()` does not reset `ConfigAxis` fields
-
-`init_config()` initialises mutexes and GPIO state but does **not** reset the
-`config.joint[]` array. Tests that depend on a clean per-joint state (e.g.
-`updated_from_c0`, `overrun_count`, `underrun_count`) must zero those fields
-explicitly in their setup function:
-
-```c
-for (size_t j = 0; j < MAX_JOINT; j++) {
-    config.joint[j].updated_from_c0 = 0;
-    config.joint[j].updated_from_c1 = 0;
-    config.joint[j].overrun_count   = 0;
-    config.joint[j].underrun_count  = 0;
-}
-```
-
-Failing to do this causes state from earlier tests to leak (symptom: counters
-accumulate to unexpectedly large values).
-
-### `driver_mocks.h` `skeleton_t` must mirror `hal_rp2040_eth.c`
-
-`src/test/mocks/driver_mocks.h` contains a hand-maintained copy of
-`skeleton_t`. It is **not** auto-generated. Any field added to the real
-`skeleton_t` in `hal_rp2040_eth.c` must also be added here, and the
-corresponding test `setup_data()` functions in `driver_network_RPtoPC_test.c`
-and `driver_gpio_test.c` must wire it up. The mismatch won't be caught at
-configure time — it surfaces as a compile error only when a driver test is
-built.
-
 ### Adding a HAL pin — use the PinDef tables
 
 New pins must be added as rows in the appropriate static table in `hal_rp2040_eth.c`:
@@ -157,8 +108,9 @@ New pins must be added as rows in the appropriate static table in `hal_rp2040_et
 
 The pointer is computed as `(char*)port_data_array + offset + i * stride`, where
 `stride = sizeof(field_element_type*)` for per-channel arrays. Also add the
-corresponding field to `skeleton_t` in both `hal_rp2040_eth.c` and the
-hand-maintained copy in `src/test/mocks/driver_mocks.h` (see pitfall above).
+corresponding field to `skeleton_t` in `src/driver/skeleton.h` and wire it up
+in the `setup_data()` functions in `driver_network_RPtoPC_test.c` and
+`driver_gpio_test.c`.
 
 ### Scalar HAL metric pins (`fb-overrun-ratio`, `fb-underrun-ratio`)
 
@@ -168,20 +120,16 @@ underrun counts summed across all joints per tick. They output `ema_overrun` and
 (`ema_overrun`, `ema_underrun` double fields); updated in `unpack_joint_metrics()`
 in `rp2040_network.c`. `EMA_ALPHA` is defined there and must match the servo rate.
 
-### `pio_reset_for_test()` must stay in sync with file-scope statics in `pio.c`
-
-`pio.c` uses file-scope statics for all per-joint state so that `pio_reset_for_test()` can reset them between test runs. When adding a new file-scope static to `pio.c`, you **must** also add its reset inside `pio_reset_for_test()` or state will leak across tests. Symptom: test results depend on run order.
-
 ### `init_config()` default `max_accel` disables stepping in `do_steps()` tests
 
-`init_config()` sets `config.joint[j].max_accel` to a non-zero default (currently
-`2.0`). In `do_steps()`, `max_accel` is divided by `update_period_us` before being
-passed to `clamp_accel()`. At a 1000 µs period this gives `max_accel = 0.002`
-steps/period, which clamps `velocity` to `0.002` — below `MIN_STEP_COUNT` —
+`init_config()` sets `config.joint[j].max_accel` to `1.0`. In `do_steps()`,
+`max_accel` is divided by `update_period_us` before being passed to
+`clamp_accel()`. At a 1000 µs period this gives `max_accel = 0.001`
+steps/period, which clamps `velocity` to `0.001` — below `MIN_STEP_COUNT` —
 causing `plan_steps()` to return 0 and no step to be issued. Tests for the
-normal-step path must set `config.joint[0].max_accel = 0.0` (disables the limiter)
-or a sufficiently large value. The acceleration limiter is tested separately in
-`test_do_steps_accel_clamped`.
+normal-step path must set `config.joint[0].max_accel = 0.0` (disables the
+limiter) or a sufficiently large value. The acceleration limiter is tested
+separately in `test_do_steps_accel_clamped`.
 
 ### Pre-commit hook blocks commits with calls to undefined functions
 
