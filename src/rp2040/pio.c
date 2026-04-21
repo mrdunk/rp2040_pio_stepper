@@ -312,6 +312,22 @@ uint8_t do_steps(const uint8_t joint) {
   return updated;
 }
 
+/* Clamp velocity change to at most max_accel per period.
+ * Returns velocity unchanged if max_accel <= 0 (no limiting). */
+double clamp_accel(double velocity, double last_velocity, double max_accel) {
+    if (max_accel <= 0.0) {
+        return velocity;
+    }
+    double delta = velocity - last_velocity;
+    if (delta > max_accel) {
+        return last_velocity + max_accel;
+    }
+    if (delta < -max_accel) {
+        return last_velocity - max_accel;
+    }
+    return velocity;
+}
+
 #ifdef BUILD_TESTS
 void pio_reset_for_test(void) {
     for (int j = 0; j < MAX_JOINT; j++) {
@@ -326,26 +342,5 @@ void pio_reset_for_test(void) {
     offset_pio0     = 0;
     offset_pio1     = 0;
     programs_loaded = 0;
-}
-
-double clamp_accel(double velocity, double last_velocity, double max_accel) {
-    /* Clamp velocity change to not exceed max_accel per tick.
-     * If max_accel is zero, return velocity unchanged (no limit).
-     */
-    if (max_accel == 0.0) {
-        return velocity;
-    }
-
-    double accel = velocity - last_velocity;
-
-    /* Clamp acceleration to [-max_accel, +max_accel] */
-    if (accel > max_accel) {
-        return last_velocity + max_accel;
-    }
-    if (accel < -max_accel) {
-        return last_velocity - max_accel;
-    }
-
-    return velocity;
 }
 #endif  // BUILD_TESTS
