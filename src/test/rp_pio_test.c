@@ -279,11 +279,12 @@ static void test_do_steps_accel_clamped(void **state) {
     do_steps(0);
     uint32_t second_word = last_pio_put_value;
 
-    /* Both calls should have written a non-zero step command */
-    assert_true(first_word != 0);
-    assert_true(second_word != 0);
-    /* The direction bit (LSB) should be set (positive motion) in both */
+    /* Clamped velocity=5.0 -> step_len=(133000/(5*2))-9=13291. Unclamped (9500) would give 656.
+     * Assert the encoded step_len (upper bits) matches the clamped expectation. */
+    assert_int_equal(first_word >> 1, 13291);
     assert_int_equal(first_word & 0x1, 1);
+    /* Second call: last_velocity=5.0, clamped to 10.0 -> step_len=(133000/(10*2))-9=6641 */
+    assert_int_equal(second_word >> 1, 6641);
     assert_int_equal(second_word & 0x1, 1);
 }
 
