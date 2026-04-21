@@ -184,6 +184,40 @@ int32_t calculate_step_len(double step_count, double update_period_ticks,
     return clamped > max_len ? max_len : clamped;
 }
 
+/* Clamp velocity change to at most max_accel per period.
+ * Returns velocity unchanged if max_accel <= 0 (no limiting). */
+double clamp_accel(double velocity, double last_velocity, double max_accel) {
+    if (max_accel <= 0.0) {
+        return velocity;
+    }
+    double delta = velocity - last_velocity;
+    if (delta > max_accel) {
+        return last_velocity + max_accel;
+    }
+    if (delta < -max_accel) {
+        return last_velocity - max_accel;
+    }
+    return velocity;
+}
+
+int32_t plan_steps(double velocity, uint8_t joint,
+                   double period_ticks, int32_t step_len) {
+    step_accumulator[joint] += fabs(velocity);
+    int32_t n_steps_desired = (int32_t)floor(step_accumulator[joint]);
+    step_accumulator[joint] -= (double)n_steps_desired;
+
+    int32_t step_period = (int32_t)(2.0 * (step_len + STEP_PIO_LEN_OVERHEAD));
+    int32_t max_steps = (step_period > 0)
+        ? (int32_t)(period_ticks / (double)step_period)
+        : 0;
+    if (max_steps < 0) max_steps = 0;
+
+    int32_t n_steps = n_steps_desired < max_steps ? n_steps_desired : max_steps;
+    step_accumulator[joint] += (double)(n_steps_desired - n_steps);
+
+    return n_steps;
+}
+
 /* Write the packed step command to PIO0's TX FIFO if it is empty.
  * Encoding: lower bit = direction, upper bits = half-period in ticks. */
 static void issue_pio_step(uint32_t joint, int32_t step_len_ticks,
@@ -295,40 +329,6 @@ uint8_t do_steps(const uint8_t joint) {
   last_pos_achieved[joint] = abs_pos_achieved;
 
   return updated;
-}
-
-/* Clamp velocity change to at most max_accel per period.
- * Returns velocity unchanged if max_accel <= 0 (no limiting). */
-double clamp_accel(double velocity, double last_velocity, double max_accel) {
-    if (max_accel <= 0.0) {
-        return velocity;
-    }
-    double delta = velocity - last_velocity;
-    if (delta > max_accel) {
-        return last_velocity + max_accel;
-    }
-    if (delta < -max_accel) {
-        return last_velocity - max_accel;
-    }
-    return velocity;
-}
-
-int32_t plan_steps(double velocity, uint8_t joint,
-                   double period_ticks, int32_t step_len) {
-    step_accumulator[joint] += fabs(velocity);
-    int32_t n_steps_desired = (int32_t)floor(step_accumulator[joint]);
-    step_accumulator[joint] -= (double)n_steps_desired;
-
-    int32_t step_period = (int32_t)(2.0 * (step_len + STEP_PIO_LEN_OVERHEAD));
-    int32_t max_steps = (step_period > 0)
-        ? (int32_t)(period_ticks / (double)step_period)
-        : 0;
-    if (max_steps < 0) max_steps = 0;
-
-    int32_t n_steps = n_steps_desired < max_steps ? n_steps_desired : max_steps;
-    step_accumulator[joint] += (double)(n_steps_desired - n_steps);
-
-    return n_steps;
 }
 
 #ifdef BUILD_TESTS
