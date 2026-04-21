@@ -150,22 +150,21 @@ double get_velocity(
 {
   double position_diff = (abs_pos_requested - (double)abs_pos_achieved);
   double velocity = (expected_velocity / (double)update_period_us);
-  //double combined_vel = position_diff * POSITION_BIAS + velocity * VELOCITY_BIAS;
+  double combined_vel = position_diff * POSITION_BIAS + velocity * VELOCITY_BIAS;
 
   // Skip very slow speeds.
   // Try again next cycle.
-  //if(fabs(position_diff) < 0.001) {
-  //  return 0.0;
-  //}
+  if(fabs(position_diff) < 0.001) {
+    return 0.0;
+  }
 
   // Different opinions on which direction to turn. Implies low speed jitter.
   // Try again next cycle.
-  //if((position_diff >= 0.0 && velocity <= 0.0) || (position_diff <= 0.0 && velocity >= 0.0)) {
-  //  return 0.0;
-  //}
+  if((position_diff >= 0.0 && velocity <= 0.0) || (position_diff <= 0.0 && velocity >= 0.0)) {
+    return 0.0;
+  }
 
-  //return combined_vel;
-  return velocity;
+  return combined_vel;
 }
 
 /* Compute the PIO step-timer length in clock ticks.
