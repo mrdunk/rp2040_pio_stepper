@@ -24,6 +24,8 @@ double get_velocity(uint32_t update_period_us, uint8_t joint,
 int32_t drain_rx_fifo(uint32_t sm, int32_t current_pos);
 int32_t calculate_step_len(double step_count, double update_period_ticks,
                            double max_velocity);
+int32_t plan_steps(double velocity, uint8_t joint,
+                   double period_ticks, int32_t step_len);
 #endif  // BUILD_TESTS
 
 #endif  // PIO__H

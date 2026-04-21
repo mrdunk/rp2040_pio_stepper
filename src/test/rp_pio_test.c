@@ -172,6 +172,46 @@ static void test_clamp_accel_zero_max(void **state) {
     assert_double_equal(result, 100.0, 1e-9);
 }
 
+/* plan_steps: fractional accumulation -> step fires on 4th call */
+static void test_plan_steps_fractional_accumulation(void **state) {
+    (void)state;
+    /* velocity=0.3, step_len=1 (tiny: max_steps >> desired, not the limiter)
+     * acc after calls: 0.3, 0.6, 0.9, 1.2 -> n=0,0,0,1 */
+    assert_int_equal(plan_steps(0.3, 0, 133000.0, 1), 0);
+    assert_int_equal(plan_steps(0.3, 0, 133000.0, 1), 0);
+    assert_int_equal(plan_steps(0.3, 0, 133000.0, 1), 0);
+    assert_int_equal(plan_steps(0.3, 0, 133000.0, 1), 1);
+}
+
+/* plan_steps: correct total over 10 periods for fractional velocity */
+static void test_plan_steps_total_over_ten_periods(void **state) {
+    (void)state;
+    /* velocity=2.7, step_len=1 -> 10 periods should produce 27 steps total */
+    int32_t total = 0;
+    for (int i = 0; i < 10; i++) {
+        total += plan_steps(2.7, 0, 133000.0, 1);
+    }
+    assert_int_equal(total, 27);
+}
+
+/* plan_steps: excess steps returned to accumulator when max_steps limits output */
+static void test_plan_steps_excess_returned_to_accumulator(void **state) {
+    (void)state;
+    /* step_len=24991: step_period=2*(24991+9)=50000
+     * max_steps = floor(133000/50000) = 2
+     * velocity=3.0 -> desired=3, capped to 2, excess 1 returned
+     * next call velocity=0.0 -> acc=1.0 -> n=1 */
+    assert_int_equal(plan_steps(3.0, 0, 133000.0, 24991), 2);
+    assert_int_equal(plan_steps(0.0, 0, 133000.0, 24991), 1);
+}
+
+/* plan_steps: zero velocity -> no steps, accumulator stays 0 */
+static void test_plan_steps_zero_velocity(void **state) {
+    (void)state;
+    assert_int_equal(plan_steps(0.0, 0, 133000.0, 13291), 0);
+    assert_int_equal(plan_steps(0.0, 0, 133000.0, 13291), 0);
+}
+
 /* get_velocity: near-zero position diff -> returns 0 */
 static void test_get_velocity_zero_pos_diff(void **state) {
     (void)state;
@@ -304,6 +344,10 @@ int main(void) {
         cmocka_unit_test_setup(test_clamp_accel_over_limit_positive,    test_setup),
         cmocka_unit_test_setup(test_clamp_accel_over_limit_negative,    test_setup),
         cmocka_unit_test_setup(test_clamp_accel_zero_max,               test_setup),
+        cmocka_unit_test_setup(test_plan_steps_fractional_accumulation,        test_setup),
+        cmocka_unit_test_setup(test_plan_steps_total_over_ten_periods,         test_setup),
+        cmocka_unit_test_setup(test_plan_steps_excess_returned_to_accumulator, test_setup),
+        cmocka_unit_test_setup(test_plan_steps_zero_velocity,                  test_setup),
         cmocka_unit_test_setup(test_get_velocity_zero_pos_diff,          test_setup),
         cmocka_unit_test_setup(test_get_velocity_direction_disagreement, test_setup),
         cmocka_unit_test_setup(test_get_velocity_normal_forward,         test_setup),

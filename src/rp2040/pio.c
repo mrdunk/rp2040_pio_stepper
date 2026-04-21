@@ -38,6 +38,8 @@ static int32_t  last_pos_requested[MAX_JOINT] = {0, 0, 0, 0};
 static int32_t  last_pos_achieved[MAX_JOINT]  = {0, 0, 0, 0};
 static uint32_t last_enabled[MAX_JOINT]       = {0, 0, 0, 0};
 static double   last_velocity[MAX_JOINT]      = {0.0, 0.0, 0.0, 0.0};
+static double  step_accumulator[MAX_JOINT] = {0.0, 0.0, 0.0, 0.0};
+static int32_t carry_ticks[MAX_JOINT]      = {0, 0, 0, 0};
 
 void init_pio(const uint32_t joint)
 {
@@ -310,6 +312,28 @@ double clamp_accel(double velocity, double last_velocity, double max_accel) {
     return velocity;
 }
 
+int32_t plan_steps(double velocity, uint8_t joint,
+                   double period_ticks, int32_t step_len) {
+    step_accumulator[joint] += fabs(velocity);
+    int32_t n_steps_desired = (int32_t)floor(step_accumulator[joint]);
+    step_accumulator[joint] -= (double)n_steps_desired;
+
+    int32_t step_period = 2 * (step_len + (int32_t)STEP_PIO_LEN_OVERHEAD);
+    double available_ticks = period_ticks - (double)carry_ticks[joint];
+    int32_t max_steps = (step_period > 0)
+        ? (int32_t)(available_ticks / (double)step_period)
+        : 0;
+    if (max_steps < 0) max_steps = 0;
+
+    int32_t n_steps = n_steps_desired < max_steps ? n_steps_desired : max_steps;
+    step_accumulator[joint] += (double)(n_steps_desired - n_steps);
+
+    int32_t new_carry = carry_ticks[joint] + n_steps * step_period - (int32_t)period_ticks;
+    carry_ticks[joint] = new_carry > 0 ? new_carry : 0;
+
+    return n_steps;
+}
+
 #ifdef BUILD_TESTS
 void pio_reset_for_test(void) {
     for (int j = 0; j < MAX_JOINT; j++) {
@@ -320,6 +344,8 @@ void pio_reset_for_test(void) {
         last_pos_achieved[j]  = 0;
         last_enabled[j]       = 0;
         last_velocity[j]      = 0.0;
+        step_accumulator[j] = 0.0;
+        carry_ticks[j]      = 0;
     }
     offset_pio0     = 0;
     offset_pio1     = 0;
