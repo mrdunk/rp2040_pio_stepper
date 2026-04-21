@@ -38,7 +38,7 @@ static int32_t  last_pos_requested[MAX_JOINT] = {0, 0, 0, 0};
 static int32_t  last_pos_achieved[MAX_JOINT]  = {0, 0, 0, 0};
 static uint32_t last_enabled[MAX_JOINT]       = {0, 0, 0, 0};
 static double   last_velocity[MAX_JOINT]      = {0.0, 0.0, 0.0, 0.0};
-static double   step_accumulator[MAX_JOINT]  = {0.0, 0.0, 0.0, 0.0};
+static double   step_accumulator[MAX_JOINT]   = {0.0, 0.0, 0.0, 0.0};
 
 void init_pio(const uint32_t joint)
 {
@@ -338,8 +338,8 @@ void pio_reset_for_test(void) {
         last_pos_requested[j] = 0;
         last_pos_achieved[j]  = 0;
         last_enabled[j]       = 0;
-        last_velocity[j]        = 0.0;
-        step_accumulator[j]     = 0.0;
+        last_velocity[j]      = 0.0;
+        step_accumulator[j]   = 0.0;
     }
     offset_pio0     = 0;
     offset_pio1     = 0;
