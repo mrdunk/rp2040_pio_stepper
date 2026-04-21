@@ -26,8 +26,6 @@ hal_float_t joint_velocity_cmd[4];
 hal_float_t joint_accel_cmd[4];
 hal_float_t joint_velocity_feedback[4];
 hal_s32_t joint_pos_error[4];
-hal_u32_t joint_overrun_count[4];
-hal_u32_t joint_underrun_count[4];
 hal_float_t metric_overrun_ratio;
 hal_float_t metric_underrun_ratio;
 
@@ -53,8 +51,6 @@ void setup_data(skeleton_t* data) {
     data->joint_accel_cmd[joint] = &(joint_accel_cmd[joint]);
     data->joint_velocity_feedback[joint] = &(joint_velocity_feedback[joint]);
     data->joint_pos_error[joint] = &(joint_pos_error[joint]);
-    data->joint_overrun_count[joint]  = &(joint_overrun_count[joint]);
-    data->joint_underrun_count[joint] = &(joint_underrun_count[joint]);
   }
   data->metric_overrun_ratio       = &metric_overrun_ratio;
   data->metric_underrun_ratio = &metric_underrun_ratio;
@@ -222,51 +218,6 @@ static void test_joint_metrics(void **state) {
     for(size_t joint = 0; joint < MAX_JOINT; joint++) {
       assert_int_equal(*(data.joint_step_len_ticks[joint]), message.step_len_ticks[joint]);
       assert_int_equal(*(data.joint_velocity_cmd[joint]), message.velocity_requested_tm1[joint]);
-      assert_int_equal(*(data.joint_overrun_count[joint]),  message.overrun_count[joint]);
-      assert_int_equal(*(data.joint_underrun_count[joint]), message.underrun_count[joint]);
-    }
-}
-
-
-/* overrun/underrun use = so HAL pins show the per-window count, not a running total. */
-static void test_joint_metrics_per_window(void **state) {
-    (void) state;
-
-    struct NWBuffer buffer = {0};
-    size_t mess_received_count = 0;
-
-    memset(joint_overrun_count,  0, sizeof(joint_overrun_count));
-    memset(joint_underrun_count, 0, sizeof(joint_underrun_count));
-    skeleton_t data = {0};
-    setup_data(&data);
-
-    struct Reply_joint_metrics message = {
-        .type = REPLY_JOINT_METRICS,
-        .overrun_count  = {5, 0, 3, 1},
-        .underrun_count = {0, 2, 0, 4}
-    };
-
-    /* First servo cycle. */
-    memcpy(buffer.payload, &message, sizeof(message));
-    buffer.length = sizeof(message);
-    buffer.checksum = checksum(0, 0, buffer.length, buffer.payload);
-    process_data(&buffer, &data, &mess_received_count,
-                 sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum),
-                 NULL, NULL, NULL);
-
-    /* Second servo cycle with same counts. */
-    mess_received_count = 0;
-    memcpy(buffer.payload, &message, sizeof(message));
-    buffer.length = sizeof(message);
-    buffer.checksum = checksum(0, 0, buffer.length, buffer.payload);
-    process_data(&buffer, &data, &mess_received_count,
-                 sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum),
-                 NULL, NULL, NULL);
-
-    /* HAL pins reflect only the most recent window — no accumulation. */
-    for (size_t joint = 0; joint < MAX_JOINT; joint++) {
-        assert_int_equal(*(data.joint_overrun_count[joint]),  message.overrun_count[joint]);
-        assert_int_equal(*(data.joint_underrun_count[joint]), message.underrun_count[joint]);
     }
 }
 
@@ -277,8 +228,6 @@ static void test_joint_metrics_ema_ratios(void **state) {
     struct NWBuffer buffer = {0};
     size_t mess_received_count = 0;
 
-    memset(joint_overrun_count,  0, sizeof(joint_overrun_count));
-    memset(joint_underrun_count, 0, sizeof(joint_underrun_count));
     metric_overrun_ratio       = 0.0;
     metric_underrun_ratio = 0.0;
 
@@ -431,7 +380,6 @@ int main(void) {
         cmocka_unit_test(test_joint_movement),
         cmocka_unit_test(test_joint_config),
         cmocka_unit_test(test_joint_metrics),
-        cmocka_unit_test(test_joint_metrics_per_window),
         cmocka_unit_test(test_joint_metrics_ema_ratios),
         cmocka_unit_test(test_unpack_spindle_speed),
         cmocka_unit_test(test_unpack_spindle_not_at_speed),

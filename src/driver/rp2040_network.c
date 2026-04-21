@@ -421,8 +421,6 @@ bool unpack_joint_metrics(
   uint32_t total_underrun = 0;
   for(size_t joint = 0; joint < MAX_JOINT; joint++) {
     *data->joint_step_len_ticks[joint] = reply->step_len_ticks[joint];
-    *data->joint_overrun_count[joint]  = reply->overrun_count[joint];
-    *data->joint_underrun_count[joint] = reply->underrun_count[joint];
     total_overrun  += reply->overrun_count[joint];
     total_underrun += reply->underrun_count[joint];
 

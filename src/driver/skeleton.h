@@ -29,9 +29,6 @@ typedef struct {
   hal_float_t* joint_velocity_feedback[MAX_JOINT];
   // Difference between requested position and actual position on RP.
   hal_s32_t* joint_pos_error[MAX_JOINT];
-  hal_u32_t* joint_overrun_count[MAX_JOINT];
-  hal_u32_t* joint_underrun_count[MAX_JOINT];
-
   hal_float_t* metric_overrun_ratio;
   hal_float_t* metric_underrun_ratio;
 
