@@ -214,17 +214,7 @@ uint8_t do_steps(const uint8_t joint) {
   double max_velocity;
   double max_accel;
   int32_t velocity_achieved = 0;
-  uint32_t updated;
-
-  if(update_period_us == 0) {
-    // Switch off PIO stepgen.
-    if(!pio_sm_is_tx_fifo_full(pio0, sm0[joint])) {
-      pio_sm_put(pio0, sm0[joint], 0);
-    }
-    return 0;
-  }
-
-  updated = get_joint_config(
+  uint32_t updated = get_joint_config(
       joint,
       CORE1,
       &enabled,
@@ -241,6 +231,10 @@ uint8_t do_steps(const uint8_t joint) {
       NULL  // &position_error
       );
 
+  if(updated == 0) {
+    return 0;
+  }
+
   if(enabled != last_enabled[joint]) {
     last_enabled[joint] = enabled;
     if(enabled) {
@@ -256,10 +250,6 @@ uint8_t do_steps(const uint8_t joint) {
     if(pio_sm_is_tx_fifo_empty(pio0, sm0[joint])) {
       pio_sm_put(pio0, sm0[joint], 0);
     }
-    return 0;
-  }
-
-  if(updated == 0) {
     return 0;
   }
 
