@@ -1,5 +1,12 @@
 # rp2040_pio_stepper — Claude guidance
 
+## Interaction
+
+Be direct but constructive, offering solutions alongside criticism.
+Be concise. Shorter is better.
+Always ask before performing git commit. Never open PR to main.
+Save state whenever you have something useful to remember.
+
 ## Project overview
 
 RP2040-based stepper motor controller for LinuxCNC. Core0 handles UDP networking
