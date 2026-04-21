@@ -265,7 +265,7 @@ uint8_t do_steps(const uint8_t joint) {
   int32_t vel_req_q    = (int32_t)((velocity_requested / (double)update_period_us) * 65536.0);
   int32_t max_vel_q    = (int32_t)((max_velocity / (double)update_period_us) * 65536.0);
   int32_t max_accel_q  = (int32_t)((max_accel / (double)update_period_us) * 65536.0);
-  int32_t period_ticks = (int32_t)update_period_us * RP2040_CLOCK_MHZ;
+  int32_t period_ticks = (int32_t)((int64_t)update_period_us * RP2040_CLOCK_MHZ);
 
   int32_t velocity_q = get_velocity(pos_diff_q, vel_req_q);
   velocity_q = clamp_accel(velocity_q, joint_state[joint].last_velocity_q, max_accel_q);
@@ -284,7 +284,7 @@ uint8_t do_steps(const uint8_t joint) {
   }
 
   velocity_achieved = abs_pos_achieved - joint_state[joint].last_pos_achieved;
-  int32_t velocity_requested_tm1 = velocity_q >> 16;
+  int32_t velocity_requested_tm1 = velocity_q / 65536;
   int32_t position_error = abs_pos_achieved - joint_state[joint].last_pos_requested;
 
   update_joint_config(
