@@ -15,6 +15,7 @@ static size_t   mock_rx_fifo_level  = 0;
 static int32_t  mock_rx_values[8]   = {0};
 static size_t   mock_rx_index       = 0;
 static uint32_t last_pio_put_value  = 0;
+static int      pio_put_call_count  = 0;
 static int      mock_tx_fifo_empty  = 0;
 
 size_t __wrap_pio_sm_get_rx_fifo_level(size_t pio, size_t sm) {
@@ -33,6 +34,7 @@ size_t __wrap_pio_sm_get_blocking(size_t pio, size_t sm) {
 void __wrap_pio_sm_put(size_t pio, size_t sm, size_t data) {
     (void)pio; (void)sm;
     last_pio_put_value = (uint32_t)data;
+    pio_put_call_count++;
 }
 
 int __wrap_pio_sm_is_tx_fifo_empty(size_t pio, size_t sm) {
@@ -54,6 +56,7 @@ static int test_setup(void **state) {
     mock_rx_fifo_level = 0;
     mock_rx_index      = 0;
     last_pio_put_value = 0;
+    pio_put_call_count  = 0;   /* reset call counter */
     mock_tx_fifo_empty = 0;
     memset(mock_rx_values, 0, sizeof(mock_rx_values));
     return 0;
@@ -346,6 +349,60 @@ static void test_do_steps_no_motion(void **state) {
     assert_int_equal(last_pio_put_value, 0);
 }
 
+/* do_steps: underrun (no new data) with slow last_velocity (<1.0) -> writes 0 to PIO */
+static void test_do_steps_underrun_slow_stops_pio(void **state) {
+    (void)state;
+    /* Prime last_velocity to ~0.475 (<1.0) via a normal do_steps() call.
+     * get_velocity: position_diff=0.5, velocity=500/1000=0.5
+     * combined = 0.5*0.1 + 0.5*0.85 = 0.475 */
+    config.joint[0].enabled            = 1;
+    config.joint[0].abs_pos_requested  = 0.5;
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].velocity_requested = 500.0;
+    config.joint[0].max_velocity       = 50.0;
+    config.joint[0].max_accel          = 0.0;
+    config.joint[0].updated_from_c0    = 1;
+    mock_tx_fifo_empty                  = 1;
+    do_steps(0);   /* primes last_velocity ~0.475 */
+
+    /* Now simulate underrun: no new data from Core0. */
+    config.joint[0].updated_from_c0 = 0;
+    pio_put_call_count               = 0;
+    last_pio_put_value               = 0xDEADBEEF;
+
+    uint8_t result = do_steps(0);
+
+    assert_int_equal(result, 0);
+    assert_int_equal(pio_put_call_count, 1);
+    assert_int_equal(last_pio_put_value, 0);
+}
+
+/* do_steps: underrun (no new data) with medium last_velocity (>=1.0) -> PIO untouched */
+static void test_do_steps_underrun_medium_leaves_pio_running(void **state) {
+    (void)state;
+    /* Prime last_velocity to ~5.25 (>=1.0) via a normal do_steps() call.
+     * get_velocity: position_diff=10, velocity=5000/1000=5.0
+     * combined = 10*0.1 + 5.0*0.85 = 5.25 */
+    config.joint[0].enabled            = 1;
+    config.joint[0].abs_pos_requested  = 10.0;
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].velocity_requested = 5000.0;
+    config.joint[0].max_velocity       = 50.0;
+    config.joint[0].max_accel          = 0.0;
+    config.joint[0].updated_from_c0    = 1;
+    mock_tx_fifo_empty                  = 1;
+    do_steps(0);   /* primes last_velocity ~5.25 */
+
+    /* Now simulate underrun: no new data from Core0. */
+    config.joint[0].updated_from_c0 = 0;
+    pio_put_call_count               = 0;
+
+    uint8_t result = do_steps(0);
+
+    assert_int_equal(result, 0);
+    assert_int_equal(pio_put_call_count, 0);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -373,6 +430,8 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_normal_step,               test_setup),
         cmocka_unit_test_setup(test_do_steps_accel_clamped,             test_setup),
         cmocka_unit_test_setup(test_do_steps_no_motion,                test_setup),
+        cmocka_unit_test_setup(test_do_steps_underrun_slow_stops_pio,            test_setup),
+        cmocka_unit_test_setup(test_do_steps_underrun_medium_leaves_pio_running, test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

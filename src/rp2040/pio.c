@@ -256,6 +256,10 @@ uint8_t do_steps(const uint8_t joint) {
       );
 
   if(updated == 0 || update_period_us == 0) {
+    if (fabs(joint_state[joint].last_velocity) < 1.0 &&
+        pio_sm_is_tx_fifo_empty(pio0, joint_state[joint].sm0)) {
+      pio_sm_put(pio0, joint_state[joint].sm0, 0);
+    }
     return 0;
   }
 
