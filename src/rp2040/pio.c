@@ -38,6 +38,7 @@ static int32_t  holdoff[MAX_JOINT]            = {0, 0, 0, 0};
 static int32_t  last_pos_requested[MAX_JOINT] = {0, 0, 0, 0};
 static int32_t  last_pos_achieved[MAX_JOINT]  = {0, 0, 0, 0};
 static uint32_t last_enabled[MAX_JOINT]       = {0, 0, 0, 0};
+static double   last_velocity[MAX_JOINT]      = {0.0, 0.0, 0.0, 0.0};
 
 void init_pio(const uint32_t joint)
 {
@@ -273,6 +274,8 @@ uint8_t do_steps(const uint8_t joint) {
 
   max_velocity /= update_period_us;
   max_accel /= update_period_us;
+  velocity = clamp_accel(velocity, last_velocity[joint], max_accel);
+  last_velocity[joint] = velocity;
 
   double step_count = fabs(velocity);
   double update_period_ticks = update_period_us * RP2040_CLOCK_MHZ;
@@ -338,6 +341,7 @@ void pio_reset_for_test(void) {
         last_pos_requested[j] = 0;
         last_pos_achieved[j]  = 0;
         last_enabled[j]       = 0;
+        last_velocity[j]      = 0.0;
     }
     offset_pio0     = 0;
     offset_pio1     = 0;

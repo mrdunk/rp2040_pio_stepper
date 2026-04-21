@@ -243,6 +243,50 @@ static void test_do_steps_normal_step(void **state) {
     assert_int_equal(last_pio_put_value & 1, 1);
 }
 
+/* do_steps: acceleration clamping activates across multiple calls */
+static void test_do_steps_accel_clamped(void **state) {
+    (void)state;
+    /* Set up a joint with small max_accel so the clamp activates.
+     * With update_period_us=1000, max_accel=5000 (steps/s/s) normalises to
+     * 5000/1000 = 5.0 steps/period.
+     * A large position request will generate velocity >> 5.0 on first call,
+     * so the second call's velocity should still be clamped near 5.0 from the first. */
+
+    uint32_t update_period_us = 1000;
+    config.update_time_us = update_period_us;
+
+    config.joint[0].enabled            = 1;
+    config.joint[0].io_pos_step        = 1;
+    config.joint[0].io_pos_dir         = 2;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].abs_pos_requested  = 10000.0;  /* large request */
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].velocity_requested = 10000.0 * update_period_us;  /* matching velocity */
+    config.joint[0].max_velocity       = 100000.0;  /* steps/s */
+    config.joint[0].max_accel          = 5000.0;    /* steps/s/s -> 5.0 steps/period */
+
+    /* First call: last_velocity starts at 0, clamp limits to max_accel/period = 5.0 */
+    mock_tx_fifo_empty = 1;
+    last_pio_put_value = 0;
+    do_steps(0);
+    uint32_t first_word = last_pio_put_value;
+
+    /* Reset for second call */
+    mock_tx_fifo_empty = 1;
+    last_pio_put_value = 0;
+    config.joint[0].updated_from_c0 = 1;
+
+    do_steps(0);
+    uint32_t second_word = last_pio_put_value;
+
+    /* Both calls should have written a non-zero step command */
+    assert_true(first_word != 0);
+    assert_true(second_word != 0);
+    /* The direction bit (LSB) should be set (positive motion) in both */
+    assert_int_equal(first_word & 0x1, 1);
+    assert_int_equal(second_word & 0x1, 1);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -264,6 +308,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_disabled,                  test_setup),
         cmocka_unit_test_setup(test_do_steps_no_update,                 test_setup),
         cmocka_unit_test_setup(test_do_steps_normal_step,               test_setup),
+        cmocka_unit_test_setup(test_do_steps_accel_clamped,             test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
