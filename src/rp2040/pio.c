@@ -149,7 +149,7 @@ double get_velocity(
     const double expected_velocity)
 {
   double position_diff = (abs_pos_requested - (double)abs_pos_achieved);
-  //double velocity = (expected_velocity / (double)update_period_us);
+  double velocity = (expected_velocity / (double)update_period_us);
   //double combined_vel = position_diff * POSITION_BIAS + velocity * VELOCITY_BIAS;
 
   // Skip very slow speeds.
@@ -165,7 +165,7 @@ double get_velocity(
   //}
 
   //return combined_vel;
-  return position_diff;
+  return velocity;
 }
 
 /* Compute the PIO step-timer length in clock ticks.
