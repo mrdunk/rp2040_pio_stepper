@@ -260,14 +260,16 @@ uint8_t do_steps(const uint8_t joint) {
   double step_count = fabs(velocity);
   double update_period_ticks = update_period_us * RP2040_CLOCK_MHZ;
 
-  // The PIO FIFO will only report step counts between steps.
-  // If too small a step_count is allowed here, the steps can get very long and
-  // block further updates.
   int32_t step_len_ticks = calculate_step_len(step_count, update_period_ticks, max_velocity);
+  int32_t n_steps = plan_steps(velocity, joint, update_period_ticks, step_len_ticks);
 
   uint32_t direction = (velocity > 0);
 
-  issue_pio_step(joint, step_len_ticks, direction);
+  if (n_steps > 0) {
+    issue_pio_step(joint, step_len_ticks, direction);
+  } else if (pio_sm_is_tx_fifo_empty(pio0, sm0[joint])) {
+    pio_sm_put(pio0, sm0[joint], 0);
+  }
 
   velocity_achieved = abs_pos_achieved - last_pos_achieved[joint];
   int32_t velocity_requested_tm1 = (int32_t)velocity;

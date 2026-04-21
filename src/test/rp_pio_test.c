@@ -273,6 +273,7 @@ static void test_do_steps_normal_step(void **state) {
     config.joint[0].abs_pos_achieved   = 0;
     config.joint[0].velocity_requested = 5000.0;
     config.joint[0].max_velocity       = 50.0;
+    config.joint[0].max_accel          = 0.0;  /* no accel limit so first call steps */
     config.joint[0].updated_from_c0    = 1;
     mock_tx_fifo_empty                  = 1;
     mock_rx_fifo_level                  = 0;
@@ -330,6 +331,26 @@ static void test_do_steps_accel_clamped(void **state) {
     assert_int_equal(second_word & 0x1, 1);
 }
 
+/* do_steps: enabled, no position error -> n_steps=0 -> puts 0 to FIFO */
+static void test_do_steps_no_motion(void **state) {
+    (void)state;
+    /* All positions at zero and velocity_requested=0 -> get_velocity returns 0.0
+     * -> step_len=0 -> plan_steps returns 0 -> PIO should receive 0. */
+    config.joint[0].enabled            = 1;
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].velocity_requested = 0.0;
+    config.joint[0].max_velocity       = 50.0;
+    config.joint[0].updated_from_c0    = 1;
+    mock_tx_fifo_empty                  = 1;
+    mock_rx_fifo_level                  = 0;
+
+    uint8_t result = do_steps(0);
+
+    assert_true(result > 0);
+    assert_int_equal(last_pio_put_value, 0);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -356,6 +377,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_no_update,                 test_setup),
         cmocka_unit_test_setup(test_do_steps_normal_step,               test_setup),
         cmocka_unit_test_setup(test_do_steps_accel_clamped,             test_setup),
+        cmocka_unit_test_setup(test_do_steps_no_motion,                test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
