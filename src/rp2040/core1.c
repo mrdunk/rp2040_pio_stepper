@@ -14,12 +14,23 @@
 #include "config.h"
 #include "pio.h"
 
-static uint32_t last_tick  = 0;
-static bool     no_network = false;
+static uint32_t last_tick               = 0;
+static uint32_t last_packet_generation  = 0;
+static bool     no_network              = false;
 
-void wait_for_tick(void) {
+void wait_for_packet(void) {
   while (tick == last_tick) {}
   last_tick = tick;
+
+  /* Skip the generation wait if the network is already lost. */
+  if ((tick - last_packet_tick) > MAX_MISSED_PACKET) {
+    last_packet_generation = packet_generation;
+    return;
+  }
+
+  /* Spin until Core0 finishes writing all joint configs for this packet. */
+  while (packet_generation == last_packet_generation) {}
+  last_packet_generation = packet_generation;
 }
 
 bool check_network_health(void) {
@@ -52,7 +63,7 @@ void step_all_joints(void) {
 }
 
 static void core1_tick(void) {
-  wait_for_tick();
+  wait_for_packet();
   if (linuxcnc_restart_detected) {
     linuxcnc_restart_detected = false;
     handle_network_timeout();
@@ -91,7 +102,8 @@ void init_core1(void) {
 
 #ifdef BUILD_TESTS
 void core1_reset_for_test(void) {
-  last_tick  = 0;
-  no_network = false;
+  last_tick               = 0;
+  last_packet_generation  = 0;
+  no_network              = false;
 }
 #endif

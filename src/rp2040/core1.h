@@ -4,8 +4,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-/* Block until tick changes. Updates internal last_tick. */
-void wait_for_tick(void);
+/* Block until a new packet batch is ready (packet_generation advances).
+ * Falls back immediately if the network has been silent for MAX_MISSED_PACKET
+ * ticks — network loss is then handled by check_network_health(). */
+void wait_for_packet(void);
 
 /* Return true if the gap between tick and last_packet_tick is within
  * MAX_MISSED_PACKET ticks, indicating the network is healthy. */

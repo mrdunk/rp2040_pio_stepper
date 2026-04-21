@@ -35,6 +35,7 @@ static int test_setup(void **state) {
     (void)state;
     tick                        = 0;
     last_packet_tick            = 0;
+    packet_generation           = 1;  /* ahead of last_packet_generation (0) */
     linuxcnc_restart_detected   = false;
     disable_joint_call_count    = 0;
     do_steps_call_count         = 0;
@@ -42,12 +43,24 @@ static int test_setup(void **state) {
     return 0;
 }
 
-/* wait_for_tick: exits immediately when tick has already advanced past last_tick. */
-static void test_wait_for_tick_returns_when_tick_changed(void **state) {
+/* wait_for_packet: exits immediately when tick has advanced and generation has advanced. */
+static void test_wait_for_packet_returns_when_generation_advances(void **state) {
     (void)state;
-    tick = 1;  /* tick (1) != last_tick (0, set by core1_reset_for_test) */
-    wait_for_tick();
-    /* Reaching this line proves the function returned (did not spin forever). */
+    tick              = 1;   /* tick (1) != last_tick (0) */
+    last_packet_tick  = 1;   /* network healthy */
+    /* packet_generation = 1 from test_setup; last_packet_generation = 0 from reset */
+    wait_for_packet();
+    /* Reaching this line proves the function returned without spinning forever. */
+}
+
+/* wait_for_packet: exits via network-loss fast-path when no packet for too long. */
+static void test_wait_for_packet_returns_on_network_loss(void **state) {
+    (void)state;
+    tick              = MAX_MISSED_PACKET + 2;
+    last_packet_tick  = 0;
+    packet_generation = 0;  /* same as last_packet_generation — generation never advanced */
+    wait_for_packet();
+    /* Reaching this line proves the network-loss fallback fired. */
 }
 
 /* check_network_health: healthy when gap <= MAX_MISSED_PACKET. */
@@ -136,7 +149,8 @@ static void test_core1_restart_while_network_unhealthy(void **state) {
 
 int main(void) {
     const struct CMUnitTest tests[] = {
-        cmocka_unit_test_setup(test_wait_for_tick_returns_when_tick_changed, test_setup),
+        cmocka_unit_test_setup(test_wait_for_packet_returns_when_generation_advances, test_setup),
+        cmocka_unit_test_setup(test_wait_for_packet_returns_on_network_loss,          test_setup),
         cmocka_unit_test_setup(test_check_network_health_ok,                 test_setup),
         cmocka_unit_test_setup(test_check_network_health_at_limit,           test_setup),
         cmocka_unit_test_setup(test_check_network_health_loss,               test_setup),
