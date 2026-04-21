@@ -126,7 +126,7 @@ static void test_step_all_joints_calls_do_steps_for_each_joint(void **state) {
 static void test_core1_disables_joints_on_linuxcnc_restart(void **state) {
     (void)state;
     linuxcnc_restart_detected = true;
-    tick             = 1;   /* tick (1) != last_tick (0) so wait_for_tick() returns */
+    tick             = 1;   /* tick (1) != last_tick (0) so wait_for_packet() returns */
     last_packet_tick = 1;   /* network appears healthy; restart flag should fire first */
     core1_run_once_for_test();
     assert_int_equal(MAX_JOINT, disable_joint_call_count);
@@ -139,8 +139,8 @@ static void test_core1_disables_joints_on_linuxcnc_restart(void **state) {
 static void test_core1_restart_while_network_unhealthy(void **state) {
     (void)state;
     linuxcnc_restart_detected = true;
-    tick             = 1;   /* tick (1) != last_tick (0) so wait_for_tick() returns */
-    last_packet_tick = 0;   /* network health check would fail: tick - last_packet_tick > MAX_MISSED_PACKET */
+    tick             = MAX_MISSED_PACKET + 2;  /* tick advanced so wait_for_packet() exits */
+    last_packet_tick = 0;                      /* network genuinely unhealthy: gap > MAX_MISSED_PACKET */
     core1_run_once_for_test();
     /* The else if ensures only MAX_JOINT joints disabled, not 2 * MAX_JOINT */
     assert_int_equal(MAX_JOINT, disable_joint_call_count);
