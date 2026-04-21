@@ -125,6 +125,41 @@ static void test_calculate_step_len_below_threshold(void **state) {
     assert_int_equal(result, 0);
 }
 
+/* clamp_accel: velocity unchanged -> returns same velocity */
+static void test_clamp_accel_no_change(void **state) {
+    (void)state;
+    double result = clamp_accel(5.0, 5.0, 2.0);
+    assert_double_equal(result, 5.0, 1e-9);
+}
+
+/* clamp_accel: acceleration under limit -> returns requested velocity */
+static void test_clamp_accel_under_limit(void **state) {
+    (void)state;
+    double result = clamp_accel(7.0, 5.0, 3.0);
+    assert_double_equal(result, 7.0, 1e-9);
+}
+
+/* clamp_accel: acceleration over limit positive -> clamped to max_accel */
+static void test_clamp_accel_over_limit_positive(void **state) {
+    (void)state;
+    double result = clamp_accel(10.0, 5.0, 2.0);
+    assert_double_equal(result, 7.0, 1e-9);
+}
+
+/* clamp_accel: deceleration over limit -> clamped to max_accel */
+static void test_clamp_accel_over_limit_negative(void **state) {
+    (void)state;
+    double result = clamp_accel(1.0, 5.0, 2.0);
+    assert_double_equal(result, 3.0, 1e-9);
+}
+
+/* clamp_accel: zero max_accel -> returns requested velocity unchanged */
+static void test_clamp_accel_zero_max(void **state) {
+    (void)state;
+    double result = clamp_accel(100.0, 0.0, 0.0);
+    assert_double_equal(result, 100.0, 1e-9);
+}
+
 /* get_velocity: near-zero position diff -> returns 0 */
 static void test_get_velocity_zero_pos_diff(void **state) {
     (void)state;
@@ -216,6 +251,11 @@ int main(void) {
         cmocka_unit_test_setup(test_calculate_step_len_normal,          test_setup),
         cmocka_unit_test_setup(test_calculate_step_len_clamped,         test_setup),
         cmocka_unit_test_setup(test_calculate_step_len_below_threshold, test_setup),
+        cmocka_unit_test_setup(test_clamp_accel_no_change,              test_setup),
+        cmocka_unit_test_setup(test_clamp_accel_under_limit,            test_setup),
+        cmocka_unit_test_setup(test_clamp_accel_over_limit_positive,    test_setup),
+        cmocka_unit_test_setup(test_clamp_accel_over_limit_negative,    test_setup),
+        cmocka_unit_test_setup(test_clamp_accel_zero_max,               test_setup),
         cmocka_unit_test_setup(test_get_velocity_zero_pos_diff,          test_setup),
         cmocka_unit_test_setup(test_get_velocity_direction_disagreement, test_setup),
         cmocka_unit_test_setup(test_get_velocity_normal_forward,         test_setup),
