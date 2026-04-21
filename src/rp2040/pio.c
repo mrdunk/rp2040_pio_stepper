@@ -303,7 +303,9 @@ uint8_t do_steps(const uint8_t joint) {
       &step_len_ticks,
       &position_error);
 
-  joint_state[joint].last_pos_requested = abs_pos_requested;
+  joint_state[joint].last_pos_requested = (int32_t)(abs_pos_requested >= 0.0
+      ? abs_pos_requested + 0.5
+      : abs_pos_requested - 0.5);
   joint_state[joint].last_pos_achieved  = abs_pos_achieved;
 
   return updated;
