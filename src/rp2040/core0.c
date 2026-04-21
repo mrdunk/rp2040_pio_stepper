@@ -416,6 +416,7 @@ void core0_main() {
     process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, data_received);
 
     if(received_msg_count > 0) {
+      packet_generation++;   /* all joint configs from this packet are now written */
       last_packet_tick = tick;
       recover_clock();
 

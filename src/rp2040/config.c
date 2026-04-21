@@ -26,6 +26,7 @@ mutex_t mtx_joint[MAX_JOINT];
 volatile uint32_t tick = 0;
 volatile uint32_t last_packet_tick = 0;
 volatile bool linuxcnc_restart_detected = false;
+volatile uint32_t packet_generation = 0;
 
 volatile struct ConfigGlobal config = {
   .last_update_id = 0,

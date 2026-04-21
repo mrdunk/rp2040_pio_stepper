@@ -25,6 +25,10 @@ extern volatile uint32_t last_packet_tick;
  * disable joints, then clears it. Single-writer/single-reader — same
  * atomic pattern as last_packet_tick. No mutex needed. */
 extern volatile bool linuxcnc_restart_detected;
+/* Incremented by Core0 after all joint configs for a packet are written.
+ * Core1 waits for this to advance before processing. Single-writer
+ * (Core0), single-reader (Core1) — same atomic pattern as tick. */
+extern volatile uint32_t packet_generation;
 
 /* Configuration object for an joint.
  * This is the format for the global config that is shared between cores. */
