@@ -59,9 +59,11 @@ ctest --test-dir build_tests --output-on-failure
 ### Firmware build (requires arm-none-eabi-gcc + pico-sdk)
 
 ```bash
-cmake -B build -S .
+cmake -B build -S . -DBUILD_RP=ON
 make -C build stepper_control
 ```
+
+Without `-DBUILD_RP=ON`, CMake configures successfully but produces an empty Makefile with no firmware targets — no error, no warning.
 
 ### Pre-commit hook
 
@@ -156,6 +158,14 @@ underrun counts summed across all joints per tick. They output `ema_overrun` and
 `ema_underrun` respectively from `skeleton_t`. State lives in `skeleton_t`
 (`ema_overrun`, `ema_underrun` double fields); updated in `unpack_joint_metrics()`
 in `rp2040_network.c`. `EMA_ALPHA` is defined there and must match the servo rate.
+
+### `pio_reset_for_test()` must stay in sync with file-scope statics in `pio.c`
+
+`pio.c` uses file-scope statics for all per-joint state so that `pio_reset_for_test()` can reset them between test runs. When adding a new file-scope static to `pio.c`, you **must** also add its reset inside `pio_reset_for_test()` or state will leak across tests. Symptom: test results depend on run order.
+
+### Pre-commit hook blocks commits with calls to undefined functions
+
+The pre-commit hook builds and runs all tests before every commit. This means the TDD pattern of "commit failing tests first, then implement" does not work here — the hook will block a commit that calls an undefined function. Write the implementation in the same commit as the tests that call it.
 
 ### Recompile the LinuxCNC driver after changing `messages.h`
 
