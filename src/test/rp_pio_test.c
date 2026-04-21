@@ -235,13 +235,16 @@ static void test_get_velocity_normal_forward(void **state) {
     assert_true(v > 0.0);
 }
 
-/* do_steps: update_period == 0 -> puts 0 to FIFO, returns 0 */
+/* do_steps: update_period == 0, enabled joint -> returns 0 without dividing */
 static void test_do_steps_zero_period(void **state) {
     (void)state;
-    config.update_time_us = 0;
+    config.update_time_us             = 0;
+    config.joint[0].enabled           = 1;
+    config.joint[0].updated_from_c0   = 1;
+    config.joint[0].abs_pos_requested = 10.0;
+    mock_tx_fifo_empty                = 1;
     uint8_t result = do_steps(0);
     assert_int_equal(result, 0);
-    assert_int_equal(last_pio_put_value, 0);
 }
 
 /* do_steps: joint disabled -> puts 0 to FIFO when empty, returns 0 */

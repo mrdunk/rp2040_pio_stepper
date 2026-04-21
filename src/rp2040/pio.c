@@ -221,7 +221,7 @@ uint8_t do_steps(const uint8_t joint) {
       NULL  // &position_error
       );
 
-  if(updated == 0) {
+  if(updated == 0 || update_period_us == 0) {
     return 0;
   }
 
