@@ -195,16 +195,6 @@ static void test_get_velocity_normal_forward(void **state) {
     assert_true(v > 0.0);
 }
 
-/* get_velocity: slow step triggers holdoff; next call returns 0 */
-static void test_get_velocity_holdoff(void **state) {
-    (void)state;
-    /* combined = 0.5*0.1 + 0.001*0.85 = 0.05085 < 1.0 -> holdoff set */
-    double v1 = get_velocity(1000, 0, 0, 0.5, 1.0);
-    assert_true(v1 > 0.0);    /* first call returns combined_vel */
-    double v2 = get_velocity(1000, 0, 0, 0.5, 1.0);
-    assert_true(v2 == 0.0);   /* holdoff active */
-}
-
 /* do_steps: update_period == 0 -> puts 0 to FIFO, returns 0 */
 static void test_do_steps_zero_period(void **state) {
     (void)state;
@@ -317,7 +307,6 @@ int main(void) {
         cmocka_unit_test_setup(test_get_velocity_zero_pos_diff,          test_setup),
         cmocka_unit_test_setup(test_get_velocity_direction_disagreement, test_setup),
         cmocka_unit_test_setup(test_get_velocity_normal_forward,         test_setup),
-        cmocka_unit_test_setup(test_get_velocity_holdoff,                test_setup),
         cmocka_unit_test_setup(test_do_steps_zero_period,               test_setup),
         cmocka_unit_test_setup(test_do_steps_disabled,                  test_setup),
         cmocka_unit_test_setup(test_do_steps_no_update,                 test_setup),

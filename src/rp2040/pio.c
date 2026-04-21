@@ -34,7 +34,6 @@ static bool     init_done[MAX_JOINT]          = {false, false, false, false};
 static uint32_t offset_pio0                   = 0;
 static uint32_t offset_pio1                   = 0;
 static uint8_t  programs_loaded               = 0;
-static int32_t  holdoff[MAX_JOINT]            = {0, 0, 0, 0};
 static int32_t  last_pos_requested[MAX_JOINT] = {0, 0, 0, 0};
 static int32_t  last_pos_achieved[MAX_JOINT]  = {0, 0, 0, 0};
 static uint32_t last_enabled[MAX_JOINT]       = {0, 0, 0, 0};
@@ -162,19 +161,6 @@ double get_velocity(
   // Try again next cycle.
   if((position_diff >= 0.0 && velocity <= 0.0) || (position_diff <= 0.0 && velocity >= 0.0)) {
     return 0.0;
-  }
-
-  // Short steps that span multiple cycles are inclined to "clump" together.
-  // If a single step is calculated to take more than one cycle, don't allow
-  // any steps in the following cycles.
-  if(fabs(combined_vel) < 1.0) {
-    if(holdoff[joint] > 0) {
-      holdoff[joint]--;
-      return 0.0;
-    }
-    holdoff[joint] = 0.75 / fabs(combined_vel);
-  } else if(holdoff[joint] > 0) {
-    holdoff[joint]--;
   }
 
   return combined_vel;
@@ -330,7 +316,6 @@ void pio_reset_for_test(void) {
         sm0[j]                = 0;
         sm1[j]                = 0;
         init_done[j]          = false;
-        holdoff[j]            = 0;
         last_pos_requested[j] = 0;
         last_pos_achieved[j]  = 0;
         last_enabled[j]       = 0;
