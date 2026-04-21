@@ -289,18 +289,6 @@ uint8_t do_steps(const uint8_t joint) {
 
   uint32_t direction = (velocity > 0);
 
-  // TODO: Remove this section once dead-zone calculation has been proven stable.
-  if(direction != last_direction[joint] && velocity > 0) {
-    dir_change_count[joint]++;
-    last_direction[joint] = direction;
-  }
-  if((count % 1000) < MAX_JOINT) {
-    if(dir_change_count[joint] > 10) {
-      printf("Excessive jitter. j: %u\tcount: %u\n", joint, dir_change_count[joint]);
-    }
-    dir_change_count[joint] = 0;
-  }
-
   issue_pio_step(joint, step_len_ticks, direction);
 
   velocity_achieved = abs_pos_achieved - last_pos_achieved[joint];
