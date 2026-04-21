@@ -40,6 +40,15 @@ The driver side runs on the LinuxCNC PC (`src/driver/`).
   it and calls `handle_network_timeout()` to disable joints before processing
   anything else. Same single-writer/single-reader atomic pattern as `tick` and
   `last_packet_tick`.
+- **PIO step generation** (`src/rp2040/pio.c`): `do_steps()` is called once per
+  Core1 tick per joint. It calls `calculate_step_len()` to get the PIO half-period
+  in clock ticks (clamped to `[min_len, max_len]` where `max_len` caps a step to
+  one loop period), then `plan_steps()` to get the whole-step count for this
+  period. `plan_steps()` maintains a per-joint fractional accumulator
+  (`step_accumulator[]`) — `|velocity|` is added each period, the floor is the
+  step count, and the remainder carries forward. `issue_pio_step()` is only called
+  when `plan_steps()` returns > 0; otherwise 0 is written to the FIFO to stop the
+  PIO. Direction is separate from step count: `velocity > 0` → forward.
 - **LinuxCNC driver config resync**: `last_joint_config` / `last_gpio_config` /
   `last_spindle_config` in `hal_rp2040_eth.c` are statics that reset to `{0}` on
   LinuxCNC restart. Because `configure()` diffs against these before sending, it
@@ -162,6 +171,17 @@ in `rp2040_network.c`. `EMA_ALPHA` is defined there and must match the servo rat
 ### `pio_reset_for_test()` must stay in sync with file-scope statics in `pio.c`
 
 `pio.c` uses file-scope statics for all per-joint state so that `pio_reset_for_test()` can reset them between test runs. When adding a new file-scope static to `pio.c`, you **must** also add its reset inside `pio_reset_for_test()` or state will leak across tests. Symptom: test results depend on run order.
+
+### `init_config()` default `max_accel` disables stepping in `do_steps()` tests
+
+`init_config()` sets `config.joint[j].max_accel` to a non-zero default (currently
+`2.0`). In `do_steps()`, `max_accel` is divided by `update_period_us` before being
+passed to `clamp_accel()`. At a 1000 µs period this gives `max_accel = 0.002`
+steps/period, which clamps `velocity` to `0.002` — below `MIN_STEP_COUNT` —
+causing `plan_steps()` to return 0 and no step to be issued. Tests for the
+normal-step path must set `config.joint[0].max_accel = 0.0` (disables the limiter)
+or a sufficiently large value. The acceleration limiter is tested separately in
+`test_do_steps_accel_clamped`.
 
 ### Pre-commit hook blocks commits with calls to undefined functions
 
