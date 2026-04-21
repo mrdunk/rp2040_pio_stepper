@@ -253,7 +253,7 @@ static void test_do_steps_disabled(void **state) {
     assert_int_equal(last_pio_put_value, 0);
 }
 
-/* do_steps: no new core0 data (updated == 0) -> returns 0 */
+/* do_steps: no new core0 data (updated == 0), slow last_velocity -> writes 0 to PIO, returns 0 */
 static void test_do_steps_no_update(void **state) {
     (void)state;
     config.joint[0].enabled         = 1;

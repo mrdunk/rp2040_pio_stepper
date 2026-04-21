@@ -128,6 +128,7 @@ void init_pio(const uint32_t joint)
 #define POSITION_BIAS 0.1
 #define VELOCITY_BIAS 0.85
 #define MIN_STEP_COUNT 0.0625   // 1/16
+#define STOP_THRESHOLD  1.0     /* steps/period: stop PIO on underrun below this velocity */
 
 /* Drain PIO1's RX FIFO and return the last feedback position received.
  * Returns current_pos unchanged if the FIFO is empty. */
@@ -256,7 +257,7 @@ uint8_t do_steps(const uint8_t joint) {
       );
 
   if(updated == 0 || update_period_us == 0) {
-    if (fabs(joint_state[joint].last_velocity) < 1.0 &&
+    if (fabs(joint_state[joint].last_velocity) < STOP_THRESHOLD &&
         pio_sm_is_tx_fifo_empty(pio0, joint_state[joint].sm0)) {
       pio_sm_put(pio0, joint_state[joint].sm0, 0);
     }
