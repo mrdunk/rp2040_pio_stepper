@@ -275,7 +275,7 @@ uint8_t do_steps(const uint8_t joint) {
   max_accel /= update_period_us;
 
   double step_count = fabs(velocity);
-  double update_period_ticks = update_period_us * (uint32_t)RP2040_CLOCK_MHZ;
+  double update_period_ticks = update_period_us * RP2040_CLOCK_MHZ;
 
   // The PIO FIFO will only report step counts between steps.
   // If too small a step_count is allowed here, the steps can get very long and
