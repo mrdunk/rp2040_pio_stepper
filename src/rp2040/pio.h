@@ -18,7 +18,6 @@ int32_t clamp_accel(int32_t velocity_q, int32_t last_velocity_q, int32_t max_acc
 void pio_reset_for_test(void);
 
 /* Exposed for unit testing only. */
-int32_t get_velocity(int32_t pos_diff_q, int32_t vel_req_q);
 int32_t drain_rx_fifo(uint32_t sm, int32_t current_pos);
 int32_t calculate_step_len(int32_t step_count_q, int32_t period_ticks, int32_t max_vel_q);
 int32_t plan_steps(int32_t velocity_q, uint8_t joint, int32_t period_ticks, int32_t step_len);

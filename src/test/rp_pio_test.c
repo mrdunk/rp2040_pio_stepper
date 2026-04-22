@@ -200,30 +200,6 @@ static void test_plan_steps_zero_velocity(void **state) {
     assert_int_equal(plan_steps(0, 0, 133000, 13291), 0);
 }
 
-/* get_velocity: near-zero position diff -> returns 0 */
-static void test_get_velocity_zero_pos_diff(void **state) {
-    (void)state;
-    /* pos_diff=0 steps -> abs(0) < 66 -> return 0 */
-    int32_t v = get_velocity(0, (int32_t)(5.0 * 65536));
-    assert_true(v == 0);
-}
-
-/* get_velocity: direction disagreement -> returns 0 */
-static void test_get_velocity_direction_disagreement(void **state) {
-    (void)state;
-    /* pos_diff=+10 steps (forward), vel_req=-5.0 steps/period (backward) -> return 0 */
-    int32_t v = get_velocity((int32_t)(10.0 * 65536), (int32_t)(-5.0 * 65536));
-    assert_true(v == 0);
-}
-
-/* get_velocity: normal forward motion -> returns positive combined velocity */
-static void test_get_velocity_normal_forward(void **state) {
-    (void)state;
-    /* pos_diff=+10, vel_req=+5.0 -> combined > 0 */
-    int32_t v = get_velocity((int32_t)(10.0 * 65536), (int32_t)(5.0 * 65536));
-    assert_true(v > 0);
-}
-
 /* do_steps: update_period == 0, enabled joint -> returns 0 without dividing */
 static void test_do_steps_zero_period(void **state) {
     (void)state;
@@ -415,9 +391,6 @@ int main(void) {
         cmocka_unit_test_setup(test_plan_steps_total_over_ten_periods,         test_setup),
         cmocka_unit_test_setup(test_plan_steps_excess_returned_to_accumulator, test_setup),
         cmocka_unit_test_setup(test_plan_steps_zero_velocity,                  test_setup),
-        cmocka_unit_test_setup(test_get_velocity_zero_pos_diff,          test_setup),
-        cmocka_unit_test_setup(test_get_velocity_direction_disagreement, test_setup),
-        cmocka_unit_test_setup(test_get_velocity_normal_forward,         test_setup),
         cmocka_unit_test_setup(test_do_steps_zero_period,               test_setup),
         cmocka_unit_test_setup(test_do_steps_disabled,                  test_setup),
         cmocka_unit_test_setup(test_do_steps_no_update,                 test_setup),

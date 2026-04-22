@@ -21,8 +21,6 @@
 
 #define STEP_PIO_LEN_OVERHEAD  9
 #define RP2040_CLOCK_MHZ       133
-#define POSITION_BIAS_Q        6554    /* round(0.1  * 65536) */
-#define VELOCITY_BIAS_Q        55706   /* round(0.85 * 65536) */
 #define MIN_STEP_COUNT_Q       4096    /* 0.0625 * 65536 */
 #define STOP_THRESHOLD_Q       65536   /* 1.0 * 65536 */
 
@@ -137,18 +135,6 @@ int32_t drain_rx_fifo(uint32_t sm, int32_t current_pos) {
     return current_pos;
 }
 
-/* Convert step command from LinuxCNC and Feedback from PIO into a desired velocity. */
-int32_t get_velocity(int32_t pos_diff_q, int32_t vel_req_q) {
-    if (abs(pos_diff_q) < 66) {
-        return 0;
-    }
-    if ((pos_diff_q > 0 && vel_req_q < 0) || (pos_diff_q < 0 && vel_req_q > 0)) {
-        return 0;
-    }
-    return (int32_t)(((int64_t)pos_diff_q * POSITION_BIAS_Q
-                      + (int64_t)vel_req_q * VELOCITY_BIAS_Q) >> 16);
-}
-
 /* Compute the PIO step-timer length in clock ticks.
  * Returns 0 if step_count_q is below MIN_STEP_COUNT_Q (too slow to drive PIO). */
 int32_t calculate_step_len(int32_t step_count_q, int32_t period_ticks, int32_t max_vel_q) {
@@ -261,13 +247,11 @@ uint8_t do_steps(const uint8_t joint) {
 
   abs_pos_achieved = drain_rx_fifo(joint_state[joint].sm1, abs_pos_achieved);
 
-  int32_t pos_diff_q   = (int32_t)((abs_pos_requested - (double)abs_pos_achieved) * 65536.0);
-  int32_t vel_req_q    = (int32_t)((velocity_requested / (double)update_period_us) * 65536.0);
+  int32_t velocity_q   = (int32_t)((velocity_requested / (double)update_period_us) * 65536.0);
   int32_t max_vel_q    = (int32_t)((max_velocity / (double)update_period_us) * 65536.0);
   int32_t max_accel_q  = (int32_t)((max_accel / (double)update_period_us) * 65536.0);
   int32_t period_ticks = (int32_t)((int64_t)update_period_us * RP2040_CLOCK_MHZ);
 
-  int32_t velocity_q = get_velocity(pos_diff_q, vel_req_q);
   velocity_q = clamp_accel(velocity_q, joint_state[joint].last_velocity_q, max_accel_q);
   joint_state[joint].last_velocity_q = velocity_q;
 
