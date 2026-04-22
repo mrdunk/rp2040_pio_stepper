@@ -151,8 +151,6 @@ static void test_joint_config(void **state) {
         .gpio_dir = 3,
         .max_velocity = 56.78,
         .max_accel = 90.12,
-        //.velocity_requested_tm1 = 3456,
-        //.step_len_ticks = 1357
     };
 
     struct Message_joint_config last_joint_config;
