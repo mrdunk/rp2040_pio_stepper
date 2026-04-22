@@ -22,7 +22,15 @@
 mutex_t mtx_top;
 mutex_t mtx_joint[MAX_JOINT];
 
-// Semaphore for synchronizing cores.
+/* tick: incremented by the timer ISR on Core0; Core1 blocks on it each loop.
+ * last_packet_tick: written by Core0 once per received packet; Core1 reads it
+ *   to detect network loss via (tick - last_packet_tick) > MAX_MISSED_PACKET.
+ * linuxcnc_restart_detected: set by Core0 in update_packet_metrics() when
+ *   id_diff < 0 (sequence wrap = LinuxCNC restarted); Core1 reads and clears it.
+ * packet_generation: incremented by Core0 after all joint configs from one
+ *   packet are written; Core1 waits on it to avoid reading a half-written config.
+ * All four are 32-bit aligned (or bool) with a single writer and single reader —
+ * atomic on Cortex-M0+, no mutex needed. */
 volatile uint32_t tick = 0;
 volatile uint32_t last_packet_tick = 0;
 volatile bool linuxcnc_restart_detected = false;

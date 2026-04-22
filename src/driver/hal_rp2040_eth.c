@@ -485,6 +485,11 @@ static void write_port(void *arg, long period)
   int device_num = 0;
 
   static size_t count = 0;
+  /* configure() diffs against these before sending. Initialised to {0} so the
+   * first cycle always resends full config. On LinuxCNC restart the driver
+   * process also restarts, reinitialising these to {0} — no RP2040-side action
+   * required. On Ethernet-down, reset_rp_config() clears them to force resend
+   * (including enable=false) when the link recovers. */
   static struct Message_joint_config last_joint_config[MAX_JOINT] = {0};
   static struct Message_gpio_config last_gpio_config[MAX_GPIO] = {0};
   static struct Message_spindle_config last_spindle_config[MAX_SPINDLE] = {0};

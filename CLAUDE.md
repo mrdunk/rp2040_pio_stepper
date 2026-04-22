@@ -13,54 +13,11 @@ RP2040-based stepper motor controller for LinuxCNC. Core0 handles UDP networking
 (W5500 Ethernet) and clock synchronisation; Core1 runs the stepper PIO loop.
 The driver side runs on the LinuxCNC PC (`src/driver/`).
 
-## Architecture
+## Code comments
 
-- **Core0** (`src/rp2040/core0.c`): receives ~1 kHz UDP packets from LinuxCNC,
-  unpacks messages, writes `last_packet_tick = tick`, then calls `recover_clock()`
-  after each packet.
-- **Core1** (`src/rp2040/core1.c`): structured as five focused functions called
-  from `core1_main()`: `wait_for_tick()` blocks until `tick` changes;
-  `check_network_health()` detects loss via `tick - last_packet_tick`;
-  `handle_network_timeout()` / `handle_network_recovery()` manage joint state;
-  `step_all_joints()` drives PIO step generation. Core1's loop rate matches the
-  average incoming packet rate — the timing module keeps them in sync.
-- **timing** (`src/rp2040/timing.c`): RP2040 hardware repeating timer fires at
-  the EMA-measured inter-packet period and increments `tick` ISR-style.
-  No busy-wait, no ring buffers. `timing_init()` called once from `core0_main()`;
-  `recover_clock()` called per packet. **`recover_clock()` is only called on
-  received packets** (guarded by `received_msg_count > 0` in `core0_main()`).
-  During a missed packet the timer free-runs at the current period — correct
-  behaviour. The EMA is protected against inflated samples from large gaps by
-  dividing `sample` by `last_id_diff` (per-packet elapsed time). This works
-  because the LinuxCNC driver sends packets continuously and never resets
-  `update_id`, even during outages.
-- **`tick`** (`src/rp2040/config.c`): `volatile uint32_t tick` — incremented by
-  the timer ISR (Core0 side), waited on by Core1's loop.
-- **`last_packet_tick`** (`src/rp2040/config.c`): `volatile uint32_t
-  last_packet_tick` — written by Core0 once per received packet. Core1 reads it
-  to detect network loss: `(tick - last_packet_tick) > MAX_MISSED_PACKET` means
-  no packet has arrived for too long. Safe without a mutex — single writer, single
-  reader, 32-bit aligned (atomic on Cortex-M0+), same pattern as `tick`.
-- **`linuxcnc_restart_detected`** (`src/rp2040/config.c`): `volatile bool` — set
-  by Core0 in `update_packet_metrics()` when `id_diff < 0` (sequence number
-  wrapped, meaning LinuxCNC restarted). Core1 reads it each tick; if set, clears
-  it and calls `handle_network_timeout()` to disable joints before processing
-  anything else. Same single-writer/single-reader atomic pattern as `tick` and
-  `last_packet_tick`.
-- **PIO step generation** (`src/rp2040/pio.c`): `do_steps()` is called once per
-  Core1 tick per joint. It calls `calculate_step_len()` to get the PIO half-period
-  in clock ticks (clamped to `[min_len, max_len]` where `max_len` caps a step to
-  one loop period), then `plan_steps()` to get the whole-step count for this
-  period. `plan_steps()` maintains a per-joint fractional accumulator
-  (`step_accumulator[]`) — `|velocity|` is added each period, the floor is the
-  step count, and the remainder carries forward. `issue_pio_step()` is only called
-  when `plan_steps()` returns > 0; otherwise 0 is written to the FIFO to stop the
-  PIO. Direction is separate from step count: `velocity > 0` → forward.
-- **LinuxCNC driver config resync**: `last_joint_config` / `last_gpio_config` /
-  `last_spindle_config` in `hal_rp2040_eth.c` are statics that reset to `{0}` on
-  LinuxCNC restart. Because `configure()` diffs against these before sending, it
-  automatically resends full config (including `enable = false`) on the first
-  cycles after restart — no RP2040-side action required to force reconfiguration.
+Before adding architecture notes here, consider whether a code comment is the
+right home — especially for concurrency safety reasoning, non-obvious invariants,
+and why a guard exists. CLAUDE.md is for things with no natural home in the code.
 
 ## Building and testing
 
@@ -119,14 +76,6 @@ corresponding field to `skeleton_t` in `src/driver/skeleton.h` and wire it up
 in the `setup_data()` functions in `driver_network_RPtoPC_test.c` and
 `driver_gpio_test.c`.
 
-### Scalar HAL metric pins (`fb-overrun-ratio`, `fb-underrun-ratio`)
-
-Both are 1-second EMA (α = 1/1000 at nominal 1 kHz) of cumulative overrun /
-underrun counts summed across all joints per tick. They output `ema_overrun` and
-`ema_underrun` respectively from `skeleton_t`. State lives in `skeleton_t`
-(`ema_overrun`, `ema_underrun` double fields); updated in `unpack_joint_metrics()`
-in `rp2040_network.c`. `EMA_ALPHA` is defined there and must match the servo rate.
-
 ### `init_config()` default `max_accel` disables stepping in `do_steps()` tests
 
 `init_config()` sets `config.joint[j].max_accel` to `1.0`. In `do_steps()`,
@@ -144,5 +93,6 @@ The pre-commit hook builds and runs all tests before every commit. This means th
 
 ### Recompile the LinuxCNC driver after changing `messages.h`
 
-See warning comment at the top of `src/shared/messages.h`. Symptom of a stale
-binary: "WARN: Unconsumed RX buffer remainder: N bytes".
+Any struct change alters the wire format. Recompile and reinstall `hal_rp2040_eth.so`
+and reflash the firmware. Symptom of a stale binary: "WARN: Unconsumed RX buffer
+remainder: N bytes".

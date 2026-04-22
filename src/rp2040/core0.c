@@ -416,6 +416,8 @@ void core0_main() {
     process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, data_received);
 
     if(received_msg_count > 0) {
+      /* Only call recover_clock() on received packets. During a missed packet
+       * the timer free-runs at the current period, which is correct behaviour. */
       /* Serialise before waking Core1 — avoids joint mutex contention. */
       serialise_joint_movement(&tx_buf, false);
       serialise_joint_metrics(&tx_buf);
