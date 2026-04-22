@@ -371,6 +371,9 @@ bool configure_joint(
       (*data->joint_max_velocity[joint]) * (*data->joint_scale[joint]);
     double max_accel_ticks =
       (*data->joint_max_accel[joint]) * (*data->joint_scale[joint]);
+    /* Send if anything changed, or if no reply has arrived yet (last_joint_config
+     * only updates in unpack_joint_config on receipt of REPLY_JOINT_CONFIG, so a
+     * lost packet leaves the diff intact and causes an automatic retry). */
     if(
         last_joint_config[joint].enable != *data->joint_enable[joint]
         ||
@@ -402,6 +405,9 @@ bool configure_gpio(
     skeleton_t *data
 ) {
     bool pack_success = true;
+    /* Send if anything changed, or if no reply has arrived yet (last_gpio_config
+     * only updates in unpack_gpio_config on receipt of REPLY_GPIO_CONFIG, so a
+     * lost packet leaves the diff intact and causes an automatic retry). */
     if(
         last_gpio_config[gpio].gpio_type != *data->gpio_type[gpio]
         ||
@@ -436,6 +442,9 @@ bool configure_spindle(
     }
 
     bool pack_success = true;
+    /* Send if anything changed, or if no reply has arrived yet (last_spindle_config
+     * only updates in unpack_spindle_config on receipt of REPLY_SPINDLE_CONFIG, so a
+     * lost packet leaves the diff intact and causes an automatic retry). */
     if(
         last_spindle_config[spindle].vfd_type != data->spindle_vfd_type[spindle]
         ||

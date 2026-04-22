@@ -19,6 +19,8 @@
 #include "pio.h"
 #include "config.h"
 
+/* PIO instruction cycles consumed by the state machine loop itself (derived
+ * from pico_stepper.pio); subtracted when converting step period to PIO len. */
 #define STEP_PIO_LEN_OVERHEAD  9
 #define RP2040_CLOCK_MHZ       133
 #define MIN_STEP_COUNT_Q       4096    /* 0.0625 * 65536 */

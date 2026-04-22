@@ -275,6 +275,7 @@ uint32_t get_joint_config(
       if(updated_by_other_core == 0) {
         config.joint[joint].underrun_count++;
       } else if(updated_by_other_core > 1) {
+        /* -1 because one packet was consumed; the rest are excess. */
         config.joint[joint].overrun_count += updated_by_other_core - 1;
       }
       break;

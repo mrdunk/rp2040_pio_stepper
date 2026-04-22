@@ -180,7 +180,7 @@ void gpio_i2c_mcp_tranceive() {
 bool gpio_i2c_mcp_get_pin(uint8_t index, uint8_t address) {
   for(uint8_t i2c = 0; i2c < MAX_I2C_MCP; i2c++) {
     if(gpio_i2c_mcp_addresses[i2c] == address) {
-      return gpio_i2c_mcp_indexes[i2c] | (0x1 << index);
+      return gpio_i2c_mcp_indexes[i2c] & (0x1 << index);
     }
   }
   return 0;

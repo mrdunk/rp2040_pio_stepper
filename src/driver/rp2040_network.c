@@ -357,7 +357,9 @@ bool unpack_joint_movement(
   return true;
 }
 
-/* Process received update documenting current config settings. */
+/* Update last_joint_config with the values the RP confirmed — this stops
+ * configure_joint() from retransmitting (diff disappears). If the reply never
+ * arrives the diff persists and the config is resent next rotation. */
 bool unpack_joint_config(
     struct NWBuffer* rx_buf,
     size_t* rx_offset,
@@ -384,7 +386,9 @@ bool unpack_joint_config(
   return true;
 }
 
-/* Process received update documenting current GPIO config settings. */
+/* Update last_gpio_config with the values the RP confirmed — this stops
+ * configure_gpio() from retransmitting (diff disappears). If the reply never
+ * arrives the diff persists and the config is resent next rotation. */
 bool unpack_gpio_config(
     struct NWBuffer* rx_buf,
     size_t* rx_offset,
@@ -456,7 +460,9 @@ bool unpack_spindle_speed(
   return true;
 }
 
-/* Process received update documenting current spindle config settings. */
+/* Update last_spindle_config with the values the RP confirmed — this stops
+ * configure_spindle() from retransmitting (diff disappears). If the reply never
+ * arrives the diff persists and the config is resent next rotation. */
 bool unpack_spindle_config(
     struct NWBuffer* rx_buf,
     size_t* rx_offset,

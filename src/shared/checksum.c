@@ -7,6 +7,8 @@ uint16_t checksum(uint16_t checksum_val, size_t pos_in, size_t pos_end, void* da
     uint16_t mod;
     for(size_t index = pos_in; index < pos_end; index++) {
         mod = ((uint8_t*)data)[index];
+        /* Accumulate byte pairs as big-endian 16-bit words: odd-indexed bytes
+         * go into the high byte, even-indexed into the low byte. */
         if(index % 2) {
            mod = mod << 8;
         }
