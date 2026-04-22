@@ -45,9 +45,7 @@ struct ConfigAxis {
   int32_t abs_pos_achieved;       // In steps. Default value is UINT_MAX / 2.
   double max_velocity;
   double max_accel;               // ticks / update_time_ticks ^ 2
-  int32_t velocity_requested_tm1; // Velocity requested last cycle. Compare to velocity_achieved.
   int32_t velocity_achieved;      // Steps per update_time_us.
-  int32_t step_len_ticks;         // Length of steps requested from the PIO.
   int32_t position_error;         // Difference between requested and achieved position.
 };
 
@@ -116,9 +114,7 @@ void update_joint_config(
     const int32_t* abs_pos_achieved,
     const double* max_velocity,
     const double* max_accel,
-    const int32_t* velocity_requested_tm1,
     const int32_t* velocity_achieved,
-    const int32_t* step_len_ticks,
     const int32_t* position_error
 );
 
@@ -133,9 +129,7 @@ uint32_t get_joint_config(
     int32_t* abs_pos_achieved,
     double* max_velocity,
     double* max_accel,
-    int32_t* velocity_requested_tm1,
     int32_t* velocity_achieved,
-    int32_t* step_len_ticks,
     int32_t* position_error
     );
 

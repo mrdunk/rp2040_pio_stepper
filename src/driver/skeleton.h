@@ -21,10 +21,6 @@ typedef struct {
   hal_float_t* joint_position[MAX_JOINT];
   hal_float_t* joint_velocity[MAX_JOINT];
   hal_float_t* joint_pos_feedback[MAX_JOINT];
-  hal_s32_t* joint_step_len_ticks[MAX_JOINT];
-  // The requested velocity at time of joint_velocity_feedback.
-  hal_float_t* joint_velocity_cmd[MAX_JOINT];
-  hal_float_t* joint_accel_cmd[MAX_JOINT];
   // The actual velocity achieved on the RP.
   hal_float_t* joint_velocity_feedback[MAX_JOINT];
   // Difference between requested position and actual position on RP.

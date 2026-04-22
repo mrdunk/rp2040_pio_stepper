@@ -420,13 +420,8 @@ bool unpack_joint_metrics(
   uint32_t total_overrun  = 0;
   uint32_t total_underrun = 0;
   for(size_t joint = 0; joint < MAX_JOINT; joint++) {
-    *data->joint_step_len_ticks[joint] = reply->step_len_ticks[joint];
     total_overrun  += reply->overrun_count[joint];
     total_underrun += reply->underrun_count[joint];
-
-    *data->joint_accel_cmd[joint] =
-      reply->velocity_requested_tm1[joint] - *data->joint_velocity_cmd[joint];
-    *data->joint_velocity_cmd[joint] = reply->velocity_requested_tm1[joint];
   }
 
   data->ema_overrun  = data->ema_overrun  * (1.0 - EMA_ALPHA) + total_overrun  * EMA_ALPHA;

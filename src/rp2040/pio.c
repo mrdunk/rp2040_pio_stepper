@@ -62,8 +62,6 @@ void init_pio(const uint32_t joint)
       NULL,
       NULL,
       NULL,
-      NULL,
-      NULL,
       NULL
       );
 
@@ -213,9 +211,7 @@ uint8_t do_steps(const uint8_t joint) {
       &abs_pos_achieved,
       &max_velocity,
       &max_accel,
-      NULL, // &velocity_requested_tm1,
       NULL, // &velocity_achieved,
-      NULL, // &step_len_ticks,
       NULL  // &position_error
       );
 
@@ -268,7 +264,6 @@ uint8_t do_steps(const uint8_t joint) {
   }
 
   velocity_achieved = abs_pos_achieved - joint_state[joint].last_pos_achieved;
-  int32_t velocity_requested_tm1 = velocity_q / 65536;
   int32_t position_error = abs_pos_achieved - joint_state[joint].last_pos_requested;
 
   update_joint_config(
@@ -282,9 +277,7 @@ uint8_t do_steps(const uint8_t joint) {
       &abs_pos_achieved,
       NULL,
       NULL,
-      &velocity_requested_tm1,
       &velocity_achieved,
-      &step_len_ticks,
       &position_error);
 
   joint_state[joint].last_pos_requested = (int32_t)(abs_pos_requested >= 0.0
