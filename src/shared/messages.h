@@ -143,7 +143,6 @@ struct Reply_joint_movement {
   uint8_t type;
   int32_t abs_pos_achieved[MAX_JOINT];
   int32_t velocity_achieved[MAX_JOINT];
-  int32_t position_error[MAX_JOINT];
 };
 
 struct Reply_joint_config {

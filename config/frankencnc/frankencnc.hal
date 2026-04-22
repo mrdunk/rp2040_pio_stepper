@@ -52,7 +52,6 @@ net xpos-cmd joint.0.motor-pos-cmd => rp2040_eth.0.joint.0.pos-cmd
 net xvel-cmd joint.0.vel-cmd => rp2040_eth.0.joint.0.vel-cmd
 
 # Send feedback to motion planner.
-net xpos-cmd joint.0.motor-pos-cmd => rp2040_eth.0.joint.0.pos-cmd
 net xpos-fb  rp2040_eth.0.joint.0.fb-pos => joint.0.motor-pos-fb
 
 # Estop
@@ -79,7 +78,6 @@ net ypos-cmd joint.1.motor-pos-cmd => rp2040_eth.0.joint.1.pos-cmd
 net yvel-cmd joint.1.vel-cmd => rp2040_eth.0.joint.1.vel-cmd
 
 # Send feedback to motion planner.
-net ypos-cmd joint.1.motor-pos-cmd => rp2040_eth.0.joint.1.pos-cmd
 net ypos-fb  rp2040_eth.0.joint.1.fb-pos => joint.1.motor-pos-fb
 
 # Estop
@@ -105,7 +103,6 @@ net zpos-cmd joint.2.motor-pos-cmd => rp2040_eth.0.joint.2.pos-cmd
 net zvel-cmd joint.2.vel-cmd => rp2040_eth.0.joint.2.vel-cmd
 
 # Send feedback to motion planner.
-net zpos-cmd joint.2.motor-pos-cmd => rp2040_eth.0.joint.2.pos-cmd
 net zpos-fb  rp2040_eth.0.joint.2.fb-pos => joint.2.motor-pos-fb
 
 # Estop

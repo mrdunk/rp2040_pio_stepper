@@ -29,7 +29,6 @@ typedef struct {
     uint32_t sm0;
     uint32_t sm1;
     bool     init_done;
-    int32_t  last_pos_requested;
     int32_t  last_pos_achieved;
     uint32_t last_enabled;
     int32_t  last_velocity_q;
@@ -56,7 +55,6 @@ void init_pio(const uint32_t joint)
       NULL,
       &io_pos_step,
       &io_pos_dir,
-      NULL,
       NULL,
       NULL,
       NULL,
@@ -196,7 +194,6 @@ uint8_t do_steps(const uint8_t joint) {
   uint8_t enabled;
   int32_t abs_pos_achieved = 0;
   double velocity_requested;
-  double abs_pos_requested;
   double max_velocity;
   double max_accel;
   int32_t velocity_achieved = 0;
@@ -207,12 +204,11 @@ uint8_t do_steps(const uint8_t joint) {
       NULL,
       NULL,
       &velocity_requested,
-      &abs_pos_requested,
+      NULL,
       &abs_pos_achieved,
       &max_velocity,
       &max_accel,
-      NULL, // &velocity_achieved,
-      NULL  // &position_error
+      NULL  // &velocity_achieved
       );
 
   if(updated == 0 || update_period_us == 0) {
@@ -264,7 +260,6 @@ uint8_t do_steps(const uint8_t joint) {
   }
 
   velocity_achieved = abs_pos_achieved - joint_state[joint].last_pos_achieved;
-  int32_t position_error = abs_pos_achieved - joint_state[joint].last_pos_requested;
 
   update_joint_config(
       joint,
@@ -277,12 +272,8 @@ uint8_t do_steps(const uint8_t joint) {
       &abs_pos_achieved,
       NULL,
       NULL,
-      &velocity_achieved,
-      &position_error);
+      &velocity_achieved);
 
-  joint_state[joint].last_pos_requested = (int32_t)(abs_pos_requested >= 0.0
-      ? abs_pos_requested + 0.5
-      : abs_pos_requested - 0.5);
   joint_state[joint].last_pos_achieved  = abs_pos_achieved;
 
   return updated;

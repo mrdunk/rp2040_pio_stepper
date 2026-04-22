@@ -186,8 +186,7 @@ void update_joint_config(
     const int32_t* abs_pos_achieved,
     const double* max_velocity,
     const double* max_accel,
-    const int32_t* velocity_achieved,
-    const int32_t* position_error
+    const int32_t* velocity_achieved
 )
 {
   if(joint >= MAX_JOINT) {
@@ -223,9 +222,6 @@ void update_joint_config(
   if(velocity_achieved != NULL) {
     config.joint[joint].velocity_achieved = *velocity_achieved;
   }
-  if(position_error != NULL) {
-    config.joint[joint].position_error = *position_error;
-  }
 
   switch(core) {
     case CORE0:
@@ -251,8 +247,7 @@ uint32_t get_joint_config(
     int32_t* abs_pos_achieved,
     double* max_velocity,
     double* max_accel,
-    int32_t* velocity_achieved,
-    int32_t* position_error)
+    int32_t* velocity_achieved)
 {
   if(joint >= MAX_JOINT) {
     return 0;
@@ -304,9 +299,6 @@ uint32_t get_joint_config(
   if(velocity_achieved != NULL) {
     *velocity_achieved = config.joint[joint].velocity_achieved;
   }
-  if(position_error != NULL) {
-    *position_error = config.joint[joint].position_error;
-  }
 
   mutex_exit(&mtx_joint[joint]);
 
@@ -348,7 +340,6 @@ void disable_joint(const uint8_t joint, const uint8_t core) {
       NULL,
       NULL,
       NULL,
-      NULL,
       NULL);
 }
 
@@ -378,7 +369,6 @@ bool serialise_joint_movement(
 {
   int32_t abs_pos_achieved;
   int32_t velocity_achieved;
-  int32_t position_error;
   uint32_t updated = 0;
 
 
@@ -398,14 +388,12 @@ bool serialise_joint_movement(
           &abs_pos_achieved,
           NULL, //&max_velocity,
           NULL, //&max_accel,
-          &velocity_achieved,
-          &position_error
+          &velocity_achieved
           );
     } while(updated == 0 && wait_for_data);
 
     reply.abs_pos_achieved[joint] = abs_pos_achieved;
     reply.velocity_achieved[joint] = velocity_achieved;
-    reply.position_error[joint] = position_error;
   }
 
   uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
@@ -491,8 +479,7 @@ bool serialise_joint_config(const uint32_t joint, struct NWBuffer* tx_buf) {
         NULL, //&abs_pos_achieved,
         &max_velocity,
         &max_accel,
-        NULL, //&velocity_achieved,
-        NULL  //&position_error
+        NULL  //&velocity_achieved
         );
 
   struct Reply_joint_config reply;

@@ -20,6 +20,7 @@ hal_s32_t joint_gpio_dir[4];
 hal_float_t joint_max_velocity[4];
 hal_float_t joint_max_accel[4];
 hal_float_t joint_pos_feedback[4];
+hal_float_t joint_position[4];
 hal_float_t joint_scale[4] = {1000, 1000, 1000, 1000};
 hal_float_t joint_velocity_feedback[4];
 hal_s32_t joint_pos_error[4];
@@ -42,6 +43,7 @@ void setup_data(skeleton_t* data) {
     data->joint_max_velocity[joint] = &(joint_max_velocity[joint]);
     data->joint_max_accel[joint] = &(joint_max_accel[joint]);
     data->joint_pos_feedback[joint] = &(joint_pos_feedback[joint]);
+    data->joint_position[joint] = &(joint_position[joint]);
     data->joint_scale[joint] = &(joint_scale[joint]);
     data->joint_velocity_feedback[joint] = &(joint_velocity_feedback[joint]);
     data->joint_pos_error[joint] = &(joint_pos_error[joint]);

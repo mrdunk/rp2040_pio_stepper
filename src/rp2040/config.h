@@ -46,7 +46,6 @@ struct ConfigAxis {
   double max_velocity;
   double max_accel;               // ticks / update_time_ticks ^ 2
   int32_t velocity_achieved;      // Steps per update_time_us.
-  int32_t position_error;         // Difference between requested and achieved position.
 };
 
 /* Configuration object for a single GPIO. */
@@ -114,8 +113,7 @@ void update_joint_config(
     const int32_t* abs_pos_achieved,
     const double* max_velocity,
     const double* max_accel,
-    const int32_t* velocity_achieved,
-    const int32_t* position_error
+    const int32_t* velocity_achieved
 );
 
 uint32_t get_joint_config(
@@ -129,8 +127,7 @@ uint32_t get_joint_config(
     int32_t* abs_pos_achieved,
     double* max_velocity,
     double* max_accel,
-    int32_t* velocity_achieved,
-    int32_t* position_error
+    int32_t* velocity_achieved
     );
 
 void disable_joint(const uint8_t joint, const uint8_t core);

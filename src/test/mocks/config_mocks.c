@@ -12,8 +12,7 @@ void update_joint_config(
     const uint32_t* abs_pos_achieved,
     const double* max_velocity,
     const double* max_accel,
-    const int32_t* velocity_achieved,
-    const int32_t* position_error
+    const int32_t* velocity_achieved
 )
 {
 }

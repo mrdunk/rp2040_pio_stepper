@@ -348,7 +348,9 @@ bool unpack_joint_movement(
     *data->joint_velocity_feedback[joint] =
       (double)reply->velocity_achieved[joint];
 
-    *data->joint_pos_error[joint] = reply->position_error[joint];
+    *data->joint_pos_error[joint] = (int32_t)round(
+        (*data->joint_position[joint] - *data->joint_pos_feedback[joint])
+        * *data->joint_scale[joint]);
   }
 
   (*received_count)++;
