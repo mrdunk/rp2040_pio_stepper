@@ -334,6 +334,47 @@ static void test_serialize_gpio_nothing_to_do(void **state) {
     assert_int_equal(*data.gpio_data_out[1], false);
 }
 
+/* If no Reply_gpio arrives after a MSG_SET_GPIO for an OUT pin, gpio_data_received
+ * is never updated. serialize_gpio must keep retransmitting on every subsequent
+ * call until the mismatch is resolved. */
+static void test_serialize_gpio_out_retransmits_without_reply(void **state) {
+    (void) state;
+
+    skeleton_t data = {0};
+    setup_data(&data);
+
+    uint32_t hal_values = 0b00000000000000000000000000000001;
+    helper_set_gpio_data(data.gpio_data_out, hal_values, 0);
+
+    // gpio_data_received differs: bit 0 is 0, HAL wants 1.
+    data.gpio_data_received[0] = 0;
+    data.gpio_confirmation_pending[0] = false;
+
+    *data.gpio_type[0] = GPIO_TYPE_NATIVE_OUT;
+
+    // First call — MSG_SET_GPIO should be sent.
+    struct NWBuffer buffer = {0};
+    size_t data_size = serialize_gpio(&buffer, &data);
+
+    assert_int_equal(data_size, sizeof(struct Message_gpio));
+    struct Message_gpio* msg = (void*)buffer.payload;
+    assert_int_equal(msg->type, MSG_SET_GPIO);
+    assert_int_equal(msg->bank, 0);
+
+    // No Reply_gpio received: gpio_data_received is still 0.
+    // gpio_confirmation_pending is not set by serialize_gpio itself.
+
+    // Second call — must still emit MSG_SET_GPIO.
+    struct NWBuffer buffer2 = {0};
+    size_t data_size2 = serialize_gpio(&buffer2, &data);
+
+    assert_int_equal(data_size2, sizeof(struct Message_gpio));
+    struct Message_gpio* msg2 = (void*)buffer2.payload;
+    assert_int_equal(msg2->type, MSG_SET_GPIO);
+    assert_int_equal(msg2->bank, 0);
+    assert_int_equal(msg2->values, hal_values);
+}
+
 static void test_unpack_gpio(void **state) {
     (void) state; /* unused */
 
@@ -399,6 +440,7 @@ static void test_unpack_gpio_config(void **state) {
 
 int main(void) {
     const struct CMUnitTest tests[] = {
+        cmocka_unit_test(test_serialize_gpio_out_retransmits_without_reply),
         cmocka_unit_test(test_serialize_gpio_out_change),
         cmocka_unit_test(test_serialize_gpio_in_change),
         cmocka_unit_test(test_serialize_gpio_confirmation_pending),
