@@ -297,8 +297,8 @@ target_link_libraries(
   cmocka
   -Wl,--wrap,time_us_64
   -Wl,--wrap,update_period
-  -Wl,--wrap,add_repeating_timer_us
-  -Wl,--wrap,cancel_repeating_timer
+  -Wl,--wrap,add_alarm_at
+  -Wl,--wrap,cancel_alarm
   -Wl,--wrap,get_last_id_diff
   )
 add_test(

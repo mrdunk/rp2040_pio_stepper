@@ -17,37 +17,42 @@
 
 /* EMA accumulator, stored ×64 for sub-µs accumulation.
  * Initialised to 1000 µs (LinuxCNC default servo period). */
-static uint32_t ave_period_us_x64   = 1000u << 6;
-static uint32_t last_timer_period_us = 0;
-static uint64_t time_last            = 0;
-static uint64_t last_restart_time    = 0;
-static bool     time_initialized     = false;
-static repeating_timer_t tick_timer;
+static uint32_t ave_period_us_x64 = 1000u << 6;
+static uint32_t last_period_us    = 0;
+static uint64_t time_last         = 0;
+static bool     time_initialized  = false;
+static alarm_id_t tick_alarm      = -1;
 
-/* Hardware timer ISR — increments Core1's tick semaphore. */
-static bool tick_callback(repeating_timer_t *rt) {
-    (void) rt;
+/* Hardware alarm ISR — increments Core1's tick semaphore.
+ * Negative return tells the SDK to reschedule from the scheduled fire time
+ * rather than from now, preventing drift accumulation on delayed wakeups. */
+static int64_t tick_alarm_callback(alarm_id_t id, void *user_data) {
+    (void) id; (void) user_data;
     tick++;
-    return true;  /* keep repeating */
+    return -(int64_t)(ave_period_us_x64 >> 6);
 }
 
 /* Called once from core0_main() before the packet loop. */
 void timing_init(void) {
-    uint32_t ave_period_us = ave_period_us_x64 >> 6;
-    add_repeating_timer_us(-(int32_t)ave_period_us, tick_callback, NULL, &tick_timer);
-    last_timer_period_us = ave_period_us;
+    uint32_t period_us = ave_period_us_x64 >> 6;
+    last_period_us     = period_us;
+    absolute_time_t fire_at = from_us_since_boot(time_us_64() + period_us / 4);
+    tick_alarm = add_alarm_at(fire_at, tick_alarm_callback, NULL, true);
 }
 
 /* Called after every received packet.
- * Updates the EMA of inter-packet period; restarts the timer only when the
- * integer-µs average changes.  No busy-wait. */
+ * Updates the EMA of inter-packet period; calls update_period when the
+ * integer-µs average changes.  Phase-locks the tick alarm to the packet
+ * arrival time: reschedules the alarm at time_now + period/4 on every call,
+ * so the tick fires at a stable phase offset ahead of the next expected packet,
+ * keeping overrun and underrun rates symmetric. */
 void recover_clock(void) {
     uint64_t time_now = time_us_64();
 
-    if(time_initialized) {
+    if (time_initialized) {
         uint32_t sample  = (uint32_t)(time_now - time_last);
         int32_t  id_diff = get_last_id_diff();
-        if(id_diff >= 1) {
+        if (id_diff >= 1) {
             /* Normalise by id_diff so that missed packets (id_diff > 1) do not
              * inflate the EMA.  When id_diff == 1 (normal) this is a no-op.
              * id_diff <= 0 means LinuxCNC restarted or first packet — skip the
@@ -62,35 +67,33 @@ void recover_clock(void) {
     time_last        = time_now;
     time_initialized = true;
 
-    uint32_t ave_period_us = ave_period_us_x64 >> 6;
-    if(ave_period_us == 0) {
-        ave_period_us = 1;  /* guard against zero on startup */
+    uint32_t period_us = ave_period_us_x64 >> 6;
+    if (period_us == 0) {
+        period_us = 1;  /* guard against zero on startup */
     }
 
-    /* Only restart the hardware timer when the period has drifted AND at least
-     * one full period has elapsed since the last restart.  Without this guard,
-     * a burst of EMA changes (each ±1 µs during convergence) would restart the
-     * timer on every packet, resetting the countdown each time and starving
-     * Core1 of ticks.
-     * Note: last_timer_period_us is updated only when we actually apply the
-     * change, so we keep tracking drift across skipped restarts. */
-    if(last_timer_period_us != ave_period_us) {
-        if((uint32_t)(time_now - last_restart_time) >= last_timer_period_us) {
-            cancel_repeating_timer(&tick_timer);
-            add_repeating_timer_us(-(int32_t)ave_period_us, tick_callback, NULL, &tick_timer);
-            update_period(ave_period_us);
-            last_restart_time  = time_now;
-            last_timer_period_us = ave_period_us;
-        }
+    if (last_period_us != period_us) {
+        update_period(period_us);
+        last_period_us = period_us;
     }
+
+    /* Phase-lock: reschedule tick from this packet's arrival time + period/4.
+     * Cancelling and rescheduling a one-shot alarm on every packet does not
+     * starve Core1 (unlike restarting a repeating timer), because the fire
+     * time is an absolute value rather than a countdown from now. */
+    if (tick_alarm >= 0) {
+        cancel_alarm(tick_alarm);
+    }
+    absolute_time_t fire_at = from_us_since_boot(time_now + period_us / 4);
+    tick_alarm = add_alarm_at(fire_at, tick_alarm_callback, NULL, true);
 }
 
 #ifdef BUILD_TESTS
 void timing_reset_for_test(void) {
-    ave_period_us_x64    = 1000u << 6;
-    last_timer_period_us = 0;
-    time_last            = 0;
-    last_restart_time    = 0;
-    time_initialized     = false;
+    ave_period_us_x64 = 1000u << 6;
+    last_period_us    = 0;
+    time_last         = 0;
+    time_initialized  = false;
+    tick_alarm        = -1;
 }
 #endif

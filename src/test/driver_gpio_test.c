@@ -356,7 +356,7 @@ static void test_serialize_gpio_out_retransmits_without_reply(void **state) {
     struct NWBuffer buffer = {0};
     size_t data_size = serialize_gpio(&buffer, &data);
 
-    assert_int_equal(data_size, sizeof(struct Message_gpio));
+    assert_int_equal(data_size, aligned32(sizeof(struct Message_gpio)));
     struct Message_gpio* msg = (void*)buffer.payload;
     assert_int_equal(msg->type, MSG_SET_GPIO);
     assert_int_equal(msg->bank, 0);
@@ -368,7 +368,7 @@ static void test_serialize_gpio_out_retransmits_without_reply(void **state) {
     struct NWBuffer buffer2 = {0};
     size_t data_size2 = serialize_gpio(&buffer2, &data);
 
-    assert_int_equal(data_size2, sizeof(struct Message_gpio));
+    assert_int_equal(data_size2, aligned32(sizeof(struct Message_gpio)));
     struct Message_gpio* msg2 = (void*)buffer2.payload;
     assert_int_equal(msg2->type, MSG_SET_GPIO);
     assert_int_equal(msg2->bank, 0);

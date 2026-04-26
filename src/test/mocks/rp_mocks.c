@@ -76,3 +76,14 @@ void multicore_launch_core1(void(*entry)(void)) {
     (void)entry;
 }
 
+alarm_id_t add_alarm_at(absolute_time_t time, alarm_callback_t callback,
+                         void *user_data, bool fire_if_past) {
+    (void) time; (void) callback; (void) user_data; (void) fire_if_past;
+    return 0;
+}
+
+bool cancel_alarm(alarm_id_t alarm_id) {
+    (void) alarm_id;
+    return true;
+}
+

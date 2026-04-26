@@ -6,8 +6,9 @@
 void timing_init(void);
 
 /* Called after receiving a network packet.
- * Updates the EMA of inter-packet period; restarts the timer if the
- * integer-µs average changes. Does not busy-wait. */
+ * Updates the EMA of inter-packet period; calls update_period when the
+ * integer-µs average changes.  Phase-locks the tick alarm to the packet
+ * arrival time + period/4 on every call to keep overrun/underrun symmetric. */
 void recover_clock(void);
 
 #ifdef BUILD_TESTS

@@ -27,22 +27,25 @@ uint64_t __wrap_time_us_64(void) {
     return t;
 }
 
-/* Capture the callback and delay so tests can fire the callback manually
- * and verify the period passed to the timer. */
-static repeating_timer_callback_t captured_callback = NULL;
-static repeating_timer_t          captured_timer;
-static int32_t                    captured_timer_delay = 0;
+/* Capture the alarm callback and scheduled fire time so tests can fire the
+ * callback manually and verify phase offset. */
+static alarm_callback_t captured_alarm_callback = NULL;
+static absolute_time_t  captured_alarm_time     = { 0 };
+static int              alarm_schedule_count    = 0;
 
-bool __wrap_add_repeating_timer_us(int32_t delay_us,
-                                    repeating_timer_callback_t callback,
-                                    void *user_data,
-                                    repeating_timer_t *out) {
-    captured_timer_delay = delay_us;
-    captured_callback    = callback;
-    return true;
+alarm_id_t __wrap_add_alarm_at(absolute_time_t time,
+                                alarm_callback_t callback,
+                                void *user_data,
+                                bool fire_if_past) {
+    (void) user_data; (void) fire_if_past;
+    captured_alarm_callback = callback;
+    captured_alarm_time     = time;
+    alarm_schedule_count++;
+    return alarm_schedule_count;  /* unique non-negative id */
 }
 
-bool __wrap_cancel_repeating_timer(repeating_timer_t *timer) {
+bool __wrap_cancel_alarm(alarm_id_t id) {
+    (void) id;
     return true;
 }
 
@@ -75,8 +78,9 @@ static int setup(void **state) {
     min_update_period_arg    = UINT32_MAX;
     max_update_period_arg    = 0;
     tick                     = 0;
-    captured_callback        = NULL;
-    captured_timer_delay     = 0;
+    captured_alarm_callback  = NULL;
+    captured_alarm_time      = (absolute_time_t){ 0 };
+    alarm_schedule_count     = 0;
     mock_id_diff             = 1;
     timing_reset_for_test();
     return 0;
@@ -84,21 +88,21 @@ static int setup(void **state) {
 
 /* ---- Structural tests ---- */
 
-/* timing_init() must register a callback via add_repeating_timer_us. */
+/* timing_init() must register a callback via add_alarm_at. */
 static void test_timing_init__registers_callback(void **state) {
     (void) state;
     timing_init();
-    assert_non_null(captured_callback);
+    assert_non_null(captured_alarm_callback);
 }
 
 /* The registered callback must increment tick when called. */
 static void test_tick_callback__increments_tick(void **state) {
     (void) state;
     timing_init();
-    assert_non_null(captured_callback);
+    assert_non_null(captured_alarm_callback);
 
     uint32_t tick_before = tick;
-    captured_callback(&captured_timer);
+    captured_alarm_callback(0, NULL);
     assert_int_equal(tick_before + 1, tick);
 }
 
@@ -108,18 +112,18 @@ static void test_tick_callback__increments_tick_multiple_times(void **state) {
     timing_init();
 
     uint32_t tick_before = tick;
-    captured_callback(&captured_timer);
-    captured_callback(&captured_timer);
-    captured_callback(&captured_timer);
+    captured_alarm_callback(0, NULL);
+    captured_alarm_callback(0, NULL);
+    captured_alarm_callback(0, NULL);
     assert_int_equal(tick_before + 3, tick);
 }
 
-/* timing_init() must start the hardware timer at the default 1000 µs period.
- * The pico SDK convention is a negative delay_us for periodic timers. */
-static void test_timing_init__sets_initial_period(void **state) {
+/* timing_init() must schedule the first tick at period/4 (250 µs) after init.
+ * With mock_time=0 and period=1000 µs: fire_at = 0 + 1000/4 = 250. */
+static void test_timing_init__sets_initial_phase_offset(void **state) {
     (void) state;
     timing_init();
-    assert_int_equal(-1000, captured_timer_delay);
+    assert_int_equal(250, captured_alarm_time._private_us_since_boot);
 }
 
 /* With steady 1000 µs packets the EMA stays at 1000 µs.
@@ -142,6 +146,30 @@ static void test_recover_clock__does_not_hang(void **state) {
     timing_init();
     recover_clock();
     assert_true(1);
+}
+
+/* recover_clock() must reschedule the alarm on every packet, not only when the
+ * EMA period changes.  This is the phase-lock: each packet arrival resets the
+ * tick's position in the inter-packet interval. */
+static void test_recover_clock__reschedules_alarm_on_every_packet(void **state) {
+    (void) state;
+    timing_init();
+
+    int calls_before = alarm_schedule_count;
+    recover_clock();
+    recover_clock();
+    recover_clock();
+    assert_int_equal(calls_before + 3, alarm_schedule_count);
+}
+
+/* recover_clock() must schedule the tick at time_now + period/4.
+ * After timing_init() (consumes t=0), recover_clock() gets t=1000 and should
+ * schedule at 1000 + 250 = 1250. */
+static void test_recover_clock__phase_offset_is_quarter_period(void **state) {
+    (void) state;
+    timing_init();      /* consumes mock_time=0; mock_time now 1000 */
+    recover_clock();    /* time_now=1000; alarm at 1000 + 250 = 1250 */
+    assert_int_equal(1250, captured_alarm_time._private_us_since_boot);
 }
 
 /* ---- EMA convergence tests ---- */
@@ -274,15 +302,10 @@ static void test_recover_clock__skips_ema_on_zero_id_diff(void **state) {
     assert_int_equal(count_before, update_period_call_count);
 }
 
-/* When the EMA is converging (each packet shifts the integer period by 1 µs),
- * the time guard must prevent a restart on every packet.
- *
- * Scenario: packets at 990 µs (10 µs early).  The guard allows at most one
- * restart per ~1000 µs elapsed, so over 20 × 990 µs ≈ 19 800 µs there can be
- * at most ≈ 19 restarts.  Without the guard all 20 EMA changes would each
- * restart the timer, resetting the countdown each time and starving Core1.
- * With the guard the count must be ≤ 11 (roughly one per two packets). */
-static void test_recover_clock__rate_limits_timer_restarts(void **state) {
+/* With slow EMA convergence (packets at 990 µs), update_period is only called
+ * when the integer EMA value actually changes — not on every packet.
+ * 20 packets at 990 µs move the EMA by ~3 µs, so at most ~3 calls are expected. */
+static void test_recover_clock__update_period_tracks_ema_not_every_packet(void **state) {
     (void) state;
     seed_at_1000us();
 
@@ -292,8 +315,8 @@ static void test_recover_clock__rate_limits_timer_restarts(void **state) {
         recover_clock();
     }
 
-    int restarts = update_period_call_count - count_before;
-    assert_true(restarts <= 11);
+    int calls = update_period_call_count - count_before;
+    assert_true(calls <= 5);
 }
 
 /* Negative id_diff (e.g. LinuxCNC restart wrapping the sequence counter) must
@@ -336,17 +359,19 @@ int main(void) {
         cmocka_unit_test_setup(test_timing_init__registers_callback, setup),
         cmocka_unit_test_setup(test_tick_callback__increments_tick, setup),
         cmocka_unit_test_setup(test_tick_callback__increments_tick_multiple_times, setup),
-        cmocka_unit_test_setup(test_timing_init__sets_initial_period, setup),
+        cmocka_unit_test_setup(test_timing_init__sets_initial_phase_offset, setup),
         cmocka_unit_test_setup(test_recover_clock__does_not_call_update_period_repeatedly, setup),
         cmocka_unit_test_setup(test_recover_clock__does_not_hang, setup),
+        cmocka_unit_test_setup(test_recover_clock__reschedules_alarm_on_every_packet, setup),
+        cmocka_unit_test_setup(test_recover_clock__phase_offset_is_quarter_period, setup),
         cmocka_unit_test_setup(test_recover_clock__early_packets_converge, setup),
         cmocka_unit_test_setup(test_recover_clock__late_packets_converge, setup),
         cmocka_unit_test_setup(test_recover_clock__erratic_packets_stay_bounded, setup),
         cmocka_unit_test_setup(test_recover_clock__missed_packet_does_not_distort_ema, setup),
         cmocka_unit_test_setup(test_recover_clock__large_gap_normalizes_correctly, setup),
         cmocka_unit_test_setup(test_recover_clock__skips_ema_on_zero_id_diff, setup),
+        cmocka_unit_test_setup(test_recover_clock__update_period_tracks_ema_not_every_packet, setup),
         cmocka_unit_test_setup(test_recover_clock__skips_ema_on_negative_id_diff, setup),
-        cmocka_unit_test_setup(test_recover_clock__rate_limits_timer_restarts, setup),
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);

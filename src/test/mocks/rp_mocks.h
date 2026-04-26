@@ -61,6 +61,18 @@ bool add_repeating_timer_us(int32_t delay_us,
                              repeating_timer_t *out);
 bool cancel_repeating_timer(repeating_timer_t *timer);
 
+typedef int alarm_id_t;
+typedef int64_t (*alarm_callback_t)(alarm_id_t id, void *user_data);
+typedef struct { uint64_t _private_us_since_boot; } absolute_time_t;
+
+static inline absolute_time_t from_us_since_boot(uint64_t us) {
+    return (absolute_time_t){ us };
+}
+
+alarm_id_t add_alarm_at(absolute_time_t time, alarm_callback_t callback,
+                         void *user_data, bool fire_if_past);
+bool cancel_alarm(alarm_id_t alarm_id);
+
 void multicore_launch_core1(void(*entry)(void));
 
 
