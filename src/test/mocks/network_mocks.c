@@ -1,6 +1,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#include "../../shared/buffer.h"
+
 int32_t put_UDP(
     uint8_t socket_num,
     uint16_t port,
@@ -15,7 +17,7 @@ int32_t put_UDP(
 int32_t get_UDP(
     uint8_t socket_num,
     uint16_t port,
-    void* rx_buf,
+    struct NWBuffer* rx_buf,
     size_t* data_received,
     uint8_t* destip,
     uint16_t* destport)

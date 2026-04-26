@@ -3,11 +3,13 @@
 
 #include <stdint.h>
 
+#include "../shared/buffer.h"
+
 /* Get a network packet arriving via UDP. */
 int32_t get_UDP(
     uint8_t socket_num,
     uint16_t port,
-    void* rx_buf,
+    struct NWBuffer* rx_buf,
     size_t* data_received,
     uint8_t* destip,
     uint16_t* destport);

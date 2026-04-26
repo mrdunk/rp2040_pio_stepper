@@ -14,7 +14,7 @@
 int32_t get_UDP(
     uint8_t socket_num,
     uint16_t port,
-    void* rx_buf,
+    struct NWBuffer* rx_buf,
     size_t* data_received,
     uint8_t* destip,
     uint16_t* destport)
@@ -33,7 +33,7 @@ int32_t get_UDP(
            size = NW_BUF_LEN;
          }
 
-         ret = recvfrom(socket_num, rx_buf, size, destip, destport);
+         ret = recvfrom(socket_num, (void*)rx_buf, size, destip, destport);
          //printf("RECEIVED: %u %u.%u.%u.%u : %u\r\n",
          //    socket_num, destip[0], destip[1], destip[2], destip[3], *destport);
          if(ret <= 0) {
