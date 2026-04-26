@@ -46,7 +46,7 @@ static void test_serialise_timing(void **state) {
     assert_int_equal(reply_p->time_diff, reply.time_diff);
     assert_int_equal(reply_p->rp_update_len, reply.rp_update_len);
 
-    assert_int_equal(tx_buf.length - initial_tx_buf_len, sizeof(reply));
+    assert_int_equal(tx_buf.length - initial_tx_buf_len, aligned32(sizeof(reply)));
     assert_int_equal(result, true);
     assert_int_not_equal(tx_buf.checksum, 0);
 }
@@ -97,7 +97,7 @@ static void test_serialise_joint_movement(void **state) {
 
     size_t joint_count = serialise_joint_movement(&tx_buf, true);
 
-    assert_int_equal(tx_buf.length, initial_tx_buf_len + sizeof(struct Reply_joint_movement));
+    assert_int_equal(tx_buf.length, initial_tx_buf_len + aligned32(sizeof(struct Reply_joint_movement)));
     assert_int_equal(joint_count, 1);
     assert_int_not_equal(tx_buf.checksum, 0);
 

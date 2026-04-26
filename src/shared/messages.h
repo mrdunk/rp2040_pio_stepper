@@ -41,50 +41,48 @@
 #define MSG_SET_SPINDLE_CONFIG       7  // Set spindle configuration
 #define MSG_SET_SPINDLE_SPEED        8  // Set spindle speed
 
-struct Message_header {
+struct __attribute__((packed)) Message_header {
   uint8_t type;
 };
 
-struct Message_timing {
+struct __attribute__((packed)) Message_timing {
   uint8_t type;                   // MSG_TIMING
   uint32_t update_id;
   uint32_t time;
 };
 
-struct Message_set_joints_pos {
+struct __attribute__((packed)) Message_set_joints_pos {
   uint8_t type;                   // MSG_SET_JOINT_ABS_POS
+  uint8_t _pad[7];                // align doubles to 8-byte boundary
   double position[MAX_JOINT];
   double velocity[MAX_JOINT];
 };
 
-// TODO: Not currently used.
-// Should be refactored to do all joints in one update.
-struct Message_joint_enable {
+struct __attribute__((packed)) Message_joint_enable {
   uint8_t type;                   // MSG_SET_JOINT_ENABLED
   uint8_t joint;
   uint8_t value;
 };
 
-struct Message_gpio {
+struct __attribute__((packed)) Message_gpio {
   uint8_t type;                   // MSG_SET_GPIO
   uint8_t bank;                   // A bank of 32 IO pins.
   uint8_t confirmation_pending;   // If set the RP should always send a Reply_gpio in response.
   uint32_t values;                // Values to be sent to any of the IO pins that are outputs.
 };
 
-struct Message_joint_config {
+struct __attribute__((packed)) Message_joint_config {
   uint8_t type;                   // MSG_SET_JOINT_CONFIG
   uint8_t joint;
   uint8_t enable;
   int8_t gpio_step;               // Negative if disabled.
   int8_t gpio_dir;                // Negative if disabled.
-
-  // TODO: These could be uint32_t.
-  double max_velocity;
-  double max_accel;
+  uint8_t _pad[3];                // align floats to 4-byte boundary
+  float max_velocity;
+  float max_accel;
 };
 
-struct Message_spindle_config {
+struct __attribute__((packed)) Message_spindle_config {
   uint8_t type;                   // MSG_SET_SPINDLE_CONFIG
   uint8_t spindle_index;
   uint8_t modbus_address;
@@ -92,12 +90,12 @@ struct Message_spindle_config {
   uint16_t bitrate;
 };
 
-struct Message_spindle_speed {
+struct __attribute__((packed)) Message_spindle_speed {
   uint8_t type;                   // MSG_SET_SPINDLE_SPEED
   float speed[MAX_SPINDLE];
 };
 
-struct Message_gpio_config {
+struct __attribute__((packed)) Message_gpio_config {
   uint8_t type;                   // MSG_SET_GPIO_CONFIG
   uint8_t gpio_type;
   uint8_t gpio_count;             // The HAL side index of which gpio this is.
@@ -128,34 +126,35 @@ union MessageAny {
 #define REPLY_SPINDLE_SPEED          7
 #define REPLY_SPINDLE_CONFIG         8
 
-struct Reply_header {
+struct __attribute__((packed)) Reply_header {
   uint8_t type;
 };
 
-struct Reply_timing {
+struct __attribute__((packed)) Reply_timing {
   uint8_t type;
   uint32_t update_id;
   int32_t time_diff;
   uint32_t rp_update_len;
 };
 
-struct Reply_joint_movement {
+struct __attribute__((packed)) Reply_joint_movement {
   uint8_t type;
   int32_t abs_pos_achieved[MAX_JOINT];
   int32_t velocity_achieved[MAX_JOINT];
 };
 
-struct Reply_joint_config {
+struct __attribute__((packed)) Reply_joint_config {
   uint8_t type;
   uint8_t joint;
   uint8_t enable;
   int8_t gpio_step;
   int8_t gpio_dir;
-  double max_velocity;
-  double max_accel;
+  uint8_t _pad[3];                // align floats to 4-byte boundary
+  float max_velocity;
+  float max_accel;
 };
 
-struct Reply_gpio_config {
+struct __attribute__((packed)) Reply_gpio_config {
   uint8_t type;
   uint8_t gpio_type;
   uint8_t gpio_count;
@@ -163,24 +162,25 @@ struct Reply_gpio_config {
   uint8_t address;
 };
 
-struct Reply_joint_metrics {
+struct __attribute__((packed)) Reply_joint_metrics {
   uint8_t type;
   uint8_t overrun_occurred;   /* 1 if any joint overran this tick, else 0 */
   uint8_t underrun_occurred;  /* 1 if any joint underran this tick, else 0 */
 };
 
-struct Reply_gpio {
+struct __attribute__((packed)) Reply_gpio {
   uint8_t type;
   uint8_t bank;
   uint8_t confirmation_pending;
   uint32_t values;
 };
 
-struct Reply_spindle_speed {
+struct __attribute__((packed)) Reply_spindle_speed {
   // TODO: Needs parameters per spindle if support for multiple spindles is added.
   uint8_t type;
   uint8_t spindle_index;
-  double speed;
+  uint8_t _pad[2];                // align float to 4-byte boundary
+  float speed;
   uint16_t crc_errors;
   uint16_t unanswered;
   uint16_t unknown;
@@ -189,7 +189,7 @@ struct Reply_spindle_speed {
   uint16_t got_act_frequency:1;
 };
 
-struct Reply_spindle_config {
+struct __attribute__((packed)) Reply_spindle_config {
   uint8_t type;
   uint8_t spindle_index;
   uint8_t modbus_address;
@@ -204,6 +204,7 @@ union ReplyAny {
   struct Reply_joint_config joint_config;
   struct Reply_gpio_config gpio_config;
   struct Reply_joint_metrics joint_metrics;
+  struct Reply_gpio gpio;
   struct Reply_spindle_speed spindle_speed;
 };
 

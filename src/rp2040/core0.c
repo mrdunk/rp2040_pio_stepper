@@ -81,21 +81,26 @@ bool unpack_joint_abs_pos(
     size_t* rx_offset,
     size_t* received_count
 ) {
+  struct Message_set_joints_pos message;
   void* data_p = unpack_nw_buff(
-      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_set_joints_pos));
+      rx_buf, *rx_offset, rx_offset, &message, sizeof(struct Message_set_joints_pos));
 
   if(! data_p) {
     return false;
   }
 
-  struct Message_set_joints_pos* message = data_p;
-  double* abs_pos = message->position;
-  double* vel_reques = message->velocity;
+  /* Copy doubles out of packed struct before taking addresses — avoids
+   * unaligned pointer UB on Cortex-M0+. */
+  double pos[MAX_JOINT], vel[MAX_JOINT];
+  for(size_t j = 0; j < MAX_JOINT; j++) {
+    pos[j] = message.position[j];
+    vel[j] = message.velocity[j];
+  }
 
   for(size_t joint = 0; joint < MAX_JOINT; joint++) {
     update_joint_config(
         joint, CORE0,
-        NULL, NULL, NULL, &(vel_reques[joint]), &(abs_pos[joint]), NULL, NULL, NULL, NULL);
+        NULL, NULL, NULL, &vel[joint], &pos[joint], NULL, NULL, NULL, NULL);
   }
 
   (*received_count)++;

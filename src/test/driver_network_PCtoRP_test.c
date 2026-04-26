@@ -46,19 +46,15 @@ static void test_serialize_jont_pos(void **state) {
         .length=0
     };
 
-    struct Message_set_joints_pos message = {
-        .type = MSG_SET_JOINT_ABS_POS,
-        .position = {34.56, 78.90, 12.34, 56.78},
-        .velocity = {78.91, 23.45, 67.89, 1.23}
-    };
-
+    double position[MAX_JOINT] = {34.56, 78.90, 12.34, 56.78};
+    double velocity[MAX_JOINT] = {78.91, 23.45, 67.89, 1.23};
     double scale[MAX_JOINT] = {1, 1, 1, 1};
 
     skeleton_t data = {0};
     for(size_t joint = 0; joint < MAX_JOINT; joint++) {
         data.joint_scale[joint] = &scale[joint];
-        data.joint_position[joint] = &message.position[joint];
-        data.joint_velocity[joint] = &message.velocity[joint];
+        data.joint_position[joint] = &position[joint];
+        data.joint_velocity[joint] = &velocity[joint];
     }
 
     size_t data_size = serialize_joint_pos(&buffer, &data);
@@ -68,9 +64,9 @@ static void test_serialize_jont_pos(void **state) {
     assert_int_not_equal(buffer.checksum, 0);
 
     struct Message_set_joints_pos* message_p = (void*)buffer.payload;
-    assert_int_equal(message.type, message_p->type);
-    assert_memory_equal(message.position, message_p->position, sizeof(double) * MAX_JOINT);
-    assert_memory_equal(message.velocity, message_p->velocity, sizeof(double) * MAX_JOINT);
+    assert_int_equal(MSG_SET_JOINT_ABS_POS, message_p->type);
+    assert_memory_equal(position, message_p->position, sizeof(double) * MAX_JOINT);
+    assert_memory_equal(velocity, message_p->velocity, sizeof(double) * MAX_JOINT);
 }
 
 static void test_serialize_joint_enable(void **state) {

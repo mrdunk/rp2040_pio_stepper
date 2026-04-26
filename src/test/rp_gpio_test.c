@@ -235,7 +235,7 @@ static void test_send_PC_to_RP(void **state) {
     };
 
     memcpy(rx_buf.payload, &message, sizeof(message));
-    rx_buf.length = sizeof(message);
+    rx_buf.length = aligned32(sizeof(message));
     rx_buf.checksum = checksum(0, 0, rx_buf.length, rx_buf.payload);
 
     // Only config.gpio[3] is an output pin whose value differs from
@@ -248,7 +248,7 @@ static void test_send_PC_to_RP(void **state) {
             &rx_buf,
             &tx_buf,
             &received_msg_count,
-            sizeof(message) + sizeof(rx_buf.length) + sizeof(rx_buf.checksum));
+            aligned32(sizeof(message)) + sizeof(rx_buf.length) + sizeof(rx_buf.checksum));
 
     // Received a single message.
     assert_int_equal(received_msg_count, 1);
@@ -271,7 +271,7 @@ static void test_send_PC_to_RP(void **state) {
     received_msg_count = 0;
 
     memcpy(rx_buf.payload, &message, sizeof(message));
-    rx_buf.length = sizeof(message);
+    rx_buf.length = aligned32(sizeof(message));
     rx_buf.checksum = checksum(0, 0, rx_buf.length, rx_buf.payload);
 
     // All output GPIO values now match what's being requested so gpio_out(...)
@@ -284,7 +284,7 @@ static void test_send_PC_to_RP(void **state) {
             &rx_buf,
             &tx_buf,
             &received_msg_count,
-            sizeof(message) + sizeof(rx_buf.length) + sizeof(rx_buf.checksum));
+            aligned32(sizeof(message)) + sizeof(rx_buf.length) + sizeof(rx_buf.checksum));
 
     // Received a single message.
     assert_int_equal(received_msg_count, 1);
@@ -353,7 +353,7 @@ static void test_send_PC_to_RP_confirmation_set(void **state) {
     };
 
     memcpy(rx_buf.payload, &message, sizeof(message));
-    rx_buf.length = sizeof(message);
+    rx_buf.length = aligned32(sizeof(message));
     rx_buf.checksum = checksum(0, 0, rx_buf.length, rx_buf.payload);
 
     // Parse Message_gpio.
@@ -361,7 +361,7 @@ static void test_send_PC_to_RP_confirmation_set(void **state) {
             &rx_buf,
             &tx_buf,
             &received_msg_count,
-            sizeof(message) + sizeof(rx_buf.length) + sizeof(rx_buf.checksum));
+            aligned32(sizeof(message)) + sizeof(rx_buf.length) + sizeof(rx_buf.checksum));
 
     // Received a single message.
     assert_int_equal(received_msg_count, 1);
@@ -433,8 +433,8 @@ static void test_send_RP_to_PC(void **state) {
     assert_int_equal(config.gpio[1].value, false);
 
     // Proves data was added to tx_buf_len.
-    assert_int_equal(tx_buf_len, sizeof(struct Reply_gpio));
-    assert_int_equal(tx_buf.length, sizeof(struct Reply_gpio));
+    assert_int_equal(tx_buf_len, aligned32(sizeof(struct Reply_gpio)));
+    assert_int_equal(tx_buf.length, aligned32(sizeof(struct Reply_gpio)));
     assert_int_not_equal(tx_buf.checksum, 0);
 
     // Config agrees that Reply_gpio should be sent.
@@ -505,8 +505,8 @@ static void test_send_RP_to_PC_out_gpio_changed(void **state) {
     assert_int_equal(config.gpio[1].value, false);
 
     // Proves data was added to tx_buf_len.
-    assert_int_equal(tx_buf_len, sizeof(struct Reply_gpio));
-    assert_int_equal(tx_buf.length, sizeof(struct Reply_gpio));
+    assert_int_equal(tx_buf_len, aligned32(sizeof(struct Reply_gpio)));
+    assert_int_equal(tx_buf.length, aligned32(sizeof(struct Reply_gpio)));
     assert_int_not_equal(tx_buf.checksum, 0);
 
     // Config agrees that Reply_gpio should be sent.

@@ -132,7 +132,7 @@ static void test_serialize_gpio_in_change(void **state) {
     struct Message_gpio* message_b0_p = (void*)buffer.payload;
 
     // Only one message:
-    assert_int_equal(data_size, sizeof(struct Message_gpio) * 1);
+    assert_int_equal(data_size, aligned32(sizeof(struct Message_gpio)) * 1);
 
     assert_int_not_equal(buffer.checksum, 0);
     assert_int_equal(buffer.length, data_size);
@@ -208,7 +208,7 @@ static void test_serialize_gpio_out_change(void **state) {
     struct Message_gpio* message_b0_p = (void*)buffer.payload;
 
     // Only one message:
-    assert_int_equal(data_size, sizeof(struct Message_gpio) * 1);
+    assert_int_equal(data_size, aligned32(sizeof(struct Message_gpio)) * 1);
     assert_int_not_equal(buffer.checksum, 0);
     assert_int_equal(buffer.length, data_size);
     
@@ -265,7 +265,7 @@ static void test_serialize_gpio_confirmation_pending(void **state) {
     size_t data_size = serialize_gpio(&buffer, &data);
 
     // Only one message:
-    assert_int_equal(data_size, sizeof(struct Message_gpio));
+    assert_int_equal(data_size, aligned32(sizeof(struct Message_gpio)));
     assert_int_not_equal(buffer.checksum, 0);
     assert_int_equal(buffer.length, data_size);
     
@@ -356,14 +356,14 @@ static void test_unpack_gpio(void **state) {
     };
 
     memcpy(buffer.payload, &reply, sizeof(reply));
-    buffer.length = sizeof(reply);
+    buffer.length = aligned32(sizeof(reply));
 
     bool result = unpack_gpio(&buffer, &rx_offset, &received_count, &data);
 
     assert_int_equal(data.gpio_data_received[reply.bank], reply.values);
     assert_int_equal(result, true);
     assert_int_equal(received_count, original_received_count + 1);
-    assert_int_equal(rx_offset, original_rx_offset += sizeof(reply));
+    assert_int_equal(rx_offset, original_rx_offset += aligned32(sizeof(reply)));
 }
 
 static void test_unpack_gpio_config(void **state) {

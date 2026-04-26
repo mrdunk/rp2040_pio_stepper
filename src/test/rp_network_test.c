@@ -159,7 +159,7 @@ static void test_unpack_timing_message(void **state) {
 
     // The serialise_timing(...) method has not been mocked
     // so there will be data on the tx_buf.
-    assert_int_equal(tx_buf.length, sizeof(struct Reply_timing));
+    assert_int_equal(tx_buf.length, aligned32(sizeof(struct Reply_timing)));
 }
 
 /* Test unpacking the struct Message_set_joints_pos works as intended. */
@@ -234,7 +234,7 @@ static void test_unpack_joint_config_message(void **state) {
     process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, expected_length);
 
     // The MSG_SET_JOINT_CONFIG populates tx_buf.
-    assert_int_equal(tx_buf.length, sizeof(struct Reply_joint_config));
+    assert_int_equal(tx_buf.length, aligned32(sizeof(struct Reply_joint_config)));
     // 1 message processed.
     assert_int_equal(received_msg_count, 1);
 
@@ -360,7 +360,7 @@ static void test_unpack_one_of_each(void **state) {
     assert_int_equal(received_msg_count, 4);
 
     // The MSG_TIMING and MSG_SET_JOINT_CONFIG populates tx_buf.
-    assert_int_equal(tx_buf.length, sizeof(struct Reply_timing) + sizeof(struct Reply_joint_config));
+    assert_int_equal(tx_buf.length, aligned32(sizeof(struct Reply_timing)) + aligned32(sizeof(struct Reply_joint_config)));
 
     // Should have reset the rx_buf.
     assert_int_equal(rx_buf.length, 0);

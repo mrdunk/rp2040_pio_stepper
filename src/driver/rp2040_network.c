@@ -203,8 +203,8 @@ size_t serialize_joint_config(
     uint8_t enable,
     uint8_t gpio_step,
     uint8_t gpio_dir,
-    double max_velocity,
-    double max_accel
+    float max_velocity,
+    float max_accel
 ) {
   union MessageAny message;
   message.joint_config.type = MSG_SET_JOINT_CONFIG;

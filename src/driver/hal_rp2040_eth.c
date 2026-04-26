@@ -367,10 +367,10 @@ bool configure_joint(
     skeleton_t *data
 ) {
     bool pack_success = true;
-    double max_velocity_ticks =
-      (*data->joint_max_velocity[joint]) * (*data->joint_scale[joint]);
-    double max_accel_ticks =
-      (*data->joint_max_accel[joint]) * (*data->joint_scale[joint]);
+    float max_velocity_ticks =
+      (float)((*data->joint_max_velocity[joint]) * (*data->joint_scale[joint]));
+    float max_accel_ticks =
+      (float)((*data->joint_max_accel[joint]) * (*data->joint_scale[joint]));
     /* Send if anything changed, or if no reply has arrived yet (last_joint_config
      * only updates in unpack_joint_config on receipt of REPLY_JOINT_CONFIG, so a
      * lost packet leaves the diff intact and causes an automatic retry). */
