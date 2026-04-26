@@ -97,7 +97,7 @@ size_t get_reply_non_block(int device, void* receive_buffer) {
   ssize_t receive_count = recvfrom(
       sockfd[device],
       receive_buffer,
-      NW_BUF_LEN,
+      sizeof(struct NWBuffer),
       flags,
       (struct sockaddr *)&remote_addr[device],
       &addr_len);

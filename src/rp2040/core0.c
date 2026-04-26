@@ -43,7 +43,9 @@ bool unpack_timing(
   int32_t id_diff;
   int32_t time_diff;
   update_packet_metrics(message, &id_diff, &time_diff);
-  serialise_timing(tx_buf, message->update_id, time_diff);
+  if(!serialise_timing(tx_buf, message->update_id, time_diff)) {
+    printf("WARN: TX buffer full, dropping timing reply.\n");
+  }
 
   (*received_count)++;
   return true;
@@ -128,7 +130,9 @@ bool unpack_spindle_config(
   vfd_config.type = message->vfd_type;
 
 
-  serialise_spindle_config(spindle, tx_buf);
+  if(!serialise_spindle_config(spindle, tx_buf)) {
+    printf("WARN: TX buffer full, dropping spindle config reply.\n");
+  }
 
   (*received_count)++;
   return true;
@@ -419,8 +423,12 @@ void core0_main() {
       /* Only call recover_clock() on received packets. During a missed packet
        * the timer free-runs at the current period, which is correct behaviour. */
       /* Serialise before waking Core1 — avoids joint mutex contention. */
-      serialise_joint_movement(&tx_buf, false);
-      serialise_joint_metrics(&tx_buf);
+      if(!serialise_joint_movement(&tx_buf, false)) {
+        printf("WARN: TX buffer full, dropping joint movement.\n");
+      }
+      if(!serialise_joint_metrics(&tx_buf)) {
+        printf("WARN: TX buffer full, dropping joint metrics.\n");
+      }
 
       packet_generation++;   /* all joint configs from this packet are now written */
       last_packet_tick = tick;
@@ -432,7 +440,9 @@ void core0_main() {
 
       // No need to update each spindle every cycle.
       if(count % 100 == 0) {
-        serialise_spindle_speed_out(&tx_buf, act_spindle_frequency, &vfd.stats);
+        if(!serialise_spindle_speed_out(&tx_buf, act_spindle_frequency, &vfd.stats)) {
+          printf("WARN: TX buffer full, dropping spindle speed.\n");
+        }
       }
 
       size_t tx_buf_len = 0;
