@@ -119,6 +119,23 @@ add_test(
 
 
 add_executable(
+  driverGetReplyTest
+  ${CMAKE_CURRENT_SOURCE_DIR}/driver_get_reply_test.c
+  ${CMAKE_SOURCE_DIR}/src/driver/rp2040_network.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/driver_mocks.c
+  )
+target_link_libraries(
+  driverGetReplyTest
+  cmocka
+  -Wl,--wrap,recvfrom
+  )
+add_test(
+  driverGetReplyTest
+  driverGetReplyTest
+  )
+
+
+add_executable(
   driverNetworkPCtoRPTest
   ${CMAKE_CURRENT_SOURCE_DIR}/driver_network_PCtoRP_test.c
   #${CMAKE_SOURCE_DIR}/src/driver/rp2040_network.c

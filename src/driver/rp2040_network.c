@@ -91,12 +91,12 @@ int send_data(int device, struct NWBuffer* buffer) {
 }
 
 /* Get data via UDP. */
-size_t get_reply_non_block(int device, void* receive_buffer) {
+size_t get_reply_non_block(int device, struct NWBuffer* receive_buffer) {
   socklen_t addr_len = sizeof(remote_addr[device]);
   int flags = MSG_DONTWAIT | MSG_DONTROUTE;
   ssize_t receive_count = recvfrom(
       sockfd[device],
-      receive_buffer,
+      (void*)receive_buffer,
       sizeof(struct NWBuffer),
       flags,
       (struct sockaddr *)&remote_addr[device],
