@@ -123,7 +123,7 @@ static void test_serialise_joint_metrics(void **state) {
 
     bool result = serialise_joint_metrics(&tx_buf);
     assert_true(result);
-    assert_int_equal(tx_buf.length, 4);  /* alligned32(sizeof(Reply_joint_metrics) = 3) */
+    assert_int_equal(tx_buf.length, 4);  /* aligned32(sizeof(Reply_joint_metrics) = 3) */
 
     struct Reply_joint_metrics* reply = (void*)tx_buf.payload;
     assert_int_equal(reply->type, REPLY_JOINT_METRICS);

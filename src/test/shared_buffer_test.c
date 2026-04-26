@@ -11,11 +11,11 @@
 
 
 uint8_t mock_checksum = 0;
-uint16_t __real_checksum(uint16_t val_in, void* new_data, uint16_t new_data_len);
+uint16_t __real_checksum(uint16_t val_in, size_t pos_in, size_t pos_end, void* data);
 
-uint16_t __wrap_checksum(uint16_t val_in, void* new_data, uint16_t new_data_len) {
+uint16_t __wrap_checksum(uint16_t val_in, size_t pos_in, size_t pos_end, void* data) {
     if(mock_checksum) {
-        return __real_checksum(val_in, new_data, new_data_len);
+        return __real_checksum(val_in, pos_in, pos_end, data);
     }
     return mock_type(int);
 }
@@ -53,11 +53,11 @@ static void test_pack_one(void **state) {
 
     return_val = pack_nw_buff(&buffer, (void*)&test_message, sizeof(test_message));
 
-    assert_int_equal(return_val, alligned32(sizeof(test_message)));
-    assert_int_equal(buffer.length, alligned32(sizeof(test_message)));
+    assert_int_equal(return_val, aligned32(sizeof(test_message)));
+    assert_int_equal(buffer.length, aligned32(sizeof(test_message)));
     assert_int_equal(buffer.checksum, 1234);
-    assert_memory_equal(buffer.payload, &test_message, alligned32(sizeof(test_message)));
-    assert_int_equal(*(buffer.payload + alligned32(sizeof(test_message))), 0);
+    assert_memory_equal(buffer.payload, &test_message, aligned32(sizeof(test_message)));
+    assert_int_equal(*(buffer.payload + aligned32(sizeof(test_message))), 0);
 }
 
 static void test_pack_one_in_dirty_buffer(void **state) {
@@ -91,11 +91,11 @@ static void test_pack_one_in_dirty_buffer(void **state) {
 
     return_val = pack_nw_buff(&buffer, (void*)&test_message, sizeof(test_message));
 
-    assert_int_equal(return_val, alligned32(sizeof(test_message)));
-    assert_int_equal(buffer.length, alligned32(sizeof(test_message)));
+    assert_int_equal(return_val, aligned32(sizeof(test_message)));
+    assert_int_equal(buffer.length, aligned32(sizeof(test_message)));
     assert_int_equal(buffer.checksum, 1234);
-    assert_memory_equal(buffer.payload, &test_message, alligned32(sizeof(test_message)));
-    assert_int_equal(*(buffer.payload + alligned32(sizeof(test_message))), 0);
+    assert_memory_equal(buffer.payload, &test_message, aligned32(sizeof(test_message)));
+    assert_int_equal(*(buffer.payload + aligned32(sizeof(test_message))), 0);
 }
 
 static void test_pack_multiple(void **state) {
@@ -123,28 +123,28 @@ static void test_pack_multiple(void **state) {
 
     will_return(__wrap_checksum, 1234);
     return_val = pack_nw_buff(&buffer, (void*)&test_message, sizeof(test_message));
-    assert_int_equal(return_val, alligned32(sizeof(test_message)));
+    assert_int_equal(return_val, aligned32(sizeof(test_message)));
 
     will_return(__wrap_checksum, 1234);
     return_val = pack_nw_buff(&buffer, (void*)&test_message, sizeof(test_message));
-    assert_int_equal(return_val, alligned32(sizeof(test_message)));
+    assert_int_equal(return_val, aligned32(sizeof(test_message)));
     
     will_return(__wrap_checksum, 5678);
     return_val = pack_nw_buff(&buffer, (void*)&test_message, sizeof(test_message));
-    assert_int_equal(return_val, alligned32(sizeof(test_message)));
+    assert_int_equal(return_val, aligned32(sizeof(test_message)));
 
-    assert_int_equal(buffer.length, 3 * alligned32(sizeof(test_message)));
+    assert_int_equal(buffer.length, 3 * aligned32(sizeof(test_message)));
     assert_int_equal(buffer.checksum, 5678);
-    assert_memory_equal(buffer.payload, &test_message, alligned32(sizeof(test_message)));
+    assert_memory_equal(buffer.payload, &test_message, aligned32(sizeof(test_message)));
     assert_memory_equal(
-            (buffer.payload + alligned32(sizeof(test_message))),
+            (buffer.payload + aligned32(sizeof(test_message))),
             &test_message,
-            alligned32(sizeof(test_message)));
+            aligned32(sizeof(test_message)));
     assert_memory_equal(
-            (buffer.payload + alligned32(sizeof(test_message)) * 2),
+            (buffer.payload + aligned32(sizeof(test_message)) * 2),
             &test_message,
-            alligned32(sizeof(test_message)));
-    assert_int_equal(*(buffer.payload + alligned32(sizeof(test_message)) * 3), 0);
+            aligned32(sizeof(test_message)));
+    assert_int_equal(*(buffer.payload + aligned32(sizeof(test_message)) * 3), 0);
 }
 
 static void test_pack_overflow(void **state) {
@@ -161,22 +161,45 @@ static void test_pack_overflow(void **state) {
     } test_message_small;
 
     struct TestMessageBig {
-        uint8_t a[NW_BUF_LEN - alligned32(sizeof(test_message_small))];
+        uint8_t a[NW_BUF_LEN - aligned32(sizeof(test_message_small))];
     } test_message_big;
 
     uint16_t return_val;
 
     will_return(__wrap_checksum, 1234);
     return_val = pack_nw_buff(&buffer, (void*)&test_message_big, sizeof(test_message_big));
-    assert_int_equal(return_val, alligned32(sizeof(test_message_big)));
+    assert_int_equal(return_val, aligned32(sizeof(test_message_big)));
 
     will_return(__wrap_checksum, 1234);
     return_val = pack_nw_buff(&buffer, (void*)&test_message_small, sizeof(test_message_small));
-    assert_int_equal(return_val, alligned32(sizeof(test_message_small)));
+    assert_int_equal(return_val, aligned32(sizeof(test_message_small)));
 
     // This one will fail to populate as the buffer is full.
     return_val = pack_nw_buff(&buffer, (void*)&test_message_small, sizeof(test_message_small));
     assert_int_equal(return_val, 0);
+}
+
+/* unaligned length passes the raw-size check but the aligned size would overflow;
+ * pack_nw_buff must reject it. */
+static void test_pack_overflow_aligned(void **state) {
+    (void) state; /* unused */
+
+    /* Fill the buffer to NW_BUF_LEN - 3: leaves 3 bytes raw space.
+     * A 3-byte struct aligns to 4 bytes, so the aligned write would overflow. */
+    struct NWBuffer buffer = {
+        .length = NW_BUF_LEN - 3,
+        .checksum = 0,
+        .payload = {0}
+    };
+
+    struct TestMessage3 {
+        uint8_t a[3];
+    } msg;
+
+    uint16_t return_val = pack_nw_buff(&buffer, (void*)&msg, sizeof(msg));
+    assert_int_equal(return_val, 0);
+    /* Buffer must be unchanged. */
+    assert_int_equal(buffer.length, NW_BUF_LEN - 3);
 }
 
 static void test_unpack_one(void **state) {
@@ -214,7 +237,7 @@ static void test_unpack_one(void **state) {
     assert_int_not_equal(data_p, NULL);
     assert_memory_equal(&test_message_sent, &test_message_received, sizeof(test_message_sent));
     assert_memory_equal(data_p, &test_message_received, sizeof(test_message_sent));
-    assert_int_equal(accumilator, alligned32(sizeof(test_message_sent)));
+    assert_int_equal(accumilator, aligned32(sizeof(test_message_sent)));
 }
 
 /* Populating the end of the payload value is optional. */
@@ -238,7 +261,7 @@ static void test_unpack_null_accumilator(void **state) {
     struct TestMessage test_message_received;
 
     struct NWBuffer buffer = {
-        .length = alligned32(sizeof(test_message_sent)),
+        .length = aligned32(sizeof(test_message_sent)),
         .checksum = 42,
         .payload = {0}
     };
@@ -287,7 +310,7 @@ static void test_unpack_multi(void **state) {
     struct TestMessage test_message_received;
 
     struct NWBuffer buffer = {
-        .length = alligned32(sizeof(struct TestMessage)) * 3,
+        .length = aligned32(sizeof(struct TestMessage)) * 3,
         .checksum = 42,
         .payload = {0}
     };
@@ -299,13 +322,13 @@ static void test_unpack_multi(void **state) {
           );
 
     memcpy(
-            ((uint8_t*)&(buffer.payload) + alligned32(sizeof(struct TestMessage))),
+            ((uint8_t*)&(buffer.payload) + aligned32(sizeof(struct TestMessage))),
             &test_message_sent_2,
             sizeof(struct TestMessage)
           );
     
     memcpy(
-            ((uint8_t*)&(buffer.payload) + alligned32(sizeof(struct TestMessage)) * 2),
+            ((uint8_t*)&(buffer.payload) + aligned32(sizeof(struct TestMessage)) * 2),
             &test_message_sent_3,
             sizeof(struct TestMessage)
           );
@@ -325,13 +348,13 @@ static void test_unpack_multi(void **state) {
     assert_int_not_equal(data_p, NULL);
     assert_memory_equal(&test_message_sent_1, &test_message_received, sizeof(struct TestMessage));
     assert_memory_equal(&test_message_sent_1, data_p, sizeof(struct TestMessage));
-    assert_int_equal(accumilator, alligned32(sizeof(struct TestMessage)));
+    assert_int_equal(accumilator, aligned32(sizeof(struct TestMessage)));
 
     
     // Unpack 2nd message.
     data_p = unpack_nw_buff(
             &buffer,
-            alligned32(sizeof(struct TestMessage)),
+            aligned32(sizeof(struct TestMessage)),
             &accumilator,
             &test_message_received,
             sizeof(test_message_received));
@@ -339,13 +362,13 @@ static void test_unpack_multi(void **state) {
     assert_int_not_equal(data_p, NULL);
     assert_memory_equal(&test_message_sent_2, &test_message_received, sizeof(struct TestMessage));
     assert_memory_equal(&test_message_sent_2, data_p, sizeof(struct TestMessage));
-    assert_int_equal(accumilator, alligned32(sizeof(struct TestMessage)) * 2);
+    assert_int_equal(accumilator, aligned32(sizeof(struct TestMessage)) * 2);
 
 
     // Unpack 3rd message.
     data_p = unpack_nw_buff(
             &buffer,
-            alligned32(sizeof(struct TestMessage)) * 2,
+            aligned32(sizeof(struct TestMessage)) * 2,
             &accumilator,
             &test_message_received,
             sizeof(test_message_received));
@@ -353,7 +376,7 @@ static void test_unpack_multi(void **state) {
     assert_int_not_equal(data_p, NULL);
     assert_memory_equal(&test_message_sent_3, &test_message_received, sizeof(struct TestMessage));
     assert_memory_equal(&test_message_sent_3, data_p, sizeof(struct TestMessage));
-    assert_int_equal(accumilator, alligned32(sizeof(struct TestMessage)) * 3);
+    assert_int_equal(accumilator, aligned32(sizeof(struct TestMessage)) * 3);
 }
 
 /* The same variable can be used to pass the input offset and receive the end of payload value. */
@@ -391,7 +414,7 @@ static void test_unpack_multi_accumilating(void **state) {
     struct TestMessage test_message_received;
 
     struct NWBuffer buffer = {
-        .length = alligned32(sizeof(struct TestMessage)) * 3,
+        .length = aligned32(sizeof(struct TestMessage)) * 3,
         .checksum = 42,
         .payload = {0}
     };
@@ -403,13 +426,13 @@ static void test_unpack_multi_accumilating(void **state) {
           );
 
     memcpy(
-            ((uint8_t*)&(buffer.payload) + alligned32(sizeof(struct TestMessage))),
+            ((uint8_t*)&(buffer.payload) + aligned32(sizeof(struct TestMessage))),
             &test_message_sent_2,
             sizeof(struct TestMessage)
           );
     
     memcpy(
-            ((uint8_t*)&(buffer.payload) + alligned32(sizeof(struct TestMessage) * 2)),
+            ((uint8_t*)&(buffer.payload) + aligned32(sizeof(struct TestMessage) * 2)),
             &test_message_sent_3,
             sizeof(struct TestMessage)
           );
@@ -429,7 +452,7 @@ static void test_unpack_multi_accumilating(void **state) {
     assert_int_not_equal(data_p, NULL);
     assert_memory_equal(&test_message_sent_1, &test_message_received, sizeof(struct TestMessage));
     assert_memory_equal(&test_message_sent_1, data_p, sizeof(struct TestMessage));
-    assert_int_equal(accumilator, alligned32(sizeof(struct TestMessage)));
+    assert_int_equal(accumilator, aligned32(sizeof(struct TestMessage)));
 
     
     // Unpack 2nd message.
@@ -443,7 +466,7 @@ static void test_unpack_multi_accumilating(void **state) {
     assert_int_not_equal(data_p, NULL);
     assert_memory_equal(&test_message_sent_2, &test_message_received, sizeof(struct TestMessage));
     assert_memory_equal(&test_message_sent_2, data_p, sizeof(struct TestMessage));
-    assert_int_equal(accumilator, alligned32(sizeof(struct TestMessage)) * 2);
+    assert_int_equal(accumilator, aligned32(sizeof(struct TestMessage)) * 2);
 
 
     // Unpack 3rd message.
@@ -457,7 +480,7 @@ static void test_unpack_multi_accumilating(void **state) {
     assert_int_not_equal(data_p, NULL);
     assert_memory_equal(&test_message_sent_3, &test_message_received, sizeof(struct TestMessage));
     assert_memory_equal(&test_message_sent_3, data_p, sizeof(struct TestMessage));
-    assert_int_equal(accumilator, alligned32(sizeof(struct TestMessage)) * 3);
+    assert_int_equal(accumilator, aligned32(sizeof(struct TestMessage)) * 3);
 }
 
 /* Try to unpack a message beyond the specified data length. */
@@ -481,12 +504,12 @@ static void test_unpack_invalid_length(void **state) {
     struct TestMessage test_message_received;
 
     struct NWBuffer buffer = {
-        .length = alligned32(sizeof(struct TestMessage)) + 123,
+        .length = aligned32(sizeof(struct TestMessage)) + 123,
         .checksum = 42,
         .payload = {0}
     };
 
-    size_t start_offset = buffer.length - alligned32(sizeof(struct TestMessage));
+    size_t start_offset = buffer.length - aligned32(sizeof(struct TestMessage));
 
     memcpy(
             (uint8_t*)&(buffer.payload) + start_offset,
@@ -513,7 +536,7 @@ static void test_unpack_invalid_length(void **state) {
     // Request 2nd message but it exceeds the reported data length.
     data_p = unpack_nw_buff(
             &buffer,
-            start_offset + alligned32(sizeof(struct TestMessage)),
+            start_offset + aligned32(sizeof(struct TestMessage)),
             NULL,
             &test_message_received,
             sizeof(test_message_received));
@@ -535,12 +558,12 @@ static void test_unpack_invalid_length_off_by_one(void **state) {
     struct TestMessage test_message_received;
 
     struct NWBuffer buffer = {
-        .length = alligned32(sizeof(struct TestMessage)) + 123,
+        .length = aligned32(sizeof(struct TestMessage)) + 123,
         .checksum = 42,
         .payload = {0}
     };
 
-    size_t start_offset = buffer.length - alligned32(sizeof(struct TestMessage));
+    size_t start_offset = buffer.length - aligned32(sizeof(struct TestMessage));
 
 
     // Unpack message fails as it finishes beyond buffer.length.
@@ -597,7 +620,7 @@ static void test_end_to_end(void **state) {
     };
     
     struct TestMessage test_message_send;
-    memset(&test_message_send, 0, alligned32(sizeof(test_message_send)));
+    memset(&test_message_send, 0, aligned32(sizeof(test_message_send)));
     test_message_send.a = 123;
     test_message_send.b = 4567;
     test_message_send.c = -8901;
@@ -630,7 +653,7 @@ static void test_end_to_end(void **state) {
     assert_memory_equal(&test_message_send, &test_message_receive, sizeof(struct TestMessage));
     assert_memory_equal(&test_message_send, data_p, sizeof(struct TestMessage));
 
-    assert_int_equal(buffer.checksum, checksum(0, 0, alligned32(sizeof(test_message_send)), buffer.payload));
+    assert_int_equal(buffer.checksum, checksum(0, 0, aligned32(sizeof(test_message_send)), buffer.payload));
     mock_checksum = 0;
 }
 
@@ -683,7 +706,7 @@ static void test_end_to_end_multi(void **state) {
 
     // Pack first thing, ( Message_timing)
     buffered_size = pack_nw_buff(&buffer, &m0, sizeof(m0));
-    expected_size = alligned32(sizeof(m0));
+    expected_size = aligned32(sizeof(m0));
     total_size += expected_size;
     assert_int_equal(buffered_size, expected_size);
     assert_int_equal(total_size, buffer.length);
@@ -695,12 +718,12 @@ static void test_end_to_end_multi(void **state) {
 
     // Pack next thing. (Message_gpio_config)
     buffered_size = pack_nw_buff(&buffer, &m1, sizeof(m1));
-    expected_size = alligned32(sizeof(m1));
+    expected_size = aligned32(sizeof(m1));
     total_size += expected_size;
     assert_int_equal(buffered_size, expected_size);
     assert_int_equal(total_size, buffer.length);
     // Check buffer has correct data.
-    m1_p = (void*)buffer.payload + alligned32(sizeof(m0));
+    m1_p = (void*)buffer.payload + aligned32(sizeof(m0));
     assert_int_equal(m1_p->type, m1.type);
     assert_int_equal(m1_p->gpio_type, m1.gpio_type);
     assert_int_equal(m1_p->gpio_count, m1.gpio_count);
@@ -709,12 +732,12 @@ static void test_end_to_end_multi(void **state) {
 
     // Pack next thing. (Message_set_joints_pos)
     buffered_size = pack_nw_buff(&buffer, &m2, sizeof(m2));
-    expected_size = alligned32(sizeof(m2));
+    expected_size = aligned32(sizeof(m2));
     total_size += expected_size;
     assert_int_equal(buffered_size, expected_size);
     assert_int_equal(total_size, buffer.length);
     // Check buffer has correct data.
-    m2_p = (void*)buffer.payload + alligned32(sizeof(m0)) + alligned32(sizeof(m1));
+    m2_p = (void*)buffer.payload + aligned32(sizeof(m0)) + aligned32(sizeof(m1));
     assert_int_equal(m2_p->type, m2.type);
     for(size_t joint = 0; joint < MAX_JOINT; joint++) {
         assert_double_equal(m2_p->position[joint], m2.position[joint], 0.01);
@@ -724,12 +747,12 @@ static void test_end_to_end_multi(void **state) {
     // Pack next thing. (Message_set_joints_pos)
     // Add this one twice.
     buffered_size = pack_nw_buff(&buffer, &m2, sizeof(m2));
-    expected_size = alligned32(sizeof(m2));
+    expected_size = aligned32(sizeof(m2));
     total_size += expected_size;
     assert_int_equal(buffered_size, expected_size);
     assert_int_equal(total_size, buffer.length);
     // Check buffer has correct data.
-    m2_p = (void*)buffer.payload + alligned32(sizeof(m0)) + alligned32(sizeof(m1)) + alligned32(sizeof(m2));
+    m2_p = (void*)buffer.payload + aligned32(sizeof(m0)) + aligned32(sizeof(m1)) + aligned32(sizeof(m2));
     assert_int_equal(m2_p->type, m2.type);
     for(size_t joint = 0; joint < MAX_JOINT; joint++) {
         assert_double_equal(m2_p->position[joint], m2.position[joint], 0.01);
@@ -750,7 +773,7 @@ static void test_end_to_end_multi(void **state) {
     assert_int_equal(m0.type, m0_p->type);
     assert_int_equal(m0.update_id, m0_p->update_id);
     assert_int_equal(m0.time, m0_p->time);
-    assert_int_equal(offset, alligned32(sizeof(m0)));
+    assert_int_equal(offset, aligned32(sizeof(m0)));
 
     m1_p = unpack_nw_buff(&buffer, offset, &offset, NULL, sizeof(struct Message_gpio_config));
     assert_int_not_equal(m1_p, NULL);
@@ -761,7 +784,7 @@ static void test_end_to_end_multi(void **state) {
     assert_int_equal(m1.gpio_count, m1_p->gpio_count);
     assert_int_equal(m1.index, m1_p->index);
     assert_int_equal(m1.address, m1_p->address);
-    assert_int_equal(offset, alligned32(sizeof(m0)) + alligned32(sizeof(m1)));
+    assert_int_equal(offset, aligned32(sizeof(m0)) + aligned32(sizeof(m1)));
 
     m2_p = unpack_nw_buff(&buffer, offset, &offset, NULL, sizeof(struct Message_set_joints_pos));
     assert_int_not_equal(m2_p, NULL);
@@ -772,7 +795,7 @@ static void test_end_to_end_multi(void **state) {
         assert_double_equal(m2.position[joint], m2_p->position[joint], 0.01);
         assert_double_equal(m2.velocity[joint], m2_p->velocity[joint], 0.01);
     }
-    assert_int_equal(offset, alligned32(sizeof(m0)) + alligned32(sizeof(m1)) + alligned32(sizeof(m2)));
+    assert_int_equal(offset, aligned32(sizeof(m0)) + aligned32(sizeof(m1)) + aligned32(sizeof(m2)));
 
     m2_p = unpack_nw_buff(&buffer, offset, &offset, NULL, sizeof(struct Message_set_joints_pos));
     assert_int_not_equal(m2_p, NULL);
@@ -783,7 +806,7 @@ static void test_end_to_end_multi(void **state) {
         assert_double_equal(m2.position[joint], m2_p->position[joint], 0.01);
         assert_double_equal(m2.velocity[joint], m2_p->velocity[joint], 0.01);
     }
-    assert_int_equal(offset, alligned32(sizeof(m0)) + alligned32(sizeof(m1)) + alligned32(sizeof(m2)) + alligned32(sizeof(m2)));
+    assert_int_equal(offset, aligned32(sizeof(m0)) + aligned32(sizeof(m1)) + aligned32(sizeof(m2)) + aligned32(sizeof(m2)));
 }
 
 int main(void) {
@@ -793,6 +816,7 @@ int main(void) {
         cmocka_unit_test(test_pack_one_in_dirty_buffer),
         cmocka_unit_test(test_pack_multiple),
         cmocka_unit_test(test_pack_overflow),
+        cmocka_unit_test(test_pack_overflow_aligned),
         cmocka_unit_test(test_unpack_one),
         cmocka_unit_test(test_unpack_null_accumilator),
         cmocka_unit_test(test_unpack_multi),

@@ -4,6 +4,7 @@
 #include <sys/types.h>
 #include <stdint.h>
 #include <string.h>
+#include <assert.h>
 
 // Must be even number as the checksum is calculated on uint16_t chunks which
 // account for 2 bytes.
@@ -14,8 +15,11 @@ struct NWBuffer {
     uint16_t checksum;
     uint8_t payload[NW_BUF_LEN];
 };
+/* recvfrom() writes raw bytes directly into this struct, so the layout must
+ * match the wire format exactly with no padding. */
+static_assert(sizeof(struct NWBuffer) == NW_BUF_LEN + 4, "NWBuffer layout mismatch");
 
-size_t alligned32(size_t input);
+size_t aligned32(size_t input);
 
 size_t pack_nw_buff(struct NWBuffer* buffer, void* new_data, size_t new_data_len);
 
@@ -31,7 +35,6 @@ size_t checkNWBuff(struct NWBuffer* buffer);
 
 void reset_nw_buf(struct NWBuffer* buffer);
 
-//uint16_t checksum(uint16_t val_in, void* data, uint16_t data_len);
 uint16_t checksum(uint16_t val_in, size_t pos_in, size_t pos_end, void* data);
 
 

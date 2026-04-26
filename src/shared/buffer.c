@@ -1,15 +1,15 @@
 #include "buffer.h"
 #include <stdio.h>
 
-size_t alligned32(size_t input) {
+size_t aligned32(size_t input) {
   return input + 3 - ((input - 1) % 4);
 }
 
 size_t pack_nw_buff(struct NWBuffer* buffer, void* new_data, size_t new_data_len) {
   // 32bit align value.
-  size_t new_data_len_alligned = alligned32(new_data_len);
+  size_t new_data_len_aligned = aligned32(new_data_len);
 
-  if(buffer->length + new_data_len > NW_BUF_LEN) {
+  if(buffer->length + new_data_len_aligned > NW_BUF_LEN) {
     // Buffer full.
     return 0;
   }
@@ -18,14 +18,14 @@ size_t pack_nw_buff(struct NWBuffer* buffer, void* new_data, size_t new_data_len
     return 0;
   }
 
-  memset(buffer->payload + buffer->length, 0, new_data_len_alligned);
+  memset(buffer->payload + buffer->length, 0, new_data_len_aligned);
   memcpy(buffer->payload + buffer->length, new_data, new_data_len);
 
   buffer->checksum = checksum(
-      buffer->checksum, buffer->length, buffer->length + new_data_len_alligned, buffer->payload);
-  buffer->length += new_data_len_alligned;
+      buffer->checksum, buffer->length, buffer->length + new_data_len_aligned, buffer->payload);
+  buffer->length += new_data_len_aligned;
 
-  return new_data_len_alligned;
+  return new_data_len_aligned;
 }
 
 /* Returns pointer to struct position within network packet.
@@ -38,9 +38,9 @@ void* unpack_nw_buff(
     size_t dest_container_len
 ) {
   // 32bit align value.
-  size_t dest_container_len_alligned = alligned32(dest_container_len);
+  size_t dest_container_len_aligned = aligned32(dest_container_len);
 
-  if(payload_offset + dest_container_len_alligned > buffer->length) {
+  if(payload_offset + dest_container_len_aligned > buffer->length) {
     // Requested data overlaps end of buffer.
     // This implies we've reached the end of the valid data.
     return NULL;
@@ -59,7 +59,7 @@ void* unpack_nw_buff(
   }
 
   if(new_payload_offset) {
-    *new_payload_offset = payload_offset += dest_container_len_alligned;
+    *new_payload_offset = payload_offset += dest_container_len_aligned;
   }
 
   return data_p;

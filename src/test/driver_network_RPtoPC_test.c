@@ -194,7 +194,7 @@ static void test_joint_metrics(void **state) {
     };
 
     memcpy(buffer.payload, &message, sizeof(message));
-    buffer.length = 4;  /* alligned32(sizeof(Reply_joint_metrics) = 3) */
+    buffer.length = 4;  /* aligned32(sizeof(Reply_joint_metrics) = 3) */
     buffer.checksum = checksum(0, 0, buffer.length, buffer.payload);
 
     process_data(
@@ -232,7 +232,7 @@ static void test_joint_metrics_ema_ratios(void **state) {
         .underrun_occurred = 0,
     };
     memcpy(buffer.payload, &message, sizeof(message));
-    buffer.length    = 4;  /* alligned32(sizeof(Reply_joint_metrics) = 3) */
+    buffer.length    = 4;  /* aligned32(sizeof(Reply_joint_metrics) = 3) */
     buffer.checksum  = checksum(0, 0, buffer.length, buffer.payload);
     process_data(&buffer, &data, &mess_received_count,
                  buffer.length + sizeof(buffer.length) + sizeof(buffer.checksum),
@@ -292,7 +292,7 @@ static void test_unpack_spindle_speed(void **state) {
     *data.spindle_speed_in[0] = 1500.0;
 
     memcpy(buffer.payload, &reply, sizeof(reply));
-    buffer.length = sizeof(reply);  /* sizeof = 24, alligned32(24) = 24 */
+    buffer.length = sizeof(reply);  /* sizeof = 24, aligned32(24) = 24 */
 
     bool result = unpack_spindle_speed(&buffer, &rx_offset, &received_count, &data);
 
@@ -300,7 +300,7 @@ static void test_unpack_spindle_speed(void **state) {
     assert_int_equal(received_count, 1);
     assert_double_equal(*data.spindle_speed_out[0], 1500.0, 0.01);
     assert_true(*data.spindle_at_speed[0]);  /* |1500 - 1500| < 10 */
-    assert_int_equal(rx_offset, 24);  /* sizeof(Reply_spindle_speed) = 24 = alligned32(24) */
+    assert_int_equal(rx_offset, 24);  /* sizeof(Reply_spindle_speed) = 24 = aligned32(24) */
 }
 
 static void test_unpack_spindle_not_at_speed(void **state) {
@@ -351,13 +351,13 @@ static void test_unpack_spindle_config(void **state) {
         .bitrate        = 19200,
     };
     memcpy(buffer.payload, &reply, sizeof(reply));
-    buffer.length = 8;  /* sizeof(reply) = 6, alligned32(6) = 8 */
+    buffer.length = 8;  /* sizeof(reply) = 6, aligned32(6) = 8 */
 
     bool result = unpack_spindle_config(&buffer, &rx_offset, &received_count, last_spindle_config);
 
     assert_true(result);
     assert_int_equal(received_count, 1);
-    assert_int_equal(rx_offset, 8);  /* alligned32(sizeof(reply)) = 8 */
+    assert_int_equal(rx_offset, 8);  /* aligned32(sizeof(reply)) = 8 */
     assert_int_equal(last_spindle_config[0].modbus_address, 2);
     assert_int_equal(last_spindle_config[0].vfd_type, 1);
     assert_int_equal(last_spindle_config[0].bitrate, 19200);
