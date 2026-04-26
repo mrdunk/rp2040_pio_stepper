@@ -189,19 +189,19 @@ static void test_joint_metrics(void **state) {
    
     struct Reply_joint_metrics message = {
         .type = REPLY_JOINT_METRICS,
-        .overrun_count  = {10, 20, 30, 40},
-        .underrun_count = {1, 2, 3, 4}
+        .overrun_occurred  = 1,
+        .underrun_occurred = 1,
     };
 
     memcpy(buffer.payload, &message, sizeof(message));
-    buffer.length = sizeof(message);
+    buffer.length = 4;  /* alligned32(sizeof(Reply_joint_metrics) = 3) */
     buffer.checksum = checksum(0, 0, buffer.length, buffer.payload);
 
     process_data(
             &buffer,
             &data,
             &mess_received_count,
-            sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum),
+            buffer.length + sizeof(buffer.length) + sizeof(buffer.checksum),
             NULL,
             NULL,
             NULL
@@ -225,21 +225,21 @@ static void test_joint_metrics_ema_ratios(void **state) {
     data.ema_overrun  = 2.0;
     data.ema_underrun = 2.0;
 
-    /* Send message with overrun=4 total (1+1+1+1), underrun=0. */
+    /* Send message with overrun_occurred=1, underrun_occurred=0. */
     struct Reply_joint_metrics message = {
-        .type = REPLY_JOINT_METRICS,
-        .overrun_count  = {1, 1, 1, 1},
-        .underrun_count = {0, 0, 0, 0}
+        .type              = REPLY_JOINT_METRICS,
+        .overrun_occurred  = 1,
+        .underrun_occurred = 0,
     };
     memcpy(buffer.payload, &message, sizeof(message));
-    buffer.length    = sizeof(message);
+    buffer.length    = 4;  /* alligned32(sizeof(Reply_joint_metrics) = 3) */
     buffer.checksum  = checksum(0, 0, buffer.length, buffer.payload);
     process_data(&buffer, &data, &mess_received_count,
-                 sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum),
+                 buffer.length + sizeof(buffer.length) + sizeof(buffer.checksum),
                  NULL, NULL, NULL);
 
-    /* After one EMA step with total_overrun=4, total_underrun=0:
-     *   ema_overrun  = 2.0 * (1 - α) + 4 * α  (α = 1/1000, so ≈ 2.002)
+    /* After one EMA step with overrun=1, underrun=0:
+     *   ema_overrun  = 2.0 * (1 - α) + 1 * α  (α = 1/1000, so ≈ 1.999)
      *   ema_underrun = 2.0 * (1 - α) + 0 * α  (≈ 1.998)
      * Both ratios reflect their respective EMA values. */
     assert_true(*data.metric_overrun_ratio > 0.0);
@@ -248,10 +248,12 @@ static void test_joint_metrics_ema_ratios(void **state) {
     /* With ema_underrun = 0 and zero underrun counts, underrun_ratio → 0. */
     data.ema_overrun  = 1000.0;
     data.ema_underrun = 0.0;
+    message.overrun_occurred  = 1;
+    message.underrun_occurred = 0;
     memcpy(buffer.payload, &message, sizeof(message));
     buffer.checksum = checksum(0, 0, buffer.length, buffer.payload);
     process_data(&buffer, &data, &mess_received_count,
-                 sizeof(message) + sizeof(buffer.length) + sizeof(buffer.checksum),
+                 buffer.length + sizeof(buffer.length) + sizeof(buffer.checksum),
                  NULL, NULL, NULL);
     assert_true(*data.metric_underrun_ratio < 0.01);
 
@@ -260,10 +262,10 @@ static void test_joint_metrics_ema_ratios(void **state) {
     data.ema_underrun = 0.0;
     struct Reply_joint_metrics zero_msg = { .type = REPLY_JOINT_METRICS };
     memcpy(buffer.payload, &zero_msg, sizeof(zero_msg));
-    buffer.length   = sizeof(zero_msg);
+    buffer.length   = 4;
     buffer.checksum = checksum(0, 0, buffer.length, buffer.payload);
     process_data(&buffer, &data, &mess_received_count,
-                 sizeof(zero_msg) + sizeof(buffer.length) + sizeof(buffer.checksum),
+                 buffer.length + sizeof(buffer.length) + sizeof(buffer.checksum),
                  NULL, NULL, NULL);
     assert_float_equal(*data.metric_underrun_ratio, 0.0, 1e-9);
 }

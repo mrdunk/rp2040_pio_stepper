@@ -515,10 +515,14 @@ bool serialise_joint_metrics(struct NWBuffer* tx_buf) {
   struct Reply_joint_metrics reply;
   reply.type = REPLY_JOINT_METRICS;
 
+  uint32_t any_overrun  = 0;
+  uint32_t any_underrun = 0;
   for(size_t joint = 0; joint < MAX_JOINT; joint++) {
-    reply.overrun_count[joint]  = get_and_reset_overrun_count(joint);
-    reply.underrun_count[joint] = get_and_reset_underrun_count(joint);
+    any_overrun  |= get_and_reset_overrun_count(joint);
+    any_underrun |= get_and_reset_underrun_count(joint);
   }
+  reply.overrun_occurred  = any_overrun  ? 1 : 0;
+  reply.underrun_occurred = any_underrun ? 1 : 0;
 
   uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
 

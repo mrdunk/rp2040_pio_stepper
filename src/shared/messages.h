@@ -165,8 +165,8 @@ struct Reply_gpio_config {
 
 struct Reply_joint_metrics {
   uint8_t type;
-  uint32_t overrun_count[MAX_JOINT];  /* updated_from_c0 > 1: N-1 packets discarded per tick. */
-  uint32_t underrun_count[MAX_JOINT]; /* updated_from_c0 == 0: Core1 ran with no new packet. */
+  uint8_t overrun_occurred;   /* 1 if any joint overran this tick, else 0 */
+  uint8_t underrun_occurred;  /* 1 if any joint underran this tick, else 0 */
 };
 
 struct Reply_gpio {

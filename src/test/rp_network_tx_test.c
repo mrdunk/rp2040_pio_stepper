@@ -110,28 +110,63 @@ static void test_serialise_joint_movement(void **state) {
     }
 }
 
+/* Any overrun/underrun across joints collapses to a single occurred flag. */
 static void test_serialise_joint_metrics(void **state) {
     (void) state;
 
     struct NWBuffer tx_buf = {0};
 
     for (size_t j = 0; j < MAX_JOINT; j++) {
-        config.joint[j].overrun_count  = j + 1;  /* 1, 2, 3, 4 */
-        config.joint[j].underrun_count = j + 5;  /* 5, 6, 7, 8 */
+        config.joint[j].overrun_count  = j + 1;  /* 1, 2, 3, 4 — all non-zero */
+        config.joint[j].underrun_count = j + 5;  /* 5, 6, 7, 8 — all non-zero */
     }
 
     bool result = serialise_joint_metrics(&tx_buf);
     assert_true(result);
-    assert_int_equal(tx_buf.length, sizeof(struct Reply_joint_metrics));
+    assert_int_equal(tx_buf.length, 4);  /* alligned32(sizeof(Reply_joint_metrics) = 3) */
 
     struct Reply_joint_metrics* reply = (void*)tx_buf.payload;
     assert_int_equal(reply->type, REPLY_JOINT_METRICS);
+    assert_int_equal(reply->overrun_occurred,  1);
+    assert_int_equal(reply->underrun_occurred, 1);
     for (size_t j = 0; j < MAX_JOINT; j++) {
-        assert_int_equal(reply->overrun_count[j],  j + 1);
-        assert_int_equal(reply->underrun_count[j], j + 5);
         assert_int_equal(config.joint[j].overrun_count,  0);
         assert_int_equal(config.joint[j].underrun_count, 0);
     }
+}
+
+/* Only joint 2 has an overrun — occurred flag is still 1. */
+static void test_serialise_joint_metrics_partial_events(void **state) {
+    (void) state;
+
+    struct NWBuffer tx_buf = {0};
+    config.joint[2].overrun_count  = 3;
+    config.joint[1].underrun_count = 7;
+
+    bool result = serialise_joint_metrics(&tx_buf);
+    assert_true(result);
+
+    struct Reply_joint_metrics* reply = (void*)tx_buf.payload;
+    assert_int_equal(reply->overrun_occurred,  1);
+    assert_int_equal(reply->underrun_occurred, 1);
+    for (size_t j = 0; j < MAX_JOINT; j++) {
+        assert_int_equal(config.joint[j].overrun_count,  0);
+        assert_int_equal(config.joint[j].underrun_count, 0);
+    }
+}
+
+/* No events: all joint counts zero — occurred flags stay 0. */
+static void test_serialise_joint_metrics_no_events(void **state) {
+    (void) state;
+
+    struct NWBuffer tx_buf = {0};
+
+    bool result = serialise_joint_metrics(&tx_buf);
+    assert_true(result);
+
+    struct Reply_joint_metrics* reply = (void*)tx_buf.payload;
+    assert_int_equal(reply->overrun_occurred,  0);
+    assert_int_equal(reply->underrun_occurred, 0);
 }
 
 /* Out of space in the buffer causes error. */
@@ -163,6 +198,8 @@ int main(void) {
         cmocka_unit_test(test_serialise_timing_overflow),
         cmocka_unit_test(test_serialise_joint_movement),
         cmocka_unit_test(test_serialise_joint_metrics),
+        cmocka_unit_test(test_serialise_joint_metrics_partial_events),
+        cmocka_unit_test(test_serialise_joint_metrics_no_events),
         cmocka_unit_test(test_serialise_overflow)
     };
 

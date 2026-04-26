@@ -423,15 +423,8 @@ bool unpack_joint_metrics(
 ) {
   UNPACK_MSG(struct Reply_joint_metrics, reply, rx_buf, rx_offset);
 
-  uint32_t total_overrun  = 0;
-  uint32_t total_underrun = 0;
-  for(size_t joint = 0; joint < MAX_JOINT; joint++) {
-    total_overrun  += reply->overrun_count[joint];
-    total_underrun += reply->underrun_count[joint];
-  }
-
-  data->ema_overrun  = data->ema_overrun  * (1.0 - EMA_ALPHA) + total_overrun  * EMA_ALPHA;
-  data->ema_underrun = data->ema_underrun * (1.0 - EMA_ALPHA) + total_underrun * EMA_ALPHA;
+  data->ema_overrun  = data->ema_overrun  * (1.0 - EMA_ALPHA) + reply->overrun_occurred  * EMA_ALPHA;
+  data->ema_underrun = data->ema_underrun * (1.0 - EMA_ALPHA) + reply->underrun_occurred * EMA_ALPHA;
 
   *data->metric_overrun_ratio  = (hal_float_t)data->ema_overrun;
   *data->metric_underrun_ratio = (hal_float_t)data->ema_underrun;
