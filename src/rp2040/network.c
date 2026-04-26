@@ -2,8 +2,12 @@
 #include <stdio.h>
 #include <stddef.h>
 
+#ifdef BUILD_TESTS
+#include "../test/mocks/socket_mocks.h"
+#else
 // w5x00 related.
 #include "socket.h"
+#endif
 
 #include "config.h"
 #include "buffer.h"
@@ -29,11 +33,11 @@ int32_t get_UDP(
      case SOCK_UDP :
        if((size = getSn_RX_RSR(socket_num)) > 0) {
          // Receiving data.
-         if(size > NW_BUF_LEN) {
-           size = NW_BUF_LEN;
+         if(size > sizeof(struct NWBuffer)) {
+           size = sizeof(struct NWBuffer);
          }
 
-         ret = recvfrom(socket_num, (void*)rx_buf, size, destip, destport);
+         ret = recvfrom(socket_num, (void*)rx_buf, (uint16_t)size, destip, destport);
          //printf("RECEIVED: %u %u.%u.%u.%u : %u\r\n",
          //    socket_num, destip[0], destip[1], destip[2], destip[3], *destport);
          if(ret <= 0) {
@@ -97,4 +101,3 @@ int32_t put_UDP(
   }
   return 1;
 }
-

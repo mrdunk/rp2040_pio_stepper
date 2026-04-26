@@ -165,6 +165,24 @@ add_test(
 
 
 add_executable(
+  rpGetUdpTest
+  ${CMAKE_CURRENT_SOURCE_DIR}/rp_get_udp_test.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/network.c
+  ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
+  ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/socket_mocks.c
+  )
+target_link_libraries(
+  rpGetUdpTest
+  cmocka
+  )
+add_test(
+  rpGetUdpTest
+  rpGetUdpTest
+  )
+
+
+add_executable(
   sharedBufferTest
   ${CMAKE_CURRENT_SOURCE_DIR}/shared_buffer_test.c
   )
