@@ -207,7 +207,9 @@ bool unpack_joint_config(
       &max_accel,
       NULL);
 
-  serialise_joint_config(joint, tx_buf);
+  if(!serialise_joint_config(joint, tx_buf)) {
+    printf("WARN: TX buffer full, dropping joint config reply.\n");
+  }
 
   (*received_count)++;
   return true;
@@ -285,7 +287,9 @@ bool unpack_gpio_config(
       break;
   }
 
-  serialise_gpio_config(gpio_count, tx_buf);
+  if(!serialise_gpio_config(gpio_count, tx_buf)) {
+    printf("WARN: TX buffer full, dropping gpio config reply.\n");
+  }
 
   (*received_count)++;
   return true;

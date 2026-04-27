@@ -503,7 +503,6 @@ bool serialise_joint_config(const uint32_t joint, struct NWBuffer* tx_buf) {
   uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
 
   if(!tx_buf_len) {
-    printf("WARN: TX length greater than buffer size.\n");
     return false;
   }
 

@@ -276,7 +276,6 @@ bool serialise_gpio_config(const uint8_t gpio, struct NWBuffer* tx_buf) {
   size_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
 
   if(!tx_buf_len) {
-    printf("WARN: TX length greater than buffer size.\n");
     return false;
   }
 

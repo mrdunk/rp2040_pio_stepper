@@ -535,19 +535,19 @@ static void write_port(void *arg, long period)
     pack_success = pack_success && serialise_spindle_speed_in(&buffer, data);
   }
 
-  if(pack_success) {
-    if (send_data(device_num, &buffer) != 0) {
-      cooloff = 2000;
-      if (errno != last_errno) {
-        last_errno = errno;
-        log_network_error("send", device_num, errno);
-      }
-      send_fail_count++;
-      if (!(send_fail_count % 10)) {
-        last_errno = 0;
-      }
-      return;
+  if(!pack_success) {
+    printf("WARN: TX packet dropped — buffer overflow packing servo cycle %u\n", count);
+  } else if (send_data(device_num, &buffer) != 0) {
+    cooloff = 2000;
+    if (errno != last_errno) {
+      last_errno = errno;
+      log_network_error("send", device_num, errno);
     }
+    send_fail_count++;
+    if (!(send_fail_count % 10)) {
+      last_errno = 0;
+    }
+    return;
   }
   send_fail_count = 0;
 
