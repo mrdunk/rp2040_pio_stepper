@@ -1,7 +1,7 @@
 loadrt [KINS]KINEMATICS
 loadrt [EMCMOT]EMCMOT base_period_nsec=[EMCMOT]BASE_PERIOD servo_period_nsec=[EMCMOT]SERVO_PERIOD num_joints=[KINS]JOINTS
 loadrt hal_rp2040_eth
-loadrt mult2 count=8
+loadrt mult2 count=6
 loadrt and2 count=1
 
 addf motion-command-handler servo-thread
@@ -13,8 +13,6 @@ addf mult2.2 servo-thread
 addf mult2.3 servo-thread
 addf mult2.4 servo-thread
 addf mult2.5 servo-thread
-addf mult2.6 servo-thread
-addf mult2.7 servo-thread
 addf and2.0 servo-thread
 
 
@@ -90,24 +88,9 @@ net zpos-fb  rp2040_eth.0.joint.2.fb-pos => joint.2.motor-pos-fb
 net estop-out => rp2040_eth.0.joint.2.enable
 
 
-# Joint 3 — A AXIS (J5: GP6=STEP, GP7=DIR via 74HCT541 buffer)
-setp rp2040_eth.0.joint.3.scale          [JOINT_3]SCALE
-setp rp2040_eth.0.joint.3.gpio-step      6
-setp rp2040_eth.0.joint.3.gpio-dir       7
-
-setp mult2.6.in0 [JOINT_3]MAX_VELOCITY
-setp mult2.6.in1 1.1
-net a-max-velocity rp2040_eth.0.joint.3.max-velocity <= mult2.6.out
-
-setp mult2.7.in0 [JOINT_3]MAX_ACCELERATION
-setp mult2.7.in1 1.0
-net a-max-accel rp2040_eth.0.joint.3.max-accel <= mult2.7.out
-
-net apos-cmd joint.3.motor-pos-cmd => rp2040_eth.0.joint.3.pos-cmd
-net avel-cmd joint.3.vel-cmd       => rp2040_eth.0.joint.3.vel-cmd
-net apos-fb  rp2040_eth.0.joint.3.fb-pos => joint.3.motor-pos-fb
-
-net estop-out => rp2040_eth.0.joint.3.enable
+# J5 (A-axis stepper connector) is wired to GP6=STEP, GP7=DIR via 74HCT541 buffer.
+# To enable: add AXIS_A/JOINT_3 to the INI, set JOINTS=4, COORDINATES=XYZA,
+# increase mult2 count to 8, and add the joint.3 block mirroring joint.2 above.
 
 
 # Metrics
