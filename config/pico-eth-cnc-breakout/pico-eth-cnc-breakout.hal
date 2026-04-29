@@ -1,18 +1,11 @@
 loadrt [KINS]KINEMATICS
 loadrt [EMCMOT]EMCMOT base_period_nsec=[EMCMOT]BASE_PERIOD servo_period_nsec=[EMCMOT]SERVO_PERIOD num_joints=[KINS]JOINTS
 loadrt hal_rp2040_eth
-loadrt mult2 count=6
 loadrt and2 count=1
 
 addf motion-command-handler servo-thread
 addf motion-controller servo-thread
 addf rp2040_eth.0.write servo-thread
-addf mult2.0 servo-thread
-addf mult2.1 servo-thread
-addf mult2.2 servo-thread
-addf mult2.3 servo-thread
-addf mult2.4 servo-thread
-addf mult2.5 servo-thread
 addf and2.0 servo-thread
 
 
@@ -33,13 +26,8 @@ setp rp2040_eth.0.joint.0.scale          [JOINT_0]SCALE
 setp rp2040_eth.0.joint.0.gpio-step      0
 setp rp2040_eth.0.joint.0.gpio-dir       1
 
-setp mult2.0.in0 [JOINT_0]MAX_VELOCITY
-setp mult2.0.in1 1.1
-net x-max-velocity rp2040_eth.0.joint.0.max-velocity <= mult2.0.out
-
-setp mult2.1.in0 [JOINT_0]MAX_ACCELERATION
-setp mult2.1.in1 1.0
-net x-max-accel rp2040_eth.0.joint.0.max-accel <= mult2.1.out
+setp rp2040_eth.0.joint.0.max-velocity    [JOINT_0]MAX_VELOCITY
+setp rp2040_eth.0.joint.0.max-accel       [JOINT_0]MAX_ACCELERATION
 
 net xpos-cmd joint.0.motor-pos-cmd => rp2040_eth.0.joint.0.pos-cmd
 net xvel-cmd joint.0.vel-cmd       => rp2040_eth.0.joint.0.vel-cmd
@@ -53,13 +41,8 @@ setp rp2040_eth.0.joint.1.scale          [JOINT_1]SCALE
 setp rp2040_eth.0.joint.1.gpio-step      2
 setp rp2040_eth.0.joint.1.gpio-dir       3
 
-setp mult2.2.in0 [JOINT_1]MAX_VELOCITY
-setp mult2.2.in1 1.1
-net y-max-velocity rp2040_eth.0.joint.1.max-velocity <= mult2.2.out
-
-setp mult2.3.in0 [JOINT_1]MAX_ACCELERATION
-setp mult2.3.in1 1.0
-net y-max-accel rp2040_eth.0.joint.1.max-accel <= mult2.3.out
+setp rp2040_eth.0.joint.1.max-velocity    [JOINT_1]MAX_VELOCITY
+setp rp2040_eth.0.joint.1.max-accel       [JOINT_1]MAX_ACCELERATION
 
 net ypos-cmd joint.1.motor-pos-cmd => rp2040_eth.0.joint.1.pos-cmd
 net yvel-cmd joint.1.vel-cmd       => rp2040_eth.0.joint.1.vel-cmd
@@ -73,13 +56,8 @@ setp rp2040_eth.0.joint.2.scale          [JOINT_2]SCALE
 setp rp2040_eth.0.joint.2.gpio-step      4
 setp rp2040_eth.0.joint.2.gpio-dir       5
 
-setp mult2.4.in0 [JOINT_2]MAX_VELOCITY
-setp mult2.4.in1 1.1
-net z-max-velocity rp2040_eth.0.joint.2.max-velocity <= mult2.4.out
-
-setp mult2.5.in0 [JOINT_2]MAX_ACCELERATION
-setp mult2.5.in1 1.0
-net z-max-accel rp2040_eth.0.joint.2.max-accel <= mult2.5.out
+setp rp2040_eth.0.joint.2.max-velocity    [JOINT_2]MAX_VELOCITY
+setp rp2040_eth.0.joint.2.max-accel       [JOINT_2]MAX_ACCELERATION
 
 net zpos-cmd joint.2.motor-pos-cmd => rp2040_eth.0.joint.2.pos-cmd
 net zvel-cmd joint.2.vel-cmd       => rp2040_eth.0.joint.2.vel-cmd
