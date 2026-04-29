@@ -36,7 +36,7 @@ void mcp23017_init(struct i2c_engine_state *state, i2c_inst_t *i2c, int sda_pin,
   sleep_ms(20);
 }
 
-#define I2C_RESET_PIN 28
+#define I2C_RESET_PIN 22
 #define I2C_SDA_PIN 26
 #define I2C_SCL_PIN 27
 
@@ -124,7 +124,7 @@ void i2c_gpio_poll(struct i2c_gpio_state *gpio) {
     return;
   }
   if (i2c_engine_is_fault(&gpio->engine)) {
-    printf("MCP Fault %02x\n", gpio->cur_chip);
+    printf("MCP Fault chip=%02x abort=%02x\n", gpio->cur_chip, gpio->engine.abort_reason);
     i2c_engine_clear_fault(&gpio->engine);
     i2c_gpio_run_setup_sequence(gpio);
     i2c_engine_run(&gpio->engine);
