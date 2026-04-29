@@ -48,6 +48,8 @@ target_sources(
   pio.c
   ring_buffer.c
   gpio.c
+  i2c.c
+  mcp23017.c
   ../shared/buffer.c
   ../shared/checksum.c
 )
@@ -59,6 +61,7 @@ target_link_libraries(
   hardware_spi
   hardware_dma
   hardware_pio
+  hardware_i2c
   ETHERNET_FILES
   IOLIBRARY_FILES
   LOOPBACK_FILES

@@ -7,6 +7,7 @@
 #else  // BUILD_TESTS
 
 #include "pico/multicore.h"
+#include "i2c.h"
 
 #endif  // BUILD_TESTS
 
@@ -64,6 +65,9 @@ void step_all_joints(void) {
 
 static void core1_tick(void) {
   wait_for_packet();
+#ifndef BUILD_TESTS
+  i2c_gpio_poll(&i2c_gpio);
+#endif
   if (linuxcnc_restart_detected) {
     linuxcnc_restart_detected = false;
     handle_network_timeout();
@@ -73,6 +77,9 @@ static void core1_tick(void) {
     handle_network_recovery();
     step_all_joints();
   }
+#ifndef BUILD_TESTS
+  i2c_gpio_poll(&i2c_gpio);
+#endif
 }
 
 void core1_main(void) {
@@ -96,6 +103,10 @@ void init_core1(void) {
       tight_loop_contents();
     }
   }
+
+#ifndef BUILD_TESTS
+  i2c_gpio_init(&i2c_gpio);
+#endif
 
   multicore_launch_core1(&core1_main);
 }

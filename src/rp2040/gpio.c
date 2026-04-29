@@ -1,8 +1,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "gpio.h"
 #include "config.h"
+#include "gpio.h"
+#include "i2c.h"
 #include "messages.h"
 
 #ifdef BUILD_TESTS
@@ -16,9 +17,10 @@
 #endif  // BUILD_TESTS
 
 
-//uint32_t gpio_i2c_mcp_indexes[MAX_I2C_MCP] = {0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff};
-uint32_t gpio_i2c_mcp_indexes[MAX_I2C_MCP] = {0, 0, 0, 0};
 uint8_t gpio_i2c_mcp_addresses[MAX_I2C_MCP] = {0xff, 0xff, 0xff, 0xff};
+uint8_t gpio_last_type[32 * MAX_I2C_MCP];
+
+struct i2c_gpio_state i2c_gpio;
 
 void update_gpio_config(
     const uint8_t gpio,
@@ -85,7 +87,6 @@ void gpio_set_values(const uint8_t bank, uint32_t values) {
     uint8_t address;
     bool current_value;
     get_gpio_config(gpio, &type, &index, &address, &current_value);
-    //printf("%u\t%#10x\t%u\t%u\n", bank, values, &type, &index);
 
     // Parsed from Message_gpio.
     bool new_value = values & (0x1 << (gpio % 32));
@@ -95,7 +96,7 @@ void gpio_set_values(const uint8_t bank, uint32_t values) {
     }
     config.gpio_confirmation_pending[bank] = true;
 
-    switch(config.gpio[gpio].type) {
+    switch(type) {
       case GPIO_TYPE_NATIVE_OUT_DEBUG:
         printf("DBG GPIO OUT: %u  IO: %u  val: %u\n", gpio, index, new_value);
         // Note: no break.
@@ -103,11 +104,13 @@ void gpio_set_values(const uint8_t bank, uint32_t values) {
         gpio_local_set_out_pin(index, new_value);
         break;
       case GPIO_TYPE_I2C_MCP_OUT:
+      case GPIO_TYPE_I2C_MCP_OUT_PULLUP:
         gpio_i2c_mcp_set_out_pin(index, address, new_value);
         break;
       default:
         break;
     }
+    gpio_last_type[gpio] = type;
 
     update_gpio_config(gpio, NULL, NULL, NULL, &new_value);
   }
@@ -122,68 +125,52 @@ bool gpio_local_get_pin(uint32_t index) {
   return gpio_get(index);
 }
 
-/* Happens before iterating through gpio data.
- * Do any i2c required operations here. */
-void gpio_i2c_mcp_prepare() {
-  for(uint8_t i2c_bucket = 0; i2c_bucket < MAX_I2C_MCP; i2c_bucket++) {
-    // uint8_t i2c_address = gpio_i2c_mcp_addresses[i2c_bucket];
-    // TODO: Any other MCP implementation here.
-  }
-}
-
-/* Find all GPIO pins sharing the same i2c address and put 
- */
-void gpio_i2c_mcp_set_out_pin(uint8_t index, uint8_t address, bool new_value) {
-  // Find which slot this i2c address is being stored in.
-  uint8_t i2c = MAX_I2C_MCP;
+int gpio_i2c_mcp_alloc(uint8_t address) {
+  int i2c = 0, i2c_free = -1;
   for(i2c = 0; i2c < MAX_I2C_MCP; i2c++) {
     if(gpio_i2c_mcp_addresses[i2c] == address) {
-      break;
+      return i2c;
     }
-    if (gpio_i2c_mcp_addresses[i2c] == 0xff) {
-      // Haven't found this address yet.
-      // Since this buffer slot is empty, use it for this address.
-      gpio_i2c_mcp_addresses[i2c] = address;
-      break;
+    if(gpio_i2c_mcp_addresses[i2c] == 0xFF && i2c_free == -1) {
+      i2c_free = i2c;
     }
   }
+  if (i2c_free != -1) {
+    gpio_i2c_mcp_addresses[i2c_free] = address;
+    i2c_gpio.config[i2c_free].i2c_address = address;
+    i2c_gpio.config[i2c_free].type = I2CGPIO_TYPE_MCP23017;
+  }
+  return i2c_free;
+}
 
-  if(i2c >= MAX_I2C_MCP) {
+void gpio_i2c_mcp_set_out_pin(uint8_t index, uint8_t address, bool new_value) {
+  int i2c = gpio_i2c_mcp_alloc(address);
+
+  if(i2c == -1) {
     printf("WARN: Too may i2c addresses. Add: %u  Index: %u\n", address, index);
     return;
   }
 
-  // Add new_value to buffer to be sent to this i2c address.
+  uint8_t bindex = (index >> 3) & 1;
+  uint8_t bitmask = 0x1 << (index & 7);
+  uint8_t *data = &i2c_gpio.config[i2c].output_data[bindex];
   if(new_value) {
-    gpio_i2c_mcp_indexes[i2c] |= (0x1 << index);
+    *data |= bitmask;
   } else {
-    gpio_i2c_mcp_indexes[i2c] &= (~(0x1 << index));
+    *data &= ~bitmask;
   }
 }
 
-/* Happens after iterating through GPIO data.
- * Do any i2c required operations here. */
-void gpio_i2c_mcp_tranceive() {
-  for(uint8_t i2c_bucket = 0; i2c_bucket < MAX_I2C_MCP; i2c_bucket++) {
-    // Write gpio_i2c_mcp_indexes[i2c] as output
-    // then read inputs into same buffer.
-    uint8_t values = gpio_i2c_mcp_indexes[i2c_bucket];
-    uint8_t address = gpio_i2c_mcp_addresses[i2c_bucket];
-    // TODO: Send values to the i2c connected MCP.
-    printf("i2c addr: %u  values: %#04x\n", address, values);
-
-    // TODO: Read i2c data into gpio_i2c_mcp_indexes[MAX_I2C_MCP] for later
-    // UDP transmission.
+bool gpio_i2c_mcp_get_pin(uint8_t index, uint8_t address, uint8_t pullup) {
+  int i2c = gpio_i2c_mcp_alloc(address);
+  if(i2c == -1) {
+    printf("WARN: Too may i2c addresses. Add: %u  Index: %u\n", address, index);
+    return false;
   }
-}
-
-bool gpio_i2c_mcp_get_pin(uint8_t index, uint8_t address) {
-  for(uint8_t i2c = 0; i2c < MAX_I2C_MCP; i2c++) {
-    if(gpio_i2c_mcp_addresses[i2c] == address) {
-      return gpio_i2c_mcp_indexes[i2c] & (0x1 << index);
-    }
-  }
-  return 0;
+  uint8_t bindex = (index >> 3) & 1;
+  uint8_t bmask = (1 << (index & 7));
+  uint8_t data = i2c_gpio.config[i2c].input_data[bindex];
+  return data & bmask ? 1 : 0;
 }
 
 /* Pack GPIO inputs in buffer for UDP transmission. */
@@ -209,7 +196,7 @@ void gpio_serialize(struct NWBuffer* tx_buf, size_t* tx_buf_len) {
 
     get_gpio_config(gpio, &type, &index, &address, &previous_value);
 
-    switch(config.gpio[gpio].type) {
+    switch(type) {
       case GPIO_TYPE_NATIVE_IN_DEBUG:
       case GPIO_TYPE_NATIVE_IN:
         new_value = gpio_local_get_pin(index);
@@ -221,12 +208,18 @@ void gpio_serialize(struct NWBuffer* tx_buf, size_t* tx_buf_len) {
         }
         break;
       case GPIO_TYPE_I2C_MCP_IN:
-        new_value = gpio_i2c_mcp_get_pin(index, address);
+        new_value = gpio_i2c_mcp_get_pin(index, address, 0);
         if(previous_value != new_value) {
           to_send[bank] = true;
           config.gpio_confirmation_pending[bank] = true;
-          // Do not update config here.
-          // Config gets updated on incoming Message_gpio.
+        }
+        break;
+      case GPIO_TYPE_I2C_MCP_OUT:
+      case GPIO_TYPE_I2C_MCP_OUT_PULLUP:
+        new_value = gpio_i2c_mcp_get_pin(index, address, type == GPIO_TYPE_I2C_MCP_OUT_PULLUP);
+        if(previous_value != new_value) {
+          to_send[bank] = true;
+          config.gpio_confirmation_pending[bank] = true;
         }
         break;
       default:
@@ -234,6 +227,7 @@ void gpio_serialize(struct NWBuffer* tx_buf, size_t* tx_buf_len) {
         new_value = previous_value;
         break;
     }
+    gpio_last_type[gpio] = type;
 
     values[bank] |= (new_value << (gpio % 32));
   }
@@ -242,20 +236,20 @@ void gpio_serialize(struct NWBuffer* tx_buf, size_t* tx_buf_len) {
   reply.type = REPLY_GPIO;
 
   for(uint8_t bank = 0; bank < MAX_GPIO_BANK; bank++) {
-      if(! config.gpio_confirmation_pending[bank]) {
-        continue;
-      }
+    if(! config.gpio_confirmation_pending[bank]) {
+      continue;
+    }
 
-      reply.bank = bank;
-      reply.values = values[bank];
-      reply.confirmation_pending = to_send[bank];
+    reply.bank = bank;
+    reply.values = values[bank];
+    reply.confirmation_pending = to_send[bank];
 
-      *tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
+    *tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
 
-      if(! *tx_buf_len) {
-        printf("WARN: TX length greater than buffer size. gpio bank: %u\n", bank);
-        return;
-      }
+    if(! *tx_buf_len) {
+      printf("WARN: TX length greater than buffer size. gpio bank: %u\n", bank);
+      return;
+    }
   }
 }
 
@@ -281,4 +275,3 @@ bool serialise_gpio_config(const uint8_t gpio, struct NWBuffer* tx_buf) {
 
   return true;
 }
-

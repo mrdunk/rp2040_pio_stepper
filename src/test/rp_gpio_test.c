@@ -10,10 +10,10 @@
 #include "../shared/messages.h"
 #include "../rp2040/config.h"
 #include "../rp2040/gpio.h"
+#include "../rp2040/i2c.h"
 #include "../rp2040/core0.h"
 
 
-extern uint32_t gpio_i2c_mcp_indexes[MAX_I2C_MCP];
 extern uint8_t gpio_i2c_mcp_addresses[MAX_I2C_MCP];
 
 void __wrap_gpio_put(int index, int value) {
@@ -135,8 +135,10 @@ static void test_i2c_gpio_set_output_values(void **state) {
     // Configure the GPIO in the main config.
     for(uint8_t gpio = 0; gpio < MAX_GPIO; gpio++) {
         config.gpio[gpio].type = GPIO_TYPE_I2C_MCP_OUT;
-        config.gpio[gpio].index = gpio % 31;
-        config.gpio[gpio].address = (gpio % MAX_I2C_MCP) * (gpio % MAX_I2C_MCP);
+        // MCP23017 has 16 pins (0-15). Assign one device per 16 gpios so
+        // each gpio gets a unique (address, index) pair with no overlap.
+        config.gpio[gpio].index = gpio % 16;
+        config.gpio[gpio].address = gpio / 16;
 
         if(gpio < 32) {
             // bank 0;
@@ -175,7 +177,9 @@ static void test_i2c_gpio_set_output_values(void **state) {
         }
         uint8_t index = config.gpio[gpio].index;
         bool expected_value = (0x1 << (gpio % 32)) & values;
-        bool actual_value = (0x1 << index) & gpio_i2c_mcp_indexes[i2c_bucket];
+        uint8_t bindex = (index >> 3) & 1;
+        uint8_t bmask = 0x1 << (index & 7);
+        bool actual_value = i2c_gpio.config[i2c_bucket].output_data[bindex] & bmask;
 
         assert_int_equal(expected_value, config.gpio[gpio].value);
         assert_int_equal(expected_value, actual_value);

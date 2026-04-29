@@ -6,6 +6,7 @@
 #include "messages.h"
 #include "buffer.h"
 #include "gpio.h"
+#include "i2c.h"
 #include "modbus.h"
 #include "timing.h"
 
@@ -283,6 +284,19 @@ bool unpack_gpio_config(
       gpio_set_dir(index, GPIO_IN);
       gpio_pull_up(index);
       break;
+#ifndef BUILD_TESTS
+    case GPIO_TYPE_I2C_MCP_IN:
+    case GPIO_TYPE_I2C_MCP_OUT:
+    case GPIO_TYPE_I2C_MCP_OUT_PULLUP:
+      ;
+    {
+      int i2c = gpio_i2c_mcp_alloc(address);
+      if (i2c >= 0) {
+        i2c_gpio_set_pin_config(&i2c_gpio, i2c, index, gpio_type);
+      }
+    }
+      break;
+#endif
     default:
       break;
   }
