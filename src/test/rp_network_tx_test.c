@@ -81,16 +81,18 @@ static void test_serialise_joint_movement(void **state) {
     struct Reply_joint_movement reply;
     reply.type = REPLY_JOINT_MOVEMENT;
 
-    config.last_update_id = 99;
+    config.update_time_us = 1000;
+    core1_loop_count = 77;
     for(size_t joint = 0; joint < MAX_JOINT; joint++) {
-        config.joint[joint].abs_pos_achieved = 123;
-        config.joint[joint].max_velocity = 456;
-        config.joint[joint].max_accel = 789;
+        config.joint[joint].abs_pos_achieved  = 123;
+        config.joint[joint].max_velocity      = 456;
+        config.joint[joint].max_accel         = 789;
         config.joint[joint].velocity_achieved = 791;
-        config.joint[joint].enabled = (joint % 2 == 0) ? 1 : 0;
-        config.joint[joint].updated_from_c1 = 1;
+        config.joint[joint].velocity_requested = 55.5 * (joint + 1);
+        config.joint[joint].enabled           = (joint % 2 == 0) ? 1 : 0;
+        config.joint[joint].updated_from_c1   = 1;
 
-        reply.abs_pos_achieved[joint] = config.joint[joint].abs_pos_achieved;
+        reply.abs_pos_achieved[joint]  = config.joint[joint].abs_pos_achieved;
         reply.velocity_achieved[joint] = config.joint[joint].velocity_achieved;
     }
 
@@ -105,12 +107,14 @@ static void test_serialise_joint_movement(void **state) {
 
     struct Reply_joint_movement* reply_p = (void*)tx_buf.payload + initial_tx_buf_len;
     assert_int_equal(reply_p->type, reply.type);
-    assert_int_equal(reply_p->last_update_id, config.last_update_id);
-
+    assert_int_equal(reply_p->update_period_us, config.update_time_us);
+    assert_int_equal(reply_p->core1_tick, core1_loop_count);
     for(size_t joint = 0; joint < 4; joint++) {
         assert_int_equal(reply_p->abs_pos_achieved[joint], reply.abs_pos_achieved[joint]);
         assert_int_equal(reply_p->velocity_achieved[joint], reply.velocity_achieved[joint]);
         assert_int_equal(reply_p->enabled[joint], config.joint[joint].enabled);
+        assert_double_equal(reply_p->velocity_cmd[joint],
+                            config.joint[joint].velocity_requested, 0.01);
     }
 }
 

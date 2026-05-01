@@ -354,9 +354,12 @@ bool unpack_joint_movement(
         (*data->joint_position[joint] - *data->joint_pos_feedback[joint])
         * *data->joint_scale[joint]);
 
-    *data->joint_rp_enabled[joint]     = reply->enabled[joint];
-    *data->joint_last_update_id[joint] = (int32_t)reply->last_update_id;
+    *data->joint_rp_enabled[joint]       = reply->enabled[joint];
+    *data->joint_rp_velocity_cmd[joint]  = reply->velocity_cmd[joint];
   }
+
+  *data->rp_update_period = reply->update_period_us;
+  *data->rp_core1_tick    = reply->core1_tick;
 
   (*received_count)++;
   return true;

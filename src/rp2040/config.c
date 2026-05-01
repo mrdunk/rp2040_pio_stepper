@@ -34,7 +34,8 @@ mutex_t mtx_joint[MAX_JOINT];
 volatile uint32_t tick = 0;
 volatile uint32_t last_packet_tick = 0;
 volatile bool linuxcnc_restart_detected = false;
-volatile uint32_t packet_generation = 0;
+volatile uint32_t packet_generation  = 0;
+volatile uint32_t core1_loop_count   = 0;
 
 volatile struct ConfigGlobal config = {
   .last_update_id = 0,
@@ -382,11 +383,13 @@ bool serialise_joint_movement(
 
 
   struct Reply_joint_movement reply;
-  reply.type = REPLY_JOINT_MOVEMENT;
-  reply.last_update_id = config.last_update_id;
+  reply.type             = REPLY_JOINT_MOVEMENT;
+  reply.update_period_us = config.update_time_us;
+  reply.core1_tick       = core1_loop_count;
 
   for(size_t joint = 0; joint < MAX_JOINT; joint++) {
     uint8_t enabled = 0;
+    double velocity_requested = 0.0;
     do {
       updated = get_joint_config(
           joint,
@@ -394,7 +397,7 @@ bool serialise_joint_movement(
           &enabled,
           NULL, //&io_pos_step,
           NULL, //&io_pos_dir,
-          NULL, //&velocity_requested,
+          &velocity_requested,
           NULL, //&abs_pos_requested,
           &abs_pos_achieved,
           NULL, //&max_velocity,
@@ -403,9 +406,10 @@ bool serialise_joint_movement(
           );
     } while(updated == 0 && wait_for_data);
 
-    reply.abs_pos_achieved[joint] = abs_pos_achieved;
+    reply.abs_pos_achieved[joint]  = abs_pos_achieved;
     reply.velocity_achieved[joint] = velocity_achieved;
-    reply.enabled[joint] = enabled;
+    reply.enabled[joint]           = enabled;
+    reply.velocity_cmd[joint]      = (float)velocity_requested;
   }
 
   uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));

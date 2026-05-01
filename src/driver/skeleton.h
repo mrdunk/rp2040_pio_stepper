@@ -7,6 +7,7 @@
 
 typedef struct {
   hal_u32_t* metric_update_id;
+  hal_u32_t* metric_tx_update_id;
   hal_s32_t* metric_time_diff;
   hal_u32_t* metric_rp_update_len;
   hal_u32_t* metric_missed_packets;
@@ -27,8 +28,10 @@ typedef struct {
   hal_s32_t* joint_pos_error[MAX_JOINT];
   // RP2040's view of joint enabled state.
   hal_bit_t* joint_rp_enabled[MAX_JOINT];
-  // update_id when RP2040 last received a position command for this joint.
-  hal_s32_t* joint_last_update_id[MAX_JOINT];
+  hal_float_t* joint_rp_velocity_cmd[MAX_JOINT];
+
+  hal_u32_t* rp_update_period;
+  hal_u32_t* rp_core1_tick;
   hal_float_t* metric_overrun_ratio;
   hal_float_t* metric_underrun_ratio;
 

@@ -11,6 +11,7 @@
 
 /* Set up mock skeleton_t struct. */
 hal_u32_t metric_update_id;
+hal_u32_t metric_tx_update_id;
 hal_s32_t metric_time_diff;
 hal_u32_t metric_rp_update_len;
 
@@ -25,7 +26,9 @@ hal_float_t joint_scale[4] = {1000, 1000, 1000, 1000};
 hal_float_t joint_velocity_feedback[4];
 hal_s32_t joint_pos_error[4];
 hal_bit_t joint_rp_enabled[4];
-hal_s32_t joint_last_update_id[4];
+hal_float_t joint_rp_velocity_cmd[4];
+hal_u32_t rp_update_period;
+hal_u32_t rp_core1_tick;
 hal_float_t metric_overrun_ratio;
 hal_float_t metric_underrun_ratio;
 
@@ -35,6 +38,7 @@ hal_bit_t   spindle_at_speed[MAX_SPINDLE];
 
 void setup_data(skeleton_t* data) {
   data->metric_update_id = &metric_update_id;
+  data->metric_tx_update_id = &metric_tx_update_id;
   data->metric_time_diff = &metric_time_diff;
   data->metric_rp_update_len = &metric_rp_update_len;
 
@@ -49,11 +53,13 @@ void setup_data(skeleton_t* data) {
     data->joint_scale[joint] = &(joint_scale[joint]);
     data->joint_velocity_feedback[joint] = &(joint_velocity_feedback[joint]);
     data->joint_pos_error[joint] = &(joint_pos_error[joint]);
-    data->joint_rp_enabled[joint] = &(joint_rp_enabled[joint]);
-    data->joint_last_update_id[joint] = &(joint_last_update_id[joint]);
+    data->joint_rp_enabled[joint]      = &(joint_rp_enabled[joint]);
+    data->joint_rp_velocity_cmd[joint] = &(joint_rp_velocity_cmd[joint]);
   }
-  data->metric_overrun_ratio       = &metric_overrun_ratio;
+  data->metric_overrun_ratio  = &metric_overrun_ratio;
   data->metric_underrun_ratio = &metric_underrun_ratio;
+  data->rp_update_period      = &rp_update_period;
+  data->rp_core1_tick         = &rp_core1_tick;
 
   for (size_t s = 0; s < MAX_SPINDLE; s++) {
     data->spindle_speed_out[s] = &spindle_speed_out[s];
@@ -112,10 +118,12 @@ static void test_joint_movement(void **state) {
    
     struct Reply_joint_movement message = {
         .type = REPLY_JOINT_MOVEMENT,
-        .abs_pos_achieved = {1234, 5678, 9, 10},
+        .abs_pos_achieved  = {1234, 5678, 9, 10},
         .velocity_achieved = {7890, 1234, 5, 6},
-        .enabled = {1, 0, 1, 0},
-        .last_update_id = 42
+        .enabled           = {1, 0, 1, 0},
+        .velocity_cmd      = {100.5f, 200.5f, 300.5f, 400.5f},
+        .update_period_us  = 1000,
+        .core1_tick        = 9999,
     };
 
     memcpy(buffer.payload, &message, sizeof(message));
@@ -139,8 +147,10 @@ static void test_joint_movement(void **state) {
                 0.0001);
         assert_int_equal((*data.joint_velocity_feedback)[joint], message.velocity_achieved[joint]);
         assert_int_equal(*data.joint_rp_enabled[joint], message.enabled[joint]);
-        assert_int_equal(*data.joint_last_update_id[joint], (int32_t)message.last_update_id);
+        assert_double_equal(*data.joint_rp_velocity_cmd[joint], message.velocity_cmd[joint], 0.001);
     }
+    assert_int_equal(*data.rp_update_period, message.update_period_us);
+    assert_int_equal(*data.rp_core1_tick, message.core1_tick);
 }
 
 static void test_joint_config(void **state) {

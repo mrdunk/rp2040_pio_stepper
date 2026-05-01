@@ -117,7 +117,7 @@ setp rp2040_eth.0.joint.3.gpio-dir     -1
 
 # Metrics.
 net metrics-time-diff       rp2040_eth.0.metrics-time-diff
-net metrics-update-id       rp2040_eth.0.metrics-update-id
+net metrics-rx-update-id    rp2040_eth.0.metrics-rx-update-id
 net metrics-rp-update-len   rp2040_eth.0.metrics-rp-update-len
 net metrics-missed-packets  rp2040_eth.0.metrics-missed-packets
 net metrics-eth-state       rp2040_eth.0.metrics-eth-state

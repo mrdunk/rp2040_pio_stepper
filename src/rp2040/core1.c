@@ -65,6 +65,7 @@ void step_all_joints(void) {
 
 static void core1_tick(void) {
   wait_for_packet();
+  core1_loop_count++;
 #ifndef BUILD_TESTS
   i2c_gpio_poll(&i2c_gpio);
 #endif

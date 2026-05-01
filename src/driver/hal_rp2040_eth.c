@@ -171,7 +171,7 @@ static const PinDef joint_pins[] = {
     { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_velocity_feedback), sizeof(hal_float_t*), "joint", 0, 1, "fb-velocity"      },
     { S32,   HAL_OUT, offsetof(skeleton_t, joint_pos_error),         sizeof(hal_s32_t*),   "joint", 0, 1, "fb-pos-error"     },
     { PIN,   HAL_OUT, offsetof(skeleton_t, joint_rp_enabled),        sizeof(hal_bit_t*),   "joint", 0, 1, "rp-enabled"       },
-    { S32,   HAL_OUT, offsetof(skeleton_t, joint_last_update_id),    sizeof(hal_s32_t*),   "joint", 0, 1, "last-update-id"   },
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_rp_velocity_cmd),  sizeof(hal_float_t*), "joint", 0, 1, "rp-velocity-cmd"  },
 };
 
 static const PinDef spindle_pins[] = {
@@ -184,8 +184,11 @@ static const PinDef spindle_pins[] = {
 
 static const PinDef scalar_pins[] = {
     { PIN, HAL_OUT, offsetof(skeleton_t, machine_enable_out),    0, "machine-enable-out",     -1, 1, NULL },
+    { U32, HAL_OUT, offsetof(skeleton_t, metric_tx_update_id),   0, "metrics-tx-update-id",   -1, 0, NULL },
+    { U32, HAL_OUT, offsetof(skeleton_t, rp_update_period),      0, "rp-update-period",        -1, 0, NULL },
+    { U32, HAL_OUT, offsetof(skeleton_t, rp_core1_tick),         0, "rp-core1-tick",           -1, 0, NULL },
     { S32, HAL_IN,  offsetof(skeleton_t, metric_time_diff),      0, "metrics-time-diff",      -1, 0, NULL },
-    { U32, HAL_IN,  offsetof(skeleton_t, metric_update_id),      0, "metrics-update-id",      -1, 0, NULL },
+    { U32, HAL_IN,  offsetof(skeleton_t, metric_update_id),      0, "metrics-rx-update-id",   -1, 0, NULL },
     { U32, HAL_IN,  offsetof(skeleton_t, metric_rp_update_len),  0, "metrics-rp-update-len",  -1, 0, NULL },
     { U32, HAL_IN,  offsetof(skeleton_t, metric_missed_packets), 0, "metrics-missed-packets", -1, 0, NULL },
     { PIN,   HAL_IN,  offsetof(skeleton_t, metric_eth_state),             0, "metrics-eth-state",      -1, 0, NULL },
@@ -519,6 +522,7 @@ static void write_port(void *arg, long period)
   reset_nw_buf(&buffer);
   bool pack_success = true;
 
+  *data->metric_tx_update_id = (uint32_t)count;
   pack_success = pack_success && serialize_timing(&buffer, count, rtapi_get_time());
 
   // Put GPIO values in network buffer.

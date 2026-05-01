@@ -29,6 +29,9 @@ extern volatile bool linuxcnc_restart_detected;
  * Core1 waits for this to advance before processing. Single-writer
  * (Core0), single-reader (Core1) — same atomic pattern as tick. */
 extern volatile uint32_t packet_generation;
+/* Incremented by Core1 each time core1_tick() runs. Single-writer (Core1),
+ * single-reader (Core0 via serialise_joint_movement). Atomic on Cortex-M0+. */
+extern volatile uint32_t core1_loop_count;
 
 /* Configuration object for an joint.
  * This is the format for the global config that is shared between cores. */

@@ -11,6 +11,7 @@
 
 /* Set up mock skeleton_t struct. */
 hal_u32_t metric_update_id;
+hal_u32_t metric_tx_update_id;
 hal_s32_t metric_time_diff;
 hal_u32_t metric_rp_update_len;
 
@@ -24,7 +25,9 @@ hal_float_t joint_scale[4] = {1000, 1000, 1000, 1000};
 hal_float_t joint_velocity_feedback[4];
 hal_s32_t joint_pos_error[4];
 hal_bit_t joint_rp_enabled[4];
-hal_s32_t joint_last_update_id[4];
+hal_float_t joint_rp_velocity_cmd[4];
+hal_u32_t rp_update_period;
+hal_u32_t rp_core1_tick;
 
 hal_bit_t gpio_data_out[MAX_GPIO];
 hal_bit_t gpio_data_out_invert[MAX_GPIO];
@@ -35,6 +38,7 @@ hal_u32_t gpio_type[MAX_GPIO];
 
 void setup_data(skeleton_t* data) {
     data->metric_update_id = &metric_update_id;
+    data->metric_tx_update_id = &metric_tx_update_id;
     data->metric_time_diff = &metric_time_diff;
     data->metric_rp_update_len = &metric_rp_update_len;
 
@@ -49,8 +53,11 @@ void setup_data(skeleton_t* data) {
         data->joint_velocity_feedback[joint] = &joint_velocity_feedback[joint];
         data->joint_pos_error[joint]         = &joint_pos_error[joint];
         data->joint_rp_enabled[joint]        = &joint_rp_enabled[joint];
-        data->joint_last_update_id[joint]    = &joint_last_update_id[joint];
+        data->joint_rp_velocity_cmd[joint]   = &joint_rp_velocity_cmd[joint];
     }
+
+    data->rp_update_period = &rp_update_period;
+    data->rp_core1_tick    = &rp_core1_tick;
 
     for(size_t gpio = 0; gpio < MAX_GPIO; gpio++) {
         data->gpio_data_out[gpio] = &gpio_data_out[gpio];
