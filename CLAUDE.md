@@ -76,17 +76,6 @@ corresponding field to `skeleton_t` in `src/driver/skeleton.h` and wire it up
 in the `setup_data()` functions in `driver_network_RPtoPC_test.c` and
 `driver_gpio_test.c`.
 
-### `init_config()` default `max_accel` disables stepping in `do_steps()` tests
-
-`init_config()` sets `config.joint[j].max_accel` to `1.0`. In `do_steps()`,
-`max_accel` is divided by `update_period_us` before being passed to
-`clamp_accel()`. At a 1000 µs period this gives `max_accel = 0.001`
-steps/period, which clamps `velocity` to `0.001` — below `MIN_STEP_COUNT` —
-causing `plan_steps()` to return 0 and no step to be issued. Tests for the
-normal-step path must set `config.joint[0].max_accel = 0.0` (disables the
-limiter) or a sufficiently large value. The acceleration limiter is tested
-separately in `test_do_steps_accel_clamped`.
-
 ### Pre-commit hook blocks commits with calls to undefined functions
 
 The pre-commit hook builds and runs all tests before every commit. This means the TDD pattern of "commit failing tests first, then implement" does not work here — the hook will block a commit that calls an undefined function. Write the implementation in the same commit as the tests that call it.

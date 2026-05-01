@@ -128,7 +128,7 @@ void init_config()
     memset((void*)&config.joint[joint], 0, sizeof(config.joint[joint]));
     config.joint[joint].io_pos_step = -1;
     config.joint[joint].io_pos_dir  = -1;
-    config.joint[joint].max_accel   = 1.0;
+    config.joint[joint].max_accel   = 0.0;
   }
 }
 

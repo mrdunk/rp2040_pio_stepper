@@ -134,19 +134,25 @@ int32_t drain_rx_fifo(uint32_t sm, int32_t current_pos) {
 
 /* Compute the PIO step-timer length in clock ticks.
  * Returns 0 if step_count_q is below MIN_STEP_COUNT_Q or the step would span
- * >= 2 servo periods (>= 2ms at 1ms period); caller must treat 0 as "skip". */
+ * >= 2 servo periods (>= 2ms at 1ms period); caller must treat 0 as "skip".
+ * max_vel_q <= 0 means "no max-velocity configured yet"; min_len clamping is
+ * skipped so the default config does not block stepping before the first
+ * MSG_SET_JOINT_CONFIG packet arrives. */
 int32_t calculate_step_len(int32_t step_count_q, int32_t period_ticks, int32_t max_vel_q) {
     if (step_count_q <= MIN_STEP_COUNT_Q) {
         return 0;
     }
     int32_t len = (int32_t)((int64_t)period_ticks * 65536
                             / ((int64_t)step_count_q << 1) - STEP_PIO_LEN_OVERHEAD);
-    int32_t min_len = (int32_t)((int64_t)period_ticks * 65536
-                                / ((int64_t)max_vel_q << 1) - STEP_PIO_LEN_OVERHEAD);
-    int32_t clamped = len < min_len ? min_len : len;
-    /* A step lasting >= 2 servo periods would block the FIFO for two Core1 ticks.
-     * Skip it; the accumulator preserves the fractional step for the next period. */
-    return clamped >= period_ticks ? 0 : clamped;
+    if (max_vel_q > 0) {
+        int32_t min_len = (int32_t)((int64_t)period_ticks * 65536
+                                    / ((int64_t)max_vel_q << 1) - STEP_PIO_LEN_OVERHEAD);
+        int32_t clamped = len < min_len ? min_len : len;
+        /* A step lasting >= 2 servo periods would block the FIFO for two Core1 ticks.
+         * Skip it; the accumulator preserves the fractional step for the next period. */
+        return clamped >= period_ticks ? 0 : clamped;
+    }
+    return len >= period_ticks ? 0 : len;
 }
 
 /* Clamp velocity change to at most max_accel_q per period.
