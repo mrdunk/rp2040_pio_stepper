@@ -257,11 +257,14 @@ static void test_do_steps_normal_step(void **state) {
 /* do_steps: acceleration clamping activates across multiple calls */
 static void test_do_steps_accel_clamped(void **state) {
     (void)state;
-    /* Set up a joint with small max_accel so the clamp activates.
+    /* Set up a joint with small max_accel so the clamp activates after enable.
      * With update_period_us=1000, max_accel=5000 (steps/s/s) normalises to
      * 5000/1000 = 5.0 steps/period.
-     * A large position request will generate velocity >> 5.0 on first call,
-     * so the second call's velocity should still be clamped near 5.0 from the first. */
+     *
+     * On enable the RP2040 snaps last_velocity_q to the commanded velocity, so
+     * the first call must use a low velocity (5.0 steps/period) to prime state.
+     * The second call then jumps to a large velocity; the clamp limits the
+     * increase to max_accel/period = 5.0, landing at 10.0 steps/period. */
 
     uint32_t update_period_us = 1000;
     config.update_time_us = update_period_us;
@@ -270,31 +273,31 @@ static void test_do_steps_accel_clamped(void **state) {
     config.joint[0].io_pos_step        = 1;
     config.joint[0].io_pos_dir         = 2;
     config.joint[0].updated_from_c0    = 1;
-    config.joint[0].abs_pos_requested  = 10000.0;  /* large request */
+    config.joint[0].abs_pos_requested  = 10000.0;
     config.joint[0].abs_pos_achieved   = 0;
-    config.joint[0].velocity_requested = 10000.0 * update_period_us;  /* matching velocity */
+    config.joint[0].velocity_requested = 5.0 * update_period_us;  /* low: snap primes to 5.0 */
     config.joint[0].max_velocity       = 100000.0;  /* steps/s */
     config.joint[0].max_accel          = 5000.0;    /* steps/s/s -> 5.0 steps/period */
 
-    /* First call: last_velocity starts at 0, clamp limits to max_accel/period = 5.0 */
+    /* First call: enable transition snaps last_velocity_q to 5.0 steps/period.
+     * velocity=5.0 -> step_len=(133000/(5*2))-9=13291 */
     mock_tx_fifo_empty = 1;
     last_pio_put_value = 0;
     do_steps(0);
     uint32_t first_word = last_pio_put_value;
 
-    /* Reset for second call */
+    /* Second call: jump velocity to 10000 steps/s; clamp limits increase to 5.0,
+     * so velocity reaches 10.0 steps/period -> step_len=(133000/(10*2))-9=6641 */
     mock_tx_fifo_empty = 1;
     last_pio_put_value = 0;
-    config.joint[0].updated_from_c0 = 1;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = 10000.0 * update_period_us;
 
     do_steps(0);
     uint32_t second_word = last_pio_put_value;
 
-    /* Clamped velocity=5.0 -> step_len=(133000/(5*2))-9=13291. Unclamped (9500) would give 656.
-     * Assert the encoded step_len (upper bits) matches the clamped expectation. */
     assert_int_equal(first_word >> 1, 13291);
     assert_int_equal(first_word & 0x1, 1);
-    /* Second call: last_velocity=5.0, clamped to 10.0 -> step_len=(133000/(10*2))-9=6641 */
     assert_int_equal(second_word >> 1, 6641);
     assert_int_equal(second_word & 0x1, 1);
 }
@@ -319,40 +322,10 @@ static void test_do_steps_no_motion(void **state) {
     assert_int_equal(last_pio_put_value, 0);
 }
 
-/* do_steps: underrun (no new data) with slow last_velocity (<1.0) -> writes 0 to PIO */
-static void test_do_steps_underrun_slow_stops_pio(void **state) {
+/* do_steps: underrun (no new data from Core0) always writes 0 to PIO to prevent
+ * the state machine re-executing a stale step_len and generating spurious steps. */
+static void test_do_steps_underrun_stops_pio(void **state) {
     (void)state;
-    /* Prime last_velocity_q to a value < STOP_THRESHOLD_Q (65536) via a normal do_steps() call.
-     * get_velocity: pos_diff=0.5*65536=32768, vel_req=500/1000*65536=32768
-     * combined = (32768*6554 + 32768*55706) >> 16 = 32768*62260 >> 16 = ~31130 < 65536 */
-    config.joint[0].enabled            = 1;
-    config.joint[0].abs_pos_requested  = 0.5;
-    config.joint[0].abs_pos_achieved   = 0;
-    config.joint[0].velocity_requested = 500.0;
-    config.joint[0].max_velocity       = 50.0;
-    config.joint[0].max_accel          = 0.0;
-    config.joint[0].updated_from_c0    = 1;
-    mock_tx_fifo_empty                  = 1;
-    do_steps(0);   /* primes last_velocity_q to a value < STOP_THRESHOLD_Q */
-
-    /* Now simulate underrun: no new data from Core0. */
-    config.joint[0].updated_from_c0 = 0;
-    pio_put_call_count               = 0;
-    last_pio_put_value               = 0xDEADBEEF;
-
-    uint8_t result = do_steps(0);
-
-    assert_int_equal(result, 0);
-    assert_int_equal(pio_put_call_count, 1);
-    assert_int_equal(last_pio_put_value, 0);
-}
-
-/* do_steps: underrun (no new data) with medium last_velocity (>=1.0) -> PIO untouched */
-static void test_do_steps_underrun_medium_leaves_pio_running(void **state) {
-    (void)state;
-    /* Prime last_velocity_q to a value >= STOP_THRESHOLD_Q (65536) via a normal do_steps() call.
-     * get_velocity: pos_diff=10*65536=655360, vel_req=5000/1000*65536=327680
-     * combined = (655360*6554 + 327680*55706) >> 16 >> STOP_THRESHOLD_Q */
     config.joint[0].enabled            = 1;
     config.joint[0].abs_pos_requested  = 10.0;
     config.joint[0].abs_pos_achieved   = 0;
@@ -361,16 +334,18 @@ static void test_do_steps_underrun_medium_leaves_pio_running(void **state) {
     config.joint[0].max_accel          = 0.0;
     config.joint[0].updated_from_c0    = 1;
     mock_tx_fifo_empty                  = 1;
-    do_steps(0);   /* primes last_velocity_q >= STOP_THRESHOLD_Q */
+    do_steps(0);   /* prime last_velocity_q to a non-zero value */
 
-    /* Now simulate underrun: no new data from Core0. */
     config.joint[0].updated_from_c0 = 0;
     pio_put_call_count               = 0;
+    last_pio_put_value               = 0xDEADBEEF;
+    mock_tx_fifo_empty               = 1;
 
     uint8_t result = do_steps(0);
 
     assert_int_equal(result, 0);
-    assert_int_equal(pio_put_call_count, 0);
+    assert_int_equal(pio_put_call_count, 1);
+    assert_int_equal(last_pio_put_value, 0);
 }
 
 int main(void) {
@@ -397,8 +372,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_normal_step,               test_setup),
         cmocka_unit_test_setup(test_do_steps_accel_clamped,             test_setup),
         cmocka_unit_test_setup(test_do_steps_no_motion,                test_setup),
-        cmocka_unit_test_setup(test_do_steps_underrun_slow_stops_pio,            test_setup),
-        cmocka_unit_test_setup(test_do_steps_underrun_medium_leaves_pio_running, test_setup),
+        cmocka_unit_test_setup(test_do_steps_underrun_stops_pio,                 test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

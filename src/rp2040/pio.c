@@ -24,7 +24,6 @@
 #define STEP_PIO_LEN_OVERHEAD  9
 #define RP2040_CLOCK_MHZ       133
 #define MIN_STEP_COUNT_Q       4096    /* 0.0625 * 65536 */
-#define STOP_THRESHOLD_Q       65536   /* 1.0 * 65536 */
 
 
 typedef struct {
@@ -214,18 +213,25 @@ uint8_t do_steps(const uint8_t joint) {
       );
 
   if(updated == 0 || update_period_us == 0) {
-    if (abs(joint_state[joint].last_velocity_q) < STOP_THRESHOLD_Q &&
-        pio_sm_is_tx_fifo_empty(pio0, joint_state[joint].sm0)) {
+    if (pio_sm_is_tx_fifo_empty(pio0, joint_state[joint].sm0)) {
       pio_sm_put(pio0, joint_state[joint].sm0, 0);
     }
     return 0;
   }
+
+  int32_t velocity_q   = (int32_t)((velocity_requested / (double)update_period_us) * 65536.0);
+  int32_t max_vel_q    = (int32_t)((max_velocity / (double)update_period_us) * 65536.0);
+  int32_t max_accel_q  = (int32_t)((max_accel / (double)update_period_us) * 65536.0);
+  int32_t period_ticks = (int32_t)((int64_t)update_period_us * RP2040_CLOCK_MHZ);
 
   if(enabled != joint_state[joint].last_enabled) {
     joint_state[joint].last_enabled = enabled;
     if(enabled) {
       printf("Joint %u was enabled.\n", joint);
       init_pio(joint);
+      // Snap to commanded velocity so we don't ramp from zero when LinuxCNC
+      // is already moving (joint was enabled before motion started).
+      joint_state[joint].last_velocity_q = velocity_q;
     } else {
       printf("Joint %u was disabled.\n", joint);
     }
@@ -240,11 +246,6 @@ uint8_t do_steps(const uint8_t joint) {
   }
 
   abs_pos_achieved = drain_rx_fifo(joint_state[joint].sm1, abs_pos_achieved);
-
-  int32_t velocity_q   = (int32_t)((velocity_requested / (double)update_period_us) * 65536.0);
-  int32_t max_vel_q    = (int32_t)((max_velocity / (double)update_period_us) * 65536.0);
-  int32_t max_accel_q  = (int32_t)((max_accel / (double)update_period_us) * 65536.0);
-  int32_t period_ticks = (int32_t)((int64_t)update_period_us * RP2040_CLOCK_MHZ);
 
   velocity_q = clamp_accel(velocity_q, joint_state[joint].last_velocity_q, max_accel_q);
   joint_state[joint].last_velocity_q = velocity_q;
