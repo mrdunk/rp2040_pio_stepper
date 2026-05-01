@@ -383,13 +383,15 @@ bool serialise_joint_movement(
 
   struct Reply_joint_movement reply;
   reply.type = REPLY_JOINT_MOVEMENT;
+  reply.last_update_id = config.last_update_id;
 
   for(size_t joint = 0; joint < MAX_JOINT; joint++) {
+    uint8_t enabled = 0;
     do {
       updated = get_joint_config(
           joint,
           CORE0,
-          NULL, //&enabled,
+          &enabled,
           NULL, //&io_pos_step,
           NULL, //&io_pos_dir,
           NULL, //&velocity_requested,
@@ -403,6 +405,7 @@ bool serialise_joint_movement(
 
     reply.abs_pos_achieved[joint] = abs_pos_achieved;
     reply.velocity_achieved[joint] = velocity_achieved;
+    reply.enabled[joint] = enabled;
   }
 
   uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));

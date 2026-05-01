@@ -170,6 +170,8 @@ static const PinDef joint_pins[] = {
     { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_pos_feedback),      sizeof(hal_float_t*), "joint", 0, 1, "fb-pos"           },
     { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_velocity_feedback), sizeof(hal_float_t*), "joint", 0, 1, "fb-velocity"      },
     { S32,   HAL_OUT, offsetof(skeleton_t, joint_pos_error),         sizeof(hal_s32_t*),   "joint", 0, 1, "fb-pos-error"     },
+    { PIN,   HAL_OUT, offsetof(skeleton_t, joint_rp_enabled),        sizeof(hal_bit_t*),   "joint", 0, 1, "rp-enabled"       },
+    { S32,   HAL_OUT, offsetof(skeleton_t, joint_last_update_id),    sizeof(hal_s32_t*),   "joint", 0, 1, "last-update-id"   },
 };
 
 static const PinDef spindle_pins[] = {

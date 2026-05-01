@@ -25,6 +25,10 @@ typedef struct {
   hal_float_t* joint_velocity_feedback[MAX_JOINT];
   // Difference between requested position and actual position on RP.
   hal_s32_t* joint_pos_error[MAX_JOINT];
+  // RP2040's view of joint enabled state.
+  hal_bit_t* joint_rp_enabled[MAX_JOINT];
+  // update_id when RP2040 last received a position command for this joint.
+  hal_s32_t* joint_last_update_id[MAX_JOINT];
   hal_float_t* metric_overrun_ratio;
   hal_float_t* metric_underrun_ratio;
 

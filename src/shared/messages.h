@@ -141,6 +141,8 @@ struct __attribute__((packed)) Reply_joint_movement {
   uint8_t type;
   int32_t abs_pos_achieved[MAX_JOINT];
   int32_t velocity_achieved[MAX_JOINT];
+  uint8_t enabled[MAX_JOINT];
+  uint32_t last_update_id;
 };
 
 struct __attribute__((packed)) Reply_joint_config {

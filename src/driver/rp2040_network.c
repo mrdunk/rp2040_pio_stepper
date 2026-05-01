@@ -353,6 +353,9 @@ bool unpack_joint_movement(
     *data->joint_pos_error[joint] = (int32_t)round(
         (*data->joint_position[joint] - *data->joint_pos_feedback[joint])
         * *data->joint_scale[joint]);
+
+    *data->joint_rp_enabled[joint]     = reply->enabled[joint];
+    *data->joint_last_update_id[joint] = (int32_t)reply->last_update_id;
   }
 
   (*received_count)++;

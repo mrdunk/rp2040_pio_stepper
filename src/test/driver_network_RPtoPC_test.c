@@ -24,6 +24,8 @@ hal_float_t joint_position[4];
 hal_float_t joint_scale[4] = {1000, 1000, 1000, 1000};
 hal_float_t joint_velocity_feedback[4];
 hal_s32_t joint_pos_error[4];
+hal_bit_t joint_rp_enabled[4];
+hal_s32_t joint_last_update_id[4];
 hal_float_t metric_overrun_ratio;
 hal_float_t metric_underrun_ratio;
 
@@ -47,6 +49,8 @@ void setup_data(skeleton_t* data) {
     data->joint_scale[joint] = &(joint_scale[joint]);
     data->joint_velocity_feedback[joint] = &(joint_velocity_feedback[joint]);
     data->joint_pos_error[joint] = &(joint_pos_error[joint]);
+    data->joint_rp_enabled[joint] = &(joint_rp_enabled[joint]);
+    data->joint_last_update_id[joint] = &(joint_last_update_id[joint]);
   }
   data->metric_overrun_ratio       = &metric_overrun_ratio;
   data->metric_underrun_ratio = &metric_underrun_ratio;
@@ -109,7 +113,9 @@ static void test_joint_movement(void **state) {
     struct Reply_joint_movement message = {
         .type = REPLY_JOINT_MOVEMENT,
         .abs_pos_achieved = {1234, 5678, 9, 10},
-        .velocity_achieved = {7890, 1234, 5, 6}
+        .velocity_achieved = {7890, 1234, 5, 6},
+        .enabled = {1, 0, 1, 0},
+        .last_update_id = 42
     };
 
     memcpy(buffer.payload, &message, sizeof(message));
@@ -132,6 +138,8 @@ static void test_joint_movement(void **state) {
                 (double)message.abs_pos_achieved[joint] / (*data.joint_scale)[joint],
                 0.0001);
         assert_int_equal((*data.joint_velocity_feedback)[joint], message.velocity_achieved[joint]);
+        assert_int_equal(*data.joint_rp_enabled[joint], message.enabled[joint]);
+        assert_int_equal(*data.joint_last_update_id[joint], (int32_t)message.last_update_id);
     }
 }
 

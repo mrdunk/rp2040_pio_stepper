@@ -22,6 +22,9 @@ hal_float_t joint_max_accel[4];
 hal_float_t joint_pos_feedback[4];
 hal_float_t joint_scale[4] = {1000, 1000, 1000, 1000};
 hal_float_t joint_velocity_feedback[4];
+hal_s32_t joint_pos_error[4];
+hal_bit_t joint_rp_enabled[4];
+hal_s32_t joint_last_update_id[4];
 
 hal_bit_t gpio_data_out[MAX_GPIO];
 hal_bit_t gpio_data_out_invert[MAX_GPIO];
@@ -44,6 +47,9 @@ void setup_data(skeleton_t* data) {
         data->joint_pos_feedback[joint] =      &joint_pos_feedback[joint];
         data->joint_scale[joint] =             &joint_scale[joint];
         data->joint_velocity_feedback[joint] = &joint_velocity_feedback[joint];
+        data->joint_pos_error[joint]         = &joint_pos_error[joint];
+        data->joint_rp_enabled[joint]        = &joint_rp_enabled[joint];
+        data->joint_last_update_id[joint]    = &joint_last_update_id[joint];
     }
 
     for(size_t gpio = 0; gpio < MAX_GPIO; gpio++) {
