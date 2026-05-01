@@ -133,7 +133,8 @@ int32_t drain_rx_fifo(uint32_t sm, int32_t current_pos) {
 }
 
 /* Compute the PIO step-timer length in clock ticks.
- * Returns 0 if step_count_q is below MIN_STEP_COUNT_Q (too slow to drive PIO). */
+ * Returns 0 if step_count_q is below MIN_STEP_COUNT_Q or the step would span
+ * >= 2 servo periods (>= 2ms at 1ms period); caller must treat 0 as "skip". */
 int32_t calculate_step_len(int32_t step_count_q, int32_t period_ticks, int32_t max_vel_q) {
     if (step_count_q <= MIN_STEP_COUNT_Q) {
         return 0;
@@ -142,9 +143,10 @@ int32_t calculate_step_len(int32_t step_count_q, int32_t period_ticks, int32_t m
                             / ((int64_t)step_count_q << 1) - STEP_PIO_LEN_OVERHEAD);
     int32_t min_len = (int32_t)((int64_t)period_ticks * 65536
                                 / ((int64_t)max_vel_q << 1) - STEP_PIO_LEN_OVERHEAD);
-    int32_t max_len = period_ticks / 2 - STEP_PIO_LEN_OVERHEAD;
     int32_t clamped = len < min_len ? min_len : len;
-    return clamped > max_len ? max_len : clamped;
+    /* A step lasting >= 2 servo periods would block the FIFO for two Core1 ticks.
+     * Skip it; the accumulator preserves the fractional step for the next period. */
+    return clamped >= period_ticks ? 0 : clamped;
 }
 
 /* Clamp velocity change to at most max_accel_q per period.
@@ -169,8 +171,9 @@ int32_t plan_steps(int32_t velocity_q, uint8_t joint,
     int32_t n_steps_desired = joint_state[joint].step_accumulator_q >> 16;
     joint_state[joint].step_accumulator_q -= n_steps_desired << 16;
 
+    /* step_len == 0 means "skip this period" — preserve accumulator, issue no steps. */
     int32_t step_period = 2 * (step_len + STEP_PIO_LEN_OVERHEAD);
-    int32_t max_steps = (step_period > 0) ? period_ticks / step_period : 0;
+    int32_t max_steps = (step_len > 0) ? period_ticks / step_period : 0;
     if (max_steps < 0) max_steps = 0;
 
     int32_t n_steps = n_steps_desired < max_steps ? n_steps_desired : max_steps;

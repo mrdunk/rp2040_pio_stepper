@@ -117,13 +117,12 @@ static void test_calculate_step_len_below_threshold(void **state) {
     assert_int_equal(result, 0);
 }
 
-/* calculate_step_len: very slow step_count -> clamped to max_len */
-static void test_calculate_step_len_upper_clamp(void **state) {
+/* calculate_step_len: very slow step_count -> step would be >= 2 periods -> skip (0) */
+static void test_calculate_step_len_too_slow_skip(void **state) {
     (void)state;
-    /* 0.1 * 65536 = 6553.6 -> 6553; raw len >> max_len; clamped to max_len */
+    /* 0.1 * 65536 = 6553; raw len = 665054 >> period_ticks (133000) -> skip */
     int32_t result = calculate_step_len(6553, 133000, 3276800);
-    /* max_len = 133000/2 - 9 = 66491 */
-    assert_int_equal(result, 66491);
+    assert_int_equal(result, 0);
 }
 
 /* clamp_accel: velocity unchanged -> returns same velocity */
@@ -200,6 +199,17 @@ static void test_plan_steps_zero_velocity(void **state) {
     assert_int_equal(plan_steps(0, 0, 133000, 13291), 0);
 }
 
+/* plan_steps: step_len=0 (skip signal) -> max_steps=0, accumulator preserved */
+static void test_plan_steps_skip_preserves_accumulator(void **state) {
+    (void)state;
+    /* velocity_q=65536 (1.0 step/period). Two calls with step_len=0 skip both
+     * steps but accumulator grows to 2.0. Third call with normal step_len
+     * issues 2 steps immediately from the banked accumulator. */
+    assert_int_equal(plan_steps(65536, 0, 133000, 0), 0);
+    assert_int_equal(plan_steps(65536, 0, 133000, 0), 0);
+    assert_int_equal(plan_steps(0,     0, 133000, 13291), 2);
+}
+
 /* do_steps: update_period == 0, enabled joint -> returns 0 without dividing */
 static void test_do_steps_zero_period(void **state) {
     (void)state;
@@ -239,8 +249,8 @@ static void test_do_steps_normal_step(void **state) {
     config.joint[0].enabled            = 1;
     config.joint[0].abs_pos_requested  = 10.0;
     config.joint[0].abs_pos_achieved   = 0;
-    config.joint[0].velocity_requested = 5000.0;
-    config.joint[0].max_velocity       = 50.0;
+    config.joint[0].velocity_requested = 5000.0;   /* steps/s */
+    config.joint[0].max_velocity       = 50000.0;  /* steps/s (≈39mm/s at 1280 steps/mm) */
     config.joint[0].max_accel          = 0.0;  /* no accel limit so first call steps */
     config.joint[0].updated_from_c0    = 1;
     mock_tx_fifo_empty                  = 1;
@@ -356,7 +366,7 @@ int main(void) {
         cmocka_unit_test_setup(test_calculate_step_len_normal,          test_setup),
         cmocka_unit_test_setup(test_calculate_step_len_clamped,         test_setup),
         cmocka_unit_test_setup(test_calculate_step_len_below_threshold, test_setup),
-        cmocka_unit_test_setup(test_calculate_step_len_upper_clamp,    test_setup),
+        cmocka_unit_test_setup(test_calculate_step_len_too_slow_skip,  test_setup),
         cmocka_unit_test_setup(test_clamp_accel_no_change,              test_setup),
         cmocka_unit_test_setup(test_clamp_accel_under_limit,            test_setup),
         cmocka_unit_test_setup(test_clamp_accel_over_limit_positive,    test_setup),
@@ -366,6 +376,7 @@ int main(void) {
         cmocka_unit_test_setup(test_plan_steps_total_over_ten_periods,         test_setup),
         cmocka_unit_test_setup(test_plan_steps_excess_returned_to_accumulator, test_setup),
         cmocka_unit_test_setup(test_plan_steps_zero_velocity,                  test_setup),
+        cmocka_unit_test_setup(test_plan_steps_skip_preserves_accumulator,     test_setup),
         cmocka_unit_test_setup(test_do_steps_zero_period,               test_setup),
         cmocka_unit_test_setup(test_do_steps_disabled,                  test_setup),
         cmocka_unit_test_setup(test_do_steps_no_update,                 test_setup),
