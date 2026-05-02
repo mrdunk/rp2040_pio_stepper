@@ -12,7 +12,7 @@ addf and2.0 servo-thread
 # Machine enable
 # Requires both the UI button to be enabled and the driver to verify network is up.
 net estop-out-user   <= iocontrol.0.user-enable-out
-net estop-out-driver <= rp2040_eth.0.machine-enable-out
+net estop-out-driver <= rp2040_eth.0.machine-on
 
 net estop-out-user   => and2.0.in0
 net estop-out-driver => and2.0.in1
@@ -26,14 +26,14 @@ setp rp2040_eth.0.joint.0.scale          [JOINT_0]SCALE
 setp rp2040_eth.0.joint.0.gpio-step      0
 setp rp2040_eth.0.joint.0.gpio-dir       1
 
-setp rp2040_eth.0.joint.0.max-velocity    [JOINT_0]MAX_VELOCITY
-setp rp2040_eth.0.joint.0.max-accel       [JOINT_0]MAX_ACCELERATION
+setp rp2040_eth.0.joint.0.vel-limit    [JOINT_0]MAX_VELOCITY
+setp rp2040_eth.0.joint.0.accel-limit       [JOINT_0]MAX_ACCELERATION
 
 net xpos-cmd joint.0.motor-pos-cmd => rp2040_eth.0.joint.0.pos-cmd
 net xvel-cmd joint.0.vel-cmd       => rp2040_eth.0.joint.0.vel-cmd
-net xpos-fb  rp2040_eth.0.joint.0.fb-pos => joint.0.motor-pos-fb
+net xpos-fb  rp2040_eth.0.joint.0.pos-fb => joint.0.motor-pos-fb
 
-net estop-out => rp2040_eth.0.joint.0.enable
+net estop-out => rp2040_eth.0.joint.0.enable-cmd
 
 
 # Joint 1 — Y AXIS (J3: GP2=STEP, GP3=DIR via 74HCT541 buffer)
@@ -41,14 +41,14 @@ setp rp2040_eth.0.joint.1.scale          [JOINT_1]SCALE
 setp rp2040_eth.0.joint.1.gpio-step      2
 setp rp2040_eth.0.joint.1.gpio-dir       3
 
-setp rp2040_eth.0.joint.1.max-velocity    [JOINT_1]MAX_VELOCITY
-setp rp2040_eth.0.joint.1.max-accel       [JOINT_1]MAX_ACCELERATION
+setp rp2040_eth.0.joint.1.vel-limit    [JOINT_1]MAX_VELOCITY
+setp rp2040_eth.0.joint.1.accel-limit       [JOINT_1]MAX_ACCELERATION
 
 net ypos-cmd joint.1.motor-pos-cmd => rp2040_eth.0.joint.1.pos-cmd
 net yvel-cmd joint.1.vel-cmd       => rp2040_eth.0.joint.1.vel-cmd
-net ypos-fb  rp2040_eth.0.joint.1.fb-pos => joint.1.motor-pos-fb
+net ypos-fb  rp2040_eth.0.joint.1.pos-fb => joint.1.motor-pos-fb
 
-net estop-out => rp2040_eth.0.joint.1.enable
+net estop-out => rp2040_eth.0.joint.1.enable-cmd
 
 
 # Joint 2 — Z AXIS (J4: GP4=STEP, GP5=DIR via 74HCT541 buffer)
@@ -56,14 +56,14 @@ setp rp2040_eth.0.joint.2.scale          [JOINT_2]SCALE
 setp rp2040_eth.0.joint.2.gpio-step      4
 setp rp2040_eth.0.joint.2.gpio-dir       5
 
-setp rp2040_eth.0.joint.2.max-velocity    [JOINT_2]MAX_VELOCITY
-setp rp2040_eth.0.joint.2.max-accel       [JOINT_2]MAX_ACCELERATION
+setp rp2040_eth.0.joint.2.vel-limit    [JOINT_2]MAX_VELOCITY
+setp rp2040_eth.0.joint.2.accel-limit       [JOINT_2]MAX_ACCELERATION
 
 net zpos-cmd joint.2.motor-pos-cmd => rp2040_eth.0.joint.2.pos-cmd
 net zvel-cmd joint.2.vel-cmd       => rp2040_eth.0.joint.2.vel-cmd
-net zpos-fb  rp2040_eth.0.joint.2.fb-pos => joint.2.motor-pos-fb
+net zpos-fb  rp2040_eth.0.joint.2.pos-fb => joint.2.motor-pos-fb
 
-net estop-out => rp2040_eth.0.joint.2.enable
+net estop-out => rp2040_eth.0.joint.2.enable-cmd
 
 
 # J5 (A-axis stepper connector) is wired to GP6=STEP, GP7=DIR via 74HCT541 buffer.
@@ -72,17 +72,16 @@ net estop-out => rp2040_eth.0.joint.2.enable
 
 
 # Metrics
-net metrics-time-diff       rp2040_eth.0.metrics-time-diff
-net metrics-rx-update-id    rp2040_eth.0.metrics-rx-update-id
-net metrics-rp-update-len   rp2040_eth.0.metrics-rp-update-len
-net metrics-missed-packets  rp2040_eth.0.metrics-missed-packets
-net metrics-eth-state       rp2040_eth.0.metrics-eth-state
+net packet-interval  rp2040_eth.0.packet-interval
+net seq-in           rp2040_eth.0.seq-in
+net rx-miss-count    rp2040_eth.0.rx-miss-count
+net eth-up           rp2040_eth.0.eth-up
 
 # Spindle
 net spindle-fwd       spindle.0.forward  => rp2040_eth.0.spindle.0.fwd
 net spindle-rev       spindle.0.reverse  => rp2040_eth.0.spindle.0.rev
-net spindle-speed-out spindle.0.speed-out => rp2040_eth.0.spindle.0.speed-in
-net spindle-speed-in  spindle.0.speed-in  <= rp2040_eth.0.spindle.0.speed-out
+net spindle-speed-cmd spindle.0.speed-out => rp2040_eth.0.spindle.0.speed-cmd
+net spindle-speed-fb  spindle.0.speed-in  <= rp2040_eth.0.spindle.0.speed-fb
 net spindle-at-speed  spindle.0.at-speed  <= rp2040_eth.0.spindle.0.at-speed
 
 

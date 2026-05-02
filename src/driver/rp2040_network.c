@@ -60,7 +60,7 @@ int init_eth(int device) {
   /* Small receive buffer to prevent stale replies accumulating at startup.
    * Kernel doubles the value internally; 2048 bytes holds ~7 packets (260 bytes each).
    * Without this the default ~200KB buffer can queue hundreds of replies, causing
-   * a large steady-state gap between metrics-tx-update-id and metrics-rx-update-id. */
+   * a large steady-state gap between seq-out and seq-in. */
   int rcvbuf = 2048;
   rc = setsockopt(sockfd[device], SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
   if (rc < 0) {

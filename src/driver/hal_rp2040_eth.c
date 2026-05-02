@@ -149,50 +149,50 @@ typedef struct {
 } PinDef;
 
 static const PinDef gpio_pins[] = {
-    { PIN, HAL_OUT, offsetof(skeleton_t, gpio_data_in),         sizeof(hal_bit_t*),   "gpio", 0, 2, "in"         },
-    { PIN, HAL_OUT, offsetof(skeleton_t, gpio_data_in_not),     sizeof(hal_bit_t*),   "gpio", 0, 2, "in-not"     },
-    { PIN, HAL_IN,  offsetof(skeleton_t, gpio_data_out),        sizeof(hal_bit_t*),   "gpio", 0, 2, "out"        },
-    { PIN, HAL_IN,  offsetof(skeleton_t, gpio_data_out_invert), sizeof(hal_bit_t*),   "gpio", 0, 2, "out-invert" },
-    { U32, HAL_IN,  offsetof(skeleton_t, gpio_type),            sizeof(hal_u32_t*),   "gpio", 0, 2, "type"       },
-    { U32, HAL_IN,  offsetof(skeleton_t, gpio_index),           sizeof(hal_u32_t*),   "gpio", 0, 2, "index"      },
-    { U32, HAL_IN,  offsetof(skeleton_t, gpio_address),         sizeof(hal_u32_t*),   "gpio", 0, 2, "address"    },
+    { PIN, HAL_OUT, offsetof(skeleton_t, gpio_data_in),         sizeof(hal_bit_t*),   "gpio", 0, 2, "in"         }, // Input state read from hardware
+    { PIN, HAL_OUT, offsetof(skeleton_t, gpio_data_in_not),     sizeof(hal_bit_t*),   "gpio", 0, 2, "in-not"     }, // Inverted input state
+    { PIN, HAL_IN,  offsetof(skeleton_t, gpio_data_out),        sizeof(hal_bit_t*),   "gpio", 0, 2, "out"        }, // Output command
+    { PIN, HAL_IN,  offsetof(skeleton_t, gpio_data_out_invert), sizeof(hal_bit_t*),   "gpio", 0, 2, "out-invert" }, // Invert output before writing to hardware
+    { U32, HAL_IN,  offsetof(skeleton_t, gpio_type),            sizeof(hal_u32_t*),   "gpio", 0, 2, "type"       }, // GPIO device type (0=native RP2040, 1=MCP23017)
+    { U32, HAL_IN,  offsetof(skeleton_t, gpio_index),           sizeof(hal_u32_t*),   "gpio", 0, 2, "index"      }, // Pin index within the GPIO device
+    { U32, HAL_IN,  offsetof(skeleton_t, gpio_address),         sizeof(hal_u32_t*),   "gpio", 0, 2, "address"    }, // I2C address of the GPIO device
 };
 
 static const PinDef joint_pins[] = {
-    { PIN,   HAL_IN,  offsetof(skeleton_t, joint_enable_cmd),     sizeof(hal_bit_t*),   "joint", 0, 1, "enable-cmd"       },
-    { S32,   HAL_IN,  offsetof(skeleton_t, joint_gpio_step),      sizeof(hal_s32_t*),   "joint", 0, 1, "gpio-step"        },
-    { S32,   HAL_IN,  offsetof(skeleton_t, joint_gpio_dir),       sizeof(hal_s32_t*),   "joint", 0, 1, "gpio-dir"         },
-    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_vel_limit),      sizeof(hal_float_t*), "joint", 0, 1, "vel-limit"        },
-    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_accel_limit),    sizeof(hal_float_t*), "joint", 0, 1, "accel-limit"      },
-    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_scale),          sizeof(hal_float_t*), "joint", 0, 1, "scale"            },
-    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_pos_cmd),        sizeof(hal_float_t*), "joint", 0, 1, "pos-cmd"          },
-    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_vel_cmd),        sizeof(hal_float_t*), "joint", 0, 1, "vel-cmd"          },
-    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_pos_fb),         sizeof(hal_float_t*), "joint", 0, 1, "pos-fb"           },
-    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_vel_fb),         sizeof(hal_float_t*), "joint", 0, 1, "vel-fb"           },
-    { S32,   HAL_OUT, offsetof(skeleton_t, joint_pos_error_fb),   sizeof(hal_s32_t*),   "joint", 0, 1, "pos-error-fb"     },
-    { PIN,   HAL_OUT, offsetof(skeleton_t, joint_enable_fb),      sizeof(hal_bit_t*),   "joint", 0, 1, "enable-fb"        },
-    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_vel_calculated), sizeof(hal_float_t*), "joint", 0, 1, "vel-calculated"   },
+    { PIN,   HAL_IN,  offsetof(skeleton_t, joint_enable_cmd),     sizeof(hal_bit_t*),   "joint", 0, 1, "enable-cmd"       }, // Enable joint (LinuxCNC command)
+    { S32,   HAL_IN,  offsetof(skeleton_t, joint_gpio_step),      sizeof(hal_s32_t*),   "joint", 0, 1, "gpio-step"        }, // RP2040 GPIO pin number for step signal
+    { S32,   HAL_IN,  offsetof(skeleton_t, joint_gpio_dir),       sizeof(hal_s32_t*),   "joint", 0, 1, "gpio-dir"         }, // RP2040 GPIO pin number for direction signal
+    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_vel_limit),      sizeof(hal_float_t*), "joint", 0, 1, "vel-limit"        }, // Maximum velocity (units/sec)
+    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_accel_limit),    sizeof(hal_float_t*), "joint", 0, 1, "accel-limit"      }, // Maximum acceleration (units/sec²)
+    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_scale),          sizeof(hal_float_t*), "joint", 0, 1, "scale"            }, // Steps per unit; applied to both position and velocity commands
+    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_pos_cmd),        sizeof(hal_float_t*), "joint", 0, 1, "pos-cmd"          }, // Sent to RP2040 but not consumed by firmware; used locally to compute pos-error-fb
+    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_vel_cmd),        sizeof(hal_float_t*), "joint", 0, 1, "vel-cmd"          }, // Velocity command from LinuxCNC
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_pos_fb),         sizeof(hal_float_t*), "joint", 0, 1, "pos-fb"           }, // Position feedback (cumulative step count ÷ scale)
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_vel_fb),         sizeof(hal_float_t*), "joint", 0, 1, "vel-fb"           }, // Velocity feedback (raw steps per servo period, unscaled)
+    { S32,   HAL_OUT, offsetof(skeleton_t, joint_pos_error_fb),   sizeof(hal_s32_t*),   "joint", 0, 1, "pos-error-fb"     }, // Difference between commanded and actual step count (raw steps, unscaled)
+    { PIN,   HAL_OUT, offsetof(skeleton_t, joint_enable_fb),      sizeof(hal_bit_t*),   "joint", 0, 1, "enable-fb"        }, // RP2040's actual enabled state; may remain false after network recovery until protocol re-enables
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_vel_calculated), sizeof(hal_float_t*), "joint", 0, 1, "vel-calculated"   }, // Velocity the RP2040 computed after applying vel-limit and accel-limit
 };
 
 static const PinDef spindle_pins[] = {
-    { PIN,   HAL_IN,  offsetof(skeleton_t, spindle_fwd),       sizeof(hal_bit_t*),   "spindle", 0, 1, "fwd"       },
-    { PIN,   HAL_IN,  offsetof(skeleton_t, spindle_rev),       sizeof(hal_bit_t*),   "spindle", 0, 1, "rev"       },
-    { FLOAT, HAL_IN,  offsetof(skeleton_t, spindle_speed_cmd), sizeof(hal_float_t*), "spindle", 0, 1, "speed-cmd" },
-    { FLOAT, HAL_OUT, offsetof(skeleton_t, spindle_speed_fb),  sizeof(hal_float_t*), "spindle", 0, 1, "speed-fb"  },
-    { PIN,   HAL_OUT, offsetof(skeleton_t, spindle_at_speed),  sizeof(hal_bit_t*),   "spindle", 0, 1, "at-speed"  },
+    { PIN,   HAL_IN,  offsetof(skeleton_t, spindle_fwd),       sizeof(hal_bit_t*),   "spindle", 0, 1, "fwd"       }, // Run spindle forward
+    { PIN,   HAL_IN,  offsetof(skeleton_t, spindle_rev),       sizeof(hal_bit_t*),   "spindle", 0, 1, "rev"       }, // Run spindle reverse
+    { FLOAT, HAL_IN,  offsetof(skeleton_t, spindle_speed_cmd), sizeof(hal_float_t*), "spindle", 0, 1, "speed-cmd" }, // Commanded speed
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, spindle_speed_fb),  sizeof(hal_float_t*), "spindle", 0, 1, "speed-fb"  }, // Actual speed feedback
+    { PIN,   HAL_OUT, offsetof(skeleton_t, spindle_at_speed),  sizeof(hal_bit_t*),   "spindle", 0, 1, "at-speed"  }, // Spindle has reached commanded speed
 };
 
 static const PinDef scalar_pins[] = {
-    { PIN,   HAL_OUT, offsetof(skeleton_t, machine_on),      0, "machine-on",      -1, 1, NULL },
-    { U32,   HAL_OUT, offsetof(skeleton_t, seq_out),         0, "seq-out",         -1, 0, NULL },
-    { U32,   HAL_OUT, offsetof(skeleton_t, core1_period),    0, "core1-period",    -1, 0, NULL },
-    { U32,   HAL_OUT, offsetof(skeleton_t, core1_tick),      0, "core1-tick",      -1, 0, NULL },
-    { S32,   HAL_IN,  offsetof(skeleton_t, packet_interval), 0, "packet-interval", -1, 0, NULL },
-    { U32,   HAL_IN,  offsetof(skeleton_t, seq_in),          0, "seq-in",          -1, 0, NULL },
-    { U32,   HAL_IN,  offsetof(skeleton_t, rx_miss_count),   0, "rx-miss-count",   -1, 0, NULL },
-    { PIN,   HAL_IN,  offsetof(skeleton_t, eth_up),          0, "eth-up",          -1, 0, NULL },
-    { FLOAT, HAL_OUT, offsetof(skeleton_t, update_overrun),  0, "update-overrun",  -1, 0, NULL },
-    { FLOAT, HAL_OUT, offsetof(skeleton_t, update_underrun), 0, "update-underrun", -1, 0, NULL },
+    { PIN,   HAL_OUT, offsetof(skeleton_t, machine_on),      0, "machine-on",      -1, 1, NULL }, // True when RP2040 Ethernet link is established and communicating
+    { U32,   HAL_OUT, offsetof(skeleton_t, seq_out),         0, "seq-out",         -1, 0, NULL }, // Sequence number stamped on each packet sent to RP2040
+    { U32,   HAL_OUT, offsetof(skeleton_t, core1_period),    0, "core1-period",    -1, 0, NULL }, // RP2040 core1 measured time between loop iterations (µs)
+    { U32,   HAL_OUT, offsetof(skeleton_t, core1_tick),      0, "core1-tick",      -1, 0, NULL }, // RP2040 core1 loop iteration counter; frozen value indicates firmware hang
+    { S32,   HAL_OUT, offsetof(skeleton_t, packet_interval), 0, "packet-interval", -1, 0, NULL }, // Time between consecutive packets from LinuxCNC timestamps (ns); nominally equals the servo period
+    { U32,   HAL_OUT, offsetof(skeleton_t, seq_in),          0, "seq-in",          -1, 0, NULL }, // Sequence number echoed back by RP2040; seq-out − seq-in gives round-trip latency in cycles
+    { U32,   HAL_OUT, offsetof(skeleton_t, rx_miss_count),   0, "rx-miss-count",   -1, 0, NULL }, // Consecutive cycles without a response; resets to 0 on success; triggers network-down at MAX_SKIPPED_PACKETS
+    { PIN,   HAL_OUT, offsetof(skeleton_t, eth_up),          0, "eth-up",          -1, 0, NULL }, // Ethernet link state as seen by the driver
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, update_overrun),  0, "update-overrun",  -1, 0, NULL }, // EMA of cycles where Core1 received more than one update from Core0 per period
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, update_underrun), 0, "update-underrun", -1, 0, NULL }, // EMA of cycles where Core1 found no new update from Core0
 };
 
 int rtapi_app_main(void)
