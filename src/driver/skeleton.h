@@ -25,6 +25,7 @@ typedef struct {
   hal_s32_t* joint_pos_error_fb[MAX_JOINT];
   hal_bit_t* joint_enable_fb[MAX_JOINT];
   hal_float_t* joint_vel_calculated[MAX_JOINT];
+  hal_float_t* joint_ferror_suggest[MAX_JOINT];
 
   hal_u32_t* core1_period;
   hal_u32_t* core1_tick;

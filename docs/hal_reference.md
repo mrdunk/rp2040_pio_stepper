@@ -40,6 +40,7 @@ Per-joint pins are indexed 0–3. Replace `<N>` with the joint number.
 | `accel-limit` | float | IN | Maximum acceleration (units/sec²) |
 | `enable-cmd` | bit | IN | Enable joint (LinuxCNC command) |
 | `enable-fb` | bit | OUT | RP2040's actual enabled state; may remain false after network recovery until the protocol explicitly re-enables the joint |
+| `ferror-suggest` | float | OUT | Expected following error at `vel-limit` given current round-trip latency (`vel-limit × (seq-out − seq-in) × packet-interval × 1e-9`); set FERROR above this value |
 | `pos-cmd` | float | IN | Position command from LinuxCNC trajectory planner (sent to RP2040 but not consumed by firmware; used locally to compute `pos-error-fb`) |
 | `pos-error-fb` | s32 | OUT | Difference between commanded and actual step count (raw steps, unscaled) |
 | `pos-fb` | float | OUT | Position feedback (cumulative step count ÷ scale) |

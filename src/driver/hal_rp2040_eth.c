@@ -234,6 +234,7 @@ static const PinDef joint_pins[] = {
     { S32,   HAL_OUT, offsetof(skeleton_t, joint_pos_error_fb),   sizeof(hal_s32_t*),   "joint", 0, 1, "pos-error-fb"     }, // Difference between commanded and actual step count (raw steps, unscaled)
     { PIN,   HAL_OUT, offsetof(skeleton_t, joint_enable_fb),      sizeof(hal_bit_t*),   "joint", 0, 1, "enable-fb"        }, // RP2040's actual enabled state; may remain false after network recovery until protocol re-enables
     { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_vel_calculated), sizeof(hal_float_t*), "joint", 0, 1, "vel-calculated"   }, // Velocity the RP2040 computed after applying vel-limit and accel-limit
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_ferror_suggest), sizeof(hal_float_t*), "joint", 0, 1, "ferror-suggest"   }, // Expected following error at vel-limit given current round-trip latency (units); use as FERROR lower bound
 };
 
 static const PinDef spindle_pins[] = {
@@ -679,6 +680,21 @@ static void write_port(void *arg, long period)
   for(uint32_t joint = 0; joint < MAX_JOINT; joint++) {
     if(! *data->joint_enable_cmd[joint]) {
       *data->joint_pos_cmd[joint] = *data->joint_pos_fb[joint];
+    }
+  }
+
+  // Compute per-joint suggested FERROR: vel-limit × round-trip-latency.
+  // Zero when eth is down or packet-interval is not yet valid.
+  hal_s32_t latency_cycles = (hal_s32_t)*data->seq_out - (hal_s32_t)*data->seq_in;
+  if (*data->eth_up && *data->packet_interval > 0 && latency_cycles > 0) {
+    double latency_s = (double)latency_cycles * (double)*data->packet_interval * 1e-9;
+    for (uint32_t joint = 0; joint < MAX_JOINT; joint++) {
+      double vl = fabs((double)*data->joint_vel_limit[joint]);
+      *data->joint_ferror_suggest[joint] = (hal_float_t)(vl * latency_s);
+    }
+  } else {
+    for (uint32_t joint = 0; joint < MAX_JOINT; joint++) {
+      *data->joint_ferror_suggest[joint] = 0.0f;
     }
   }
 
