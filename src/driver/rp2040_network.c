@@ -57,6 +57,29 @@ int init_eth(int device) {
     return -1;
   }
 
+  /* Small receive buffer to prevent stale replies accumulating at startup.
+   * Kernel doubles the value internally; 2048 bytes holds ~7 packets (260 bytes each).
+   * Without this the default ~200KB buffer can queue hundreds of replies, causing
+   * a large steady-state gap between metrics-tx-update-id and metrics-rx-update-id. */
+  int rcvbuf = 2048;
+  rc = setsockopt(sockfd[device], SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+  if (rc < 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, "ERROR setting SOL_SOCKET, SO_RCVBUF\n");
+    return -1;
+  }
+
+  /* Bind to local port so the kernel can route incoming packets to this socket
+   * directly without a routing table lookup on each receive. */
+  struct sockaddr_in local_addr = {0};
+  local_addr.sin_family = AF_INET;
+  local_addr.sin_addr.s_addr = INADDR_ANY;
+  local_addr.sin_port = htons(portno);
+  rc = bind(sockfd[device], (struct sockaddr*)&local_addr, sizeof(local_addr));
+  if (rc < 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, "ERROR binding socket to local port\n");
+    return -1;
+  }
+
   /* gethostbyname: get the server's DNS entry */
   struct hostent *server = gethostbyname(hostname);
   if (server == NULL) {
@@ -128,8 +151,8 @@ size_t serialize_joint_pos(
   message.type = MSG_SET_JOINT_ABS_POS;
 
   for(size_t joint = 0; joint < MAX_JOINT; joint++) {
-    double position = *data->joint_scale[joint] * *data->joint_position[joint];
-    double velocity = *data->joint_scale[joint] * *data->joint_velocity[joint];
+    double position = *data->joint_scale[joint] * *data->joint_pos_cmd[joint];
+    double velocity = *data->joint_scale[joint] * *data->joint_vel_cmd[joint];
     message.position[joint] = position;
     message.velocity[joint] = velocity;
   }
@@ -174,7 +197,7 @@ bool serialise_spindle_speed_in(
     at_least_one_enabled = true;
 
     speed =
-      *data->spindle_speed_in[spindle] / (120.0 / data->spindle_poles[spindle]);
+      *data->spindle_speed_cmd[spindle] / (120.0 / data->spindle_poles[spindle]);
     message.speed[spindle] = speed;
   }
 
@@ -326,9 +349,8 @@ bool unpack_timing(
     skeleton_t* data
 ) {
   UNPACK_MSG(struct Reply_timing, reply, rx_buf, rx_offset);
-  *data->metric_update_id = reply->update_id;
-  *data->metric_time_diff = reply->time_diff;
-  *data->metric_rp_update_len = reply->rp_update_len;
+  *data->seq_in = reply->update_id;
+  *data->packet_interval = reply->time_diff;
 
   (*received_count)++;
   return true;
@@ -344,22 +366,22 @@ bool unpack_joint_movement(
   UNPACK_MSG(struct Reply_joint_movement, reply, rx_buf, rx_offset);
 
   for(size_t joint = 0; joint < MAX_JOINT; joint++) {
-    *data->joint_pos_feedback[joint] =
+    *data->joint_pos_fb[joint] =
       ((double)reply->abs_pos_achieved[joint]) / *data->joint_scale[joint];
 
-    *data->joint_velocity_feedback[joint] =
+    *data->joint_vel_fb[joint] =
       (double)reply->velocity_achieved[joint];
 
-    *data->joint_pos_error[joint] = (int32_t)round(
-        (*data->joint_position[joint] - *data->joint_pos_feedback[joint])
+    *data->joint_pos_error_fb[joint] = (int32_t)round(
+        (*data->joint_pos_cmd[joint] - *data->joint_pos_fb[joint])
         * *data->joint_scale[joint]);
 
-    *data->joint_rp_enabled[joint]       = reply->enabled[joint];
-    *data->joint_rp_velocity_cmd[joint]  = reply->velocity_cmd[joint];
+    *data->joint_enable_fb[joint]       = reply->enabled[joint];
+    *data->joint_vel_calculated[joint]  = reply->velocity_cmd[joint];
   }
 
-  *data->rp_update_period = reply->update_period_us;
-  *data->rp_core1_tick    = reply->core1_tick;
+  *data->core1_period = reply->update_period_us;
+  *data->core1_tick   = reply->core1_tick;
 
   (*received_count)++;
   return true;
@@ -434,8 +456,8 @@ bool unpack_joint_metrics(
   data->ema_overrun  = data->ema_overrun  * (1.0 - EMA_ALPHA) + reply->overrun_occurred  * EMA_ALPHA;
   data->ema_underrun = data->ema_underrun * (1.0 - EMA_ALPHA) + reply->underrun_occurred * EMA_ALPHA;
 
-  *data->metric_overrun_ratio  = (hal_float_t)data->ema_overrun;
-  *data->metric_underrun_ratio = (hal_float_t)data->ema_underrun;
+  *data->update_overrun  = (hal_float_t)data->ema_overrun;
+  *data->update_underrun = (hal_float_t)data->ema_underrun;
 
   (*received_count)++;
   return true;
@@ -453,8 +475,8 @@ bool unpack_spindle_speed(
   uint8_t spindle = reply->spindle_index;
 
   float rpm = reply->speed * 120.0 / data->spindle_poles[spindle];
-  float expected_rpm = *data->spindle_speed_in[spindle];
-  *data->spindle_speed_out[spindle] = rpm;
+  float expected_rpm = *data->spindle_speed_cmd[spindle];
+  *data->spindle_speed_fb[spindle] = rpm;
   *data->spindle_at_speed[spindle] = fabs(rpm - expected_rpm) < 10.0;
 
   (*received_count)++;

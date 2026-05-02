@@ -159,41 +159,40 @@ static const PinDef gpio_pins[] = {
 };
 
 static const PinDef joint_pins[] = {
-    { PIN,   HAL_IN,  offsetof(skeleton_t, joint_enable),            sizeof(hal_bit_t*),   "joint", 0, 1, "enable"           },
-    { S32,   HAL_IN,  offsetof(skeleton_t, joint_gpio_step),         sizeof(hal_s32_t*),   "joint", 0, 1, "gpio-step"        },
-    { S32,   HAL_IN,  offsetof(skeleton_t, joint_gpio_dir),          sizeof(hal_s32_t*),   "joint", 0, 1, "gpio-dir"         },
-    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_max_velocity),      sizeof(hal_float_t*), "joint", 0, 1, "max-velocity"     },
-    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_max_accel),         sizeof(hal_float_t*), "joint", 0, 1, "max-accel"        },
-    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_scale),             sizeof(hal_float_t*), "joint", 0, 1, "scale"            },
-    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_position),          sizeof(hal_float_t*), "joint", 0, 1, "pos-cmd"          },
-    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_velocity),          sizeof(hal_float_t*), "joint", 0, 1, "vel-cmd"          },
-    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_pos_feedback),      sizeof(hal_float_t*), "joint", 0, 1, "fb-pos"           },
-    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_velocity_feedback), sizeof(hal_float_t*), "joint", 0, 1, "fb-velocity"      },
-    { S32,   HAL_OUT, offsetof(skeleton_t, joint_pos_error),         sizeof(hal_s32_t*),   "joint", 0, 1, "fb-pos-error"     },
-    { PIN,   HAL_OUT, offsetof(skeleton_t, joint_rp_enabled),        sizeof(hal_bit_t*),   "joint", 0, 1, "rp-enabled"       },
-    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_rp_velocity_cmd),  sizeof(hal_float_t*), "joint", 0, 1, "rp-velocity-cmd"  },
+    { PIN,   HAL_IN,  offsetof(skeleton_t, joint_enable_cmd),     sizeof(hal_bit_t*),   "joint", 0, 1, "enable-cmd"       },
+    { S32,   HAL_IN,  offsetof(skeleton_t, joint_gpio_step),      sizeof(hal_s32_t*),   "joint", 0, 1, "gpio-step"        },
+    { S32,   HAL_IN,  offsetof(skeleton_t, joint_gpio_dir),       sizeof(hal_s32_t*),   "joint", 0, 1, "gpio-dir"         },
+    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_vel_limit),      sizeof(hal_float_t*), "joint", 0, 1, "vel-limit"        },
+    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_accel_limit),    sizeof(hal_float_t*), "joint", 0, 1, "accel-limit"      },
+    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_scale),          sizeof(hal_float_t*), "joint", 0, 1, "scale"            },
+    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_pos_cmd),        sizeof(hal_float_t*), "joint", 0, 1, "pos-cmd"          },
+    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_vel_cmd),        sizeof(hal_float_t*), "joint", 0, 1, "vel-cmd"          },
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_pos_fb),         sizeof(hal_float_t*), "joint", 0, 1, "pos-fb"           },
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_vel_fb),         sizeof(hal_float_t*), "joint", 0, 1, "vel-fb"           },
+    { S32,   HAL_OUT, offsetof(skeleton_t, joint_pos_error_fb),   sizeof(hal_s32_t*),   "joint", 0, 1, "pos-error-fb"     },
+    { PIN,   HAL_OUT, offsetof(skeleton_t, joint_enable_fb),      sizeof(hal_bit_t*),   "joint", 0, 1, "enable-fb"        },
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_vel_calculated), sizeof(hal_float_t*), "joint", 0, 1, "vel-calculated"   },
 };
 
 static const PinDef spindle_pins[] = {
     { PIN,   HAL_IN,  offsetof(skeleton_t, spindle_fwd),       sizeof(hal_bit_t*),   "spindle", 0, 1, "fwd"       },
     { PIN,   HAL_IN,  offsetof(skeleton_t, spindle_rev),       sizeof(hal_bit_t*),   "spindle", 0, 1, "rev"       },
-    { FLOAT, HAL_IN,  offsetof(skeleton_t, spindle_speed_in),  sizeof(hal_float_t*), "spindle", 0, 1, "speed-in"  },
-    { FLOAT, HAL_OUT, offsetof(skeleton_t, spindle_speed_out), sizeof(hal_float_t*), "spindle", 0, 1, "speed-out" },
+    { FLOAT, HAL_IN,  offsetof(skeleton_t, spindle_speed_cmd), sizeof(hal_float_t*), "spindle", 0, 1, "speed-cmd" },
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, spindle_speed_fb),  sizeof(hal_float_t*), "spindle", 0, 1, "speed-fb"  },
     { PIN,   HAL_OUT, offsetof(skeleton_t, spindle_at_speed),  sizeof(hal_bit_t*),   "spindle", 0, 1, "at-speed"  },
 };
 
 static const PinDef scalar_pins[] = {
-    { PIN, HAL_OUT, offsetof(skeleton_t, machine_enable_out),    0, "machine-enable-out",     -1, 1, NULL },
-    { U32, HAL_OUT, offsetof(skeleton_t, metric_tx_update_id),   0, "metrics-tx-update-id",   -1, 0, NULL },
-    { U32, HAL_OUT, offsetof(skeleton_t, rp_update_period),      0, "rp-update-period",        -1, 0, NULL },
-    { U32, HAL_OUT, offsetof(skeleton_t, rp_core1_tick),         0, "rp-core1-tick",           -1, 0, NULL },
-    { S32, HAL_IN,  offsetof(skeleton_t, metric_time_diff),      0, "metrics-time-diff",      -1, 0, NULL },
-    { U32, HAL_IN,  offsetof(skeleton_t, metric_update_id),      0, "metrics-rx-update-id",   -1, 0, NULL },
-    { U32, HAL_IN,  offsetof(skeleton_t, metric_rp_update_len),  0, "metrics-rp-update-len",  -1, 0, NULL },
-    { U32, HAL_IN,  offsetof(skeleton_t, metric_missed_packets), 0, "metrics-missed-packets", -1, 0, NULL },
-    { PIN,   HAL_IN,  offsetof(skeleton_t, metric_eth_state),             0, "metrics-eth-state",      -1, 0, NULL },
-    { FLOAT, HAL_OUT, offsetof(skeleton_t, metric_overrun_ratio),        0, "fb-overrun-ratio",       -1, 0, NULL },
-    { FLOAT, HAL_OUT, offsetof(skeleton_t, metric_underrun_ratio),       0, "fb-underrun-ratio",      -1, 0, NULL },
+    { PIN,   HAL_OUT, offsetof(skeleton_t, machine_on),      0, "machine-on",      -1, 1, NULL },
+    { U32,   HAL_OUT, offsetof(skeleton_t, seq_out),         0, "seq-out",         -1, 0, NULL },
+    { U32,   HAL_OUT, offsetof(skeleton_t, core1_period),    0, "core1-period",    -1, 0, NULL },
+    { U32,   HAL_OUT, offsetof(skeleton_t, core1_tick),      0, "core1-tick",      -1, 0, NULL },
+    { S32,   HAL_IN,  offsetof(skeleton_t, packet_interval), 0, "packet-interval", -1, 0, NULL },
+    { U32,   HAL_IN,  offsetof(skeleton_t, seq_in),          0, "seq-in",          -1, 0, NULL },
+    { U32,   HAL_IN,  offsetof(skeleton_t, rx_miss_count),   0, "rx-miss-count",   -1, 0, NULL },
+    { PIN,   HAL_IN,  offsetof(skeleton_t, eth_up),          0, "eth-up",          -1, 0, NULL },
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, update_overrun),  0, "update-overrun",  -1, 0, NULL },
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, update_underrun), 0, "update-underrun", -1, 0, NULL },
 };
 
 int rtapi_app_main(void)
@@ -256,7 +255,7 @@ int rtapi_app_main(void)
       goto port_error;
     }
   }
-  *port_data_array->machine_enable_out = false;
+  *port_data_array->machine_on = false;
 
   for (int i = 0; i < MAX_JOINT; i++) {
     for (int j = 0; j < ARRAY_SIZE(joint_pins); j++) {
@@ -269,7 +268,7 @@ int rtapi_app_main(void)
     }
   }
   for (int i = 0; i < MAX_JOINT; i++) {
-    *port_data_array->joint_enable[i]    = false;
+    *port_data_array->joint_enable_cmd[i]    = false;
     *port_data_array->joint_gpio_step[i] = -1;
     *port_data_array->joint_gpio_dir[i]  = -1;
   }
@@ -373,14 +372,14 @@ bool configure_joint(
 ) {
     bool pack_success = true;
     float max_velocity_ticks =
-      (float)((*data->joint_max_velocity[joint]) * (*data->joint_scale[joint]));
+      (float)((*data->joint_vel_limit[joint]) * (*data->joint_scale[joint]));
     float max_accel_ticks =
-      (float)((*data->joint_max_accel[joint]) * (*data->joint_scale[joint]));
+      (float)((*data->joint_accel_limit[joint]) * (*data->joint_scale[joint]));
     /* Send if anything changed, or if no reply has arrived yet (last_joint_config
      * only updates in unpack_joint_config on receipt of REPLY_JOINT_CONFIG, so a
      * lost packet leaves the diff intact and causes an automatic retry). */
     if(
-        last_joint_config[joint].enable != *data->joint_enable[joint]
+        last_joint_config[joint].enable != *data->joint_enable_cmd[joint]
         ||
         last_joint_config[joint].gpio_step != *data->joint_gpio_step[joint]
         ||
@@ -393,7 +392,7 @@ bool configure_joint(
       pack_success = pack_success && serialize_joint_config(
           tx_buffer,
           joint,
-          *data->joint_enable[joint],
+          *data->joint_enable_cmd[joint],
           *data->joint_gpio_step[joint],
           *data->joint_gpio_dir[joint],
           max_velocity_ticks,
@@ -522,7 +521,7 @@ static void write_port(void *arg, long period)
   reset_nw_buf(&buffer);
   bool pack_success = true;
 
-  *data->metric_tx_update_id = (uint32_t)count;
+  *data->seq_out = (uint32_t)count;
   pack_success = pack_success && serialize_timing(&buffer, count, rtapi_get_time());
 
   // Put GPIO values in network buffer.
@@ -572,28 +571,28 @@ static void write_port(void *arg, long period)
         last_spindle_config
     );
 
-    if(! *data->metric_eth_state) {
+    if(! *data->eth_up) {
       // Network connection just came up after being down.
       on_eth_up(data, count);
     }
 
-    if(last_update_id +1 != *data->metric_update_id && last_update_id != 0) {
+    if(last_update_id +1 != *data->seq_in && last_update_id != 0) {
       printf("WARN: %i missing updates. %u %u\n",
-          *data->metric_update_id - last_update_id - 1, last_update_id, *data->metric_update_id);
+          *data->seq_in - last_update_id - 1, last_update_id, *data->seq_in);
     }
-    last_update_id = *data->metric_update_id;
-    *data->metric_missed_packets = 0;
+    last_update_id = *data->seq_in;
+    *data->rx_miss_count = 0;
   } else {
     if(errno != EAGAIN && last_errno != errno) {
       last_errno = errno;
       log_network_error("receive", device_num, errno);
     }
-    if(*data->metric_eth_state) {
+    if(*data->eth_up) {
       // Network connection just went down after being up.
       on_eth_down(data, last_joint_config, last_gpio_config, last_spindle_config, count);
     }
-    (*data->metric_missed_packets)++;
-    if (*data->metric_missed_packets == 5000 || !(*data->metric_missed_packets % 10000)) {
+    (*data->rx_miss_count)++;
+    if (*data->rx_miss_count == 5000 || !(*data->rx_miss_count % 10000)) {
       printf("WARN: Still no connection over Ethernet link.\n");
     }
   }
@@ -601,8 +600,8 @@ static void write_port(void *arg, long period)
   // If joint not enabled, assume LinuxCNC has just started and set it's position
   // to that of the RP.
   for(uint32_t joint = 0; joint < MAX_JOINT; joint++) {
-    if(! *data->joint_enable[joint]) {
-      *data->joint_position[joint] = *data->joint_pos_feedback[joint];
+    if(! *data->joint_enable_cmd[joint]) {
+      *data->joint_pos_cmd[joint] = *data->joint_pos_fb[joint];
     }
   }
 
@@ -613,8 +612,8 @@ static void write_port(void *arg, long period)
  * the RP has been lost then re-established. */
 void on_eth_up(skeleton_t *data, uint count) {
   printf("Ethernet up. Packet count: %u\n", count);
-  *data->metric_eth_state = true;
-  *data->machine_enable_out = true;
+  *data->eth_up = true;
+  *data->machine_on = true;
 }
 
 void on_eth_down(
@@ -623,13 +622,13 @@ void on_eth_down(
     struct Message_gpio_config* last_gpio_config,
     struct Message_spindle_config* last_spindle_config,
     uint count) {
-  if(*data->metric_missed_packets < MAX_SKIPPED_PACKETS) {
+  if(*data->rx_miss_count < MAX_SKIPPED_PACKETS) {
     return;
   }
 
   printf("WARN: Ethernet down. Packet count: %u\n", count);
-  *data->metric_eth_state = false;
-  *data->machine_enable_out = false;
+  *data->eth_up = false;
+  *data->machine_on = false;
 
   // Force reconfiguration when network comes back up.
   reset_rp_config(data, last_joint_config, last_gpio_config, last_spindle_config);
@@ -643,7 +642,7 @@ void reset_rp_config(
     struct Message_spindle_config* last_spindle_config
 ) {
   for(size_t joint = 0; joint < MAX_JOINT; joint++) {
-    *data->joint_enable[joint] = false;
+    *data->joint_enable_cmd[joint] = false;
     last_joint_config[joint].gpio_step = -1;
     last_joint_config[joint].gpio_dir = -1;
   }

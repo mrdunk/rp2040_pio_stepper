@@ -10,60 +10,58 @@
 
 
 /* Set up mock skeleton_t struct. */
-hal_u32_t metric_update_id;
-hal_u32_t metric_tx_update_id;
-hal_s32_t metric_time_diff;
-hal_u32_t metric_rp_update_len;
+hal_u32_t seq_in;
+hal_u32_t seq_out;
+hal_s32_t packet_interval;
 
-hal_bit_t joint_enable[4];
+hal_bit_t joint_enable_cmd[4];
 hal_s32_t joint_gpio_step[4];
 hal_s32_t joint_gpio_dir[4];
-hal_float_t joint_max_velocity[4];
-hal_float_t joint_max_accel[4];
-hal_float_t joint_pos_feedback[4];
-hal_float_t joint_position[4];
+hal_float_t joint_vel_limit[4];
+hal_float_t joint_accel_limit[4];
+hal_float_t joint_pos_fb[4];
+hal_float_t joint_pos_cmd[4];
 hal_float_t joint_scale[4] = {1000, 1000, 1000, 1000};
-hal_float_t joint_velocity_feedback[4];
-hal_s32_t joint_pos_error[4];
-hal_bit_t joint_rp_enabled[4];
-hal_float_t joint_rp_velocity_cmd[4];
-hal_u32_t rp_update_period;
-hal_u32_t rp_core1_tick;
-hal_float_t metric_overrun_ratio;
-hal_float_t metric_underrun_ratio;
+hal_float_t joint_vel_fb[4];
+hal_s32_t joint_pos_error_fb[4];
+hal_bit_t joint_enable_fb[4];
+hal_float_t joint_vel_calculated[4];
+hal_u32_t core1_period;
+hal_u32_t core1_tick;
+hal_float_t update_overrun;
+hal_float_t update_underrun;
 
-hal_float_t spindle_speed_out[MAX_SPINDLE];
-hal_float_t spindle_speed_in[MAX_SPINDLE];
+hal_float_t spindle_speed_fb[MAX_SPINDLE];
+hal_float_t spindle_speed_cmd[MAX_SPINDLE];
 hal_bit_t   spindle_at_speed[MAX_SPINDLE];
 
 void setup_data(skeleton_t* data) {
-  data->metric_update_id = &metric_update_id;
-  data->metric_tx_update_id = &metric_tx_update_id;
-  data->metric_time_diff = &metric_time_diff;
-  data->metric_rp_update_len = &metric_rp_update_len;
+  data->seq_in = &seq_in;
+  data->seq_out = &seq_out;
+  data->packet_interval = &packet_interval;
 
   for(size_t joint = 0; joint < MAX_JOINT; joint++) {
-    data->joint_enable[joint] = &(joint_enable[joint]);
+    data->joint_enable_cmd[joint] = &(joint_enable_cmd[joint]);
     data->joint_gpio_step[joint] = &(joint_gpio_step[joint]);
     data->joint_gpio_dir[joint] = &(joint_gpio_dir[joint]);
-    data->joint_max_velocity[joint] = &(joint_max_velocity[joint]);
-    data->joint_max_accel[joint] = &(joint_max_accel[joint]);
-    data->joint_pos_feedback[joint] = &(joint_pos_feedback[joint]);
-    data->joint_position[joint] = &(joint_position[joint]);
+    data->joint_vel_limit[joint] = &(joint_vel_limit[joint]);
+    data->joint_accel_limit[joint] = &(joint_accel_limit[joint]);
+    data->joint_pos_fb[joint] = &(joint_pos_fb[joint]);
+    data->joint_pos_cmd[joint] = &(joint_pos_cmd[joint]);
     data->joint_scale[joint] = &(joint_scale[joint]);
-    data->joint_velocity_feedback[joint] = &(joint_velocity_feedback[joint]);
-    data->joint_pos_error[joint] = &(joint_pos_error[joint]);
-    data->joint_rp_enabled[joint]      = &(joint_rp_enabled[joint]);
-    data->joint_rp_velocity_cmd[joint] = &(joint_rp_velocity_cmd[joint]);
+    data->joint_vel_fb[joint] = &(joint_vel_fb[joint]);
+    data->joint_pos_error_fb[joint] = &(joint_pos_error_fb[joint]);
+    data->joint_enable_fb[joint]      = &(joint_enable_fb[joint]);
+    data->joint_vel_calculated[joint] = &(joint_vel_calculated[joint]);
   }
-  data->metric_overrun_ratio  = &metric_overrun_ratio;
-  data->metric_underrun_ratio = &metric_underrun_ratio;
-  data->rp_update_period      = &rp_update_period;
-  data->rp_core1_tick         = &rp_core1_tick;
+  data->update_overrun  = &update_overrun;
+  data->update_underrun = &update_underrun;
+  data->core1_period    = &core1_period;
+  data->core1_tick      = &core1_tick;
 
   for (size_t s = 0; s < MAX_SPINDLE; s++) {
-    data->spindle_speed_out[s] = &spindle_speed_out[s];
-    data->spindle_speed_in[s]  = &spindle_speed_in[s];
+    data->spindle_speed_fb[s]  = &spindle_speed_fb[s];
+    data->spindle_speed_cmd[s] = &spindle_speed_cmd[s];
     data->spindle_at_speed[s]  = &spindle_at_speed[s];
     data->spindle_poles[s]     = 4.0;
   }
@@ -102,9 +100,8 @@ static void test_timing(void **state) {
             );
 
 
-    assert_int_equal(*(data.metric_update_id), message.update_id);
-    assert_int_equal(*(data.metric_time_diff), message.time_diff);
-    assert_int_equal(*(data.metric_rp_update_len), message.rp_update_len);
+    assert_int_equal(*(data.seq_in), message.update_id);
+    assert_int_equal(*(data.packet_interval), message.time_diff);
 }
 
 static void test_joint_movement(void **state) {
@@ -142,15 +139,15 @@ static void test_joint_movement(void **state) {
 
     for(size_t joint = 0; joint < MAX_JOINT; joint++) {
         assert_double_equal(
-                (*data.joint_pos_feedback)[joint],
+                (*data.joint_pos_fb)[joint],
                 (double)message.abs_pos_achieved[joint] / (*data.joint_scale)[joint],
                 0.0001);
-        assert_int_equal((*data.joint_velocity_feedback)[joint], message.velocity_achieved[joint]);
-        assert_int_equal(*data.joint_rp_enabled[joint], message.enabled[joint]);
-        assert_double_equal(*data.joint_rp_velocity_cmd[joint], message.velocity_cmd[joint], 0.001);
+        assert_int_equal((*data.joint_vel_fb)[joint], message.velocity_achieved[joint]);
+        assert_int_equal(*data.joint_enable_fb[joint], message.enabled[joint]);
+        assert_double_equal(*data.joint_vel_calculated[joint], message.velocity_cmd[joint], 0.001);
     }
-    assert_int_equal(*data.rp_update_period, message.update_period_us);
-    assert_int_equal(*data.rp_core1_tick, message.core1_tick);
+    assert_int_equal(*data.core1_period, message.update_period_us);
+    assert_int_equal(*data.core1_tick, message.core1_tick);
 }
 
 static void test_joint_config(void **state) {
@@ -233,8 +230,8 @@ static void test_joint_metrics_ema_ratios(void **state) {
     struct NWBuffer buffer = {0};
     size_t mess_received_count = 0;
 
-    metric_overrun_ratio       = 0.0;
-    metric_underrun_ratio = 0.0;
+    update_overrun  = 0.0;
+    update_underrun = 0.0;
 
     skeleton_t data = {0};
     setup_data(&data);
@@ -260,8 +257,8 @@ static void test_joint_metrics_ema_ratios(void **state) {
      *   ema_overrun  = 2.0 * (1 - α) + 1 * α  (α = 1/1000, so ≈ 1.999)
      *   ema_underrun = 2.0 * (1 - α) + 0 * α  (≈ 1.998)
      * Both ratios reflect their respective EMA values. */
-    assert_true(*data.metric_overrun_ratio > 0.0);
-    assert_true(*data.metric_underrun_ratio > 0.0);
+    assert_true(*data.update_overrun > 0.0);
+    assert_true(*data.update_underrun > 0.0);
 
     /* With ema_underrun = 0 and zero underrun counts, underrun_ratio → 0. */
     data.ema_overrun  = 1000.0;
@@ -273,7 +270,7 @@ static void test_joint_metrics_ema_ratios(void **state) {
     process_data(&buffer, &data, &mess_received_count,
                  buffer.length + sizeof(buffer.length) + sizeof(buffer.checksum),
                  NULL, NULL, NULL);
-    assert_true(*data.metric_underrun_ratio < 0.01);
+    assert_true(*data.update_underrun < 0.01);
 
     /* With both EMA zero and zero counts, both ratios should be 0. */
     data.ema_overrun  = 0.0;
@@ -285,15 +282,15 @@ static void test_joint_metrics_ema_ratios(void **state) {
     process_data(&buffer, &data, &mess_received_count,
                  buffer.length + sizeof(buffer.length) + sizeof(buffer.checksum),
                  NULL, NULL, NULL);
-    assert_float_equal(*data.metric_underrun_ratio, 0.0, 1e-9);
+    assert_float_equal(*data.update_underrun, 0.0, 1e-9);
 }
 
 static void test_unpack_spindle_speed(void **state) {
     (void) state;
 
     skeleton_t data = {0};
-    memset(spindle_speed_out, 0, sizeof(spindle_speed_out));
-    memset(spindle_speed_in,  0, sizeof(spindle_speed_in));
+    memset(spindle_speed_fb,  0, sizeof(spindle_speed_fb));
+    memset(spindle_speed_cmd, 0, sizeof(spindle_speed_cmd));
     memset(spindle_at_speed,  0, sizeof(spindle_at_speed));
     setup_data(&data);
 
@@ -307,7 +304,7 @@ static void test_unpack_spindle_speed(void **state) {
         .spindle_index = 0,
         .speed         = 50.0,
     };
-    *data.spindle_speed_in[0] = 1500.0;
+    *data.spindle_speed_cmd[0] = 1500.0;
 
     memcpy(buffer.payload, &reply, sizeof(reply));
     buffer.length = aligned32(sizeof(reply));
@@ -316,7 +313,7 @@ static void test_unpack_spindle_speed(void **state) {
 
     assert_true(result);
     assert_int_equal(received_count, 1);
-    assert_double_equal(*data.spindle_speed_out[0], 1500.0, 0.01);
+    assert_double_equal(*data.spindle_speed_fb[0], 1500.0, 0.01);
     assert_true(*data.spindle_at_speed[0]);  /* |1500 - 1500| < 10 */
     assert_int_equal(rx_offset, aligned32(sizeof(reply)));
 }
@@ -325,8 +322,8 @@ static void test_unpack_spindle_not_at_speed(void **state) {
     (void) state;
 
     skeleton_t data = {0};
-    memset(spindle_speed_out, 0, sizeof(spindle_speed_out));
-    memset(spindle_speed_in,  0, sizeof(spindle_speed_in));
+    memset(spindle_speed_fb,  0, sizeof(spindle_speed_fb));
+    memset(spindle_speed_cmd, 0, sizeof(spindle_speed_cmd));
     memset(spindle_at_speed,  0, sizeof(spindle_at_speed));
     setup_data(&data);
 
@@ -340,7 +337,7 @@ static void test_unpack_spindle_not_at_speed(void **state) {
         .spindle_index = 0,
         .speed         = 50.0,
     };
-    *data.spindle_speed_in[0] = 1520.0;
+    *data.spindle_speed_cmd[0] = 1520.0;
 
     memcpy(buffer.payload, &reply, sizeof(reply));
     buffer.length = aligned32(sizeof(reply));
@@ -349,7 +346,7 @@ static void test_unpack_spindle_not_at_speed(void **state) {
 
     assert_true(result);
     assert_int_equal(received_count, 1);
-    assert_double_equal(*data.spindle_speed_out[0], 1500.0, 0.01);
+    assert_double_equal(*data.spindle_speed_fb[0], 1500.0, 0.01);
     assert_false(*data.spindle_at_speed[0]);  /* |1500 - 1520| = 20 >= 10 */
 }
 

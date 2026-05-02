@@ -52,9 +52,9 @@ static void test_serialize_jont_pos(void **state) {
 
     skeleton_t data = {0};
     for(size_t joint = 0; joint < MAX_JOINT; joint++) {
-        data.joint_scale[joint] = &scale[joint];
-        data.joint_position[joint] = &position[joint];
-        data.joint_velocity[joint] = &velocity[joint];
+        data.joint_scale[joint]   = &scale[joint];
+        data.joint_pos_cmd[joint] = &position[joint];
+        data.joint_vel_cmd[joint] = &velocity[joint];
     }
 
     size_t data_size = serialize_joint_pos(&buffer, &data);

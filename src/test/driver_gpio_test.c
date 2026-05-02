@@ -10,24 +10,23 @@
 
 
 /* Set up mock skeleton_t struct. */
-hal_u32_t metric_update_id;
-hal_u32_t metric_tx_update_id;
-hal_s32_t metric_time_diff;
-hal_u32_t metric_rp_update_len;
+hal_u32_t seq_in;
+hal_u32_t seq_out;
+hal_s32_t packet_interval;
 
-hal_bit_t joint_enable[4];
+hal_bit_t joint_enable_cmd[4];
 hal_s32_t joint_gpio_step[4];
 hal_s32_t joint_gpio_dir[4];
-hal_float_t joint_max_velocity[4];
-hal_float_t joint_max_accel[4];
-hal_float_t joint_pos_feedback[4];
+hal_float_t joint_vel_limit[4];
+hal_float_t joint_accel_limit[4];
+hal_float_t joint_pos_fb[4];
 hal_float_t joint_scale[4] = {1000, 1000, 1000, 1000};
-hal_float_t joint_velocity_feedback[4];
-hal_s32_t joint_pos_error[4];
-hal_bit_t joint_rp_enabled[4];
-hal_float_t joint_rp_velocity_cmd[4];
-hal_u32_t rp_update_period;
-hal_u32_t rp_core1_tick;
+hal_float_t joint_vel_fb[4];
+hal_s32_t joint_pos_error_fb[4];
+hal_bit_t joint_enable_fb[4];
+hal_float_t joint_vel_calculated[4];
+hal_u32_t core1_period;
+hal_u32_t core1_tick;
 
 hal_bit_t gpio_data_out[MAX_GPIO];
 hal_bit_t gpio_data_out_invert[MAX_GPIO];
@@ -37,27 +36,26 @@ hal_u32_t gpio_type[MAX_GPIO];
 
 
 void setup_data(skeleton_t* data) {
-    data->metric_update_id = &metric_update_id;
-    data->metric_tx_update_id = &metric_tx_update_id;
-    data->metric_time_diff = &metric_time_diff;
-    data->metric_rp_update_len = &metric_rp_update_len;
+    data->seq_in = &seq_in;
+    data->seq_out = &seq_out;
+    data->packet_interval = &packet_interval;
 
     for(size_t joint = 0; joint < MAX_JOINT; joint++) {
-        data->joint_enable[joint] =            &joint_enable[joint];
-        data->joint_gpio_step[joint] =         &joint_gpio_step[joint];
-        data->joint_gpio_dir[joint] =          &joint_gpio_dir[joint];
-        data->joint_max_velocity[joint] =      &joint_max_velocity[joint];
-        data->joint_max_accel[joint] =         &joint_max_accel[joint];
-        data->joint_pos_feedback[joint] =      &joint_pos_feedback[joint];
-        data->joint_scale[joint] =             &joint_scale[joint];
-        data->joint_velocity_feedback[joint] = &joint_velocity_feedback[joint];
-        data->joint_pos_error[joint]         = &joint_pos_error[joint];
-        data->joint_rp_enabled[joint]        = &joint_rp_enabled[joint];
-        data->joint_rp_velocity_cmd[joint]   = &joint_rp_velocity_cmd[joint];
+        data->joint_enable_cmd[joint] =      &joint_enable_cmd[joint];
+        data->joint_gpio_step[joint] =       &joint_gpio_step[joint];
+        data->joint_gpio_dir[joint] =        &joint_gpio_dir[joint];
+        data->joint_vel_limit[joint] =       &joint_vel_limit[joint];
+        data->joint_accel_limit[joint] =     &joint_accel_limit[joint];
+        data->joint_pos_fb[joint] =          &joint_pos_fb[joint];
+        data->joint_scale[joint] =           &joint_scale[joint];
+        data->joint_vel_fb[joint] =          &joint_vel_fb[joint];
+        data->joint_pos_error_fb[joint] =    &joint_pos_error_fb[joint];
+        data->joint_enable_fb[joint] =       &joint_enable_fb[joint];
+        data->joint_vel_calculated[joint] =  &joint_vel_calculated[joint];
     }
 
-    data->rp_update_period = &rp_update_period;
-    data->rp_core1_tick    = &rp_core1_tick;
+    data->core1_period = &core1_period;
+    data->core1_tick   = &core1_tick;
 
     for(size_t gpio = 0; gpio < MAX_GPIO; gpio++) {
         data->gpio_data_out[gpio] = &gpio_data_out[gpio];
