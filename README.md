@@ -8,7 +8,24 @@ The IP address of the RP2040 is 192.168.12.2.
 I use a straight point-to-point ethernet connecton to an empty network interface on the LinuxCNC host.
 I use 192.168.12.1 for the LinuxCNC host.
 
+# Host network tuning
+
+For lowest latency, disable interrupt coalescing on the network interface connected
+to the RP2040. Add a udev rule so it applies automatically on boot and link-up:
+
+```
+# /etc/udev/rules.d/60-linuxcnc-coalesce.rules
+ACTION=="add", SUBSYSTEM=="net", KERNEL=="eth0", \
+  RUN+="/sbin/ethtool -C eth0 rx-usecs 0 rx-frames 1"
+```
+
+Replace `eth0` with the actual interface name. Without this, the NIC may coalesce
+several incoming packets before raising an interrupt, adding variable latency to
+the `pos-fb` round-trip.
+
 # Configuration
+See [docs/hal_pins.md](docs/hal_pins.md) for a full reference of all HAL pins, types, directions, and setup examples.
+
 Machine-specific LinuxCNC config files live in `config/<machine-name>/`:
 
 ```
