@@ -13,8 +13,8 @@ typedef struct {
   hal_bit_t* eth_up;
   hal_bit_t* machine_on;
   hal_bit_t* joint_enable_cmd[MAX_JOINT];
-  hal_s32_t* joint_gpio_step[MAX_JOINT];
-  hal_s32_t* joint_gpio_dir[MAX_JOINT];
+  hal_s32_t  joint_gpio_step[MAX_JOINT];
+  hal_s32_t  joint_gpio_dir[MAX_JOINT];
   hal_float_t* joint_vel_limit[MAX_JOINT];
   hal_float_t* joint_accel_limit[MAX_JOINT];
   hal_float_t* joint_scale[MAX_JOINT];
@@ -38,9 +38,9 @@ typedef struct {
   hal_bit_t* gpio_data_in_not[MAX_GPIO];
   hal_bit_t* gpio_data_out[MAX_GPIO];
   hal_bit_t* gpio_data_out_invert[MAX_GPIO];
-  hal_u32_t* gpio_type[MAX_GPIO];
-  hal_u32_t* gpio_index[MAX_GPIO];
-  hal_u32_t* gpio_address[MAX_GPIO];
+  hal_u32_t  gpio_type[MAX_GPIO];
+  hal_u32_t  gpio_index[MAX_GPIO];
+  hal_u32_t  gpio_address[MAX_GPIO];
 
   hal_u32_t gpio_data_received[MAX_GPIO_BANK];
   hal_bit_t gpio_confirmation_pending[MAX_GPIO_BANK];

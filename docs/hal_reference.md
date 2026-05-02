@@ -1,13 +1,16 @@
-# HAL Pin Reference
+# HAL Reference
 
-All pins are registered under the component name `rp2040_eth`. With the default
+All pins and parameters are registered under the component name `rp2040_eth`. With the default
 device index of 0, the full prefix is `rp2040_eth.0`.
 
-Pin name format:
+Name format:
 - Scalar: `rp2040_eth.0.<name>`
 - Per-joint: `rp2040_eth.0.joint.<N>.<name>` (N = 0–3)
-- Per-GPIO: `rp2040_eth.0.gpio.<NN>.<name>` (NN = 00–31, zero-padded)
+- Per-GPIO: `rp2040_eth.0.gpio.<NN>.<name>` (NN = 00–63, zero-padded)
 - Per-spindle: `rp2040_eth.0.spindle.<N>.<name>` (N = 0–3)
+
+**HAL pins** can be connected to signals with `net`. **HAL parameters** are set once at
+config time with `setp` and cannot be connected to signals.
 
 ---
 
@@ -37,8 +40,6 @@ Per-joint pins are indexed 0–3. Replace `<N>` with the joint number.
 | `accel-limit` | float | IN | Maximum acceleration (units/sec²) |
 | `enable-cmd` | bit | IN | Enable joint (LinuxCNC command) |
 | `enable-fb` | bit | OUT | RP2040's actual enabled state; may remain false after network recovery until the protocol explicitly re-enables the joint |
-| `gpio-dir` | s32 | IN | RP2040 GPIO pin number for the direction signal |
-| `gpio-step` | s32 | IN | RP2040 GPIO pin number for the step signal |
 | `pos-cmd` | float | IN | Position command from LinuxCNC trajectory planner (sent to RP2040 but not consumed by firmware; used locally to compute `pos-error-fb`) |
 | `pos-error-fb` | s32 | OUT | Difference between commanded and actual step count (raw steps, unscaled) |
 | `pos-fb` | float | OUT | Position feedback (cumulative step count ÷ scale) |
@@ -48,13 +49,26 @@ Per-joint pins are indexed 0–3. Replace `<N>` with the joint number.
 | `vel-fb` | float | OUT | Velocity feedback (raw steps per servo period, unscaled) |
 | `vel-limit` | float | IN | Maximum velocity (units/sec) |
 
+### Joint Parameters
+
+Hardware wiring — set once at config time.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `gpio-dir` | s32 | RP2040 GPIO pin number for the direction signal |
+| `gpio-step` | s32 | RP2040 GPIO pin number for the step signal |
+
 ### Joint setup example
 
 ```hal
-# Set configuration parameters
-setp rp2040_eth.0.joint.0.scale       800       # 800 steps/mm
+# config/frankencnc/frankencnc.hal
+
+# Hardware wiring (parameters)
 setp rp2040_eth.0.joint.0.gpio-step   0         # RP2040 GP0
 setp rp2040_eth.0.joint.0.gpio-dir    1         # RP2040 GP1
+
+# Motion limits and scale (pins — can be driven by signals)
+setp rp2040_eth.0.joint.0.scale       800       # 800 steps/mm
 setp rp2040_eth.0.joint.0.vel-limit   [JOINT_0]MAX_VELOCITY
 setp rp2040_eth.0.joint.0.accel-limit [JOINT_0]MAX_ACCELERATION
 
@@ -69,18 +83,25 @@ net x-enable  joint.0.amp-enable-out => rp2040_eth.0.joint.0.enable-cmd
 
 ## GPIO Pins
 
-Per-GPIO pins are indexed 00–31 (zero-padded to two digits). Replace `<NN>` with
+Per-GPIO pins are indexed 00–63 (zero-padded to two digits). Replace `<NN>` with
 the GPIO channel number.
 
 | Pin | Type | Dir | Description |
 |-----|------|-----|-------------|
-| `address` | u32 | IN | I2C address of the GPIO device (MCP23017 only) |
 | `in` | bit | OUT | Input state read from hardware |
 | `in-not` | bit | OUT | Inverted input state |
-| `index` | u32 | IN | Pin index within the GPIO device |
 | `out` | bit | IN | Output command |
 | `out-invert` | bit | IN | Invert output before writing to hardware |
-| `type` | u32 | IN | GPIO device type — see `config/shared/rp2040_gpio_types.ini` for values |
+
+### GPIO Parameters
+
+Hardware wiring — set once at config time.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `address` | u32 | I2C address of the GPIO device (MCP23017 only) |
+| `index` | u32 | Pin index within the GPIO device |
+| `type` | u32 | GPIO device type — see `config/shared/rp2040_gpio_types.ini` for values |
 
 GPIO type values (from `rp2040_gpio_types.ini`):
 
@@ -96,6 +117,7 @@ GPIO type values (from `rp2040_gpio_types.ini`):
 
 **Native RP2040 input (e.g. probe)**
 ```hal
+# config/frankencnc/frankencnc.hal
 setp rp2040_eth.0.gpio.00.type  [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_IN
 setp rp2040_eth.0.gpio.00.index 8    # GP8
 net probe-in  rp2040_eth.0.gpio.00.in
@@ -103,6 +125,7 @@ net probe-in  rp2040_eth.0.gpio.00.in
 
 **Native RP2040 output (e.g. coolant relay)**
 ```hal
+# config/frankencnc/frankencnc.hal
 setp rp2040_eth.0.gpio.01.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_OUT
 setp rp2040_eth.0.gpio.01.index     9    # GP9
 setp rp2040_eth.0.gpio.01.out-invert false
@@ -111,6 +134,7 @@ net coolant-out  rp2040_eth.0.gpio.01.out
 
 **MCP23017 I2C expander input**
 ```hal
+# config/frankencnc/frankencnc.hal
 setp rp2040_eth.0.gpio.08.type    [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_IN
 setp rp2040_eth.0.gpio.08.index   0        # MCP23017 pin GPA0
 setp rp2040_eth.0.gpio.08.address [I2C_0]ADDRESS
@@ -119,6 +143,7 @@ net hold-in  rp2040_eth.0.gpio.08.in
 
 **MCP23017 I2C expander output**
 ```hal
+# config/frankencnc/frankencnc.hal
 setp rp2040_eth.0.gpio.09.type    [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_OUT
 setp rp2040_eth.0.gpio.09.index   1        # MCP23017 pin GPA1
 setp rp2040_eth.0.gpio.09.address [I2C_0]ADDRESS
@@ -139,27 +164,31 @@ Per-spindle pins are indexed 0–3. Replace `<N>` with the spindle number.
 | `speed-cmd` | float | IN | Commanded speed |
 | `speed-fb` | float | OUT | Actual speed feedback |
 
-HAL parameters (set once, not connected to signals):
+### Spindle Parameters
+
+Hardware wiring — set once at config time.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `vfd-type` | u32 | VFD protocol (0=disabled, 1=Huanyang, 2=Fuling, 3=Weiken, 4=Loopback) |
 | `address` | u32 | Modbus/RS-485 device address |
-| `poles` | float | Motor pole count |
 | `bitrate` | u32 | Serial link bitrate |
+| `poles` | float | Motor pole count |
+| `vfd-type` | u32 | VFD protocol (0=disabled, 1=Huanyang, 2=Fuling, 3=Weiken, 4=Loopback) |
 
 ### Spindle setup example
 
 ```hal
-# VFD parameters (set before connecting signals)
+# config/frankencnc/frankencnc.hal
+
+# VFD parameters
 setp rp2040_eth.0.spindle.0.vfd-type 1     # Huanyang
 setp rp2040_eth.0.spindle.0.address  1
 setp rp2040_eth.0.spindle.0.poles    4
 setp rp2040_eth.0.spindle.0.bitrate  9600
 
 # Connect to LinuxCNC spindle component
-net spindle-fwd      spindle.0.forward   => rp2040_eth.0.spindle.0.fwd
-net spindle-rev      spindle.0.reverse   => rp2040_eth.0.spindle.0.rev
+net spindle-fwd       spindle.0.forward   => rp2040_eth.0.spindle.0.fwd
+net spindle-rev       spindle.0.reverse   => rp2040_eth.0.spindle.0.rev
 net spindle-speed-cmd spindle.0.speed-out => rp2040_eth.0.spindle.0.speed-cmd
 net spindle-speed-fb  spindle.0.speed-in  <= rp2040_eth.0.spindle.0.speed-fb
 net spindle-at-speed  spindle.0.at-speed  <= rp2040_eth.0.spindle.0.at-speed

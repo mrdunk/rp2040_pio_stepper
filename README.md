@@ -24,7 +24,7 @@ several incoming packets before raising an interrupt, adding variable latency to
 the `pos-fb` round-trip.
 
 # Configuration
-See [docs/hal_pins.md](docs/hal_pins.md) for a full reference of all HAL pins, types, directions, and setup examples.
+See [docs/hal_reference.md](docs/hal_reference.md) for a full reference of all HAL pins and parameters, types, directions, and setup examples.
 
 Machine-specific LinuxCNC config files live in `config/<machine-name>/`:
 

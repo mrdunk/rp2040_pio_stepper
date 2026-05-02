@@ -15,8 +15,6 @@ hal_u32_t seq_out;
 hal_s32_t packet_interval;
 
 hal_bit_t joint_enable_cmd[4];
-hal_s32_t joint_gpio_step[4];
-hal_s32_t joint_gpio_dir[4];
 hal_float_t joint_vel_limit[4];
 hal_float_t joint_accel_limit[4];
 hal_float_t joint_pos_fb[4];
@@ -42,8 +40,6 @@ void setup_data(skeleton_t* data) {
 
   for(size_t joint = 0; joint < MAX_JOINT; joint++) {
     data->joint_enable_cmd[joint] = &(joint_enable_cmd[joint]);
-    data->joint_gpio_step[joint] = &(joint_gpio_step[joint]);
-    data->joint_gpio_dir[joint] = &(joint_gpio_dir[joint]);
     data->joint_vel_limit[joint] = &(joint_vel_limit[joint]);
     data->joint_accel_limit[joint] = &(joint_accel_limit[joint]);
     data->joint_pos_fb[joint] = &(joint_pos_fb[joint]);

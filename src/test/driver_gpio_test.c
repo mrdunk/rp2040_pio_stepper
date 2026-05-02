@@ -15,8 +15,6 @@ hal_u32_t seq_out;
 hal_s32_t packet_interval;
 
 hal_bit_t joint_enable_cmd[4];
-hal_s32_t joint_gpio_step[4];
-hal_s32_t joint_gpio_dir[4];
 hal_float_t joint_vel_limit[4];
 hal_float_t joint_accel_limit[4];
 hal_float_t joint_pos_fb[4];
@@ -32,7 +30,6 @@ hal_bit_t gpio_data_out[MAX_GPIO];
 hal_bit_t gpio_data_out_invert[MAX_GPIO];
 hal_bit_t gpio_data_in[MAX_GPIO];
 hal_bit_t gpio_data_in_not[MAX_GPIO];
-hal_u32_t gpio_type[MAX_GPIO];
 
 
 void setup_data(skeleton_t* data) {
@@ -42,8 +39,6 @@ void setup_data(skeleton_t* data) {
 
     for(size_t joint = 0; joint < MAX_JOINT; joint++) {
         data->joint_enable_cmd[joint] =      &joint_enable_cmd[joint];
-        data->joint_gpio_step[joint] =       &joint_gpio_step[joint];
-        data->joint_gpio_dir[joint] =        &joint_gpio_dir[joint];
         data->joint_vel_limit[joint] =       &joint_vel_limit[joint];
         data->joint_accel_limit[joint] =     &joint_accel_limit[joint];
         data->joint_pos_fb[joint] =          &joint_pos_fb[joint];
@@ -62,10 +57,8 @@ void setup_data(skeleton_t* data) {
         data->gpio_data_out_invert[gpio] = &gpio_data_out_invert[gpio];
         data->gpio_data_in[gpio] = &gpio_data_in[gpio];
         data->gpio_data_in_not[gpio] = &gpio_data_in_not[gpio];
-        data->gpio_type[gpio] = &gpio_type[gpio];
-
         *data->gpio_data_out_invert[gpio] = false;
-        *data->gpio_type[gpio] = GPIO_TYPE_NOT_SET;
+        data->gpio_type[gpio] = GPIO_TYPE_NOT_SET;
     }
 
     for(size_t bank = 0; bank < MAX_GPIO / 32; bank++) {
@@ -125,13 +118,13 @@ static void test_serialize_gpio_in_change(void **state) {
 
     // GPIO pin is of input type on a bit with changed data.
     // This will case a bank 0 transmission.
-    *data.gpio_type[0] = GPIO_TYPE_NATIVE_IN;
-    *data.gpio_type[1] = GPIO_TYPE_NATIVE_IN;
+    data.gpio_type[0] = GPIO_TYPE_NATIVE_IN;
+    data.gpio_type[1] = GPIO_TYPE_NATIVE_IN;
 
     // GPIO pins on a bits without changed data.
     // This will not case a bank 1 transmission.
-    *data.gpio_type[32] = GPIO_TYPE_NATIVE_OUT;
-    *data.gpio_type[33] = GPIO_TYPE_NATIVE_IN;
+    data.gpio_type[32] = GPIO_TYPE_NATIVE_OUT;
+    data.gpio_type[33] = GPIO_TYPE_NATIVE_IN;
 
     // Last incoming message did not have confirmation_pending set.
     data.gpio_confirmation_pending[0] = false;
@@ -199,15 +192,15 @@ static void test_serialize_gpio_out_change(void **state) {
 
     // GPIO pin is of output type on a bit with changed data.
     // This will case a bank 1 transmission.
-    *data.gpio_type[32] = GPIO_TYPE_NATIVE_OUT;
-    *data.gpio_type[33] = GPIO_TYPE_NATIVE_OUT;
-    *data.gpio_type[34] = GPIO_TYPE_NATIVE_OUT;
-    *data.gpio_type[35] = GPIO_TYPE_NATIVE_OUT;
+    data.gpio_type[32] = GPIO_TYPE_NATIVE_OUT;
+    data.gpio_type[33] = GPIO_TYPE_NATIVE_OUT;
+    data.gpio_type[34] = GPIO_TYPE_NATIVE_OUT;
+    data.gpio_type[35] = GPIO_TYPE_NATIVE_OUT;
 
     // GPIO pins on bits without changed data.
     // This will not case a bank 0 transmission.
-    *data.gpio_type[0] = GPIO_TYPE_NATIVE_OUT;
-    *data.gpio_type[1] = GPIO_TYPE_NATIVE_IN;
+    data.gpio_type[0] = GPIO_TYPE_NATIVE_OUT;
+    data.gpio_type[1] = GPIO_TYPE_NATIVE_IN;
 
     // Last incoming message did not have confirmation_pending set.
     data.gpio_confirmation_pending[0] = false;
@@ -265,8 +258,8 @@ static void test_serialize_gpio_confirmation_pending(void **state) {
 
     // GPIO pins on a bits without changed data.
     // This will not case a bank 0 transmission.
-    *data.gpio_type[0] = GPIO_TYPE_NATIVE_OUT;
-    *data.gpio_type[1] = GPIO_TYPE_NATIVE_IN;
+    data.gpio_type[0] = GPIO_TYPE_NATIVE_OUT;
+    data.gpio_type[1] = GPIO_TYPE_NATIVE_IN;
 
     // Last incoming message had confirmation_pending set on bank 0.
     data.gpio_confirmation_pending[0] = true;
@@ -322,8 +315,8 @@ static void test_serialize_gpio_nothing_to_do(void **state) {
 
     // GPIO pins on a bits without changed data.
     // This will not case a bank 0 transmission.
-    *data.gpio_type[0] = GPIO_TYPE_NATIVE_OUT;
-    *data.gpio_type[1] = GPIO_TYPE_NATIVE_IN;
+    data.gpio_type[0] = GPIO_TYPE_NATIVE_OUT;
+    data.gpio_type[1] = GPIO_TYPE_NATIVE_IN;
 
     // Last incoming message did not have confirmation_pending set.
     data.gpio_confirmation_pending[0] = false;
@@ -361,7 +354,7 @@ static void test_serialize_gpio_out_retransmits_without_reply(void **state) {
     data.gpio_data_received[0] = 0;
     data.gpio_confirmation_pending[0] = false;
 
-    *data.gpio_type[0] = GPIO_TYPE_NATIVE_OUT;
+    data.gpio_type[0] = GPIO_TYPE_NATIVE_OUT;
 
     // First call — MSG_SET_GPIO should be sent.
     struct NWBuffer buffer = {0};

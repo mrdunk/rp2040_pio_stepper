@@ -131,6 +131,51 @@ bool init_hal_pin(
     return true;
 }
 
+static bool init_hal_param(
+    enum t_types types,
+    void* data_p,
+    const int component_id,
+    const int device_num,
+    const char* io_type,
+    const int chan_num,
+    const int chan_num_len,
+    const char* specific_name
+) {
+    int retval = -1;
+    char format[64];
+    int check = snprintf(format, 64, "rp2040_eth.%%d.%%s.%%0%dd.%%s", chan_num_len);
+    if (check < 0 || check >= 64) {
+      rtapi_print_msg(RTAPI_MSG_ERR, "ERROR: Invalid string length=%i\n", check);
+      hal_exit(component_id);
+      return false;
+    }
+    switch(types) {
+      case U32:
+        retval = hal_param_u32_newf(HAL_RW, data_p, component_id, format,
+                                    device_num, io_type, chan_num, specific_name);
+        break;
+      case S32:
+        retval = hal_param_s32_newf(HAL_RW, data_p, component_id, format,
+                                    device_num, io_type, chan_num, specific_name);
+        break;
+      case FLOAT:
+        retval = hal_param_float_newf(HAL_RW, data_p, component_id, format,
+                                      device_num, io_type, chan_num, specific_name);
+        break;
+      case PIN:
+        rtapi_print_msg(RTAPI_MSG_ERR, "RP2040: ERROR: bit-type HAL params not supported\n");
+        return false;
+    }
+    if (retval < 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR,
+                      "RP2040: ERROR: param export failed with err=%i\n",
+                      retval);
+      hal_exit(component_id);
+      return false;
+    }
+    return true;
+}
+
 
 #define ARRAY_SIZE(a) ((int)(sizeof(a) / sizeof((a)[0])))
 
@@ -148,20 +193,37 @@ typedef struct {
     const char*    specific_name;
 } PinDef;
 
+/* HAL params: direct storage in skeleton_t (not pointer-to-pointer).
+ * stride = sizeof(value_type) steps through plain value arrays. */
+typedef struct {
+    enum t_types   type;
+    size_t         offset;
+    size_t         stride;
+    const char*    io_type;
+    int            chan_num_len;
+    const char*    specific_name;
+} ParamDef;
+
 static const PinDef gpio_pins[] = {
     { PIN, HAL_OUT, offsetof(skeleton_t, gpio_data_in),         sizeof(hal_bit_t*),   "gpio", 0, 2, "in"         }, // Input state read from hardware
     { PIN, HAL_OUT, offsetof(skeleton_t, gpio_data_in_not),     sizeof(hal_bit_t*),   "gpio", 0, 2, "in-not"     }, // Inverted input state
     { PIN, HAL_IN,  offsetof(skeleton_t, gpio_data_out),        sizeof(hal_bit_t*),   "gpio", 0, 2, "out"        }, // Output command
     { PIN, HAL_IN,  offsetof(skeleton_t, gpio_data_out_invert), sizeof(hal_bit_t*),   "gpio", 0, 2, "out-invert" }, // Invert output before writing to hardware
-    { U32, HAL_IN,  offsetof(skeleton_t, gpio_type),            sizeof(hal_u32_t*),   "gpio", 0, 2, "type"       }, // GPIO device type (0=native RP2040, 1=MCP23017)
-    { U32, HAL_IN,  offsetof(skeleton_t, gpio_index),           sizeof(hal_u32_t*),   "gpio", 0, 2, "index"      }, // Pin index within the GPIO device
-    { U32, HAL_IN,  offsetof(skeleton_t, gpio_address),         sizeof(hal_u32_t*),   "gpio", 0, 2, "address"    }, // I2C address of the GPIO device
+};
+
+static const ParamDef gpio_params[] = {
+    { U32, offsetof(skeleton_t, gpio_type),    sizeof(hal_u32_t), "gpio", 2, "type"    }, // GPIO device type — see rp2040_gpio_types.ini
+    { U32, offsetof(skeleton_t, gpio_index),   sizeof(hal_u32_t), "gpio", 2, "index"   }, // Pin index within the GPIO device
+    { U32, offsetof(skeleton_t, gpio_address), sizeof(hal_u32_t), "gpio", 2, "address" }, // I2C address of the GPIO device (MCP23017 only)
+};
+
+static const ParamDef joint_params[] = {
+    { S32, offsetof(skeleton_t, joint_gpio_step), sizeof(hal_s32_t), "joint", 1, "gpio-step" }, // RP2040 GPIO pin number for the step signal
+    { S32, offsetof(skeleton_t, joint_gpio_dir),  sizeof(hal_s32_t), "joint", 1, "gpio-dir"  }, // RP2040 GPIO pin number for the direction signal
 };
 
 static const PinDef joint_pins[] = {
     { PIN,   HAL_IN,  offsetof(skeleton_t, joint_enable_cmd),     sizeof(hal_bit_t*),   "joint", 0, 1, "enable-cmd"       }, // Enable joint (LinuxCNC command)
-    { S32,   HAL_IN,  offsetof(skeleton_t, joint_gpio_step),      sizeof(hal_s32_t*),   "joint", 0, 1, "gpio-step"        }, // RP2040 GPIO pin number for step signal
-    { S32,   HAL_IN,  offsetof(skeleton_t, joint_gpio_dir),       sizeof(hal_s32_t*),   "joint", 0, 1, "gpio-dir"         }, // RP2040 GPIO pin number for direction signal
     { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_vel_limit),      sizeof(hal_float_t*), "joint", 0, 1, "vel-limit"        }, // Maximum velocity (units/sec)
     { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_accel_limit),    sizeof(hal_float_t*), "joint", 0, 1, "accel-limit"      }, // Maximum acceleration (units/sec²)
     { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_scale),          sizeof(hal_float_t*), "joint", 0, 1, "scale"            }, // Steps per unit; applied to both position and velocity commands
@@ -226,7 +288,7 @@ int rtapi_app_main(void)
   }
 
 
-  /* Set up the HAL pins via descriptor tables. */
+  /* Set up the HAL pins and params via descriptor tables. */
   for (int i = 0; i < MAX_GPIO; i++) {
     for (int j = 0; j < ARRAY_SIZE(gpio_pins); j++) {
       const PinDef* def = &gpio_pins[j];
@@ -236,15 +298,22 @@ int rtapi_app_main(void)
         goto port_error;
       }
     }
+    for (int j = 0; j < ARRAY_SIZE(gpio_params); j++) {
+      const ParamDef* def = &gpio_params[j];
+      void* fp = (void*)((char*)port_data_array + def->offset + i * def->stride);
+      if (!init_hal_param(def->type, fp, component_id, device_num,
+                          def->io_type, i, def->chan_num_len, def->specific_name)) {
+        goto port_error;
+      }
+    }
   }
-  /* Default values written after all pins are registered (equivalent to the
-   * original interleaved approach since goto port_error fires on any failure). */
+  /* Default values written after all pins/params are registered. */
   for (int i = 0; i < MAX_GPIO; i++) {
     *port_data_array->gpio_data_in[i]         = true;
     *port_data_array->gpio_data_in_not[i]     = false;
     *port_data_array->gpio_data_out[i]        = false;
     *port_data_array->gpio_data_out_invert[i] = false;
-    *port_data_array->gpio_type[i]            = GPIO_TYPE_NOT_SET;
+    port_data_array->gpio_type[i]             = GPIO_TYPE_NOT_SET;
   }
 
   for (int j = 0; j < ARRAY_SIZE(scalar_pins); j++) {
@@ -266,11 +335,19 @@ int rtapi_app_main(void)
         goto port_error;
       }
     }
+    for (int j = 0; j < ARRAY_SIZE(joint_params); j++) {
+      const ParamDef* def = &joint_params[j];
+      void* fp = (void*)((char*)port_data_array + def->offset + i * def->stride);
+      if (!init_hal_param(def->type, fp, component_id, device_num,
+                          def->io_type, i, def->chan_num_len, def->specific_name)) {
+        goto port_error;
+      }
+    }
   }
   for (int i = 0; i < MAX_JOINT; i++) {
-    *port_data_array->joint_enable_cmd[i]    = false;
-    *port_data_array->joint_gpio_step[i] = -1;
-    *port_data_array->joint_gpio_dir[i]  = -1;
+    *port_data_array->joint_enable_cmd[i]  = false;
+    port_data_array->joint_gpio_step[i]    = -1;
+    port_data_array->joint_gpio_dir[i]     = -1;
   }
 
   /* Export spindle pins. */
@@ -381,9 +458,9 @@ bool configure_joint(
     if(
         last_joint_config[joint].enable != *data->joint_enable_cmd[joint]
         ||
-        last_joint_config[joint].gpio_step != *data->joint_gpio_step[joint]
+        last_joint_config[joint].gpio_step != data->joint_gpio_step[joint]
         ||
-        last_joint_config[joint].gpio_dir != *data->joint_gpio_dir[joint]
+        last_joint_config[joint].gpio_dir != data->joint_gpio_dir[joint]
         ||
         last_joint_config[joint].max_velocity != max_velocity_ticks
         ||
@@ -393,8 +470,8 @@ bool configure_joint(
           tx_buffer,
           joint,
           *data->joint_enable_cmd[joint],
-          *data->joint_gpio_step[joint],
-          *data->joint_gpio_dir[joint],
+          data->joint_gpio_step[joint],
+          data->joint_gpio_dir[joint],
           max_velocity_ticks,
           max_accel_ticks
           );
@@ -413,18 +490,18 @@ bool configure_gpio(
      * only updates in unpack_gpio_config on receipt of REPLY_GPIO_CONFIG, so a
      * lost packet leaves the diff intact and causes an automatic retry). */
     if(
-        last_gpio_config[gpio].gpio_type != *data->gpio_type[gpio]
+        last_gpio_config[gpio].gpio_type != data->gpio_type[gpio]
         ||
-        last_gpio_config[gpio].index != *data->gpio_index[gpio]
+        last_gpio_config[gpio].index != data->gpio_index[gpio]
         ||
-        last_gpio_config[gpio].address != *data->gpio_address[gpio]
+        last_gpio_config[gpio].address != data->gpio_address[gpio]
     ) {
       pack_success = pack_success && serialize_gpio_config(
           tx_buffer,
           gpio,
-          *data->gpio_type[gpio],
-          *data->gpio_index[gpio],
-          *data->gpio_address[gpio]
+          data->gpio_type[gpio],
+          data->gpio_index[gpio],
+          data->gpio_address[gpio]
         );
     }
     return pack_success;
