@@ -105,26 +105,28 @@ Machine-specific files live in `config/<machine-name>/`:
 
 ```
 config/
-  frankencnc/
-    frankencnc.ini    -- LinuxCNC machine config
-    frankencnc.hal    -- HAL wiring for joints, GPIO, spindle
+  pico-eth-cnc-breakout/
+    pico-eth-cnc-breakout.ini    -- LinuxCNC machine config
+    pico-eth-cnc-breakout.hal    -- HAL wiring for joints, GPIO, spindle
+    custom.hal                   -- site-specific overrides
+    postgui_call_list.hal        -- post-GUI HAL commands
+  shared/
+    rp2040_gpio_types.ini        -- shared HAL type definitions
 ```
 
 Launch LinuxCNC with a config:
 
 ```bash
-linuxcnc config/frankencnc/frankencnc.ini
+linuxcnc config/pico-eth-cnc-breakout/pico-eth-cnc-breakout.ini
 ```
 
-`rp2040_gpio_types.ini` lives in `src/driver/` and is included by the machine
+`rp2040_gpio_types.ini` lives in `config/shared/` and is included by the machine
 `.ini` via `#INCLUDE`. LinuxCNC resolves `#INCLUDE` paths relative to the
-including file's directory, so the path in your `.ini` should be:
+including file's directory:
 
 ```ini
-#INCLUDE ../../src/driver/rp2040_gpio_types.ini
+#INCLUDE ../shared/rp2040_gpio_types.ini
 ```
-
-(adjust `../` depth to match your `config/<machine>/` nesting).
 
 See [hal_reference.md](hal_reference.md) for a full reference of all HAL pins
 and parameters.
