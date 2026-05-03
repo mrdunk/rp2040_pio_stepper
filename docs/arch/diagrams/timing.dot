@@ -1,0 +1,26 @@
+digraph recover_clock {
+  rankdir=TB
+  graph [bgcolor="white" fontname="Helvetica" pad=0.5
+         label="recover_clock() — per-packet clock adaptation" labelloc=t fontsize=12]
+  node  [style=filled fillcolor="#f4f4f8" color="#3a3a8a" fontcolor="#111111"
+         fontname="Helvetica" fontsize=10 shape=box margin="0.25,0.15"]
+  edge  [color="#555555" fontcolor="#444444" fontname="Helvetica" fontsize=9]
+
+  PKT   [label="UDP packet received\n(Core0)"]
+  MEAS  [label="measure inter-packet interval\nnow − last_rx_us"]
+  EMA   [label="EMA update\nave = ave − (ave >> 6) + sample\n(accumulator ×64, alpha = 1/64)"]
+  CHG   [label="integer period changed?" shape=diamond fillcolor="#fffbe6"]
+  UPD   [label="update_period()\n(update alarm callback period)"]
+  PHASE [label="reschedule alarm\nat  now + period/4"]
+  PG    [label="packet_generation++\n(Core1 unblocked)"]
+  C1    [label="Core1\nwakes — do_steps()"]
+
+  PKT   -> MEAS
+  MEAS  -> EMA
+  EMA   -> CHG
+  CHG   -> UPD   [label="yes"]
+  UPD   -> PHASE
+  CHG   -> PHASE [label="no"]
+  PHASE -> PG
+  PG    -> C1
+}

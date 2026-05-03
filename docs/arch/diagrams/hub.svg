@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="740" height="934">
+<rect width="740" height="934" fill="#1e1e2e"/>
+<rect x="20" y="10" width="700" height="380" rx="10" fill="none" stroke="#89b4fa" stroke-width="2"/>
+<text x="32" y="27" fill="#89b4fa" font-size="10.5" font-weight="bold" font-family="Helvetica,Arial,sans-serif">PC — LinuxCNC host · 192.168.12.1</text>
+<rect x="240" y="36" width="260" height="36" rx="5" fill="#45475a" stroke="#89b4fa" stroke-width="1.5"/>
+<text x="370" y="59" text-anchor="middle" fill="#cdd6f4" font-size="11.5" font-family="Helvetica,Arial,sans-serif">LinuxCNC motion planner</text>
+<line x1="360" y1="76" x2="360" y2="112" stroke="#a6adc8" stroke-width="1.5"/><polygon points="356,108 364,108 360,116" fill="#a6adc8"/>
+<line x1="380" y1="120" x2="380" y2="84" stroke="#a6adc8" stroke-width="1.5"/><polygon points="376,88 384,88 380,80" fill="#a6adc8"/>
+<text x="344" y="103" text-anchor="end" fill="#a6adc8" font-size="10" font-family="Helvetica,Arial,sans-serif">pos/vel cmds</text>
+<text x="396" y="103" text-anchor="start" fill="#a6adc8" font-size="10" font-family="Helvetica,Arial,sans-serif">pos-fb · vel-fb · enable-fb</text>
+<rect x="240" y="124" width="260" height="36" rx="5" fill="#45475a" stroke="#89b4fa" stroke-width="1.5"/>
+<text x="370" y="147" text-anchor="middle" fill="#cdd6f4" font-size="11.5" font-family="Helvetica,Arial,sans-serif">HAL layer</text>
+<line x1="360" y1="164" x2="360" y2="200" stroke="#a6adc8" stroke-width="1.5"/><polygon points="356,196 364,196 360,204" fill="#a6adc8"/>
+<line x1="380" y1="208" x2="380" y2="172" stroke="#a6adc8" stroke-width="1.5"/><polygon points="376,176 384,176 380,168" fill="#a6adc8"/>
+<text x="344" y="191" text-anchor="end" fill="#a6adc8" font-size="10" font-family="Helvetica,Arial,sans-serif">write_port()</text>
+<text x="396" y="191" text-anchor="start" fill="#a6adc8" font-size="10" font-family="Helvetica,Arial,sans-serif">unpack reply</text>
+<rect x="240" y="212" width="260" height="48" rx="5" fill="#45475a" stroke="#89b4fa" stroke-width="1.5"/>
+<text x="370" y="230" text-anchor="middle" fill="#cdd6f4" font-size="11.5" font-family="Helvetica,Arial,sans-serif">rp2040_eth HAL driver</text>
+<text x="370" y="246" text-anchor="middle" fill="#a6adc8" font-size="10" font-family="Helvetica,Arial,sans-serif">hal_rp2040_eth.so</text>
+<line x1="360" y1="264" x2="360" y2="314" stroke="#a6adc8" stroke-width="1.5"/><polygon points="356,310 364,310 360,318" fill="#a6adc8"/>
+<line x1="380" y1="322" x2="380" y2="272" stroke="#a6adc8" stroke-width="1.5"/><polygon points="376,276 384,276 380,268" fill="#a6adc8"/>
+<text x="344" y="291" text-anchor="end" fill="#a6adc8" font-size="10" font-family="Helvetica,Arial,sans-serif">MSG_TIMING · MSG_SET_JOINT_ABS_POS</text>
+<text x="344" y="305" text-anchor="end" fill="#a6adc8" font-size="10" font-family="Helvetica,Arial,sans-serif">MSG_SET_GPIO …</text>
+<text x="396" y="291" text-anchor="start" fill="#a6adc8" font-size="10" font-family="Helvetica,Arial,sans-serif">Reply_joint_movement</text>
+<text x="396" y="305" text-anchor="start" fill="#a6adc8" font-size="10" font-family="Helvetica,Arial,sans-serif">Reply_gpio …</text>
+<rect x="240" y="326" width="260" height="48" rx="5" fill="#45475a" stroke="#89b4fa" stroke-width="1.5"/>
+<text x="370" y="344" text-anchor="middle" fill="#cdd6f4" font-size="11.5" font-family="Helvetica,Arial,sans-serif">Network interface</text>
+<text x="370" y="360" text-anchor="middle" fill="#a6adc8" font-size="10" font-family="Helvetica,Arial,sans-serif">:5002 UDP</text>
+<line x1="360" y1="394" x2="360" y2="430" stroke="#a6e3a1" stroke-width="1.5"/><polygon points="356,426 364,426 360,434" fill="#a6e3a1"/>
+<line x1="380" y1="438" x2="380" y2="402" stroke="#a6e3a1" stroke-width="1.5"/><polygon points="376,406 384,406 380,398" fill="#a6e3a1"/>
+<text x="344" y="421" text-anchor="end" fill="#a6e3a1" font-size="10" font-family="Helvetica,Arial,sans-serif">UDP / Ethernet</text>
+<text x="396" y="421" text-anchor="start" fill="#a6e3a1" font-size="10" font-family="Helvetica,Arial,sans-serif">UDP reply</text>
+<rect x="240" y="468" width="260" height="48" rx="5" fill="#45475a" stroke="#89b4fa" stroke-width="1.5"/>
+<text x="370" y="486" text-anchor="middle" fill="#cdd6f4" font-size="11.5" font-family="Helvetica,Arial,sans-serif">W5500 Ethernet</text>
+<text x="370" y="502" text-anchor="middle" fill="#a6adc8" font-size="10" font-family="Helvetica,Arial,sans-serif">SPI interface</text>
+<line x1="360" y1="520" x2="360" y2="556" stroke="#a6adc8" stroke-width="1.5"/><polygon points="356,552 364,552 360,560" fill="#a6adc8"/>
+<line x1="380" y1="564" x2="380" y2="528" stroke="#a6adc8" stroke-width="1.5"/><polygon points="376,532 384,532 380,524" fill="#a6adc8"/>
+<text x="344" y="547" text-anchor="end" fill="#a6adc8" font-size="10" font-family="Helvetica,Arial,sans-serif">rx packet</text>
+<text x="396" y="547" text-anchor="start" fill="#a6adc8" font-size="10" font-family="Helvetica,Arial,sans-serif">tx reply</text>
+<rect x="240" y="568" width="260" height="48" rx="5" fill="#45475a" stroke="#89b4fa" stroke-width="1.5"/>
+<text x="370" y="586" text-anchor="middle" fill="#cdd6f4" font-size="11.5" font-family="Helvetica,Arial,sans-serif">Core0</text>
+<text x="370" y="602" text-anchor="middle" fill="#a6adc8" font-size="10" font-family="Helvetica,Arial,sans-serif">UDP rx/tx · clock sync</text>
+<line x1="360" y1="620" x2="360" y2="656" stroke="#a6adc8" stroke-width="1.5"/><polygon points="356,652 364,652 360,660" fill="#a6adc8"/>
+<line x1="380" y1="664" x2="380" y2="628" stroke="#a6adc8" stroke-width="1.5"/><polygon points="376,632 384,632 380,624" fill="#a6adc8"/>
+<text x="344" y="647" text-anchor="end" fill="#a6adc8" font-size="10" font-family="Helvetica,Arial,sans-serif">packet_generation · alarm tick</text>
+<text x="396" y="647" text-anchor="start" fill="#a6adc8" font-size="10" font-family="Helvetica,Arial,sans-serif">config.abs_pos_achieved</text>
+<rect x="240" y="668" width="260" height="48" rx="5" fill="#45475a" stroke="#89b4fa" stroke-width="1.5"/>
+<text x="370" y="686" text-anchor="middle" fill="#cdd6f4" font-size="11.5" font-family="Helvetica,Arial,sans-serif">Core1</text>
+<text x="370" y="702" text-anchor="middle" fill="#a6adc8" font-size="10" font-family="Helvetica,Arial,sans-serif">step generation · servo-period tick</text>
+<line x1="360" y1="720" x2="360" y2="756" stroke="#a6adc8" stroke-width="1.5"/><polygon points="356,752 364,752 360,760" fill="#a6adc8"/>
+<line x1="380" y1="764" x2="380" y2="728" stroke="#a6adc8" stroke-width="1.5"/><polygon points="376,732 384,732 380,724" fill="#a6adc8"/>
+<text x="344" y="747" text-anchor="end" fill="#a6adc8" font-size="10" font-family="Helvetica,Arial,sans-serif">TX FIFO — step pulses</text>
+<text x="396" y="747" text-anchor="start" fill="#a6adc8" font-size="10" font-family="Helvetica,Arial,sans-serif">RX FIFO — position counter</text>
+<rect x="240" y="768" width="260" height="48" rx="5" fill="#45475a" stroke="#89b4fa" stroke-width="1.5"/>
+<text x="370" y="786" text-anchor="middle" fill="#cdd6f4" font-size="11.5" font-family="Helvetica,Arial,sans-serif">PIO hardware</text>
+<text x="370" y="802" text-anchor="middle" fill="#a6adc8" font-size="10" font-family="Helvetica,Arial,sans-serif">step_gen · PIO0 · step_count · PIO1</text>
+<line x1="370" y1="820" x2="370" y2="838" stroke="#a6adc8" stroke-width="1.5"/><polygon points="366,834 374,834 370,842" fill="#a6adc8"/>
+<text x="344" y="838" text-anchor="end" fill="#a6adc8" font-size="10" font-family="Helvetica,Arial,sans-serif">step · dir pulses</text>
+<rect x="240" y="850" width="260" height="48" rx="5" fill="#45475a" stroke="#89b4fa" stroke-width="1.5"/>
+<text x="370" y="868" text-anchor="middle" fill="#cdd6f4" font-size="11.5" font-family="Helvetica,Arial,sans-serif">GPIO</text>
+<text x="370" y="884" text-anchor="middle" fill="#a6adc8" font-size="10" font-family="Helvetica,Arial,sans-serif">step · dir · digital I/O · I²C MCP23017</text>
+<rect x="20" y="442" width="700" height="472" rx="10" fill="none" stroke="#a6e3a1" stroke-width="2"/>
+<text x="32" y="459" fill="#a6e3a1" font-size="10.5" font-weight="bold" font-family="Helvetica,Arial,sans-serif">RP2040 · 192.168.12.2</text>
+
+</svg>

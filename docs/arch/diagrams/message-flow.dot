@@ -1,0 +1,70 @@
+digraph message_flow {
+  rankdir=TB
+  graph [bgcolor="white" fontname="Helvetica" pad=0.5
+         label="One servo period — message flow" labelloc=t fontsize=12]
+  node  [style=filled fontname="Helvetica" fontsize=10 shape=box margin="0.25,0.15"]
+  edge  [color="#555555" fontcolor="#444444" fontname="Helvetica" fontsize=9]
+
+  // ── PC (outbound) ────────────────────────────────────────────────────────
+  subgraph cluster_pc_out {
+    label     = "PC"
+    color     = "#3a3a8a"
+    fontcolor = "#3a3a8a"
+    fontsize  = 9
+    node [fillcolor="#dce7f5" color="#3a3a8a" fontcolor="#111111"]
+
+    WP [label="1  write_port()\n(every servo period, ~1 ms)"]
+    TX [label="2  UDP tx\nMSG_TIMING (seq-out)\nMSG_SET_JOINT_ABS_POS · MSG_SET_GPIO …"]
+
+    WP -> TX
+  }
+
+  // ── RP2040 ───────────────────────────────────────────────────────────────
+  subgraph cluster_rp {
+    label     = "RP2040"
+    color     = "#2a7a2a"
+    fontcolor = "#2a7a2a"
+    fontsize  = 9
+    node [fillcolor="#d5f0e0" color="#2a7a2a" fontcolor="#111111"]
+
+    RX [label="3  Core0 rx packet"]
+    UC [label="4  update joint config\n(positions, velocities, enables)"]
+    PG [label="5  packet_generation++\n(Core1 unblocked)"]
+
+    // Core1 path
+    CT [label="6  Core1 tick\n(alarm fires: now + period/4)"]
+    DS [label="7  do_steps()  ×4 joints\ndrain PIO1 RX FIFO\n→ config.abs_pos_achieved"]
+    PF [label="8  PIO0 TX FIFO\nstep_gen drives step/dir pins"]
+
+    // Core0 reply path (parallel)
+    SR [label="9  Core0 serialises reply\nReply_timing (seq-in)\nReply_joint_movement"]
+    TR [label="10  UDP tx reply"]
+
+    RX -> UC -> PG
+    PG -> CT  [label="Core1 unblocks"]
+    CT -> DS -> PF
+    DS -> SR  [label="config.abs_pos_achieved"
+               color="#555588" fontcolor="#555588"]
+    PG -> SR  [style=dashed constraint=false
+               label="Core0 continues\n(parallel with 6–8)"]
+    SR -> TR
+  }
+
+  // ── PC (inbound) ─────────────────────────────────────────────────────────
+  subgraph cluster_pc_in {
+    label     = "PC"
+    color     = "#3a3a8a"
+    fontcolor = "#3a3a8a"
+    fontsize  = 9
+    node [fillcolor="#dce7f5" color="#3a3a8a" fontcolor="#111111"]
+
+    HR [label="11  HAL rx reply"]
+    HP [label="12  HAL pin update\npos-fb · vel-fb · seq-in · update-overrun"]
+
+    HR -> HP
+  }
+
+  // ── Cross-cluster edges ───────────────────────────────────────────────────
+  TX -> RX [label="  UDP / Ethernet" color="#2a7a2a" fontcolor="#2a7a2a"]
+  TR -> HR [label="  UDP / Ethernet" color="#2a7a2a" fontcolor="#2a7a2a"]
+}

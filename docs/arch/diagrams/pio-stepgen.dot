@@ -1,0 +1,39 @@
+digraph pio_stepgen {
+  rankdir=LR
+  graph [bgcolor="white" fontname="Helvetica" pad=0.5
+         label="PIO step generation — per joint" labelloc=t fontsize=12]
+  node  [style=filled fillcolor="#f4f4f8" color="#3a3a8a" fontcolor="#111111"
+         fontname="Helvetica" fontsize=10 shape=box margin="0.25,0.15"]
+  edge  [color="#555555" fontcolor="#444444" fontname="Helvetica" fontsize=9]
+
+  // ── Core1 ────────────────────────────────────────────────────────────────
+  DS   [label="Core1\ndo_steps()"]
+  CALC [label="velocity →\npulse length\n(133 MHz clock,\n9-cycle overhead)"]
+
+  // ── PIO0 path ────────────────────────────────────────────────────────────
+  TXFF [label="PIO0\nTX FIFO"]
+  SG   [label="step_gen SM\n(PIO0)"]
+
+  // ── GPIO ─────────────────────────────────────────────────────────────────
+  STEP [label="step pin\n(GPIO)"]
+  DIR  [label="dir pin\n(GPIO)"]
+
+  // ── PIO1 path ────────────────────────────────────────────────────────────
+  SC   [label="step_count SM\n(PIO1)"]
+  RXFF [label="PIO1\nRX FIFO"]
+
+  // ── Core1 feedback ───────────────────────────────────────────────────────
+  POS  [label="Core1\nposition update\n(abs_pos_achieved)"]
+
+  // ── Edges ────────────────────────────────────────────────────────────────
+  DS   -> CALC
+  CALC -> TXFF [label="packed word\n(pulse_len | dir_bit)"]
+  TXFF -> SG
+  SG   -> STEP [label="square-wave\npulses"]
+  SG   -> DIR  [label="direction bit"]
+  STEP -> SC   [label="rising edge"]
+  DIR  -> SC   [label="direction\nmonitor" style=dashed]
+  SC   -> RXFF [label="32-bit\ncounter"]
+  RXFF -> POS
+  POS  -> DS   [label="feedback\nloop" constraint=false style=dashed color="#888888"]
+}

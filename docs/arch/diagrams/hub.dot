@@ -1,0 +1,59 @@
+digraph hub {
+  rankdir=TB
+  graph [bgcolor="white" fontname="Helvetica" pad=0.6]
+  node  [style=filled fillcolor="#f4f4f8" color="#3a3a8a" fontcolor="#111111"
+         fontname="Helvetica" fontsize=10 shape=box margin="0.25,0.15"]
+  edge  [color="#555555" fontcolor="#444444" fontname="Helvetica" fontsize=8
+         labeldistance=2.5 labelangle=25]
+
+  subgraph cluster_pc {
+    label     = "PC — LinuxCNC host · 192.168.12.1"
+    labeljust = l
+    color     = "#3a3a8a"
+    fontcolor = "#3a3a8a"
+    fontname  = "Helvetica"
+    fontsize  = 9
+
+    LC  [label="LinuxCNC\nmotion planner"]
+    HAL [label="HAL layer"]
+    DRV [label="rp2040_eth HAL driver\nhal_rp2040_eth.so"]
+    NIC [label="Network interface\n:5002 UDP"]
+
+    LC  -> HAL [dir=both taillabel="pos/vel cmds"
+                headlabel="pos-fb · vel-fb\nenable-fb"]
+    HAL -> DRV [dir=both taillabel="write_port()"
+                headlabel="unpack reply"]
+    DRV -> NIC [dir=both taillabel="MSG_TIMING\nMSG_SET_JOINT_ABS_POS\nMSG_SET_GPIO …"
+                headlabel="Reply_joint_movement\nReply_gpio …"
+                labeldistance=4.5]
+  }
+
+  NIC -> W55 [dir=both
+              taillabel="UDP / Ethernet"
+              headlabel="UDP reply"
+              color="#2a7a2a" fontcolor="#2a7a2a"
+              fontsize=9 labeldistance=3]
+
+  subgraph cluster_rp {
+    label     = "RP2040 · 192.168.12.2"
+    labeljust = l
+    color     = "#2a7a2a"
+    fontcolor = "#2a7a2a"
+    fontname  = "Helvetica"
+    fontsize  = 9
+
+    W55  [label="W5500 Ethernet\nSPI interface"]
+    C0   [label="Core0\nUDP rx/tx · clock sync"]
+    C1   [label="Core1\nstep generation · servo-period tick"]
+    PIO  [label="PIO hardware\nstep_gen · PIO0 · step_count · PIO1"]
+    GPIO [label="GPIO\nstep · dir · digital I/O · I²C MCP23017"]
+
+    W55  -> C0   [dir=both taillabel="rx packet"
+                  headlabel="tx reply"]
+    C0   -> C1   [taillabel="packet_generation\nalarm tick"]
+    C1   -> PIO  [dir=both taillabel="TX FIFO — step pulses"
+                  headlabel="RX FIFO — position counter"
+                  labeldistance=4]
+    PIO  -> GPIO [label="step · dir pulses"]
+  }
+}

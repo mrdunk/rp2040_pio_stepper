@@ -23,6 +23,9 @@ Replace `eth0` with the actual interface name. Without this, the NIC may coalesc
 several incoming packets before raising an interrupt, adding variable latency to
 the `pos-fb` round-trip.
 
+# Architecture
+See [docs/architecture.md](docs/architecture.md) for a component overview and links to detailed pages covering message flow, clock sync, and PIO step generation.
+
 # Configuration
 See [docs/hal_reference.md](docs/hal_reference.md) for a full reference of all HAL pins and parameters, types, directions, and setup examples.
 
