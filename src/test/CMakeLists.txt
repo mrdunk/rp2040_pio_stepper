@@ -102,6 +102,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
   ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
   ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/mcp23017.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c

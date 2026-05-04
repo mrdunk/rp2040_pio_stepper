@@ -525,6 +525,35 @@ static void test_send_RP_to_PC_out_gpio_changed(void **state) {
     assert_int_equal(reply_p->values, 0b00000000000000000000000000000100);
 }
 
+/* i2c_gpio_set_pin_config sets IODIR bitmask correctly: IN→1, OUT→0, OUT_PULLUP→0 */
+static void test_i2c_gpio_set_pin_config_iodir(void **state) {
+    (void) state;
+
+    struct i2c_gpio_state gpio = {0};
+    for (int i = 0; i < MAX_I2C_MCP; i++) {
+        gpio.config[i].input_bitmask[0] = 0xFF;
+        gpio.config[i].input_bitmask[1] = 0xFF;
+    }
+
+    /* pin 0 (bank 0, bit 0): configure as IN → IODIR bit must be SET */
+    i2c_gpio_set_pin_config(&gpio, 0, 0, GPIO_TYPE_I2C_MCP_IN);
+    assert_true(gpio.config[0].input_bitmask[0] & (1 << 0));
+
+    /* pin 1 (bank 0, bit 1): configure as OUT → IODIR bit must be CLEAR */
+    i2c_gpio_set_pin_config(&gpio, 0, 1, GPIO_TYPE_I2C_MCP_OUT);
+    assert_false(gpio.config[0].input_bitmask[0] & (1 << 1));
+    assert_false(gpio.config[0].pullup_bitmask[0] & (1 << 1));
+
+    /* pin 2 (bank 0, bit 2): configure as OUT_PULLUP → IODIR bit CLEAR, pullup SET */
+    i2c_gpio_set_pin_config(&gpio, 0, 2, GPIO_TYPE_I2C_MCP_OUT_PULLUP);
+    assert_false(gpio.config[0].input_bitmask[0] & (1 << 2));
+    assert_true(gpio.config[0].pullup_bitmask[0] & (1 << 2));
+
+    /* pin 8 crosses into bank 1 (bit 0 of bank 1): configure as IN */
+    i2c_gpio_set_pin_config(&gpio, 0, 8, GPIO_TYPE_I2C_MCP_IN);
+    assert_true(gpio.config[0].input_bitmask[1] & (1 << 0));
+}
+
 /* If GPIO state does not match that in config.gpio_values_confirmed, don't send Reply_gpio. */
 static void test_send_RP_to_PC_matching(void **state) {
     (void) state; /* unused */
@@ -593,6 +622,7 @@ int main(void) {
         cmocka_unit_test(test_gpio_config),
         cmocka_unit_test(test_native_gpio_set_output_values),
         cmocka_unit_test(test_i2c_gpio_set_output_values),
+        cmocka_unit_test(test_i2c_gpio_set_pin_config_iodir),
         cmocka_unit_test(test_send_PC_to_RP),
         cmocka_unit_test(test_send_PC_to_RP_confirmation_set),
         cmocka_unit_test(test_send_RP_to_PC),

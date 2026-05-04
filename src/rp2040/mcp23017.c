@@ -1,6 +1,12 @@
-#include "i2c.h"
-#include "hardware/gpio.h"
+#include <stdbool.h>
 #include <stdio.h>
+#include "i2c.h"
+
+#ifdef BUILD_TESTS
+#include "../test/mocks/rp_mocks.h"
+#else
+#include "hardware/gpio.h"
+#endif
 
 #define PLACEHOLDER 0x00
 #define I2C_WRITE_CMD(write_len, write_data...) (write_len), write_data
@@ -19,6 +25,7 @@ uint8_t mcp23017_run_sequence[] = {
   I2C_END_CMD
 };
 
+#ifndef BUILD_TESTS
 void mcp23017_init(struct i2c_engine_state *state, i2c_inst_t *i2c, int sda_pin, int scl_pin, int reset_pin) {
   i2c_init(i2c, 400 * 1000);
   gpio_set_function(sda_pin, GPIO_FUNC_I2C);
@@ -35,6 +42,7 @@ void mcp23017_init(struct i2c_engine_state *state, i2c_inst_t *i2c, int sda_pin,
   gpio_put(reset_pin, 1);
   sleep_ms(20);
 }
+#endif
 
 #define I2C_RESET_PIN 22
 #define I2C_SDA_PIN 26
@@ -57,16 +65,9 @@ void i2c_gpio_init(struct i2c_gpio_state *gpio) {
   }
   gpio->cur_chip = MAX_I2C_MCP - 1;
 
+#ifndef BUILD_TESTS
   mcp23017_init(&gpio->engine, i2c1, I2C_SDA_PIN, I2C_SCL_PIN, I2C_RESET_PIN);
-}
-
-static void i2c_gpio_run_setup_sequence(struct i2c_gpio_state *gpio) {
-  struct i2c_gpio_config *cfg = &gpio->config[gpio->cur_chip];
-  mcp23017_setup_sequence[2] = cfg->input_bitmask[0];
-  mcp23017_setup_sequence[3] = cfg->input_bitmask[1];
-  mcp23017_setup_sequence[6] = cfg->pullup_bitmask[0];
-  mcp23017_setup_sequence[7] = cfg->pullup_bitmask[1];
-  i2c_engine_set_sequence(&gpio->engine, cfg->i2c_address, mcp23017_setup_sequence, NULL);
+#endif
 }
 
 void i2c_gpio_set_pin_config(struct i2c_gpio_state *gpio, uint8_t device, uint8_t index, int type)
@@ -76,20 +77,30 @@ void i2c_gpio_set_pin_config(struct i2c_gpio_state *gpio, uint8_t device, uint8_
   switch(type) {
     case GPIO_TYPE_I2C_MCP_IN:
       gpio->config[device].pullup_bitmask[bank] &= ~bitmask;
-      gpio->config[device].input_bitmask[bank] &= ~bitmask;
+      gpio->config[device].input_bitmask[bank] |= bitmask;   /* IODIR=1 → input */
       break;
     case GPIO_TYPE_I2C_MCP_OUT:
       gpio->config[device].pullup_bitmask[bank] &= ~bitmask;
-      gpio->config[device].input_bitmask[bank] |= bitmask;
+      gpio->config[device].input_bitmask[bank] &= ~bitmask;  /* IODIR=0 → output */
       break;
     case GPIO_TYPE_I2C_MCP_OUT_PULLUP:
       gpio->config[device].pullup_bitmask[bank] |= bitmask;
-      gpio->config[device].input_bitmask[bank] |= bitmask;
+      gpio->config[device].input_bitmask[bank] &= ~bitmask;  /* IODIR=0 → output */
       break;
     default:
       return;
   }
   gpio->config[device].needs_config = 1;
+}
+
+#ifndef BUILD_TESTS
+static void i2c_gpio_run_setup_sequence(struct i2c_gpio_state *gpio) {
+  struct i2c_gpio_config *cfg = &gpio->config[gpio->cur_chip];
+  mcp23017_setup_sequence[2] = cfg->input_bitmask[0];
+  mcp23017_setup_sequence[3] = cfg->input_bitmask[1];
+  mcp23017_setup_sequence[6] = cfg->pullup_bitmask[0];
+  mcp23017_setup_sequence[7] = cfg->pullup_bitmask[1];
+  i2c_engine_set_sequence(&gpio->engine, cfg->i2c_address, mcp23017_setup_sequence, NULL);
 }
 
 static void i2c_gpio_next_chip(struct i2c_gpio_state *gpio) {
@@ -130,3 +141,4 @@ void i2c_gpio_poll(struct i2c_gpio_state *gpio) {
     i2c_engine_run(&gpio->engine);
   }
 }
+#endif  /* !BUILD_TESTS */

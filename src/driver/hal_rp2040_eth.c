@@ -314,7 +314,9 @@ int rtapi_app_main(void)
     *port_data_array->gpio_data_in_not[i]     = false;
     *port_data_array->gpio_data_out[i]        = false;
     *port_data_array->gpio_data_out_invert[i] = false;
-    port_data_array->gpio_type[i]             = GPIO_TYPE_NOT_SET;
+    port_data_array->gpio_type[i]    = GPIO_TYPE_NOT_SET;
+    port_data_array->gpio_index[i]   = 0;
+    port_data_array->gpio_address[i] = 0;
   }
 
   for (int j = 0; j < ARRAY_SIZE(scalar_pins); j++) {
