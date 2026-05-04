@@ -77,7 +77,6 @@ net estop-out => rp2040_eth.0.joint.2.enable-cmd
 
 
 # Metrics
-net packet-interval  rp2040_eth.0.packet-interval
 net seq-out          rp2040_eth.0.seq-out => conv-seq-out.in
 net seq-in           rp2040_eth.0.seq-in  => conv-seq-in.in
 
@@ -85,28 +84,9 @@ setp sum2.0.gain1 -1
 net seq-out-f        conv-seq-out.out => sum2.0.in0
 net seq-in-f         conv-seq-in.out  => sum2.0.in1
 net seq-latency      sum2.0.out
-net rx-miss-count    rp2040_eth.0.rx-miss-count
-net eth-up           rp2040_eth.0.eth-up
-net core1-tick       rp2040_eth.0.core1-tick
-net core1-period     rp2040_eth.0.core1-period
-net update-overrun   rp2040_eth.0.update-overrun
-net update-underrun  rp2040_eth.0.update-underrun
-
-# Joint debug
-net x-ferror-suggest  rp2040_eth.0.joint.0.ferror-suggest
-net x-vel-calculated  rp2040_eth.0.joint.0.vel-calculated
-net x-pos-error-fb    rp2040_eth.0.joint.0.pos-error-fb
-
-net y-ferror-suggest  rp2040_eth.0.joint.1.ferror-suggest
-net y-vel-calculated  rp2040_eth.0.joint.1.vel-calculated
-net y-pos-error-fb    rp2040_eth.0.joint.1.pos-error-fb
-
-net z-ferror-suggest  rp2040_eth.0.joint.2.ferror-suggest
-net z-vel-calculated  rp2040_eth.0.joint.2.vel-calculated
-net z-pos-error-fb    rp2040_eth.0.joint.2.pos-error-fb
 
 # Spindle
-setp rp2040_eth.0.spindle.0.vfd-type  4
+setp rp2040_eth.0.spindle.0.vfd-type  [RP2040_ETH_VFD_TYPES]VFD_TYPE_LOOPBACK
 net spindle-fwd       spindle.0.forward  => rp2040_eth.0.spindle.0.fwd
 net spindle-rev       spindle.0.reverse  => rp2040_eth.0.spindle.0.rev
 net spindle-speed-cmd spindle.0.speed-out => rp2040_eth.0.spindle.0.speed-cmd

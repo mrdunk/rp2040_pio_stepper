@@ -158,7 +158,7 @@ config/
     custom.hal                   -- site-specific overrides
     postgui_call_list.hal        -- post-GUI HAL commands
   shared/
-    rp2040_gpio_types.ini        -- shared HAL type definitions
+    rp2040_types.ini        -- shared HAL type definitions
 ```
 
 Launch [LinuxCNC](https://linuxcnc.org/) with a config:
@@ -167,12 +167,12 @@ Launch [LinuxCNC](https://linuxcnc.org/) with a config:
 linuxcnc config/pico-eth-cnc-breakout/pico-eth-cnc-breakout.ini
 ```
 
-`rp2040_gpio_types.ini` lives in `config/shared/` and is included by the machine
+`rp2040_types.ini` lives in `config/shared/` and is included by the machine
 `.ini` via `#INCLUDE`. [LinuxCNC](https://linuxcnc.org/) resolves `#INCLUDE`
 paths relative to the including file's directory:
 
 ```ini
-#INCLUDE ../shared/rp2040_gpio_types.ini
+#INCLUDE ../shared/rp2040_types.ini
 ```
 
 See [hal_reference.md](hal_reference.md) for a full reference of all HAL pins

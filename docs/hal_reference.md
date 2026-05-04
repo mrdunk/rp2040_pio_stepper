@@ -102,9 +102,9 @@ Hardware wiring — set once at config time.
 |-----------|------|-------------|
 | `address` | u32 | I2C address of the GPIO device (MCP23017 only) |
 | `index` | u32 | Pin index within the GPIO device |
-| `type` | u32 | GPIO device type — see `config/shared/rp2040_gpio_types.ini` for values |
+| `type` | u32 | GPIO device type — see `config/shared/rp2040_types.ini` for values |
 
-GPIO type values (from `rp2040_gpio_types.ini`):
+GPIO type values (from `rp2040_types.ini`):
 
 | Constant | Meaning |
 |----------|---------|
