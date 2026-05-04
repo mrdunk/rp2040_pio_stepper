@@ -87,8 +87,11 @@ sudo halcompile --compile --install ./hal_rp2040_eth.c
 ```
 
 Rerun this command any time you change `src/driver/hal_rp2040_eth.c` or
-`src/driver/messages.h`. A stale `.so` against a reflashed firmware produces
-the warning: `WARN: Unconsumed RX buffer remainder: N bytes`.
+`src/driver/messages.h`. A version mismatch between the driver and firmware
+(e.g. a reflashed RP2040 without reinstalling the driver) can cause erratic
+behaviour — incorrect position feedback, unexpected faults, or garbled data.
+`WARN: Unconsumed RX buffer remainder: N bytes` is one possible symptom but
+not the only one.
 
 ## Network Setup
 
