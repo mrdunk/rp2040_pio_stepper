@@ -96,10 +96,10 @@ net spindle-at-speed  spindle.0.at-speed  <= rp2040_eth.0.spindle.0.at-speed
 
 # GPIO — J6 GPIO_FAST (native RP2040 GPIO, GP8-GP15)
 # Direction not fixed by hardware: set each to NATIVE_IN or NATIVE_OUT for your application.
-setp rp2040_eth.0.gpio.00.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio.00.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_OUT_DEBUG
 setp rp2040_eth.0.gpio.00.index     8
 
-setp rp2040_eth.0.gpio.01.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio.01.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_IN_DEBUG
 setp rp2040_eth.0.gpio.01.index     9
 
 setp rp2040_eth.0.gpio.02.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
