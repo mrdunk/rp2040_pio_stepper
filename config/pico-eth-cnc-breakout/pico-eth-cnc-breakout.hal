@@ -73,9 +73,27 @@ net estop-out => rp2040_eth.0.joint.2.enable-cmd
 
 # Metrics
 net packet-interval  rp2040_eth.0.packet-interval
+net seq-out          rp2040_eth.0.seq-out
 net seq-in           rp2040_eth.0.seq-in
 net rx-miss-count    rp2040_eth.0.rx-miss-count
 net eth-up           rp2040_eth.0.eth-up
+net core1-tick       rp2040_eth.0.core1-tick
+net core1-period     rp2040_eth.0.core1-period
+net update-overrun   rp2040_eth.0.update-overrun
+net update-underrun  rp2040_eth.0.update-underrun
+
+# Joint debug
+net x-ferror-suggest  rp2040_eth.0.joint.0.ferror-suggest
+net x-vel-calculated  rp2040_eth.0.joint.0.vel-calculated
+net x-pos-error-fb    rp2040_eth.0.joint.0.pos-error-fb
+
+net y-ferror-suggest  rp2040_eth.0.joint.1.ferror-suggest
+net y-vel-calculated  rp2040_eth.0.joint.1.vel-calculated
+net y-pos-error-fb    rp2040_eth.0.joint.1.pos-error-fb
+
+net z-ferror-suggest  rp2040_eth.0.joint.2.ferror-suggest
+net z-vel-calculated  rp2040_eth.0.joint.2.vel-calculated
+net z-pos-error-fb    rp2040_eth.0.joint.2.pos-error-fb
 
 # Spindle
 net spindle-fwd       spindle.0.forward  => rp2040_eth.0.spindle.0.fwd
