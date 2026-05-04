@@ -105,21 +105,6 @@ Assign addresses:
 | LinuxCNC host NIC | `192.168.12.1` |
 | RP2040 | `192.168.12.2` |
 
-### Reduce NIC latency
-
-Disable interrupt coalescing on the interface to minimise round-trip latency.
-Add a udev rule so it applies on every boot and link-up:
-
-```
-# /etc/udev/rules.d/60-linuxcnc-coalesce.rules
-ACTION=="add", SUBSYSTEM=="net", KERNEL=="eth0", \
-  RUN+="/sbin/ethtool -C eth0 rx-usecs 0 rx-frames 1"
-```
-
-Replace `eth0` with your actual interface name. Without this the NIC may batch
-incoming packets before raising an interrupt, adding variable latency to
-position-feedback round-trips.
-
 ### Changing the IP addresses
 
 The IP addresses and UDP port are hardcoded in two source files. To change
@@ -145,6 +130,21 @@ int portno = 5002;
 **UDP port** — `src/rp2040/stepper_control.h` (`NW_PORT`) must match `portno`
 in the driver. After editing: recompile and reflash the firmware, then
 recompile and reinstall the driver.
+
+### Reduce NIC latency
+
+Disable interrupt coalescing on the interface to minimise round-trip latency.
+Add a udev rule so it applies on every boot and link-up:
+
+```
+# /etc/udev/rules.d/60-linuxcnc-coalesce.rules
+ACTION=="add", SUBSYSTEM=="net", KERNEL=="eth0", \
+  RUN+="/sbin/ethtool -C eth0 rx-usecs 0 rx-frames 1"
+```
+
+Replace `eth0` with your actual interface name. Without this the NIC may batch
+incoming packets before raising an interrupt, adding variable latency to
+position-feedback round-trips.
 
 ## [LinuxCNC](https://linuxcnc.org/) Machine Config
 
