@@ -6,7 +6,7 @@ Most hobby CNC projects use GRBL — simple, cheap, but limited: no real-time fe
 
 rp2040_pio_stepper sits between these worlds: low-cost, open hardware with a real-time Ethernet link to LinuxCNC, accurate step generation via the RP2040's PIO state machines, and a HAL driver that integrates cleanly with LinuxCNC's existing toolchain. No parallel port required.
 
-A verified starting point is the [W5500-EVB-Pico](https://docs.wiznet.io/Product/Chip/Ethernet/W5500/w5500-evb-pico) — a dev board combining the RP2040 with a W5500 Ethernet chip. Three-axis operation has been tested and confirmed.
+A verified starting point is the [W5500-EVB-Pico](https://docs.wiznet.io/Product/Chip/Ethernet/W5500/w5500-evb-pico) — a dev board combining the RP2040 with a W5500 Ethernet chip. Three-axis operation has been tested and confirmed; four-axis should work but has not yet been tested.
 
 The RP2040 is at `192.168.12.2`; the LinuxCNC host NIC is `192.168.12.1`.
 
