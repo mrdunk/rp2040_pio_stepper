@@ -106,6 +106,7 @@ net z-vel-calculated  rp2040_eth.0.joint.2.vel-calculated
 net z-pos-error-fb    rp2040_eth.0.joint.2.pos-error-fb
 
 # Spindle
+setp rp2040_eth.0.spindle.0.vfd-type  4
 net spindle-fwd       spindle.0.forward  => rp2040_eth.0.spindle.0.fwd
 net spindle-rev       spindle.0.reverse  => rp2040_eth.0.spindle.0.rev
 net spindle-speed-cmd spindle.0.speed-out => rp2040_eth.0.spindle.0.speed-cmd
