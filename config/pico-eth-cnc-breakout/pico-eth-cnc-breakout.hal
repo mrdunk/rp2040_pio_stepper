@@ -2,15 +2,15 @@ loadrt [KINS]KINEMATICS
 loadrt [EMCMOT]EMCMOT base_period_nsec=[EMCMOT]BASE_PERIOD servo_period_nsec=[EMCMOT]SERVO_PERIOD num_joints=[KINS]JOINTS
 loadrt hal_rp2040_eth
 loadrt and2 count=1
-loadrt conv_u32_float count=2
+loadrt conv_u32_float names=conv-seq-out,conv-seq-in
 loadrt sum2 count=1
 
 addf motion-command-handler servo-thread
 addf motion-controller servo-thread
 addf rp2040_eth.0.write servo-thread
 addf and2.0 servo-thread
-addf conv_u32_float.0 servo-thread
-addf conv_u32_float.1 servo-thread
+addf conv-seq-out servo-thread
+addf conv-seq-in servo-thread
 addf sum2.0 servo-thread
 
 
@@ -78,12 +78,12 @@ net estop-out => rp2040_eth.0.joint.2.enable-cmd
 
 # Metrics
 net packet-interval  rp2040_eth.0.packet-interval
-net seq-out          rp2040_eth.0.seq-out => conv_u32_float.0.in
-net seq-in           rp2040_eth.0.seq-in  => conv_u32_float.1.in
+net seq-out          rp2040_eth.0.seq-out => conv-seq-out.in
+net seq-in           rp2040_eth.0.seq-in  => conv-seq-in.in
 
 setp sum2.0.gain1 -1
-net seq-out-f        conv_u32_float.0.out => sum2.0.in0
-net seq-in-f         conv_u32_float.1.out => sum2.0.in1
+net seq-out-f        conv-seq-out.out => sum2.0.in0
+net seq-in-f         conv-seq-in.out  => sum2.0.in1
 net seq-latency      sum2.0.out
 net rx-miss-count    rp2040_eth.0.rx-miss-count
 net eth-up           rp2040_eth.0.eth-up
