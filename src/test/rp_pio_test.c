@@ -316,7 +316,8 @@ static void test_do_steps_accel_clamped(void **state) {
 }
 
 /* do_steps: position mode drives toward abs_pos_requested.
- * Error = 1000 steps; velocity_q = (1000/1000)*65536 = 65536 >> MIN_STEP_COUNT_Q.
+ * vel_ff=0 (velocity_requested=0 in test), error=1000, Kp=0.5:
+ * velocity = 0 + 1000*(1e6/1000)*0.5 = 500 000 steps/s >> MIN_STEP_COUNT_Q.
  * Direction bit (LSB) must be 1 (positive error). */
 static void test_do_steps_position_mode_drives_forward(void **state) {
     (void)state;
@@ -358,14 +359,15 @@ static void test_do_steps_position_mode_reverses(void **state) {
     assert_int_equal(last_pio_put_value & 1, 0);  /* direction = reverse */
 }
 
-/* do_steps: position mode at target -> no steps */
+/* do_steps: position mode at target -> no steps.
+ * vel_ff=0 (LinuxCNC vel_cmd=0 at rest), error=0 -> velocity=0. */
 static void test_do_steps_position_mode_at_target(void **state) {
     (void)state;
     config.joint[0].enabled            = 1;
     config.joint[0].cmd_type           = JOINT_CMD_POSITION;
     config.joint[0].abs_pos_requested  = 0.0;
     config.joint[0].abs_pos_achieved   = 0;
-    config.joint[0].velocity_requested = 9999.0;  /* ignored in position mode */
+    config.joint[0].velocity_requested = 0.0;  /* vel_cmd=0: machine at rest */
     config.joint[0].max_velocity       = 50000.0;
     config.joint[0].max_accel          = 0.0;
     config.joint[0].updated_from_c0    = 1;

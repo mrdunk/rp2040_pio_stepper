@@ -233,12 +233,17 @@ uint8_t do_steps(const uint8_t joint) {
   }
 
   if(cmd_type == JOINT_CMD_POSITION) {
-    /* P=1 position controller: convert position error (steps) to velocity
-     * (steps/s) by multiplying by the servo frequency (1e6/period_us).
-     * This gives gain=1 so a 1-step error commands 1 step/period, matching
-     * the same unit convention used by the velocity_q formula below. */
-    velocity_requested = (abs_pos_requested - (double)abs_pos_achieved)
-                         * (1.0e6 / (double)update_period_us);
+    /* Velocity feed-forward + Kp=0.5 position correction.
+     * velocity_requested holds scale×vel_cmd (steps/s) from the driver;
+     * using it as feed-forward cancels the trajectory velocity, keeping
+     * following error near zero during motion.
+     * With 1-period measurement delay, Kp=1.0 gives poles on the unit
+     * circle (sustained oscillation). Kp=0.5 places poles at z=0.5±0.5i
+     * (|z|=0.707), giving stable convergence in ~10 periods. */
+    double vel_ff      = velocity_requested;
+    double error_steps = abs_pos_requested - (double)abs_pos_achieved;
+    velocity_requested = vel_ff
+                         + error_steps * (1.0e6 / (double)update_period_us) * 0.5;
   }
 
   int32_t velocity_q   = (int32_t)((velocity_requested / (double)update_period_us) * 65536.0);
