@@ -233,8 +233,12 @@ uint8_t do_steps(const uint8_t joint) {
   }
 
   if(cmd_type == JOINT_CMD_POSITION) {
-    /* P=1 position controller: drive velocity proportional to position error. */
-    velocity_requested = abs_pos_requested - (double)abs_pos_achieved;
+    /* P=1 position controller: convert position error (steps) to velocity
+     * (steps/s) by multiplying by the servo frequency (1e6/period_us).
+     * This gives gain=1 so a 1-step error commands 1 step/period, matching
+     * the same unit convention used by the velocity_q formula below. */
+    velocity_requested = (abs_pos_requested - (double)abs_pos_achieved)
+                         * (1.0e6 / (double)update_period_us);
   }
 
   int32_t velocity_q   = (int32_t)((velocity_requested / (double)update_period_us) * 65536.0);
