@@ -77,7 +77,8 @@ struct __attribute__((packed)) Message_joint_config {
   uint8_t enable;
   int8_t gpio_step;               // Negative if disabled.
   int8_t gpio_dir;                // Negative if disabled.
-  uint8_t _pad[3];                // align floats to 4-byte boundary
+  uint8_t cmd_type;               // JOINT_CMD_POSITION or JOINT_CMD_VELOCITY
+  uint8_t _pad[2];                // align floats to 4-byte boundary
   float max_velocity;
   float max_accel;
 };
@@ -153,7 +154,8 @@ struct __attribute__((packed)) Reply_joint_config {
   uint8_t enable;
   int8_t gpio_step;
   int8_t gpio_dir;
-  uint8_t _pad[3];                // align floats to 4-byte boundary
+  uint8_t cmd_type;               // JOINT_CMD_POSITION or JOINT_CMD_VELOCITY
+  uint8_t _pad[2];                // align floats to 4-byte boundary
   float max_velocity;
   float max_accel;
 };
@@ -211,6 +213,9 @@ union ReplyAny {
   struct Reply_gpio gpio;
   struct Reply_spindle_speed spindle_speed;
 };
+
+#define JOINT_CMD_POSITION           0   // stepgen follows abs_pos_requested (default)
+#define JOINT_CMD_VELOCITY           1   // stepgen follows velocity_requested
 
 #define GPIO_TYPE_NOT_SET            0
 #define GPIO_TYPE_NATIVE_OUT         1

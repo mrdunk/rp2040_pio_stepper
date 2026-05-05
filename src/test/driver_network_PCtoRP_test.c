@@ -113,6 +113,7 @@ static void test_serialize_joint_config(void **state) {
     message.gpio_dir = 2;
     message.max_velocity = 12.34;
     message.max_accel = 56.78;
+    message.cmd_type = JOINT_CMD_VELOCITY;
 
     size_t data_size = serialize_joint_config(
             &buffer,
@@ -121,7 +122,8 @@ static void test_serialize_joint_config(void **state) {
             message.gpio_step,
             message.gpio_dir,
             message.max_velocity,
-            message.max_accel
+            message.max_accel,
+            message.cmd_type
             );
 
     assert_int_equal(data_size, aligned32(sizeof(struct Message_joint_config)));
@@ -136,6 +138,7 @@ static void test_serialize_joint_config(void **state) {
     assert_int_equal(message.gpio_dir, message_p->gpio_dir);
     assert_int_equal(message.max_velocity, message_p->max_velocity);
     assert_int_equal(message.max_accel, message_p->max_accel);
+    assert_int_equal(message.cmd_type, message_p->cmd_type);
 }
 
 int main(void) {

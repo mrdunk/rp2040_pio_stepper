@@ -61,6 +61,7 @@ void init_pio(const uint32_t joint)
       NULL,
       NULL,
       NULL,
+      NULL,
       NULL
       );
 
@@ -204,8 +205,10 @@ uint8_t do_steps(const uint8_t joint) {
   uint8_t enabled;
   int32_t abs_pos_achieved = 0;
   double velocity_requested;
+  double abs_pos_requested;
   double max_velocity;
   double max_accel;
+  uint8_t cmd_type;
   int32_t velocity_achieved = 0;
   uint32_t updated = get_joint_config(
       joint,
@@ -214,11 +217,12 @@ uint8_t do_steps(const uint8_t joint) {
       NULL,
       NULL,
       &velocity_requested,
-      NULL,
+      &abs_pos_requested,
       &abs_pos_achieved,
       &max_velocity,
       &max_accel,
-      NULL  // &velocity_achieved
+      NULL,  // &velocity_achieved
+      &cmd_type
       );
 
   if(updated == 0 || update_period_us == 0) {
@@ -226,6 +230,11 @@ uint8_t do_steps(const uint8_t joint) {
       pio_sm_put(pio0, joint_state[joint].sm0, 0);
     }
     return 0;
+  }
+
+  if(cmd_type == JOINT_CMD_POSITION) {
+    /* P=1 position controller: drive velocity proportional to position error. */
+    velocity_requested = abs_pos_requested - (double)abs_pos_achieved;
   }
 
   int32_t velocity_q   = (int32_t)((velocity_requested / (double)update_period_us) * 65536.0);
@@ -284,7 +293,8 @@ uint8_t do_steps(const uint8_t joint) {
       &abs_pos_achieved,
       NULL,
       NULL,
-      &velocity_achieved);
+      &velocity_achieved,
+      NULL);
 
   joint_state[joint].last_pos_achieved  = abs_pos_achieved;
 

@@ -227,7 +227,8 @@ size_t serialize_joint_config(
     uint8_t gpio_step,
     uint8_t gpio_dir,
     float max_velocity,
-    float max_accel
+    float max_accel,
+    uint8_t cmd_type
 ) {
   union MessageAny message;
   message.joint_config.type = MSG_SET_JOINT_CONFIG;
@@ -237,6 +238,7 @@ size_t serialize_joint_config(
   message.joint_config.gpio_dir = gpio_dir;
   message.joint_config.max_velocity = max_velocity;
   message.joint_config.max_accel = max_accel;
+  message.joint_config.cmd_type = cmd_type;
 
   return pack_nw_buff(buffer, &message, sizeof(struct Message_joint_config));
 }
@@ -405,12 +407,14 @@ bool unpack_joint_config(
   printf("      gpio_dir:     %i\n", reply->gpio_dir);
   printf("      max_velocity: %f\n", reply->max_velocity);
   printf("      max_accel:    %f\n", reply->max_accel);
+  printf("      cmd_type:     %u\n", reply->cmd_type);
 
   last_joint_config[joint].enable = reply->enable;
   last_joint_config[joint].gpio_step = reply->gpio_step;
   last_joint_config[joint].gpio_dir = reply->gpio_dir;
   last_joint_config[joint].max_velocity = reply->max_velocity;
   last_joint_config[joint].max_accel = reply->max_accel;
+  last_joint_config[joint].cmd_type = reply->cmd_type;
 
   (*received_count)++;
   return true;

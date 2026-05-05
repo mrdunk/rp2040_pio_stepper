@@ -9,10 +9,11 @@ void update_joint_config(
     const int8_t* io_pos_dir,
     const double* velocity_requested,
     const double* abs_pos_requested,
-    const uint32_t* abs_pos_achieved,
+    const int32_t* abs_pos_achieved,
     const double* max_velocity,
     const double* max_accel,
-    const int32_t* velocity_achieved
+    const int32_t* velocity_achieved,
+    const uint8_t* cmd_type
 )
 {
 }

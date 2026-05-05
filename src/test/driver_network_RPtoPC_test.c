@@ -162,6 +162,7 @@ static void test_joint_config(void **state) {
         .enable = 1,
         .gpio_step = 2,
         .gpio_dir = 3,
+        .cmd_type = JOINT_CMD_VELOCITY,
         .max_velocity = 56.78,
         .max_accel = 90.12,
     };
@@ -185,6 +186,7 @@ static void test_joint_config(void **state) {
     assert_int_equal(last_joint_config.enable, message.enable);
     assert_int_equal(last_joint_config.gpio_step, message.gpio_step);
     assert_int_equal(last_joint_config.gpio_dir, message.gpio_dir);
+    assert_int_equal(last_joint_config.cmd_type, message.cmd_type);
     assert_double_equal(last_joint_config.max_velocity, message.max_velocity, 0.0001);
     assert_double_equal(last_joint_config.max_accel, message.max_accel, 0.0001);
 }

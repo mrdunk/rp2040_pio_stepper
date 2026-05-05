@@ -243,14 +243,16 @@ static void test_do_steps_no_update(void **state) {
     assert_int_equal(result, 0);
 }
 
-/* do_steps: valid position request + empty FIFO -> non-zero step written to PIO */
+/* do_steps: valid position request + empty FIFO -> non-zero step written to PIO.
+ * In default position mode the error (1000 steps) drives velocity well above
+ * MIN_STEP_COUNT_Q so a step is issued; velocity_requested is ignored. */
 static void test_do_steps_normal_step(void **state) {
     (void)state;
     config.joint[0].enabled            = 1;
-    config.joint[0].abs_pos_requested  = 10.0;
+    config.joint[0].abs_pos_requested  = 1000.0;  /* 1000-step error >> MIN_STEP_COUNT_Q */
     config.joint[0].abs_pos_achieved   = 0;
-    config.joint[0].velocity_requested = 5000.0;   /* steps/s */
-    config.joint[0].max_velocity       = 50000.0;  /* steps/s (≈39mm/s at 1280 steps/mm) */
+    config.joint[0].velocity_requested = 5000.0;   /* ignored in position mode */
+    config.joint[0].max_velocity       = 50000.0;
     config.joint[0].max_accel          = 0.0;  /* no accel limit so first call steps */
     config.joint[0].updated_from_c0    = 1;
     mock_tx_fifo_empty                  = 1;
@@ -264,7 +266,7 @@ static void test_do_steps_normal_step(void **state) {
     assert_int_equal(last_pio_put_value & 1, 1);
 }
 
-/* do_steps: acceleration clamping activates across multiple calls */
+/* do_steps: acceleration clamping activates across multiple calls (velocity mode) */
 static void test_do_steps_accel_clamped(void **state) {
     (void)state;
     /* Set up a joint with small max_accel so the clamp activates after enable.
@@ -282,6 +284,7 @@ static void test_do_steps_accel_clamped(void **state) {
     config.joint[0].enabled            = 1;
     config.joint[0].io_pos_step        = 1;
     config.joint[0].io_pos_dir         = 2;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
     config.joint[0].updated_from_c0    = 1;
     config.joint[0].abs_pos_requested  = 10000.0;
     config.joint[0].abs_pos_achieved   = 0;
@@ -310,6 +313,69 @@ static void test_do_steps_accel_clamped(void **state) {
     assert_int_equal(first_word & 0x1, 1);
     assert_int_equal(second_word >> 1, 6641);
     assert_int_equal(second_word & 0x1, 1);
+}
+
+/* do_steps: position mode drives toward abs_pos_requested.
+ * Error = 1000 steps; velocity_q = (1000/1000)*65536 = 65536 >> MIN_STEP_COUNT_Q.
+ * Direction bit (LSB) must be 1 (positive error). */
+static void test_do_steps_position_mode_drives_forward(void **state) {
+    (void)state;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].abs_pos_requested  = 1000.0;
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].velocity_requested = 0.0;  /* ignored in position mode */
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 0.0;
+    config.joint[0].updated_from_c0    = 1;
+    mock_tx_fifo_empty                  = 1;
+    mock_rx_fifo_level                  = 0;
+
+    uint8_t result = do_steps(0);
+
+    assert_true(result > 0);
+    assert_true(last_pio_put_value != 0);
+    assert_int_equal(last_pio_put_value & 1, 1);  /* direction = forward */
+}
+
+/* do_steps: position mode reverses when past target.
+ * abs_pos_achieved=1000 > abs_pos_requested=0 => error=-1000 => reverse. */
+static void test_do_steps_position_mode_reverses(void **state) {
+    (void)state;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].abs_pos_achieved   = 1000;
+    config.joint[0].velocity_requested = 0.0;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 0.0;
+    config.joint[0].updated_from_c0    = 1;
+    mock_tx_fifo_empty                  = 1;
+    mock_rx_fifo_level                  = 0;
+
+    do_steps(0);
+
+    assert_int_equal(last_pio_put_value & 1, 0);  /* direction = reverse */
+}
+
+/* do_steps: position mode at target -> no steps */
+static void test_do_steps_position_mode_at_target(void **state) {
+    (void)state;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].velocity_requested = 9999.0;  /* ignored in position mode */
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 0.0;
+    config.joint[0].updated_from_c0    = 1;
+    mock_tx_fifo_empty                  = 1;
+    mock_rx_fifo_level                  = 0;
+
+    uint8_t result = do_steps(0);
+
+    assert_true(result > 0);
+    assert_int_equal(last_pio_put_value, 0);  /* no steps when at target */
 }
 
 /* do_steps: enabled, no position error -> n_steps=0 -> puts 0 to FIFO */
@@ -381,9 +447,12 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_disabled,                  test_setup),
         cmocka_unit_test_setup(test_do_steps_no_update,                 test_setup),
         cmocka_unit_test_setup(test_do_steps_normal_step,               test_setup),
-        cmocka_unit_test_setup(test_do_steps_accel_clamped,             test_setup),
-        cmocka_unit_test_setup(test_do_steps_no_motion,                test_setup),
+        cmocka_unit_test_setup(test_do_steps_accel_clamped,                      test_setup),
+        cmocka_unit_test_setup(test_do_steps_no_motion,                          test_setup),
         cmocka_unit_test_setup(test_do_steps_underrun_stops_pio,                 test_setup),
+        cmocka_unit_test_setup(test_do_steps_position_mode_drives_forward,       test_setup),
+        cmocka_unit_test_setup(test_do_steps_position_mode_reverses,             test_setup),
+        cmocka_unit_test_setup(test_do_steps_position_mode_at_target,            test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

@@ -73,7 +73,7 @@ static void test_overrun_count_accumulates_when_core1_reads(void **state) {
     }
 
     get_joint_config(0, CORE1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-                     NULL);
+                     NULL, NULL);
 
     assert_int_equal(get_and_reset_overrun_count(0), N - 1);
     assert_int_equal(get_and_reset_overrun_count(0), 0);  /* resets on read */
@@ -91,7 +91,7 @@ static void test_no_overrun_when_one_packet_per_tick(void **state) {
     process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, expected_length);
 
     get_joint_config(0, CORE1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-                     NULL);
+                     NULL, NULL);
 
     assert_int_equal(get_and_reset_overrun_count(0), 0);
     assert_int_equal(get_and_reset_underrun_count(0), 0);
@@ -103,7 +103,7 @@ static void test_underrun_count_when_core1_reads_before_packet(void **state) {
 
     /* No packets sent — updated_from_c0 stays 0. */
     get_joint_config(0, CORE1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-                     NULL);
+                     NULL, NULL);
 
     assert_int_equal(get_and_reset_underrun_count(0), 1);
     assert_int_equal(get_and_reset_underrun_count(0), 0);  /* resets on read */

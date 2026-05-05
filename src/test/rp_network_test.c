@@ -224,6 +224,7 @@ static void test_unpack_joint_config_message(void **state) {
     joint_config.gpio_dir = 2;
     joint_config.max_velocity = 12.34;
     joint_config.max_accel = 56.78;
+    joint_config.cmd_type = JOINT_CMD_VELOCITY;
 
     union MessageAny message = {0};
     message.joint_config = joint_config;
@@ -245,6 +246,7 @@ static void test_unpack_joint_config_message(void **state) {
     assert_int_equal(config.joint[2].io_pos_dir, 2);
     assert_double_equal(config.joint[2].max_velocity, 12.34, 0.01);
     assert_double_equal(config.joint[2].max_accel, 56.78, 0.01);
+    assert_int_equal(config.joint[2].cmd_type, JOINT_CMD_VELOCITY);
 }
 
 static void test_unpack_unknown_message_type(void **state) {

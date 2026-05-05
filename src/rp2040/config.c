@@ -195,7 +195,8 @@ void update_joint_config(
     const int32_t* abs_pos_achieved,
     const double* max_velocity,
     const double* max_accel,
-    const int32_t* velocity_achieved
+    const int32_t* velocity_achieved,
+    const uint8_t* cmd_type
 )
 {
   if(joint >= MAX_JOINT) {
@@ -231,6 +232,9 @@ void update_joint_config(
   if(velocity_achieved != NULL) {
     config.joint[joint].velocity_achieved = *velocity_achieved;
   }
+  if(cmd_type != NULL) {
+    config.joint[joint].cmd_type = *cmd_type;
+  }
 
   switch(core) {
     case CORE0:
@@ -256,7 +260,8 @@ uint32_t get_joint_config(
     int32_t* abs_pos_achieved,
     double* max_velocity,
     double* max_accel,
-    int32_t* velocity_achieved)
+    int32_t* velocity_achieved,
+    uint8_t* cmd_type)
 {
   if(joint >= MAX_JOINT) {
     return 0;
@@ -309,6 +314,9 @@ uint32_t get_joint_config(
   if(velocity_achieved != NULL) {
     *velocity_achieved = config.joint[joint].velocity_achieved;
   }
+  if(cmd_type != NULL) {
+    *cmd_type = config.joint[joint].cmd_type;
+  }
 
   mutex_exit(&mtx_joint[joint]);
 
@@ -343,6 +351,7 @@ void disable_joint(const uint8_t joint, const uint8_t core) {
       joint,
       core,
       &enabled,
+      NULL,
       NULL,
       NULL,
       NULL,
@@ -402,7 +411,8 @@ bool serialise_joint_movement(
           &abs_pos_achieved,
           NULL, //&max_velocity,
           NULL, //&max_accel,
-          &velocity_achieved
+          &velocity_achieved,
+          NULL  //&cmd_type
           );
     } while(updated == 0 && wait_for_data);
 
@@ -483,6 +493,7 @@ bool serialise_joint_config(const uint32_t joint, struct NWBuffer* tx_buf) {
   int8_t io_pos_dir;
   double max_velocity;
   double max_accel;
+  uint8_t cmd_type;
 
   get_joint_config(
         joint,
@@ -495,7 +506,8 @@ bool serialise_joint_config(const uint32_t joint, struct NWBuffer* tx_buf) {
         NULL, //&abs_pos_achieved,
         &max_velocity,
         &max_accel,
-        NULL  //&velocity_achieved
+        NULL, //&velocity_achieved
+        &cmd_type
         );
 
   struct Reply_joint_config reply;
@@ -504,6 +516,7 @@ bool serialise_joint_config(const uint32_t joint, struct NWBuffer* tx_buf) {
   reply.enable = enabled;
   reply.gpio_step = io_pos_step;
   reply.gpio_dir = io_pos_dir;
+  reply.cmd_type = cmd_type;
   reply.max_velocity = max_velocity;
   reply.max_accel = max_accel;
 

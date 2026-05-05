@@ -220,6 +220,7 @@ static const ParamDef gpio_params[] = {
 static const ParamDef joint_params[] = {
     { S32, offsetof(skeleton_t, joint_gpio_step), sizeof(hal_s32_t), "joint", 1, "gpio-step" }, // RP2040 GPIO pin number for the step signal
     { S32, offsetof(skeleton_t, joint_gpio_dir),  sizeof(hal_s32_t), "joint", 1, "gpio-dir"  }, // RP2040 GPIO pin number for the direction signal
+    { U32, offsetof(skeleton_t, joint_cmd_type),  sizeof(hal_u32_t), "joint", 1, "cmd-type"  }, // Step command mode: 0=position (default), 1=velocity
 };
 
 static const PinDef joint_pins[] = {
@@ -227,7 +228,7 @@ static const PinDef joint_pins[] = {
     { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_vel_limit),      sizeof(hal_float_t*), "joint", 0, 1, "vel-limit"        }, // Maximum velocity (units/sec)
     { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_accel_limit),    sizeof(hal_float_t*), "joint", 0, 1, "accel-limit"      }, // Maximum acceleration (units/sec²)
     { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_scale),          sizeof(hal_float_t*), "joint", 0, 1, "scale"            }, // Steps per unit; applied to both position and velocity commands
-    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_pos_cmd),        sizeof(hal_float_t*), "joint", 0, 1, "pos-cmd"          }, // Sent to RP2040 but not consumed by firmware; used locally to compute pos-error-fb
+    { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_pos_cmd),        sizeof(hal_float_t*), "joint", 0, 1, "pos-cmd"          }, // Position command; consumed by firmware in position mode (cmd-type=0); also used to compute pos-error-fb
     { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_vel_cmd),        sizeof(hal_float_t*), "joint", 0, 1, "vel-cmd"          }, // Velocity command from LinuxCNC
     { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_pos_fb),         sizeof(hal_float_t*), "joint", 0, 1, "pos-fb"           }, // Position feedback (cumulative step count ÷ scale)
     { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_vel_fb),         sizeof(hal_float_t*), "joint", 0, 1, "vel-fb"           }, // Velocity feedback (raw steps per servo period, unscaled)
@@ -351,6 +352,7 @@ int rtapi_app_main(void)
     *port_data_array->joint_enable_cmd[i]  = false;
     port_data_array->joint_gpio_step[i]    = -1;
     port_data_array->joint_gpio_dir[i]     = -1;
+    port_data_array->joint_cmd_type[i]     = JOINT_CMD_POSITION;
   }
 
   /* Export spindle pins. */
@@ -468,6 +470,8 @@ bool configure_joint(
         last_joint_config[joint].max_velocity != max_velocity_ticks
         ||
         last_joint_config[joint].max_accel != max_accel_ticks
+        ||
+        last_joint_config[joint].cmd_type != data->joint_cmd_type[joint]
       ) {
       pack_success = pack_success && serialize_joint_config(
           tx_buffer,
@@ -476,7 +480,8 @@ bool configure_joint(
           data->joint_gpio_step[joint],
           data->joint_gpio_dir[joint],
           max_velocity_ticks,
-          max_accel_ticks
+          max_accel_ticks,
+          data->joint_cmd_type[joint]
           );
     }
     return pack_success;

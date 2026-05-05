@@ -71,7 +71,7 @@ bool unpack_joint_enable(
   printf("%u Enabling joint: %u\t%i\n", *received_count, joint, enabled);
   update_joint_config(
       joint, CORE0,
-      &enabled, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+      &enabled, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
   (*received_count)++;
   return true;
@@ -101,7 +101,7 @@ bool unpack_joint_abs_pos(
   for(size_t joint = 0; joint < MAX_JOINT; joint++) {
     update_joint_config(
         joint, CORE0,
-        NULL, NULL, NULL, &vel[joint], &pos[joint], NULL, NULL, NULL, NULL);
+        NULL, NULL, NULL, &vel[joint], &pos[joint], NULL, NULL, NULL, NULL, NULL);
   }
 
   (*received_count)++;
@@ -191,10 +191,11 @@ bool unpack_joint_config(
   int8_t io_dir = message->gpio_dir;
   double max_velocity = message->max_velocity;
   double max_accel = message->max_accel;
+  uint8_t cmd_type = message->cmd_type;
 
 
-  printf("%u Cfg joint %u: en=%u step=%i dir=%i vel=%f acc=%f\n",
-      *received_count, joint, enabled, io_step, io_dir, max_velocity, max_accel);
+  printf("%u Cfg joint %u: en=%u step=%i dir=%i vel=%f acc=%f cmd=%u\n",
+      *received_count, joint, enabled, io_step, io_dir, max_velocity, max_accel, cmd_type);
   update_joint_config(
       joint,
       CORE0,
@@ -206,7 +207,8 @@ bool unpack_joint_config(
       NULL,
       &max_velocity,
       &max_accel,
-      NULL);
+      NULL,
+      &cmd_type);
 
   if(!serialise_joint_config(joint, tx_buf)) {
     printf("WARN: TX buffer full, dropping joint config reply.\n");

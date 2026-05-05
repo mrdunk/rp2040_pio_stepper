@@ -41,7 +41,7 @@ Per-joint pins are indexed 0–3. Replace `<N>` with the joint number.
 | `enable-cmd` | bit | IN | Enable joint (LinuxCNC command) |
 | `enable-fb` | bit | OUT | RP2040's actual enabled state; may remain false after network recovery until the protocol explicitly re-enables the joint |
 | `ferror-suggest` | float | OUT | Expected following error at `vel-limit` given current round-trip latency (`vel-limit × (seq-out − seq-in) × packet-interval × 1e-9`); set FERROR above this value |
-| `pos-cmd` | float | IN | Position command from LinuxCNC trajectory planner (sent to RP2040 but not consumed by firmware; used locally to compute `pos-error-fb`) |
+| `pos-cmd` | float | IN | Position command from LinuxCNC trajectory planner; consumed by firmware in position mode (`cmd-type=0`); also used locally to compute `pos-error-fb` |
 | `pos-error-fb` | s32 | OUT | Difference between commanded and actual step count (raw steps, unscaled) |
 | `pos-fb` | float | OUT | Position feedback (cumulative step count ÷ scale) |
 | `scale` | float | IN | Steps per unit; applied to both position and velocity commands |
@@ -56,8 +56,19 @@ Hardware wiring — set once at config time.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
+| `cmd-type` | u32 | Step command mode: `0` = position (default), `1` = velocity |
 | `gpio-dir` | s32 | RP2040 GPIO pin number for the direction signal |
 | `gpio-step` | s32 | RP2040 GPIO pin number for the step signal |
+
+**`cmd-type` modes:**
+
+- `0` (position, default): The RP2040 stepgen acts as a position follower. Each servo
+  period it computes velocity = `abs_pos_requested − abs_pos_achieved` and drives that
+  many steps, subject to `vel-limit` and `accel-limit`. Connect `joint.N.motor-pos-cmd`
+  to `pos-cmd`; `vel-cmd` is ignored.
+- `1` (velocity): The RP2040 stepgen integrates the `vel-cmd` value each period
+  (scaled by `scale`). This is the legacy mode. `pos-cmd` is still transmitted but
+  ignored by the firmware.
 
 ### Joint setup example
 
