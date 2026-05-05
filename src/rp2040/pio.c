@@ -23,7 +23,6 @@
  * from pico_stepper.pio); subtracted when converting step period to PIO len. */
 #define STEP_PIO_LEN_OVERHEAD  9
 #define RP2040_CLOCK_MHZ       133
-#define MIN_STEP_COUNT_Q       4096    /* 0.0625 * 65536 */
 
 
 typedef struct {
@@ -134,26 +133,29 @@ int32_t drain_rx_fifo(uint32_t sm, int32_t current_pos) {
 }
 
 /* Compute the PIO step-timer length in clock ticks.
- * Returns 0 if step_count_q is below MIN_STEP_COUNT_Q or the step would span
- * >= 2 servo periods (>= 2ms at 1ms period); caller must treat 0 as "skip".
+ * Returns 0 only for step_count_q <= 0 (no motion).
+ * Velocities below 1 step/period are capped at max_len so the step fits within
+ * one servo period; plan_steps spaces them out via its accumulator.
  * max_vel_q <= 0 means "no max-velocity configured yet"; min_len clamping is
  * skipped so the default config does not block stepping before the first
  * MSG_SET_JOINT_CONFIG packet arrives. */
 int32_t calculate_step_len(int32_t step_count_q, int32_t period_ticks, int32_t max_vel_q) {
-    if (step_count_q <= MIN_STEP_COUNT_Q) {
+    if (step_count_q <= 0) {
         return 0;
     }
-    int32_t len = (int32_t)((int64_t)period_ticks * 65536
-                            / ((int64_t)step_count_q << 1) - STEP_PIO_LEN_OVERHEAD);
+    /* Longest step_len that keeps a step within one servo period.
+     * A step > 1 period blocks the FIFO for the following Core1 tick. */
+    int32_t max_len = period_ticks / 2 - STEP_PIO_LEN_OVERHEAD;
+    int64_t len64 = (int64_t)period_ticks * 65536
+                    / ((int64_t)step_count_q << 1) - STEP_PIO_LEN_OVERHEAD;
+    int32_t len = len64 > (int64_t)max_len ? max_len : (int32_t)len64;
     if (max_vel_q > 0) {
         int32_t min_len = (int32_t)((int64_t)period_ticks * 65536
                                     / ((int64_t)max_vel_q << 1) - STEP_PIO_LEN_OVERHEAD);
         int32_t clamped = len < min_len ? min_len : len;
-        /* A step lasting >= 2 servo periods would block the FIFO for two Core1 ticks.
-         * Skip it; the accumulator preserves the fractional step for the next period. */
-        return clamped >= period_ticks ? 0 : clamped;
+        return clamped > max_len ? max_len : clamped;
     }
-    return len >= period_ticks ? 0 : len;
+    return len;
 }
 
 /* Clamp velocity change to at most max_accel_q per period.
@@ -172,16 +174,25 @@ int32_t clamp_accel(int32_t velocity_q, int32_t last_velocity_q, int32_t max_acc
     return velocity_q;
 }
 
+/* Bresenham step scheduler.
+ *
+ * Accumulates fractional desired steps (velocity_q is Q16.16 steps/period) and
+ * returns how many steps to issue this period.  Excess desired steps are
+ * returned to the accumulator for the next period.
+ *
+ * max_steps = floor(period_ticks / step_period): the most complete steps the
+ * PIO can produce in one period at the given step_len.  calculate_step_len
+ * guarantees step_len <= period_ticks/2 - OVERHEAD, so max_steps >= 1
+ * whenever step_len > 0.  step_len == 0 (no motion) gives max_steps = 0;
+ * the accumulator is preserved so no desired steps are lost. */
 int32_t plan_steps(int32_t velocity_q, uint8_t joint,
                    int32_t period_ticks, int32_t step_len) {
     joint_state[joint].step_accumulator_q += abs(velocity_q);
     int32_t n_steps_desired = joint_state[joint].step_accumulator_q >> 16;
     joint_state[joint].step_accumulator_q -= n_steps_desired << 16;
 
-    /* step_len == 0 means "skip this period" — preserve accumulator, issue no steps. */
     int32_t step_period = 2 * (step_len + STEP_PIO_LEN_OVERHEAD);
     int32_t max_steps = (step_len > 0) ? period_ticks / step_period : 0;
-    if (max_steps < 0) max_steps = 0;
 
     int32_t n_steps = n_steps_desired < max_steps ? n_steps_desired : max_steps;
     joint_state[joint].step_accumulator_q += (n_steps_desired - n_steps) << 16;

@@ -109,20 +109,21 @@ static void test_calculate_step_len_clamped(void **state) {
     assert_int_equal(result, 1321);
 }
 
-/* calculate_step_len: below MIN_STEP_COUNT threshold -> 0 */
+/* calculate_step_len: step_count_q=0 -> 0 (division-by-zero guard) */
 static void test_calculate_step_len_below_threshold(void **state) {
     (void)state;
-    /* 0.05 * 65536 = 3276.8 -> 3276; MIN_STEP_COUNT_Q=4096; 3276<=4096 -> 0 */
-    int32_t result = calculate_step_len(3276, 133000, 3276800);
-    assert_int_equal(result, 0);
+    assert_int_equal(calculate_step_len(0, 133000, 3276800), 0);
 }
 
-/* calculate_step_len: very slow step_count -> step would be >= 2 periods -> skip (0) */
+/* calculate_step_len: slow velocity -> capped at max_len (fits in one period) */
 static void test_calculate_step_len_too_slow_skip(void **state) {
     (void)state;
-    /* 0.1 * 65536 = 6553; raw len = 665054 >> period_ticks (133000) -> skip */
-    int32_t result = calculate_step_len(6553, 133000, 3276800);
-    assert_int_equal(result, 0);
+    /* 0.05 steps/period (sq=3276): raw len >> period_ticks, capped to max_len=66491 */
+    assert_int_equal(calculate_step_len(3276, 133000, 3276800), 66491);
+    /* 0.1 steps/period (sq=6553): same cap */
+    assert_int_equal(calculate_step_len(6553, 133000, 3276800), 66491);
+    /* sq=1 (extreme): int64 intermediate would overflow int32, capped to max_len */
+    assert_int_equal(calculate_step_len(1, 133000, 3276800), 66491);
 }
 
 /* clamp_accel: velocity unchanged -> returns same velocity */
@@ -249,7 +250,7 @@ static void test_do_steps_no_update(void **state) {
 static void test_do_steps_normal_step(void **state) {
     (void)state;
     config.joint[0].enabled            = 1;
-    config.joint[0].abs_pos_requested  = 1000.0;  /* 1000-step error >> MIN_STEP_COUNT_Q */
+    config.joint[0].abs_pos_requested  = 1000.0;  /* 1000-step error */
     config.joint[0].abs_pos_achieved   = 0;
     config.joint[0].velocity_requested = 5000.0;   /* ignored in position mode */
     config.joint[0].max_velocity       = 50000.0;
