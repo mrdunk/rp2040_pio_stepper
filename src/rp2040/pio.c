@@ -176,9 +176,12 @@ int32_t clamp_accel(int32_t velocity_q, int32_t last_velocity_q, int32_t max_acc
 
 /* Bresenham step scheduler.
  *
- * Accumulates fractional desired steps (velocity_q is Q16.16 steps/period) and
- * returns how many steps to issue this period.  Excess desired steps are
- * returned to the accumulator for the next period.
+ * Accumulates fractional desired steps using a signed accumulator.
+ * velocity_q is Q16.16 steps/period (positive = forward, negative = backward).
+ * Returns a signed step count: positive = forward, negative = backward.
+ * Using a signed accumulator means that oscillating small corrections (e.g.
+ * from the Kp position term) cancel each other rather than compounding into
+ * spurious steps.
  *
  * max_steps = floor(period_ticks / step_period): the most complete steps the
  * PIO can produce in one period at the given step_len.  calculate_step_len
@@ -187,17 +190,30 @@ int32_t clamp_accel(int32_t velocity_q, int32_t last_velocity_q, int32_t max_acc
  * the accumulator is preserved so no desired steps are lost. */
 int32_t plan_steps(int32_t velocity_q, uint8_t joint,
                    int32_t period_ticks, int32_t step_len) {
-    joint_state[joint].step_accumulator_q += abs(velocity_q);
-    int32_t n_steps_desired = joint_state[joint].step_accumulator_q >> 16;
-    joint_state[joint].step_accumulator_q -= n_steps_desired << 16;
+    joint_state[joint].step_accumulator_q += velocity_q;
+    int32_t acc = joint_state[joint].step_accumulator_q;
+
+    int32_t n_steps_desired;
+    int32_t sign;
+    if (acc >= 65536) {
+        n_steps_desired = acc >> 16;
+        sign = 1;
+        joint_state[joint].step_accumulator_q -= n_steps_desired << 16;
+    } else if (acc <= -65536) {
+        n_steps_desired = (-acc) >> 16;
+        sign = -1;
+        joint_state[joint].step_accumulator_q += n_steps_desired << 16;
+    } else {
+        return 0;
+    }
 
     int32_t step_period = 2 * (step_len + STEP_PIO_LEN_OVERHEAD);
     int32_t max_steps = (step_len > 0) ? period_ticks / step_period : 0;
 
     int32_t n_steps = n_steps_desired < max_steps ? n_steps_desired : max_steps;
-    joint_state[joint].step_accumulator_q += (n_steps_desired - n_steps) << 16;
+    joint_state[joint].step_accumulator_q += sign * ((n_steps_desired - n_steps) << 16);
 
-    return n_steps;
+    return n_steps * sign;
 }
 
 /* Write the packed step command to PIO0's TX FIFO if it is empty.
@@ -292,9 +308,9 @@ uint8_t do_steps(const uint8_t joint) {
   int32_t step_len_ticks = calculate_step_len(step_count_q, period_ticks, max_vel_q);
   int32_t n_steps        = plan_steps(velocity_q, joint, period_ticks, step_len_ticks);
 
-  uint32_t direction = (velocity_q > 0);
+  uint32_t direction = (n_steps > 0) ? 1 : 0;
 
-  if (n_steps > 0) {
+  if (n_steps != 0) {
     issue_pio_step(joint, step_len_ticks, direction);
   } else if (pio_sm_is_tx_fifo_empty(pio0, joint_state[joint].sm0)) {
     pio_sm_put(pio0, joint_state[joint].sm0, 0);
