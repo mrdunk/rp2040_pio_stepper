@@ -691,13 +691,18 @@ static void write_port(void *arg, long period)
   }
 
   // Compute per-joint suggested FERROR: vel-limit × round-trip-latency.
+  // Velocity mode uses 2× because a full reversal swings f-error by 2×latency×vel
+  // (latency offset in the forward phase is not corrected before the reverse phase
+  // adds its own latency offset).  Position mode Kp correction absorbs transients,
+  // so 1× is sufficient there.
   // Zero when eth is down or packet-interval is not yet valid.
   hal_s32_t latency_cycles = (hal_s32_t)*data->seq_out - (hal_s32_t)*data->seq_in;
   if (*data->eth_up && *data->packet_interval > 0 && latency_cycles > 0) {
     double latency_s = (double)latency_cycles * (double)*data->packet_interval * 1e-9;
     for (uint32_t joint = 0; joint < MAX_JOINT; joint++) {
       double vl = fabs((double)*data->joint_vel_limit[joint]);
-      *data->joint_ferror_suggest[joint] = (hal_float_t)(vl * latency_s);
+      double multiplier = (data->joint_cmd_type[joint] == JOINT_CMD_VELOCITY) ? 2.0 : 1.0;
+      *data->joint_ferror_suggest[joint] = (hal_float_t)(multiplier * vl * latency_s);
     }
   } else {
     for (uint32_t joint = 0; joint < MAX_JOINT; joint++) {
