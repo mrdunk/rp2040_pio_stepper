@@ -473,6 +473,120 @@ static void test_do_steps_position_mode_no_jitter_at_rest(void **state) {
     assert_int_equal(steps_fired, 0);
 }
 
+/* ── Velocity-mode position-accuracy integration tests ────────────────────
+ *
+ * Physical model: when do_steps writes a non-zero word to the PIO FIFO, the
+ * step_gen programme loops at rate step_period = 2*(step_len+9) ticks.  In one
+ * servo period (133000 ticks @ 1ms/133MHz) it generates
+ *   max_steps = 133000 / step_period
+ * physical steps.  pio_word_steps() converts a FIFO word to that signed count.
+ *
+ * Accuracy analysis:
+ *
+ *   v < 1 step/period:
+ *     calculate_step_len caps step_len at max_len=66491 → step_period=133000 →
+ *     max_steps=1.  Bresenham schedules 0 or 1 step each period; long-run
+ *     average equals v exactly.  Position is EXACT.
+ *
+ *   v = integer steps/period:
+ *     step_len sized so max_steps = v exactly; Bresenham desired = v always.
+ *     Position is EXACT.
+ *
+ *   v = non-integer, v > 1 step/period:
+ *     calculate_step_len sizes step_len for ceil(v) → max_steps = ceil(v).
+ *     Bresenham alternates floor(v) and ceil(v) steps per period; long-run
+ *     average equals v exactly.  Position is EXACT.
+ */
+
+/* Convert one PIO FIFO word to the physical step count it causes.
+ * Returns negative for direction=0 (reverse). */
+static int32_t pio_word_steps(uint32_t word) {
+    if (word == 0) return 0;
+    int32_t step_len  = (int32_t)(word >> 1);
+    int32_t max_steps = 133000 / (2 * (step_len + 9));
+    return (word & 1) ? max_steps : -max_steps;
+}
+
+/* Run n servo periods in JOINT_CMD_VELOCITY mode; return accumulated position.
+ * No acceleration limit so the commanded velocity takes effect immediately.
+ * Uses pico-eth-cnc-breakout parameters: 1ms period, max_vel=32000 steps/s. */
+static int32_t run_velocity_periods(double vel_steps_per_s, int n) {
+    config.update_time_us              = 1000;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].enabled            = 1;
+    config.joint[0].velocity_requested = vel_steps_per_s;
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].max_velocity       = 32000.0;
+    config.joint[0].max_accel          = 0.0;
+    mock_tx_fifo_empty                 = 1;
+
+    int32_t sim_pos = 0;
+    for (int i = 0; i < n; i++) {
+        mock_rx_values[0]  = sim_pos;
+        mock_rx_fifo_level = 1;
+        mock_rx_index      = 0;
+        config.joint[0].updated_from_c0 = 1;
+        last_pio_put_value = 0;
+        do_steps(0);
+        sim_pos += pio_word_steps(last_pio_put_value);
+    }
+    return sim_pos;
+}
+
+/* 0.75 steps/period (750 steps/s): sub-1 fraction, exact.
+ * step_len capped → max_steps=1.  Bresenham: 0,1,1,1 per 4 periods.
+ * 25 complete cycles of 4 → 75 steps. */
+static void test_do_steps_velmode_0_75(void **state) {
+    (void)state;
+    assert_int_equal(run_velocity_periods(750.0, 100), 75);
+}
+
+/* 0.25 steps/period (250 steps/s): sub-1 fraction, exact.
+ * Bresenham: 0,0,0,1 per 4 periods → 25 steps in 100 periods. */
+static void test_do_steps_velmode_0_25(void **state) {
+    (void)state;
+    assert_int_equal(run_velocity_periods(250.0, 100), 25);
+}
+
+/* 1.0 steps/period (1000 steps/s): integer boundary, exact.
+ * step_len=66491 (=max_len), max_steps=1, desired=1 every period → 100 steps. */
+static void test_do_steps_velmode_int_1(void **state) {
+    (void)state;
+    assert_int_equal(run_velocity_periods(1000.0, 100), 100);
+}
+
+/* 10.0 steps/period (10000 steps/s): integer, exact.
+ * step_len=6641, max_steps=10, desired=10 every period → 1000 steps. */
+static void test_do_steps_velmode_int_10(void **state) {
+    (void)state;
+    assert_int_equal(run_velocity_periods(10000.0, 100), 1000);
+}
+
+/* 1.5 steps/period (1500 steps/s): non-integer above 1, now exact.
+ * v_ceil=2, step_len=33241, max_steps=2.
+ * Bresenham alternates 1,2 → 150 steps in 100 periods. */
+static void test_do_steps_velmode_frac_1_5(void **state) {
+    (void)state;
+    assert_int_equal(run_velocity_periods(1500.0, 100), 150);
+}
+
+/* 10.5 steps/period (10500 steps/s): non-integer above 10, now exact.
+ * v_ceil=11, step_len=6036, max_steps=11.
+ * Bresenham alternates 10,11 → 1050 steps in 100 periods. */
+static void test_do_steps_velmode_frac_10_5(void **state) {
+    (void)state;
+    assert_int_equal(run_velocity_periods(10500.0, 100), 1050);
+}
+
+/* -0.75 steps/period (-750 steps/s): reverse direction.
+ * Identical Bresenham schedule to +0.75 but direction bit=0.
+ * 75 reverse steps → position -75. */
+static void test_do_steps_velmode_reverse(void **state) {
+    (void)state;
+    assert_int_equal(run_velocity_periods(-750.0, 100), -75);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -502,7 +616,14 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_position_mode_drives_forward,       test_setup),
         cmocka_unit_test_setup(test_do_steps_position_mode_reverses,             test_setup),
         cmocka_unit_test_setup(test_do_steps_position_mode_at_target,            test_setup),
-        cmocka_unit_test_setup(test_do_steps_position_mode_no_jitter_at_rest,   test_setup),
+        cmocka_unit_test_setup(test_do_steps_position_mode_no_jitter_at_rest,    test_setup),
+        cmocka_unit_test_setup(test_do_steps_velmode_0_75,      test_setup),
+        cmocka_unit_test_setup(test_do_steps_velmode_0_25,      test_setup),
+        cmocka_unit_test_setup(test_do_steps_velmode_int_1,     test_setup),
+        cmocka_unit_test_setup(test_do_steps_velmode_int_10,    test_setup),
+        cmocka_unit_test_setup(test_do_steps_velmode_frac_1_5,  test_setup),
+        cmocka_unit_test_setup(test_do_steps_velmode_frac_10_5, test_setup),
+        cmocka_unit_test_setup(test_do_steps_velmode_reverse,   test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

@@ -146,9 +146,12 @@ int32_t calculate_step_len(int32_t step_count_q, int32_t period_ticks, int32_t m
     /* Longest step_len that keeps a step within one servo period.
      * A step > 1 period blocks the FIFO for the following Core1 tick. */
     int32_t max_len = period_ticks / 2 - STEP_PIO_LEN_OVERHEAD;
-    int64_t len64 = (int64_t)period_ticks * 65536
-                    / ((int64_t)step_count_q << 1) - STEP_PIO_LEN_OVERHEAD;
-    int32_t len = len64 > (int64_t)max_len ? max_len : (int32_t)len64;
+    /* Size step_len for ceil(v) steps per period so that max_steps = ceil(v).
+     * The Bresenham accumulator can then alternate floor(v)/ceil(v) to achieve
+     * exactly v steps/period on average, including non-integer velocities. */
+    int32_t v_ceil = (step_count_q + 65535) >> 16;
+    int32_t len    = period_ticks / (2 * v_ceil) - STEP_PIO_LEN_OVERHEAD;
+    if (len > max_len) len = max_len;
     if (max_vel_q > 0) {
         int32_t min_len = (int32_t)((int64_t)period_ticks * 65536
                                     / ((int64_t)max_vel_q << 1) - STEP_PIO_LEN_OVERHEAD);
@@ -297,9 +300,12 @@ uint8_t do_steps(const uint8_t joint) {
   velocity_q = clamp_accel(velocity_q, joint_state[joint].last_velocity_q, max_accel_q);
   joint_state[joint].last_velocity_q = velocity_q;
 
-  int32_t step_count_q   = abs(velocity_q);
-  int32_t step_len_ticks = calculate_step_len(step_count_q, period_ticks, max_vel_q);
-  int32_t n_steps        = plan_steps(velocity_q, joint, period_ticks, step_len_ticks);
+  int32_t step_count_q  = abs(velocity_q);
+  int32_t step_len_ceil = calculate_step_len(step_count_q, period_ticks, max_vel_q);
+  int32_t n_steps       = plan_steps(velocity_q, joint, period_ticks, step_len_ceil);
+  /* Derive step_len for the exact n_steps this period (floor or ceil of v),
+   * so the PIO pulse rate matches the intended physical step count. */
+  int32_t step_len_ticks = calculate_step_len(n_steps * 65536, period_ticks, max_vel_q);
 
   uint32_t direction = (velocity_q > 0);
 
