@@ -250,11 +250,20 @@ uint8_t do_steps(const uint8_t joint) {
      * following error near zero during motion.
      * With 1-period measurement delay, Kp=1.0 gives poles on the unit
      * circle (sustained oscillation). Kp=0.5 places poles at z=0.5±0.5i
-     * (|z|=0.707), giving stable convergence in ~10 periods. */
+     * (|z|=0.707), giving stable convergence in ~10 periods.
+     *
+     * Dead zone: suppress correction when |error| < 1 step.  Sub-step
+     * errors cannot be resolved without oscillation — a correction step
+     * moves abs_pos_achieved by 1, which reverses the error sign and
+     * fires an opposite correction next cycle.  Errors up to ±0.5 step
+     * are inherent in mapping a float trajectory onto integer steps. */
     double vel_ff      = velocity_requested;
     double error_steps = abs_pos_requested - (double)abs_pos_achieved;
-    velocity_requested = vel_ff
-                         + error_steps * (1.0e6 / (double)update_period_us) * 0.5;
+    double correction  = 0.0;
+    if (error_steps >= 1.0 || error_steps <= -1.0) {
+        correction = error_steps * (1.0e6 / (double)update_period_us) * 0.5;
+    }
+    velocity_requested = vel_ff + correction;
   }
 
   int32_t velocity_q   = (int32_t)((velocity_requested / (double)update_period_us) * 65536.0);

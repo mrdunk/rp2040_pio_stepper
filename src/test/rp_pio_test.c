@@ -427,6 +427,52 @@ static void test_do_steps_underrun_stops_pio(void **state) {
     assert_int_equal(last_pio_put_value, 0);
 }
 
+/* Integration test: position-mode stationary hold at fractional step position.
+ *
+ * Uses pico-eth-cnc-breakout.ini parameters:
+ *   period=1ms, scale=1280 steps/mm, max_vel=25mm/s=32000 steps/s,
+ *   max_accel=375mm/s²=480000 steps/s².
+ *
+ * Scenario: joint at rest (vel_ff=0), abs_pos_requested=100.5, abs_pos_achieved=100.
+ *
+ *   Kp correction = (100.5-100) * (1e6/1000) * 0.5 = 250 steps/s = 0.25 steps/period
+ *   velocity_q = (250/1000) * 65536 = 16384
+ *   step_len   = (133000*65536/32768) - 9 = 265991 ticks  (spans ~2 servo periods)
+ *
+ * dunk_stepgen_refactor_involved: 265991 >= period_ticks → calculate_step_len returns 0
+ *   → plan_steps: max_steps=0 → no step fires → stable hold.
+ *
+ * dunk_fix_cmd_pos: 265991 > max_len → capped to 66491 → plan_steps fires 1 step every
+ *   4 periods → visible back-and-forth jitter on hardware when machine is stationary.
+ *
+ * Expected: zero steps fired over 20 servo periods. */
+static void test_do_steps_position_mode_no_jitter_at_rest(void **state) {
+    (void)state;
+
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = 0.0;     /* vel_ff=0: machine at rest */
+    config.joint[0].abs_pos_requested  = 100.5;   /* fractional: 0.5-step Kp error */
+    config.joint[0].abs_pos_achieved   = 100;
+    config.joint[0].max_velocity       = 32000.0; /* 25 mm/s * 1280 steps/mm */
+    config.joint[0].max_accel          = 480000.0; /* 375 mm/s² * 1280 steps/mm */
+    mock_rx_fifo_level                 = 0;  /* PIO counter unchanged: no steps from hardware */
+    mock_tx_fifo_empty                 = 1;
+
+    int steps_fired = 0;
+    for (int i = 0; i < 20; i++) {
+        config.joint[0].updated_from_c0 = 1;
+        last_pio_put_value = 0;
+        do_steps(0);
+        if (last_pio_put_value != 0) {
+            steps_fired++;
+        }
+    }
+
+    assert_int_equal(steps_fired, 0);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -456,6 +502,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_position_mode_drives_forward,       test_setup),
         cmocka_unit_test_setup(test_do_steps_position_mode_reverses,             test_setup),
         cmocka_unit_test_setup(test_do_steps_position_mode_at_target,            test_setup),
+        cmocka_unit_test_setup(test_do_steps_position_mode_no_jitter_at_rest,   test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
