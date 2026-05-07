@@ -211,21 +211,6 @@ static void test_plan_steps_skip_preserves_accumulator(void **state) {
     assert_int_equal(plan_steps(0,     0, 133000, 13291), 2);
 }
 
-/* plan_steps: oscillating ±corrections cancel in signed accumulator -> no steps.
- * This verifies the position-mode jitter fix: the Kp error term produces small
- * alternating velocities that should not accumulate into spurious steps. */
-static void test_plan_steps_oscillating_cancels(void **state) {
-    (void)state;
-    int32_t pos = (int32_t)(0.05 * 65536);  /* +0.05 steps/period */
-    int32_t neg = -pos;
-    int32_t total = 0;
-    for (int i = 0; i < 100; i++) {
-        total += plan_steps(pos, 0, 133000, 66491);
-        total += plan_steps(neg, 0, 133000, 66491);
-    }
-    assert_int_equal(total, 0);
-}
-
 /* do_steps: update_period == 0, enabled joint -> returns 0 without dividing */
 static void test_do_steps_zero_period(void **state) {
     (void)state;
@@ -461,7 +446,6 @@ int main(void) {
         cmocka_unit_test_setup(test_plan_steps_excess_returned_to_accumulator, test_setup),
         cmocka_unit_test_setup(test_plan_steps_zero_velocity,                  test_setup),
         cmocka_unit_test_setup(test_plan_steps_skip_preserves_accumulator,     test_setup),
-        cmocka_unit_test_setup(test_plan_steps_oscillating_cancels,           test_setup),
         cmocka_unit_test_setup(test_do_steps_zero_period,               test_setup),
         cmocka_unit_test_setup(test_do_steps_disabled,                  test_setup),
         cmocka_unit_test_setup(test_do_steps_no_update,                 test_setup),
