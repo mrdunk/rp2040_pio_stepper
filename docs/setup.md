@@ -387,3 +387,30 @@ net spindle-at-speed  spindle.0.at-speed  <= rp2040_eth.0.spindle.0.at-speed
 
 See [hal_reference.md](hal_reference.md) for a full list of spindle pins and
 parameters.
+
+## Advanced: Increasing GPIO and I2C Expander Counts
+
+`MAX_GPIO` and `MAX_I2C_MCP` in `src/shared/messages.h` are compile-time limits
+that can be raised if your hardware supports more channels.
+
+```c
+// src/shared/messages.h
+#define MAX_GPIO     32   // must be a multiple of 32
+#define MAX_I2C_MCP   4   // hardware maximum is 8 (MCP23017 address range 0x20–0x27)
+```
+
+**`MAX_GPIO`** controls the total number of GPIO channels (native RP2040 pins
+plus MCP23017 pins combined). It must be a multiple of 32 — the driver packs
+GPIO state into 32-bit banks (`MAX_GPIO_BANK = MAX_GPIO / 32`).
+
+The practical ceiling is the number of native GP pins available on your board
+(varies by hardware) plus `MAX_I2C_MCP × 16` (16 pins per MCP23017 expander).
+
+**`MAX_I2C_MCP`** controls how many MCP23017 expanders are tracked. The
+MCP23017 I2C address is set by hardware pins A0–A2, giving addresses 0x20–0x27
+on a single I2C bus — a hard limit of 8 expanders (128 I2C GPIO pins).
+
+After changing either constant, recompile and reflash the firmware, then
+recompile and reinstall the driver. Both share `src/shared/messages.h` — a
+mismatch between firmware and driver will corrupt the wire format; the symptom
+is `WARN: Unconsumed RX buffer remainder: N bytes` or garbled GPIO data.

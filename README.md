@@ -10,6 +10,21 @@ A verified starting point is the [W5500-EVB-Pico](https://docs.wiznet.io/Product
 
 The RP2040 is at `192.168.12.2`; the LinuxCNC host NIC is `192.168.12.1`.
 
+# Specifications
+
+| Property | Value |
+|----------|-------|
+| Joints (stepper axes) | Up to 4 (3 tested) |
+| Step rate — theoretical max | 6.65 MHz per joint (PIO ceiling at 133 MHz clock) |
+| Step rate — practical max | ~500 kHz per joint (limited by stepper driver minimum pulse width, typically 1–2 µs) |
+| Step command modes | Position or velocity, configurable per joint |
+| Position feedback | Step counter via second PIO state machine |
+| GPIO channels | 32 by default (compile-time limit; see [Advanced GPIO](docs/setup.md#advanced-increasing-gpio-and-i2c-expander-counts)) |
+| MCP23017 expanders supported | 4 by default, up to 8 (compile-time limit; see above) |
+| Spindle controllers | Up to 4 RS-485 VFD (Huanyang, Fuling, Weiken) |
+| Network | UDP/Ethernet, W5500 or W5100S |
+| Host connection | Direct point-to-point to LinuxCNC NIC (no switch needed) |
+
 # Docs
 - [Setup](docs/setup.md) — build, flash, network tuning, LinuxCNC config
 - [Architecture](docs/architecture.md) — component overview, message flow, clock sync, PIO step generation
