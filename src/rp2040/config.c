@@ -36,6 +36,8 @@ volatile uint32_t last_packet_tick = 0;
 volatile bool linuxcnc_restart_detected = false;
 volatile uint32_t packet_generation  = 0;
 volatile uint32_t core1_loop_count   = 0;
+volatile uint32_t core1_work_us      = 0;
+volatile uint32_t core0_work_us      = 0;
 
 volatile struct ConfigGlobal config = {
   .last_update_id = 0,
@@ -542,6 +544,8 @@ bool serialise_joint_metrics(struct NWBuffer* tx_buf) {
   }
   reply.overrun_occurred  = any_overrun  ? 1 : 0;
   reply.underrun_occurred = any_underrun ? 1 : 0;
+  reply.core1_work_us     = core1_work_us;
+  reply.core0_work_us     = core0_work_us;
 
   uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
 

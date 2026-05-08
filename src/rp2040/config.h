@@ -32,6 +32,10 @@ extern volatile uint32_t packet_generation;
 /* Incremented by Core1 each time core1_tick() runs. Single-writer (Core1),
  * single-reader (Core0 via serialise_joint_movement). Atomic on Cortex-M0+. */
 extern volatile uint32_t core1_loop_count;
+/* Microseconds Core1/Core0 spent doing real work last period. Single-writer
+ * per variable; Core0 reads both for serialisation. Atomic on Cortex-M0+. */
+extern volatile uint32_t core1_work_us;
+extern volatile uint32_t core0_work_us;
 
 /* Configuration object for an joint.
  * This is the format for the global config that is shared between cores. */

@@ -169,9 +169,12 @@ struct __attribute__((packed)) Reply_gpio_config {
 };
 
 struct __attribute__((packed)) Reply_joint_metrics {
-  uint8_t type;
-  uint8_t overrun_occurred;   /* 1 if any joint overran this tick, else 0 */
-  uint8_t underrun_occurred;  /* 1 if any joint underran this tick, else 0 */
+  uint8_t  type;
+  uint8_t  overrun_occurred;   /* 1 if any joint overran this tick, else 0 */
+  uint8_t  underrun_occurred;  /* 1 if any joint underran this tick, else 0 */
+  uint8_t  _pad;               /* align uint32_t fields to 4-byte boundary */
+  uint32_t core1_work_us;      /* µs Core1 spent working last period (excl. wait_for_packet) */
+  uint32_t core0_work_us;      /* µs Core0 spent working last period (packet rx → response tx) */
 };
 
 struct __attribute__((packed)) Reply_gpio {

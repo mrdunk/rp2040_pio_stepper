@@ -30,6 +30,9 @@ typedef struct {
 
   hal_u32_t* core1_period;
   hal_u32_t* core1_tick;
+  hal_u32_t* core1_work_us;
+  hal_u32_t* core0_work_us;
+  hal_u32_t* driver_work_ns;
   hal_float_t* update_overrun;
   hal_float_t* update_underrun;
 

@@ -18,8 +18,11 @@ config time with `setp` and cannot be connected to signals.
 
 | Pin | Type | Dir | Description |
 |-----|------|-----|-------------|
+| `core0-work-us` | u32 | OUT | µs Core0 spent working last period (packet received → response sent, including modbus) |
 | `core1-period` | u32 | OUT | RP2040 core1 measured time between loop iterations (µs) |
 | `core1-tick` | u32 | OUT | RP2040 core1 loop iteration counter; a frozen value indicates firmware hang |
+| `core1-work-us` | u32 | OUT | µs Core1 spent working last period (excludes time waiting for tick) |
+| `driver-work-ns` | u32 | OUT | ns `write_port()` spent last servo period (send + non-blocking receive + reply processing) |
 | `eth-up` | bit | OUT | Ethernet link state as seen by the driver |
 | `machine-on` | bit | OUT | True when the RP2040 Ethernet link is established and communicating |
 | `packet-interval` | s32 | OUT | Time between consecutive packets computed from LinuxCNC timestamps (ns); nominally equals the servo period |

@@ -462,6 +462,8 @@ bool unpack_joint_metrics(
 
   *data->update_overrun  = (hal_float_t)data->ema_overrun;
   *data->update_underrun = (hal_float_t)data->ema_underrun;
+  *data->core1_work_us   = reply->core1_work_us;
+  *data->core0_work_us   = reply->core0_work_us;
 
   (*received_count)++;
   return true;

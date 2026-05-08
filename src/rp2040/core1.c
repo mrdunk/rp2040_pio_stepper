@@ -65,6 +65,7 @@ void step_all_joints(void) {
 
 static void core1_tick(void) {
   wait_for_packet();
+  uint64_t t_start = time_us_64();
   core1_loop_count++;
 #ifndef BUILD_TESTS
   i2c_gpio_poll(&i2c_gpio);
@@ -81,6 +82,7 @@ static void core1_tick(void) {
 #ifndef BUILD_TESTS
   i2c_gpio_poll(&i2c_gpio);
 #endif
+  core1_work_us = (uint32_t)(time_us_64() - t_start);
 }
 
 void core1_main(void) {

@@ -445,6 +445,7 @@ void core0_main() {
     process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, data_received);
 
     if(received_msg_count > 0) {
+      uint64_t t_c0_start = time_us_64();
       /* Only call recover_clock() on received packets. During a missed packet
        * the timer free-runs at the current period, which is correct behaviour. */
       /* Serialise before waking Core1 — avoids joint mutex contention. */
@@ -483,6 +484,7 @@ void core0_main() {
           destip_machine,
           &destport_machine);
       act_spindle_frequency = modbus_loop(req_spindle_frequency);
+      core0_work_us = (uint32_t)(time_us_64() - t_c0_start);
     }
     reset_nw_buf(&tx_buf);
   }

@@ -257,6 +257,9 @@ static const PinDef scalar_pins[] = {
     { PIN,   HAL_OUT, offsetof(skeleton_t, eth_up),          0, "eth-up",          -1, 0, NULL }, // Ethernet link state as seen by the driver
     { FLOAT, HAL_OUT, offsetof(skeleton_t, update_overrun),  0, "update-overrun",  -1, 0, NULL }, // EMA of cycles where Core1 received more than one update from Core0 per period
     { FLOAT, HAL_OUT, offsetof(skeleton_t, update_underrun), 0, "update-underrun", -1, 0, NULL }, // EMA of cycles where Core1 found no new update from Core0
+    { U32,   HAL_OUT, offsetof(skeleton_t, core1_work_us),   0, "core1-work-us",   -1, 0, NULL }, // µs Core1 spent working last period (excludes time waiting for tick)
+    { U32,   HAL_OUT, offsetof(skeleton_t, core0_work_us),   0, "core0-work-us",   -1, 0, NULL }, // µs Core0 spent working last period (packet received → response sent, incl. modbus)
+    { U32,   HAL_OUT, offsetof(skeleton_t, driver_work_ns),  0, "driver-work-ns",  -1, 0, NULL }, // ns write_port() spent last servo period (send + non-blocking receive + reply processing)
 };
 
 int rtapi_app_main(void)
@@ -601,6 +604,7 @@ static void write_port(void *arg, long period)
     return;
   }
 
+  long t_wp_start = rtapi_get_time();
   skeleton_t *data = arg;
   struct NWBuffer buffer;
   reset_nw_buf(&buffer);
@@ -710,6 +714,7 @@ static void write_port(void *arg, long period)
     }
   }
 
+  *data->driver_work_ns = (hal_u32_t)(rtapi_get_time() - t_wp_start);
   count++;
 }
 

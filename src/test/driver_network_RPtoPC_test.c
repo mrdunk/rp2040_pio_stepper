@@ -26,6 +26,9 @@ hal_bit_t joint_enable_fb[4];
 hal_float_t joint_vel_calculated[4];
 hal_u32_t core1_period;
 hal_u32_t core1_tick;
+hal_u32_t core1_work_us;
+hal_u32_t core0_work_us;
+hal_u32_t driver_work_ns;
 hal_float_t update_overrun;
 hal_float_t update_underrun;
 
@@ -54,6 +57,9 @@ void setup_data(skeleton_t* data) {
   data->update_underrun = &update_underrun;
   data->core1_period    = &core1_period;
   data->core1_tick      = &core1_tick;
+  data->core1_work_us   = &core1_work_us;
+  data->core0_work_us   = &core0_work_us;
+  data->driver_work_ns  = &driver_work_ns;
 
   for (size_t s = 0; s < MAX_SPINDLE; s++) {
     data->spindle_speed_fb[s]  = &spindle_speed_fb[s];
@@ -207,7 +213,7 @@ static void test_joint_metrics(void **state) {
     };
 
     memcpy(buffer.payload, &message, sizeof(message));
-    buffer.length = 4;  /* aligned32(sizeof(Reply_joint_metrics) = 3) */
+    buffer.length = aligned32(sizeof(struct Reply_joint_metrics));
     buffer.checksum = checksum(0, 0, buffer.length, buffer.payload);
 
     process_data(
@@ -245,7 +251,7 @@ static void test_joint_metrics_ema_ratios(void **state) {
         .underrun_occurred = 0,
     };
     memcpy(buffer.payload, &message, sizeof(message));
-    buffer.length    = 4;  /* aligned32(sizeof(Reply_joint_metrics) = 3) */
+    buffer.length    = aligned32(sizeof(struct Reply_joint_metrics));
     buffer.checksum  = checksum(0, 0, buffer.length, buffer.payload);
     process_data(&buffer, &data, &mess_received_count,
                  buffer.length + sizeof(buffer.length) + sizeof(buffer.checksum),
