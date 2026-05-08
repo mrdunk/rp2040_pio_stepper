@@ -33,6 +33,7 @@ The RP2040 is at `192.168.12.2`; the LinuxCNC host NIC is `192.168.12.1`.
 # Wishlist
   * RS-485 support.
   * Test with all 4 axis. (Only 3 tested so far.)
+  * Rotary encoder support.
 
 # Stretch goals
   * SPI support.
