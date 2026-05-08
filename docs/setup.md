@@ -15,7 +15,7 @@ cd rp2040_pio_stepper
 
 - `arm-none-eabi-gcc` and the [pico-sdk](https://github.com/raspberrypi/pico-sdk)
 - `halcompile` (part of [LinuxCNC](https://linuxcnc.org/) — install LinuxCNC first)
-- `ethtool` (usually pre-installed on Linux)
+- `ethtool`: `sudo apt install ethtool`
 
 The [Getting Started with Raspberry Pi Pico](https://rptl.io/pico-get-started)
 guide covers installing the toolchain and pico-sdk, and also explains how to
