@@ -28,7 +28,6 @@ hal_u32_t core1_period;
 hal_u32_t core1_tick;
 hal_u32_t core1_work_us;
 hal_u32_t core0_work_us;
-hal_u32_t driver_work_ns;
 hal_float_t update_overrun;
 hal_float_t update_underrun;
 
@@ -59,7 +58,6 @@ void setup_data(skeleton_t* data) {
   data->core1_tick      = &core1_tick;
   data->core1_work_us   = &core1_work_us;
   data->core0_work_us   = &core0_work_us;
-  data->driver_work_ns  = &driver_work_ns;
 
   for (size_t s = 0; s < MAX_SPINDLE; s++) {
     data->spindle_speed_fb[s]  = &spindle_speed_fb[s];

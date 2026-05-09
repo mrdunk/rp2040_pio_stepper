@@ -27,7 +27,6 @@ hal_u32_t core1_period;
 hal_u32_t core1_tick;
 hal_u32_t core1_work_us;
 hal_u32_t core0_work_us;
-hal_u32_t driver_work_ns;
 
 hal_bit_t gpio_data_out[MAX_GPIO];
 hal_bit_t gpio_data_out_invert[MAX_GPIO];
@@ -56,7 +55,6 @@ void setup_data(skeleton_t* data) {
     data->core1_tick    = &core1_tick;
     data->core1_work_us = &core1_work_us;
     data->core0_work_us = &core0_work_us;
-    data->driver_work_ns = &driver_work_ns;
 
     for(size_t gpio = 0; gpio < MAX_GPIO; gpio++) {
         data->gpio_data_out[gpio] = &gpio_data_out[gpio];

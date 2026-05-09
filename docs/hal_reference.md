@@ -16,21 +16,20 @@ config time with `setp` and cannot be connected to signals.
 
 ## Scalar Pins
 
-| Pin | Type | Dir | Description |
-|-----|------|-----|-------------|
-| `core0-work-us` | u32 | OUT | µs Core0 spent working last period (packet received → response sent, including modbus) |
-| `core1-period` | u32 | OUT | RP2040 core1 measured time between loop iterations (µs) |
-| `core1-tick` | u32 | OUT | RP2040 core1 loop iteration counter; a frozen value indicates firmware hang |
-| `core1-work-us` | u32 | OUT | µs Core1 spent working last period (excludes time waiting for tick) |
-| `driver-work-ns` | u32 | OUT | ns `write_port()` spent last servo period (send + non-blocking receive + reply processing) |
-| `eth-up` | bit | OUT | Ethernet link state as seen by the driver |
-| `machine-on` | bit | OUT | True when the RP2040 Ethernet link is established and communicating |
-| `packet-interval` | s32 | OUT | Time between consecutive packets computed from LinuxCNC timestamps (ns); nominally equals the servo period |
-| `rx-miss-count` | u32 | OUT | Consecutive cycles without a response from RP2040; resets to 0 on success; triggers network-down handling at MAX_SKIPPED_PACKETS |
-| `seq-in` | u32 | OUT | Sequence number echoed back by RP2040; `seq-out − seq-in` gives round-trip latency in servo cycles |
-| `seq-out` | u32 | OUT | Sequence number stamped on each packet sent to RP2040 |
-| `update-overrun` | float | OUT | Exponential moving average of cycles where Core1 received more than one update from Core0 per period |
-| `update-underrun` | float | OUT | Exponential moving average of cycles where Core1 found no new update from Core0 |
+| Pin | Type | Dir | Use | Description |
+|-----|------|-----|-----|-------------|
+| `core0-work-us` | u32 | OUT | debug | µs Core0 spent working last period (packet received → response sent, including modbus) |
+| `core1-period` | u32 | OUT | debug | RP2040 core1 measured time between loop iterations (µs) |
+| `core1-tick` | u32 | OUT | debug | RP2040 core1 loop iteration counter; a frozen value indicates firmware hang |
+| `core1-work-us` | u32 | OUT | debug | µs Core1 spent working last period (excludes time waiting for tick) |
+| `eth-up` | bit | OUT | user | Ethernet link state as seen by the driver |
+| `machine-on` | bit | OUT | user | True when the RP2040 Ethernet link is established and communicating |
+| `packet-interval` | s32 | OUT | debug | Time between consecutive packets computed from LinuxCNC timestamps (ns); nominally equals the servo period |
+| `rx-miss-count` | u32 | OUT | debug | Consecutive cycles without a response from RP2040; resets to 0 on success; triggers network-down handling at MAX_SKIPPED_PACKETS |
+| `seq-in` | u32 | OUT | debug | Sequence number echoed back by RP2040; `seq-out − seq-in` gives round-trip latency in servo cycles |
+| `seq-out` | u32 | OUT | debug | Sequence number stamped on each packet sent to RP2040 |
+| `update-overrun` | float | OUT | debug | Exponential moving average of cycles where Core1 received more than one update from Core0 per period |
+| `update-underrun` | float | OUT | debug | Exponential moving average of cycles where Core1 found no new update from Core0 |
 
 ---
 
@@ -38,20 +37,20 @@ config time with `setp` and cannot be connected to signals.
 
 Per-joint pins are indexed 0–3. Replace `<N>` with the joint number.
 
-| Pin | Type | Dir | Description |
-|-----|------|-----|-------------|
-| `accel-limit` | float | IN | Maximum acceleration (units/sec²) |
-| `enable-cmd` | bit | IN | Enable joint (LinuxCNC command) |
-| `enable-fb` | bit | OUT | RP2040's actual enabled state; may remain false after network recovery until the protocol explicitly re-enables the joint |
-| `ferror-suggest` | float | OUT | Expected following error at `vel-limit` given current round-trip latency (`vel-limit × (seq-out − seq-in) × packet-interval × 1e-9`); set FERROR above this value |
-| `pos-cmd` | float | IN | Position command from LinuxCNC trajectory planner; consumed by firmware in position mode (`cmd-type=0`); also used locally to compute `pos-error-fb` |
-| `pos-error-fb` | s32 | OUT | Difference between commanded and actual step count (raw steps, unscaled) |
-| `pos-fb` | float | OUT | Position feedback (cumulative step count ÷ scale) |
-| `scale` | float | IN | Steps per unit; applied to both position and velocity commands |
-| `vel-calculated` | float | OUT | Velocity the RP2040 computed after applying `vel-limit` and `accel-limit` |
-| `vel-cmd` | float | IN | Velocity command from LinuxCNC |
-| `vel-fb` | float | OUT | Velocity feedback (raw steps per servo period, unscaled) |
-| `vel-limit` | float | IN | Maximum velocity (units/sec) |
+| Pin | Type | Dir | Use | Description |
+|-----|------|-----|-----|-------------|
+| `accel-limit` | float | IN | user | Maximum acceleration (units/sec²) |
+| `enable-cmd` | bit | IN | user | Enable joint (LinuxCNC command) |
+| `enable-fb` | bit | OUT | user | RP2040's actual enabled state; may remain false after network recovery until the protocol explicitly re-enables the joint |
+| `ferror-suggest` | float | OUT | user | Expected following error at `vel-limit` given current round-trip latency (`vel-limit × (seq-out − seq-in) × packet-interval × 1e-9`); set FERROR above this value |
+| `pos-cmd` | float | IN | user | Position command from LinuxCNC trajectory planner; consumed by firmware in position mode (`cmd-type=0`); also used locally to compute `pos-error-fb` |
+| `pos-error-fb` | s32 | OUT | debug | Difference between commanded and actual step count (raw steps, unscaled) |
+| `pos-fb` | float | OUT | user | Position feedback (cumulative step count ÷ scale) |
+| `scale` | float | IN | user | Steps per unit; applied to both position and velocity commands |
+| `vel-calculated` | float | OUT | debug | Velocity the RP2040 computed after applying `vel-limit` and `accel-limit` |
+| `vel-cmd` | float | IN | user | Velocity command from LinuxCNC |
+| `vel-fb` | float | OUT | debug | Velocity feedback (raw steps per servo period, unscaled) |
+| `vel-limit` | float | IN | user | Maximum velocity (units/sec) |
 
 ### Joint Parameters
 

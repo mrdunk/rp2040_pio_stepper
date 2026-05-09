@@ -13,9 +13,12 @@ cd rp2040_pio_stepper
 
 ## Prerequisites
 
-- `arm-none-eabi-gcc` and the [pico-sdk](https://github.com/raspberrypi/pico-sdk)
+```bash
+sudo apt install git cmake gcc-arm-none-eabi ethtool
+```
+
+- [pico-sdk](https://github.com/raspberrypi/pico-sdk)
 - `halcompile` (part of [LinuxCNC](https://linuxcnc.org/) — install LinuxCNC first)
-- `ethtool`: `sudo apt install ethtool`
 
 The [Getting Started with Raspberry Pi Pico](https://rptl.io/pico-get-started)
 guide covers installing the toolchain and pico-sdk, and also explains how to
@@ -69,16 +72,6 @@ The board reboots automatically once the file is written.
 For detail on BOOTSEL mode, UF2 flashing, and connecting a UART serial console
 for debug output, see [Getting Started with Raspberry Pi Pico](https://rptl.io/pico-get-started).
 
-## Build and Run Tests
-
-Tests run on the host — no hardware needed.
-
-```bash
-cmake -B build_tests -S . -DBUILD_TESTS=ON
-make -C build_tests
-ctest --test-dir build_tests --output-on-failure
-```
-
 ## Install the LinuxCNC Driver
 
 ```bash
@@ -95,8 +88,9 @@ not the only one.
 
 ## Network Setup
 
-Connect the RP2040 directly to a spare Ethernet interface on the
-[LinuxCNC](https://linuxcnc.org/) host (point-to-point, no switch needed).
+Connect the RP2040 point-to-point to a spare Ethernet interface on the
+[LinuxCNC](https://linuxcnc.org/) host. Ideally no switch or other equipment
+between the LinuxCNC PC and the RP2040 — each hop adds latency and jitter.
 
 Assign addresses:
 
@@ -105,31 +99,9 @@ Assign addresses:
 | LinuxCNC host NIC | `192.168.12.1` |
 | RP2040 | `192.168.12.2` |
 
-### Changing the IP addresses
-
-The IP addresses and UDP port are hardcoded in two source files. To change
-them, edit both files and recompile both the firmware and the driver.
-
-**RP2040 firmware** — `src/rp2040/stepper_control.c`:
-
-```c
-static wiz_NetInfo g_net_info = {
-    .ip = {192, 168, 12, 2},   // RP2040 address
-    .gw = {192, 168, 12, 1},   // host/gateway
-    ...
-};
-```
-
-**LinuxCNC driver** — `src/driver/rp2040_network.c:31`:
-
-```c
-char *hostname = "192.168.12.2";
-int portno = 5002;
-```
-
-**UDP port** — `src/rp2040/stepper_control.h` (`NW_PORT`) must match `portno`
-in the driver. After editing: recompile and reflash the firmware, then
-recompile and reinstall the driver.
+The RP2040 address is hardcoded in the firmware. The LinuxCNC host NIC address
+must be set to match. See [Advanced: Changing the IP Addresses](#advanced-changing-the-ip-addresses)
+if the defaults conflict with your network.
 
 ### Reduce NIC latency
 
@@ -414,3 +386,39 @@ After changing either constant, recompile and reflash the firmware, then
 recompile and reinstall the driver. Both share `src/shared/messages.h` — a
 mismatch between firmware and driver will corrupt the wire format; the symptom
 is `WARN: Unconsumed RX buffer remainder: N bytes` or garbled GPIO data.
+
+## Advanced: Changing the IP Addresses
+
+The IP addresses and UDP port are hardcoded in two source files. To change
+them, edit both files and recompile both the firmware and the driver.
+
+**RP2040 firmware** — `src/rp2040/stepper_control.c`:
+
+```c
+static wiz_NetInfo g_net_info = {
+    .ip = {192, 168, 12, 2},   // RP2040 address
+    .gw = {192, 168, 12, 1},   // host/gateway
+    ...
+};
+```
+
+**LinuxCNC driver** — `src/driver/rp2040_network.c:31`:
+
+```c
+char *hostname = "192.168.12.2";
+int portno = 5002;
+```
+
+**UDP port** — `src/rp2040/stepper_control.h` (`NW_PORT`) must match `portno`
+in the driver. After editing: recompile and reflash the firmware, then
+recompile and reinstall the driver.
+
+## Development
+
+Tests run on the host — no hardware needed.
+
+```bash
+cmake -B build_tests -S . -DBUILD_TESTS=ON
+make -C build_tests
+ctest --test-dir build_tests --output-on-failure
+```
