@@ -129,9 +129,9 @@ config/
     pico-eth-cnc-breakout.hal    -- HAL wiring for joints, GPIO, spindle
     custom.hal                   -- site-specific overrides
     postgui_call_list.hal        -- post-GUI HAL commands
-  pico-eth-cnc-gantry/
-    pico-eth-cnc-gantry.ini      -- LinuxCNC machine config (4-joint gantry, XYYZ)
-    pico-eth-cnc-gantry.hal      -- HAL wiring: X(J2), Y1(J3), Y2(J4), Z(J5)
+  pico-eth-cnc-4axis/
+    pico-eth-cnc-4axis.ini       -- LinuxCNC machine config (4-joint XYZA)
+    pico-eth-cnc-4axis.hal       -- HAL wiring: X(J2), Y(J3), Z(J4), A(J5)
     custom.hal                   -- site-specific overrides
     postgui_call_list.hal        -- post-GUI HAL commands
   shared/
