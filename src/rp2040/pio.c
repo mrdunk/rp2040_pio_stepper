@@ -292,6 +292,20 @@ uint8_t do_steps(const uint8_t joint) {
     if(pio_sm_is_tx_fifo_empty(pio0, joint_state[joint].sm0)) {
       pio_sm_put(pio0, joint_state[joint].sm0, 0);
     }
+    // Keep abs_pos_achieved current while disabled so pos_fb stays accurate.
+    // Without this, in-flight steps accumulate in the PIO FIFO unread; on
+    // re-enable they all land at once, creating a position error that triggers
+    // a correction move (jitter).
+    abs_pos_achieved = drain_rx_fifo(joint_state[joint].sm1, abs_pos_achieved);
+    velocity_achieved = abs_pos_achieved - joint_state[joint].last_pos_achieved;
+    update_joint_config(
+        joint, CORE1,
+        NULL, NULL, NULL, NULL, NULL,
+        &abs_pos_achieved,
+        NULL, NULL,
+        &velocity_achieved,
+        NULL);
+    joint_state[joint].last_pos_achieved = abs_pos_achieved;
     return 0;
   }
 

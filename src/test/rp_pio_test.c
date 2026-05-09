@@ -234,6 +234,28 @@ static void test_do_steps_disabled(void **state) {
     assert_int_equal(last_pio_put_value, 0);
 }
 
+/* do_steps: joint disabled with steps in RX FIFO -> abs_pos_achieved updated.
+ * Regression for estop-during-motion jitter: in-flight steps must be drained
+ * while disabled so pos_fb (= abs_pos_achieved / scale) stays current.  The
+ * driver clamps pos_cmd = pos_fb while disabled; without the drain, pos_cmd
+ * falls behind by the in-flight step count, causing a correction move on
+ * re-enable that the user sees as persistent jitter. */
+static void test_do_steps_disabled_drains_rx_fifo(void **state) {
+    (void)state;
+    config.joint[0].enabled          = 0;
+    config.joint[0].updated_from_c0  = 1;
+    config.joint[0].abs_pos_achieved = 100;
+    mock_tx_fifo_empty                = 1;
+    mock_rx_fifo_level                = 1;
+    mock_rx_values[0]                 = 103;  /* 3 extra steps took while stopping */
+
+    uint8_t result = do_steps(0);
+
+    assert_int_equal(result, 0);
+    assert_int_equal(last_pio_put_value, 0);
+    assert_int_equal(config.joint[0].abs_pos_achieved, 103);
+}
+
 /* do_steps: no new core0 data (updated == 0), slow last_velocity -> writes 0 to PIO, returns 0 */
 static void test_do_steps_no_update(void **state) {
     (void)state;
@@ -608,6 +630,7 @@ int main(void) {
         cmocka_unit_test_setup(test_plan_steps_skip_preserves_accumulator,     test_setup),
         cmocka_unit_test_setup(test_do_steps_zero_period,               test_setup),
         cmocka_unit_test_setup(test_do_steps_disabled,                  test_setup),
+        cmocka_unit_test_setup(test_do_steps_disabled_drains_rx_fifo,  test_setup),
         cmocka_unit_test_setup(test_do_steps_no_update,                 test_setup),
         cmocka_unit_test_setup(test_do_steps_normal_step,               test_setup),
         cmocka_unit_test_setup(test_do_steps_accel_clamped,                      test_setup),
