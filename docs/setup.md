@@ -150,77 +150,6 @@ paths relative to the including file's directory:
 See [hal_reference.md](hal_reference.md) for a full reference of all HAL pins
 and parameters.
 
-## Tuning
-
-### Verifying sync with seq-out and seq-in
-
-The driver stamps each outgoing packet with a sequence number
-(`rp2040_eth.0.seq-out`) and the RP2040 echoes it back
-(`rp2040_eth.0.seq-in`). The difference `seq-out − seq-in` is the round-trip
-latency measured in servo cycles.
-
-The value is system-dependent — establish a baseline on your hardware, then
-watch for instability or sustained drift upward, which indicates network or
-host load problems.
-
-Observe both values live with halmeter:
-
-```bash
-halmeter pin rp2040_eth.0.seq-out &
-halmeter pin rp2040_eth.0.seq-in &
-```
-
-Or connect them to signals for halscope logging. The example config wires
-`seq-in` to a named signal:
-
-```hal
-net seq-in  rp2040_eth.0.seq-in
-```
-
-### Setting FERROR with ferror-suggest
-
-[LinuxCNC](https://linuxcnc.org/)'s `FERROR` setting in the `[JOINT.N]` INI
-section is the maximum allowed following error. If exceeded, LinuxCNC faults
-with "Follow error".
-
-`rp2040_eth.0.joint.N.ferror-suggest` gives a calculated minimum safe value
-based on current round-trip latency:
-
-```
-ferror-suggest = vel-limit × (seq-out − seq-in) × packet-interval × 1e-9
-```
-
-**Workflow:**
-1. Run the machine at full speed.
-2. Read `ferror-suggest` via halmeter: `halmeter pin rp2040_eth.0.joint.0.ferror-suggest`
-3. Set `FERROR` in the INI to that value plus a small safety margin.
-
-`FERROR` is parsed at startup before HAL runs — it cannot be auto-populated.
-Read the pin at runtime and update the INI manually. The example INI includes a
-comment showing how to calculate it from first principles:
-
-```ini
-# FERROR = 2 * MAX_VELOCITY * SERVO_PERIOD = 2 * 25mm/s * 0.001s = 0.1mm
-# Factor of 2: round-trip latency (command→steps→feedback = 2 servo periods).
-# Doubled again to tolerate one dropped packet.
-FERROR = 0.2
-MIN_FERROR = 0.2
-```
-
-### Max velocity and acceleration
-
-`rp2040_eth.0.joint.N.vel-limit` and `rp2040_eth.0.joint.N.accel-limit` cap
-what the driver will command. In the example config these are set from the INI:
-
-```hal
-setp rp2040_eth.0.joint.0.vel-limit   [JOINT_0]MAX_VELOCITY
-setp rp2040_eth.0.joint.0.accel-limit [JOINT_0]MAX_ACCELERATION
-```
-
-Start with conservative values and increase while monitoring `ferror-suggest`
-and following error in halscope. See [hal_reference.md](hal_reference.md) for
-the full list of joint pins and params.
-
 ## GPIO
 
 GPIO channels are numbered sequentially (`gpio.00`, `gpio.01`, …) regardless
@@ -412,6 +341,77 @@ int portno = 5002;
 **UDP port** — `src/rp2040/stepper_control.h` (`NW_PORT`) must match `portno`
 in the driver. After editing: recompile and reflash the firmware, then
 recompile and reinstall the driver.
+
+## Advanced: Tuning
+
+### Verifying sync with seq-out and seq-in
+
+The driver stamps each outgoing packet with a sequence number
+(`rp2040_eth.0.seq-out`) and the RP2040 echoes it back
+(`rp2040_eth.0.seq-in`). The difference `seq-out − seq-in` is the round-trip
+latency measured in servo cycles.
+
+The value is system-dependent — establish a baseline on your hardware, then
+watch for instability or sustained drift upward, which indicates network or
+host load problems.
+
+Observe both values live with halmeter:
+
+```bash
+halmeter pin rp2040_eth.0.seq-out &
+halmeter pin rp2040_eth.0.seq-in &
+```
+
+Or connect them to signals for halscope logging. The example config wires
+`seq-in` to a named signal:
+
+```hal
+net seq-in  rp2040_eth.0.seq-in
+```
+
+### Setting FERROR with ferror-suggest
+
+[LinuxCNC](https://linuxcnc.org/)'s `FERROR` setting in the `[JOINT.N]` INI
+section is the maximum allowed following error. If exceeded, LinuxCNC faults
+with "Follow error".
+
+`rp2040_eth.0.joint.N.ferror-suggest` gives a calculated minimum safe value
+based on current round-trip latency:
+
+```
+ferror-suggest = vel-limit × (seq-out − seq-in) × packet-interval × 1e-9
+```
+
+**Workflow:**
+1. Run the machine at full speed.
+2. Read `ferror-suggest` via halmeter: `halmeter pin rp2040_eth.0.joint.0.ferror-suggest`
+3. Set `FERROR` in the INI to that value plus a small safety margin.
+
+`FERROR` is parsed at startup before HAL runs — it cannot be auto-populated.
+Read the pin at runtime and update the INI manually. The example INI includes a
+comment showing how to calculate it from first principles:
+
+```ini
+# FERROR = 2 * MAX_VELOCITY * SERVO_PERIOD = 2 * 25mm/s * 0.001s = 0.1mm
+# Factor of 2: round-trip latency (command→steps→feedback = 2 servo periods).
+# Doubled again to tolerate one dropped packet.
+FERROR = 0.2
+MIN_FERROR = 0.2
+```
+
+### Max velocity and acceleration
+
+`rp2040_eth.0.joint.N.vel-limit` and `rp2040_eth.0.joint.N.accel-limit` cap
+what the driver will command. In the example config these are set from the INI:
+
+```hal
+setp rp2040_eth.0.joint.0.vel-limit   [JOINT_0]MAX_VELOCITY
+setp rp2040_eth.0.joint.0.accel-limit [JOINT_0]MAX_ACCELERATION
+```
+
+Start with conservative values and increase while monitoring `ferror-suggest`
+and following error in halscope. See [hal_reference.md](hal_reference.md) for
+the full list of joint pins and params.
 
 ## Development
 
