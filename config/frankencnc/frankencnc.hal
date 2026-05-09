@@ -28,6 +28,7 @@ net estop-out-user   => and2.0.in0
 net estop-out-driver => and2.0.in1
 
 net estop-out        <= and2.0.out
+net estop-out        => iocontrol.0.emc-enable-in
 
 # Also gate on machine power so toggling power disables joints (same as estop).
 # Without this, joints stay enabled during machine power off, causing jitter on
@@ -36,7 +37,6 @@ net estop-out        => and2.1.in0
 net machine-power-on <= halui.machine.is-on
 net machine-power-on => and2.1.in1
 net enable-out       <= and2.1.out
-net enable-out       => iocontrol.0.emc-enable-in
 
 
 # Joint 0
