@@ -34,7 +34,7 @@ Two cache variables control the build:
 | `MAX_JOINT` | `8` | Number of stepper joints (1–8) |
 
 ```bash
-cmake -B build_rp -S . -DBUILD_RP=ON -DWIZNET_CHIP=W5100S -DMAX_JOINT=6
+cmake -B build_rp -S . -DBUILD_RP=ON -DWIZNET_CHIP=W5500 -DMAX_JOINT=6
 make -C build_rp stepper_control
 ```
 
