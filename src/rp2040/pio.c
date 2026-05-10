@@ -24,10 +24,27 @@
 #define STEP_PIO_LEN_OVERHEAD  9
 #define RP2040_CLOCK_MHZ       133
 
+/* Remaining SMs after step_gen, capped at MAX_JOINT (can't count more joints
+ * than we move). For MAX_JOINT=4: 4 feedback SMs (current behaviour).
+ * For MAX_JOINT=8: 0 feedback SMs (open-loop). */
+#if MAX_JOINT > 8
+  #error "MAX_JOINT must be 1-8"
+#endif
+#define NUM_FEEDBACK  ((8 - MAX_JOINT) < MAX_JOINT ? (8 - MAX_JOINT) : MAX_JOINT)
+
+/* Which PIO block and program offset a joint's step_gen SM lives on.
+ * Joints 0-3 always use PIO0; joints 4-7 use PIO1 (MAX_JOINT > 4 only). */
+#if MAX_JOINT > 4
+  #define JOINT_PIO(j)        ((j) < 4 ? pio0 : pio1)
+  #define JOINT_GEN_OFFSET(j) ((j) < 4 ? offset_pio0 : offset_pio1_gen)
+#else
+  #define JOINT_PIO(j)        pio0
+  #define JOINT_GEN_OFFSET(j) offset_pio0
+#endif
 
 typedef struct {
-    uint32_t sm0;
-    uint32_t sm1;
+    uint32_t sm_gen;    /* step_gen SM on JOINT_PIO(joint) */
+    uint32_t sm_count;  /* step_count SM on PIO1; valid only for joint < NUM_FEEDBACK */
     bool     init_done;
     int32_t  last_pos_achieved;
     uint32_t last_enabled;
@@ -36,9 +53,10 @@ typedef struct {
 } JointPioState;
 
 static JointPioState joint_state[MAX_JOINT];
-static uint32_t offset_pio0     = 0;
-static uint32_t offset_pio1     = 0;
-static uint8_t  programs_loaded = 0;
+static uint32_t offset_pio0       = 0;  /* step_gen on PIO0 */
+static uint32_t offset_pio1_gen   = 0;  /* step_gen on PIO1 (MAX_JOINT > 4 only) */
+static uint32_t offset_pio1_count = 0;  /* step_count on PIO1 (NUM_FEEDBACK > 0 only) */
+static uint8_t  programs_loaded   = 0;
 
 void init_pio(const uint32_t joint)
 {
@@ -82,40 +100,58 @@ void init_pio(const uint32_t joint)
   gpio_put(io_pos_step, 0);
   gpio_put(io_pos_dir, 0);
 
-
   if(programs_loaded == 0)
   {
     offset_pio0 = pio_add_program(pio0, &step_gen_program);
-    offset_pio1 = pio_add_program(pio1, &step_count_program);
 
-    for(int8_t a = 0; a < MAX_JOINT; a++) {
-      joint_state[a].sm0 = pio_claim_unused_sm(pio0, true);
-      joint_state[a].sm1 = pio_claim_unused_sm(pio1, true);
+#if MAX_JOINT > 4
+    offset_pio1_gen = pio_add_program(pio1, &step_gen_program);
+#endif
+#if NUM_FEEDBACK > 0
+    offset_pio1_count = pio_add_program(pio1, &step_count_program);
+#endif
+
+    /* Claim step_gen SMs: joints 0-3 on PIO0, joints 4+ on PIO1. */
+    for(int8_t a = 0; a < MAX_JOINT && a < 4; a++) {
+      joint_state[a].sm_gen = pio_claim_unused_sm(pio0, true);
+    }
+    for(int8_t a = 4; a < MAX_JOINT; a++) {
+      joint_state[a].sm_gen = pio_claim_unused_sm(pio1, true);
+    }
+
+    /* Claim step_count SMs on PIO1 for the first NUM_FEEDBACK joints. */
+    for(int8_t a = 0; a < NUM_FEEDBACK; a++) {
+      joint_state[a].sm_count = pio_claim_unused_sm(pio1, true);
     }
 
     programs_loaded = 1;
   }
 
-  // The stepping PIO program.
-  pio_sm_set_enabled(pio0, joint_state[joint].sm0, false);
-  // From pico_axs.pio
-  step_gen_program_init(pio0, joint_state[joint].sm0, offset_pio0, io_pos_step, io_pos_dir);
-  pio_sm_set_enabled(pio0, joint_state[joint].sm0, true);
+  /* Initialise the step_gen state machine for this joint. */
+  pio_sm_set_enabled(JOINT_PIO(joint), joint_state[joint].sm_gen, false);
+  step_gen_program_init(JOINT_PIO(joint), joint_state[joint].sm_gen,
+                        JOINT_GEN_OFFSET(joint), io_pos_step, io_pos_dir);
+  pio_sm_set_enabled(JOINT_PIO(joint), joint_state[joint].sm_gen, true);
 
-  if(joint_state[joint].sm0 != joint) {
-    printf("ERROR: Incorrect PIO initialization order for pio0. joint: %u  sm0[joint]: %u",
-        joint, joint_state[joint].sm0);
+  if(joint_state[joint].sm_gen != joint % 4) {
+    printf("ERROR: Incorrect PIO initialization order for step_gen. joint: %u  sm_gen[joint]: %u",
+        joint, joint_state[joint].sm_gen);
   }
 
-  // The counting PIO program.
-  pio_sm_set_enabled(pio1, joint_state[joint].sm1, false);
-  // From pico_axs.pio
-  step_count_program_init(pio1, joint_state[joint].sm1, offset_pio1, io_pos_step, io_pos_dir);
-  pio_sm_set_enabled(pio1, joint_state[joint].sm1, true);
+  /* Initialise the step_count state machine for joints that have feedback. */
+  if(joint < NUM_FEEDBACK) {
+    pio_sm_set_enabled(pio1, joint_state[joint].sm_count, false);
+    step_count_program_init(pio1, joint_state[joint].sm_count,
+                            offset_pio1_count, io_pos_step, io_pos_dir);
+    pio_sm_set_enabled(pio1, joint_state[joint].sm_count, true);
 
-  if(joint_state[joint].sm1 != joint) {
-    printf("ERROR: Incorrect PIO initialization order for pio1. joint: %u  sm1[joint]: %u",
-        joint, joint_state[joint].sm1);
+    /* step_count SMs are claimed after step_gen SMs on PIO1; expected index
+     * is joint + number of step_gen SMs already on PIO1. */
+    uint32_t expected_sm_count = joint + (MAX_JOINT > 4 ? MAX_JOINT - 4 : 0);
+    if(joint_state[joint].sm_count != expected_sm_count) {
+      printf("ERROR: Incorrect PIO init order for step_count. joint: %u  sm_count: %u  expected: %u",
+          joint, joint_state[joint].sm_count, expected_sm_count);
+    }
   }
 
   joint_state[joint].init_done = true;
@@ -203,12 +239,13 @@ int32_t plan_steps(int32_t velocity_q, uint8_t joint,
     return n_steps;
 }
 
-/* Write the packed step command to PIO0's TX FIFO if it is empty.
+/* Write the packed step command to the joint's step_gen TX FIFO if it is empty.
  * Encoding: lower bit = direction, upper bits = half-period in ticks. */
 static void issue_pio_step(uint32_t joint, int32_t step_len_ticks,
                            uint32_t direction) {
-    if (pio_sm_is_tx_fifo_empty(pio0, joint_state[joint].sm0)) {
-        pio_sm_put(pio0, joint_state[joint].sm0, ((uint32_t)step_len_ticks << 1) | direction);
+    if (pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
+        pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen,
+                   ((uint32_t)step_len_ticks << 1) | direction);
     }
 }
 
@@ -240,8 +277,8 @@ uint8_t do_steps(const uint8_t joint) {
       );
 
   if(updated == 0 || update_period_us == 0) {
-    if (pio_sm_is_tx_fifo_empty(pio0, joint_state[joint].sm0)) {
-      pio_sm_put(pio0, joint_state[joint].sm0, 0);
+    if (pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
+      pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, 0);
     }
     return 0;
   }
@@ -289,15 +326,19 @@ uint8_t do_steps(const uint8_t joint) {
 
   if(!enabled) {
     // Switch off PIO stepgen.
-    if(pio_sm_is_tx_fifo_empty(pio0, joint_state[joint].sm0)) {
-      pio_sm_put(pio0, joint_state[joint].sm0, 0);
+    if(pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
+      pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, 0);
     }
     // Keep abs_pos_achieved current while disabled so pos_fb stays accurate.
     // Without this, in-flight steps accumulate in the PIO FIFO unread; on
     // re-enable they all land at once, creating a position error that triggers
     // a correction move (jitter).
-    abs_pos_achieved = drain_rx_fifo(joint_state[joint].sm1, abs_pos_achieved);
-    velocity_achieved = abs_pos_achieved - joint_state[joint].last_pos_achieved;
+    if(joint < NUM_FEEDBACK) {
+      abs_pos_achieved = drain_rx_fifo(joint_state[joint].sm_count, abs_pos_achieved);
+      velocity_achieved = abs_pos_achieved - joint_state[joint].last_pos_achieved;
+    } else {
+      velocity_achieved = 0;
+    }
     update_joint_config(
         joint, CORE1,
         NULL, NULL, NULL, NULL, NULL,
@@ -309,7 +350,9 @@ uint8_t do_steps(const uint8_t joint) {
     return 0;
   }
 
-  abs_pos_achieved = drain_rx_fifo(joint_state[joint].sm1, abs_pos_achieved);
+  if(joint < NUM_FEEDBACK) {
+    abs_pos_achieved = drain_rx_fifo(joint_state[joint].sm_count, abs_pos_achieved);
+  }
 
   velocity_q = clamp_accel(velocity_q, joint_state[joint].last_velocity_q, max_accel_q);
   joint_state[joint].last_velocity_q = velocity_q;
@@ -323,10 +366,14 @@ uint8_t do_steps(const uint8_t joint) {
 
   uint32_t direction = (velocity_q > 0);
 
+  if(joint >= NUM_FEEDBACK) {
+    abs_pos_achieved += (direction ? 1 : -1) * n_steps;
+  }
+
   if (n_steps > 0) {
     issue_pio_step(joint, step_len_ticks, direction);
-  } else if (pio_sm_is_tx_fifo_empty(pio0, joint_state[joint].sm0)) {
-    pio_sm_put(pio0, joint_state[joint].sm0, 0);
+  } else if (pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
+    pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, 0);
   }
 
   velocity_achieved = abs_pos_achieved - joint_state[joint].last_pos_achieved;
@@ -353,8 +400,9 @@ uint8_t do_steps(const uint8_t joint) {
 #ifdef BUILD_TESTS
 void pio_reset_for_test(void) {
     memset(joint_state, 0, sizeof(joint_state));
-    offset_pio0     = 0;
-    offset_pio1     = 0;
-    programs_loaded = 0;
+    offset_pio0       = 0;
+    offset_pio1_gen   = 0;
+    offset_pio1_count = 0;
+    programs_loaded   = 0;
 }
 #endif  // BUILD_TESTS

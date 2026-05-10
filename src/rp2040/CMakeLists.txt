@@ -31,6 +31,7 @@ add_custom_target(
 )
 
 target_include_directories(stepper_control PRIVATE ${CMAKE_BINARY_DIR})
+target_compile_definitions(stepper_control PRIVATE MAX_JOINT=${MAX_JOINT})
 add_dependencies(stepper_control build_info)
 
 target_sources(

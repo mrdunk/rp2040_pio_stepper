@@ -37,7 +37,11 @@ if(BUILD_RP)
     pico_sdk_init()
 
     # Set ethernet chip
-    set(WIZNET_CHIP W5500)
+    set(WIZNET_CHIP "W5500" CACHE STRING "Ethernet chip (W5500, W5100S)")
+    set_property(CACHE WIZNET_CHIP PROPERTY STRINGS W5500 W5100S)
+
+    # Number of stepper joints (1-8); determines PIO layout and feedback allocation
+    set(MAX_JOINT 4 CACHE STRING "Number of stepper joints (1-8)")
 
     if(${WIZNET_CHIP} STREQUAL W5100S)
         add_definitions(-D_WIZCHIP_=W5100S)

@@ -12,23 +12,19 @@
  * RP2040 firmware. A stale driver binary shows: "WARN: Unconsumed RX buffer
  * remainder: N bytes" where N equals the size of the new/changed field(s). */
 
+#ifndef MAX_JOINT
+  #define MAX_JOINT 4
+#endif
+
 #ifdef BUILD_TESTS
-
-#define MAX_JOINT 4
 #define MAX_GPIO 64
-#define MAX_GPIO_BANK (MAX_GPIO / 32)
-#define MAX_SPINDLE 4
-#define MAX_I2C_MCP 4
-
-#else // BUILD_TESTS
-
-#define MAX_JOINT 4
+#else
 #define MAX_GPIO 32
+#endif
+
 #define MAX_GPIO_BANK (MAX_GPIO / 32)
 #define MAX_SPINDLE 4
 #define MAX_I2C_MCP 4
-
-#endif  // BUILD_TESTS
 
 
 #define MSG_NONE                     0
