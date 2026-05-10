@@ -172,7 +172,8 @@ static void test_unpack_set_abs_pos_message(void **state) {
     uint16_t expected_length = sizeof(rx_buf.length) + sizeof(rx_buf.checksum);
 
     struct Message_set_joints_pos message_set_abs_pos = {0};
-    message_set_abs_pos.type = MSG_SET_JOINT_ABS_POS;
+    message_set_abs_pos.type  = MSG_SET_JOINT_ABS_POS;
+    message_set_abs_pos.count = MAX_JOINT;
 
     double p = 12.34;
     double v = 56.78;

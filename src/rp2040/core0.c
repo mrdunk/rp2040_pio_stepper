@@ -91,14 +91,16 @@ bool unpack_joint_abs_pos(
   }
 
   /* Copy doubles out of packed struct before taking addresses — avoids
-   * unaligned pointer UB on Cortex-M0+. */
-  double pos[MAX_JOINT], vel[MAX_JOINT];
-  for(size_t j = 0; j < MAX_JOINT; j++) {
+   * unaligned pointer UB on Cortex-M0+. Only process up to MAX_JOINT joints;
+   * message.count may be larger if driver has more joints than this firmware. */
+  size_t n = message.count < MAX_JOINT ? message.count : MAX_JOINT;
+  double pos[WIRE_MAX_JOINT], vel[WIRE_MAX_JOINT];
+  for(size_t j = 0; j < n; j++) {
     pos[j] = message.position[j];
     vel[j] = message.velocity[j];
   }
 
-  for(size_t joint = 0; joint < MAX_JOINT; joint++) {
+  for(size_t joint = 0; joint < n; joint++) {
     update_joint_config(
         joint, CORE0,
         NULL, NULL, NULL, &vel[joint], &pos[joint], NULL, NULL, NULL, NULL, NULL);

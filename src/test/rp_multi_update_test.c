@@ -39,7 +39,8 @@ static size_t build_abs_pos_packet(
     size_t expected_length = sizeof(rx_buf->length) + sizeof(rx_buf->checksum);
 
     struct Message_set_joints_pos msg = {0};
-    msg.type = MSG_SET_JOINT_ABS_POS;
+    msg.type  = MSG_SET_JOINT_ABS_POS;
+    msg.count = MAX_JOINT;
     for (size_t j = 0; j < MAX_JOINT; j++) {
         msg.position[j] = position;
         msg.velocity[j] = velocity;

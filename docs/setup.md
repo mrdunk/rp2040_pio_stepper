@@ -87,6 +87,10 @@ cd src/driver
 sudo halcompile --compile --install ./hal_rp2040_eth.c
 ```
 
+A single driver binary works with any firmware `MAX_JOINT` (4–8). The driver
+detects the firmware's joint count from the first reply packet and logs it:
+`INFO: firmware reports N joints`. All HAL configs use `loadrt hal_rp2040_eth`.
+
 Rerun this command any time you change `src/driver/hal_rp2040_eth.c` or
 `src/driver/messages.h`. A version mismatch between the driver and firmware
 (e.g. a reflashed RP2040 without reinstalling the driver) can cause erratic
