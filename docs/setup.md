@@ -24,15 +24,6 @@ The [Getting Started with Raspberry Pi Pico](https://rptl.io/pico-get-started)
 guide covers installing the toolchain and pico-sdk, and also explains how to
 connect a UART serial console for debug output from the firmware.
 
-Edit `CMakeLists.txt` to match your Ethernet chip. Find the section:
-
-```cmake
-# Set ethernet chip
-set(WIZNET_CHIP W5500)
-```
-
-Change `W5500` to `W5100S` if you have that chip instead.
-
 ## Build the Firmware
 
 ```bash
@@ -42,6 +33,23 @@ make -C build_rp stepper_control
 
 Without `-DBUILD_RP=ON`, CMake configures successfully but produces an empty
 Makefile with no firmware targets — no error, no warning.
+
+Two cache variables control the build:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WIZNET_CHIP` | `W5500` | Ethernet chip — `W5500` or `W5100S` |
+| `MAX_JOINT` | `4` | Number of stepper joints (1–8) |
+
+Pass them on the `cmake` command line as needed:
+
+```bash
+cmake -B build_rp -S . -DBUILD_RP=ON -DWIZNET_CHIP=W5100S -DMAX_JOINT=6
+```
+
+`MAX_JOINT` determines the PIO layout and feedback channel allocation. It must
+match the number of joints configured in LinuxCNC. Rebuilding with a different
+value requires reflashing the firmware.
 
 The output image:
 
