@@ -124,9 +124,9 @@ Machine-specific files live in `config/<machine-name>/`:
 
 ```
 config/
-  pico-eth-cnc-breakout/
-    pico-eth-cnc-breakout.ini    -- LinuxCNC machine config
-    pico-eth-cnc-breakout.hal    -- HAL wiring for joints, GPIO, spindle
+  pico-eth-cnc-3axis/
+    pico-eth-cnc-3axis.ini    -- LinuxCNC machine config
+    pico-eth-cnc-3axis.hal    -- HAL wiring for joints, GPIO, spindle
     custom.hal                   -- site-specific overrides
     postgui_call_list.hal        -- post-GUI HAL commands
   pico-eth-cnc-4axis/
@@ -141,7 +141,7 @@ config/
 Launch [LinuxCNC](https://linuxcnc.org/) with a config:
 
 ```bash
-linuxcnc config/pico-eth-cnc-breakout/pico-eth-cnc-breakout.ini
+linuxcnc config/pico-eth-cnc-3axis/pico-eth-cnc-3axis.ini
 ```
 
 `rp2040_types.ini` lives in `config/shared/` and is included by the machine
@@ -173,7 +173,7 @@ RP2040.
 
 HAL pins available: `.in`, `.in-not`, `.out`, `.out-invert`.
 
-Example from `config/pico-eth-cnc-breakout/pico-eth-cnc-breakout.hal` — the
+Example from `config/pico-eth-cnc-3axis/pico-eth-cnc-3axis.hal` — the
 J6 header exposes GP8–GP15. Direction is not fixed by hardware; set `type` to
 `NATIVE_IN` or `NATIVE_OUT` for your application:
 
@@ -214,7 +214,7 @@ devices on one bus.
 Declare the address in the INI to avoid duplicating it in the HAL:
 
 ```ini
-# config/pico-eth-cnc-breakout/pico-eth-cnc-breakout.ini
+# config/pico-eth-cnc-3axis/pico-eth-cnc-3axis.ini
 [I2C_0]
 TYPE = MCP
 ADDRESS = 32
@@ -226,7 +226,7 @@ Then reference it in the HAL:
 setp rp2040_eth.0.gpio.NN.address  [I2C_0]ADDRESS
 ```
 
-Example from `config/pico-eth-cnc-breakout/pico-eth-cnc-breakout.hal` — fully
+Example from `config/pico-eth-cnc-3axis/pico-eth-cnc-3axis.hal` — fully
 configured I2C inputs and outputs (J8–J11):
 
 ```hal

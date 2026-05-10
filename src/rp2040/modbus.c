@@ -10,7 +10,10 @@
 #endif  // BUILD_TESTS
 
 #include "modbus.h"
-#include "hardware/irq.h"
+
+#ifndef BUILD_TESTS
+  #include "hardware/irq.h"
+#endif
 
 uint16_t crc16_table[256];
 

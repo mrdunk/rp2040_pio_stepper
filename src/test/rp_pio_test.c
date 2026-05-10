@@ -451,7 +451,7 @@ static void test_do_steps_underrun_stops_pio(void **state) {
 
 /* Integration test: position-mode stationary hold at fractional step position.
  *
- * Uses pico-eth-cnc-breakout.ini parameters:
+ * Uses pico-eth-cnc-3axis.ini parameters:
  *   period=1ms, scale=1280 steps/mm, max_vel=25mm/s=32000 steps/s,
  *   max_accel=375mm/s²=480000 steps/s².
  *
@@ -531,7 +531,7 @@ static int32_t pio_word_steps(uint32_t word) {
 
 /* Run n servo periods in JOINT_CMD_VELOCITY mode; return accumulated position.
  * No acceleration limit so the commanded velocity takes effect immediately.
- * Uses pico-eth-cnc-breakout parameters: 1ms period, max_vel=32000 steps/s. */
+ * Uses pico-eth-cnc-3axis parameters: 1ms period, max_vel=32000 steps/s. */
 static int32_t run_velocity_periods(double vel_steps_per_s, int n) {
     config.update_time_us              = 1000;
     config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;

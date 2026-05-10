@@ -75,5 +75,12 @@ bool cancel_alarm(alarm_id_t alarm_id);
 
 void multicore_launch_core1(void(*entry)(void));
 
+#define UART1_IRQ 0
+typedef void (*irq_handler_t)(void);
+static inline void irq_set_exclusive_handler(uint32_t num, irq_handler_t handler) { (void)num; (void)handler; }
+static inline void uart_set_irq_enables(size_t *uart, bool rx, bool tx) { (void)uart; (void)rx; (void)tx; }
+static inline void uart_putc(size_t *uart, char c) { (void)uart; (void)c; }
+static inline bool uart_is_writable(size_t *uart) { (void)uart; return true; }
+
 
 #endif  // MOCKS_RP_MOCKS__H
