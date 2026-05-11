@@ -579,7 +579,7 @@ bool configure(
       warned = true;
     }
   }
-  size_t active_joints = (fw_joints > 0 && fw_joints < MAX_JOINT) ? fw_joints : MAX_JOINT;
+  size_t active_joints = (fw_joints > 0) ? fw_joints : (size_t)num_joints;
   size_t total_things = active_joints + MAX_GPIO + MAX_SPINDLE;
   size_t joint_or_gpio_or_spindle = count % total_things;
 
