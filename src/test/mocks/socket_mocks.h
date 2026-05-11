@@ -16,7 +16,7 @@ int8_t   socket(uint8_t sn, uint8_t protocol, uint16_t port, uint8_t flag);
 /* Test controls — set before each test via sock_mock_reset(). */
 extern uint8_t  sock_mock_status;
 extern uint16_t sock_mock_rx_size;
-extern uint8_t  sock_mock_rx_data[300];
+extern uint8_t  sock_mock_rx_data[700];
 extern int32_t  sock_mock_socket_calls;
 
 void sock_mock_reset(void);

@@ -3,7 +3,7 @@
 
 uint8_t  sock_mock_status       = SOCK_UDP;
 uint16_t sock_mock_rx_size      = 0;
-uint8_t  sock_mock_rx_data[300] = {0};
+uint8_t  sock_mock_rx_data[700] = {0};
 int32_t  sock_mock_socket_calls = 0;
 
 void sock_mock_reset(void) {

@@ -8,7 +8,7 @@
 
 // Must be even number as the checksum is calculated on uint16_t chunks which
 // account for 2 bytes.
-#define NW_BUF_LEN 256
+#define NW_BUF_LEN 512
 
 struct NWBuffer {
     uint16_t length;

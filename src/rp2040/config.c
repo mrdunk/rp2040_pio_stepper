@@ -488,7 +488,11 @@ bool serialise_spindle_config(size_t spindle, struct NWBuffer* tx_buf) {
 /* Serialise data stored in global config in a format for sending over UDP. */
 bool serialise_joint_config(const uint32_t joint, struct NWBuffer* tx_buf) {
   if(joint >= MAX_JOINT) {
-    printf("ERROR: Invalid joint: %u\n", joint);
+    static uint32_t reported = 0;
+    if(!(reported & (1u << joint))) {
+      printf("ERROR: Invalid joint: %u\n", joint);
+      reported |= (1u << joint);
+    }
     return false;
   }
 
