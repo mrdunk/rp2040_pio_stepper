@@ -92,7 +92,9 @@ void init_pio(const uint32_t joint)
   }
   // TODO: Warn about duplicate pin assignments.
 
+#ifdef VERBOSE_CONFIG_LOG
   printf("\tio-step: %i\tio-dir: %i\n", io_pos_step, io_pos_dir);
+#endif
   gpio_init(io_pos_step);
   gpio_init(io_pos_dir);
   gpio_set_dir(io_pos_step, GPIO_OUT);
@@ -314,13 +316,13 @@ uint8_t do_steps(const uint8_t joint) {
   if(enabled != joint_state[joint].last_enabled) {
     joint_state[joint].last_enabled = enabled;
     if(enabled) {
-      printf("Joint %u was enabled.\n", joint);
+      printf("J%u enab\n", joint);
       init_pio(joint);
       // Snap to commanded velocity so we don't ramp from zero when LinuxCNC
       // is already moving (joint was enabled before motion started).
       joint_state[joint].last_velocity_q = velocity_q;
     } else {
-      printf("Joint %u was disabled.\n", joint);
+      printf("J%u disab\n", joint);
     }
   }
 
