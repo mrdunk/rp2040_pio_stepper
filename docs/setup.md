@@ -22,7 +22,7 @@ sudo apt install git cmake gcc-arm-none-eabi ethtool
 
 The [Getting Started with Raspberry Pi Pico](https://rptl.io/pico-get-started)
 guide covers installing the toolchain and pico-sdk, and also explains how to
-connect a UART serial console for debug output from the firmware.
+connect a UART serial console for debug output from the firmware (see [Advanced: Connecting to the RP2040 UART](#advanced-connecting-to-the-rp2040-uart)).
 
 ## Build the Firmware
 
@@ -71,8 +71,9 @@ cp build_rp/src/rp2040/stepper_control.uf2 /media/$USER/RPI-RP2/
 
 The board reboots automatically once the file is written.
 
-For detail on BOOTSEL mode, UF2 flashing, and connecting a UART serial console
-for debug output, see [Getting Started with Raspberry Pi Pico](https://rptl.io/pico-get-started).
+For detail on BOOTSEL mode and UF2 flashing, see [Getting Started with Raspberry Pi Pico](https://rptl.io/pico-get-started).
+For connecting a serial console to read firmware debug output, see
+[Advanced: Connecting to the RP2040 UART](#advanced-connecting-to-the-rp2040-uart).
 
 ## Install the LinuxCNC Driver
 
@@ -90,8 +91,9 @@ loadrt hal_rp2040_eth num_joints=[KINS]JOINTS
 ```
 
 `num_joints` is required — omitting it causes an error at load time and the
-driver defaults to `MAX_JOINT`. The firmware also prints its `MAX_JOINT` at
-startup alongside branch, commit, and build info.
+driver defaults to `MAX_JOINT`. The firmware also prints its `MAX_JOINT` and
+protocol version at startup alongside branch, commit, and build info — connect
+a [UART serial console](#advanced-connecting-to-the-rp2040-uart) to read it.
 
 Rerun this command any time you change `src/driver/hal_rp2040_eth.c` or
 `src/driver/messages.h`. A version mismatch between the driver and firmware
@@ -317,6 +319,52 @@ net spindle-at-speed  spindle.0.at-speed  <= rp2040_eth.0.spindle.0.at-speed
 
 See [hal_reference.md](hal_reference.md) for a full list of spindle pins and
 parameters.
+
+## Advanced: Connecting to the RP2040 UART
+
+The firmware writes startup diagnostics and runtime log messages to UART0 at
+**115200 baud**. The pins are fixed by the pico-sdk default:
+
+| Signal | RP2040 pin |
+|--------|-----------|
+| TX     | GP0       |
+| RX     | GP1       |
+
+Connect a 3.3 V USB-to-serial adapter (CP2102, CH340, or similar) with TX→RX
+and RX→TX crossed. **Do not connect 5 V adapters directly — the RP2040 GPIO is
+not 5 V tolerant.**
+
+Then open a terminal at 115200 8N1. Examples:
+
+```bash
+# minicom
+minicom -b 115200 -D /dev/ttyUSB0
+
+# screen
+screen /dev/ttyUSB0 115200
+
+# picocom
+picocom -b 115200 /dev/ttyUSB0
+```
+
+On power-up or reset the firmware prints a startup block:
+
+```
+--------------------------------
+UART up.
+Branch: main
+Commit: abc1234
+Built:  2026-05-11 12:00:00 by user
+Joints: 6
+Version: 0.2.4
+--------------------------------
+```
+
+`Version` is the protocol version shared between the firmware and the
+LinuxCNC driver. The driver logs `INFO: version OK (M.N.P)` on first contact,
+or `ERROR: version mismatch` if the firmware and driver were built from
+different source revisions — reflash the firmware and reinstall the driver from
+the same commit to resolve it.
 
 ## Advanced: Increasing GPIO and I2C Expander Counts
 
