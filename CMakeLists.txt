@@ -43,6 +43,10 @@ if(BUILD_RP)
     # Number of stepper joints (1-8); determines PIO layout and feedback allocation
     set(MAX_JOINT 8 CACHE STRING "Number of stepper joints (1-8)")
 
+    # Print joint/GPIO/spindle config details on UART as they are received.
+    # Disable for production builds; UART blocking during startup causes missed UDP replies.
+    option(VERBOSE_CONFIG_LOG "Log config message details to UART" OFF)
+
     if(${WIZNET_CHIP} STREQUAL W5100S)
         add_definitions(-D_WIZCHIP_=W5100S)
     elseif(${WIZNET_CHIP} STREQUAL W5500)

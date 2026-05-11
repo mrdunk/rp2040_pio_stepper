@@ -68,7 +68,9 @@ bool unpack_joint_enable(
   uint8_t joint = message->joint;
   uint8_t enabled = message->value;
 
+#ifdef VERBOSE_CONFIG_LOG
   printf("%u Enabling joint: %u\t%i\n", *received_count, joint, enabled);
+#endif
   update_joint_config(
       joint, CORE0,
       &enabled, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
@@ -131,7 +133,9 @@ bool unpack_spindle_config(
     return false;
   }
 
+#ifdef VERBOSE_CONFIG_LOG
   printf("%u Configuring spindle: %u\n", *received_count, message->spindle_index);
+#endif
   
   vfd_config.address = message->modbus_address;
   vfd_config.bitrate = message->bitrate;
@@ -196,8 +200,10 @@ bool unpack_joint_config(
   uint8_t cmd_type = message->cmd_type;
 
 
+#ifdef VERBOSE_CONFIG_LOG
   printf("%u Cfg joint %u: en=%u step=%i dir=%i vel=%f acc=%f cmd=%u\n",
       *received_count, joint, enabled, io_step, io_dir, max_velocity, max_accel, cmd_type);
+#endif
   update_joint_config(
       joint,
       CORE0,
@@ -264,7 +270,9 @@ bool unpack_gpio_config(
   uint8_t index = message->index;
   uint8_t address = message->address;
 
+#ifdef VERBOSE_CONFIG_LOG
   printf("Cfg gpio t=%u i=%u a=%u c=%u\n", gpio_type, index, address, gpio_count);
+#endif
 
   config.gpio[gpio_count].type = gpio_type;
   config.gpio[gpio_count].index = index;
@@ -276,14 +284,18 @@ bool unpack_gpio_config(
       ;  // This semicolon is required. It's a C syntax thing related to multiple
          // `case` statments at the start.
       // Remember HAL's definition of IN and OUT are opposite of RPs.
+#ifdef VERBOSE_CONFIG_LOG
       printf("GPIO %u OUT\n", index);
+#endif
       gpio_init(index);
       gpio_set_dir(index, GPIO_OUT);
       break;
     case GPIO_TYPE_NATIVE_IN:
     case GPIO_TYPE_NATIVE_IN_DEBUG:
       // Remember HAL's definition of IN and OUT are opposite of RPs.
+#ifdef VERBOSE_CONFIG_LOG
       printf("GPIO %u IN\n", index);
+#endif
       gpio_init(index);
       gpio_set_dir(index, GPIO_IN);
       gpio_pull_up(index);
