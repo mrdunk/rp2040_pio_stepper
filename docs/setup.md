@@ -83,7 +83,15 @@ sudo halcompile --compile --install ./hal_rp2040_eth.c
 
 A single driver binary works with any firmware `MAX_JOINT` (4–8). The driver
 detects the firmware's joint count from the first reply packet and logs it:
-`INFO: firmware reports N joints`. All HAL configs use `loadrt hal_rp2040_eth`.
+`INFO: firmware reports N joints`. All HAL configs use:
+
+```
+loadrt hal_rp2040_eth num_joints=[KINS]JOINTS
+```
+
+`num_joints` is required — omitting it causes an error at load time and the
+driver defaults to `MAX_JOINT`. The firmware also prints its `MAX_JOINT` at
+startup alongside branch, commit, and build info.
 
 Rerun this command any time you change `src/driver/hal_rp2040_eth.c` or
 `src/driver/messages.h`. A version mismatch between the driver and firmware
@@ -131,13 +139,23 @@ Machine-specific files live in `config/<machine-name>/`:
 ```
 config/
   pico-eth-cnc-breakout/
-    pico-eth-cnc-breakout.ini    -- LinuxCNC machine config
+    pico-eth-cnc-breakout.ini    -- LinuxCNC machine config (3-joint)
     pico-eth-cnc-breakout.hal    -- HAL wiring for joints, GPIO, spindle
     custom.hal                   -- site-specific overrides
     postgui_call_list.hal        -- post-GUI HAL commands
   pico-eth-cnc-4axis/
     pico-eth-cnc-4axis.ini       -- LinuxCNC machine config (4-joint XYZA)
     pico-eth-cnc-4axis.hal       -- HAL wiring: X(J2), Y(J3), Z(J4), A(J5)
+    custom.hal                   -- site-specific overrides
+    postgui_call_list.hal        -- post-GUI HAL commands
+  pico-eth-cnc-6axis/
+    pico-eth-cnc-6axis.ini       -- LinuxCNC machine config (6-joint XYZABC)
+    pico-eth-cnc-6axis.hal       -- HAL wiring for 6 joints
+    custom.hal                   -- site-specific overrides
+    postgui_call_list.hal        -- post-GUI HAL commands
+  pico-eth-cnc-8axis/
+    pico-eth-cnc-8axis.ini       -- LinuxCNC machine config (8-joint XYZABCUV)
+    pico-eth-cnc-8axis.hal       -- HAL wiring for 8 joints (open-loop, no feedback)
     custom.hal                   -- site-specific overrides
     postgui_call_list.hal        -- post-GUI HAL commands
   shared/
