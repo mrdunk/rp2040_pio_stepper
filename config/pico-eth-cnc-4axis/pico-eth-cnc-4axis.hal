@@ -1,7 +1,7 @@
 loadrt [KINS]KINEMATICS
 loadrt [EMCMOT]EMCMOT base_period_nsec=[EMCMOT]BASE_PERIOD servo_period_nsec=[EMCMOT]SERVO_PERIOD num_joints=[KINS]JOINTS
 loadrt hal_rp2040_eth num_joints=[KINS]JOINTS
-loadrt and2 count=2
+loadrt and2 count=3
 loadrt conv_u32_float names=conv-seq-out,conv-seq-in
 loadrt sum2 count=1
 
@@ -10,6 +10,7 @@ addf motion-controller servo-thread
 addf rp2040_eth.0.write servo-thread
 addf and2.0 servo-thread
 addf and2.1 servo-thread
+addf and2.2 servo-thread
 addf conv-seq-out servo-thread
 addf conv-seq-in servo-thread
 addf sum2.0 servo-thread
@@ -32,7 +33,13 @@ net estop-out        => iocontrol.0.emc-enable-in
 net estop-out        => and2.1.in0
 net machine-power-on <= halui.machine.is-on
 net machine-power-on => and2.1.in1
-net enable-out       <= and2.1.out
+net machine-enabled  <= and2.1.out
+
+# Gate enable-out on config-complete so joints only enable after firmware config is confirmed.
+net machine-enabled  => and2.2.in0
+net config-complete  <= rp2040_eth.0.config-complete
+net config-complete  => and2.2.in1
+net enable-out       <= and2.2.out
 
 
 # Joint 0 — X AXIS (J2: GP0=STEP, GP1=DIR via 74HCT541 buffer)
