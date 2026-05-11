@@ -16,6 +16,10 @@ MODULE_AUTHOR("Duncan Law");
 MODULE_DESCRIPTION("RP2040 based IO for LinuxCNC HAL");
 MODULE_LICENSE("GPL");
 
+static int num_joints = MAX_JOINT;
+MODULE_PARM(num_joints, "i");
+MODULE_PARM_DESC(num_joints, "Number of joints configured in LinuxCNC ([KINS]JOINTS)");
+
 
 /***********************************************************************
  *                STRUCTURES AND GLOBAL VARIABLES                       *
@@ -565,6 +569,16 @@ bool configure(
     skeleton_t *data
 ) {
   uint8_t fw_joints = get_detected_joint_count();
+  if(fw_joints > 0 && fw_joints < (uint8_t)num_joints) {
+    static bool warned = false;
+    if(!warned) {
+      rtapi_print_msg(RTAPI_MSG_ERR,
+          "RP2040: ERROR: firmware has %u joints but LinuxCNC expects %d; "
+          "reflash firmware with MAX_JOINT>=%d\n",
+          fw_joints, num_joints, num_joints);
+      warned = true;
+    }
+  }
   size_t active_joints = (fw_joints > 0 && fw_joints < MAX_JOINT) ? fw_joints : MAX_JOINT;
   size_t total_things = active_joints + MAX_GPIO + MAX_SPINDLE;
   size_t joint_or_gpio_or_spindle = count % total_things;
