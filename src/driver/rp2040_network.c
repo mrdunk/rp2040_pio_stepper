@@ -422,20 +422,22 @@ bool unpack_version_reply(
     size_t* received_count
 ) {
   UNPACK_MSG(struct Reply_version, reply, rx_buf, rx_offset);
-  if (reply->version_major != PROTOCOL_VERSION_MAJOR ||
-      reply->version_minor != PROTOCOL_VERSION_MINOR ||
-      reply->version_patch != PROTOCOL_VERSION_PATCH) {
-    rtapi_print_msg(RTAPI_MSG_ERR,
-        "RP2040: ERROR: version mismatch — firmware %d.%d.%d, driver %d.%d.%d. "
-        "Reflash firmware and reinstall driver from the same source.\n",
-        reply->version_major, reply->version_minor, reply->version_patch,
-        PROTOCOL_VERSION_MAJOR, PROTOCOL_VERSION_MINOR, PROTOCOL_VERSION_PATCH);
-  } else {
-    rtapi_print_msg(RTAPI_MSG_INFO,
-        "RP2040: INFO: version OK (%d.%d.%d)\n",
-        reply->version_major, reply->version_minor, reply->version_patch);
+  if (!version_confirmed) {
+    if (reply->version_major != PROTOCOL_VERSION_MAJOR ||
+        reply->version_minor != PROTOCOL_VERSION_MINOR ||
+        reply->version_patch != PROTOCOL_VERSION_PATCH) {
+      rtapi_print_msg(RTAPI_MSG_ERR,
+          "RP2040: ERROR: version mismatch — firmware %d.%d.%d, driver %d.%d.%d. "
+          "Reflash firmware and reinstall driver from the same source.\n",
+          reply->version_major, reply->version_minor, reply->version_patch,
+          PROTOCOL_VERSION_MAJOR, PROTOCOL_VERSION_MINOR, PROTOCOL_VERSION_PATCH);
+    } else {
+      rtapi_print_msg(RTAPI_MSG_INFO,
+          "RP2040: INFO: version OK (%d.%d.%d)\n",
+          reply->version_major, reply->version_minor, reply->version_patch);
+    }
+    version_confirmed = true;
   }
-  version_confirmed = true;
   (*received_count)++;
   return true;
 }
