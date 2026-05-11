@@ -564,17 +564,19 @@ bool configure(
     struct Message_spindle_config* last_spindle_config,
     skeleton_t *data
 ) {
-  size_t total_things = MAX_JOINT + MAX_GPIO + MAX_SPINDLE;
+  uint8_t fw_joints = get_detected_joint_count();
+  size_t active_joints = (fw_joints > 0 && fw_joints < MAX_JOINT) ? fw_joints : MAX_JOINT;
+  size_t total_things = active_joints + MAX_GPIO + MAX_SPINDLE;
   size_t joint_or_gpio_or_spindle = count % total_things;
 
-  if(joint_or_gpio_or_spindle < MAX_JOINT) {
+  if(joint_or_gpio_or_spindle < active_joints) {
     uint8_t joint = joint_or_gpio_or_spindle;
     return configure_joint(tx_buffer, joint, last_joint_config, data);
-  } else if(joint_or_gpio_or_spindle < MAX_JOINT + MAX_GPIO) {
-    uint8_t gpio = joint_or_gpio_or_spindle - MAX_JOINT;
+  } else if(joint_or_gpio_or_spindle < active_joints + MAX_GPIO) {
+    uint8_t gpio = joint_or_gpio_or_spindle - active_joints;
     return configure_gpio(tx_buffer, gpio, last_gpio_config, data);
-  } else if(joint_or_gpio_or_spindle < MAX_JOINT + MAX_GPIO + MAX_SPINDLE) {
-    uint8_t spindle = joint_or_gpio_or_spindle - MAX_JOINT - MAX_GPIO;
+  } else if(joint_or_gpio_or_spindle < active_joints + MAX_GPIO + MAX_SPINDLE) {
+    uint8_t spindle = joint_or_gpio_or_spindle - active_joints - MAX_GPIO;
     return configure_spindle(tx_buffer, spindle, last_spindle_config, data);
   }
   return true;

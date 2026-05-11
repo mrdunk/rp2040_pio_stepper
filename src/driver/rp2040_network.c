@@ -401,6 +401,10 @@ bool unpack_joint_movement(
   return true;
 }
 
+uint8_t get_detected_joint_count(void) {
+  return detected_joint_count;
+}
+
 /* Update last_joint_config with the values the RP confirmed — this stops
  * configure_joint() from retransmitting (diff disappears). If the reply never
  * arrives the diff persists and the config is resent next rotation. */
