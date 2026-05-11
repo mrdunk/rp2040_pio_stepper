@@ -22,6 +22,7 @@ config time with `setp` and cannot be connected to signals.
 | `core1-period` | u32 | OUT | debug | RP2040 core1 measured time between loop iterations (µs) |
 | `core1-tick` | u32 | OUT | debug | RP2040 core1 loop iteration counter; a frozen value indicates firmware hang |
 | `core1-work-us` | u32 | OUT | debug | µs Core1 spent working last period (excludes time waiting for tick) |
+| `config-complete` | bit | OUT | user | Goes high once all joint/GPIO/spindle configs have been confirmed by the firmware; used to gate `enable-out` |
 | `eth-up` | bit | OUT | user | Ethernet link state as seen by the driver |
 | `machine-on` | bit | OUT | user | True when the RP2040 Ethernet link is established and communicating |
 | `packet-interval` | s32 | OUT | debug | Time between consecutive packets computed from LinuxCNC timestamps (ns); nominally equals the servo period |
