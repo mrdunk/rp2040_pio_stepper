@@ -67,33 +67,49 @@ A zero byte (MSG_NONE) terminates the list.
 
 ---
 
+## Startup handshake
+
+Before the normal per-period loop begins, the driver sends `MSG_VERSION_REQUEST` on every
+cycle until it receives a `REPLY_VERSION`. The firmware replies with its
+`PROTOCOL_VERSION_MAJOR/MINOR/PATCH` from `src/shared/version.h`. If the versions match
+the driver logs `INFO: version OK (M.N.P)` and proceeds; if they differ it logs
+`ERROR: version mismatch` and continues (but data may be corrupted). The check resets on
+link-down so it is repeated after every reconnect.
+
+The protocol version patch number is auto-incremented by the pre-commit hook on every
+commit. Major/minor are bumped manually when the wire format changes.
+
+---
+
 ## Message types
 
 ### Host → RP2040 (MSG_*)
 
 | Type | Value | Key fields | Purpose |
 |------|-------|-----------|---------|
-| `MSG_TIMING` | 1 | `update_id`, `time` | Heartbeat; carries sequence number and host timestamp |
-| `MSG_SET_JOINT_ENABLED` | 2 | `joint`, `value` | Enable or disable a single joint |
-| `MSG_SET_JOINT_ABS_POS` | 3 | `position[4]`, `velocity[4]` | Set target position and velocity for all joints |
-| `MSG_SET_JOINT_CONFIG` | 4 | `joint`, `gpio_step`, `gpio_dir`, `max_velocity`, `max_accel` | Per-joint hardware config |
-| `MSG_SET_GPIO` | 5 | `bank`, `values`, `confirmation_pending` | Set output state for a 32-bit bank of GPIO |
-| `MSG_SET_GPIO_CONFIG` | 6 | `gpio_type`, `index`, `address` | Configure a single GPIO pin type |
-| `MSG_SET_SPINDLE_CONFIG` | 7 | `spindle_index`, `modbus_address`, `vfd_type`, `bitrate` | Spindle driver config |
-| `MSG_SET_SPINDLE_SPEED` | 8 | `speed[4]` | Set spindle speed |
+| `MSG_VERSION_REQUEST` | 1 | — | Request firmware protocol version |
+| `MSG_TIMING` | 2 | `update_id`, `time` | Heartbeat; carries sequence number and host timestamp |
+| `MSG_SET_JOINT_ENABLED` | 3 | `joint`, `value` | Enable or disable a single joint |
+| `MSG_SET_JOINT_ABS_POS` | 4 | `position[8]`, `velocity[8]` | Set target position and velocity for all joints |
+| `MSG_SET_JOINT_CONFIG` | 5 | `joint`, `gpio_step`, `gpio_dir`, `max_velocity`, `max_accel` | Per-joint hardware config |
+| `MSG_SET_GPIO` | 6 | `bank`, `values`, `confirmation_pending` | Set output state for a 32-bit bank of GPIO |
+| `MSG_SET_GPIO_CONFIG` | 7 | `gpio_type`, `index`, `address` | Configure a single GPIO pin type |
+| `MSG_SET_SPINDLE_CONFIG` | 8 | `spindle_index`, `modbus_address`, `vfd_type`, `bitrate` | Spindle driver config |
+| `MSG_SET_SPINDLE_SPEED` | 9 | `speed[4]` | Set spindle speed |
 
 ### RP2040 → Host (REPLY_*)
 
 | Type | Value | Key fields | Purpose |
 |------|-------|-----------|---------|
-| `REPLY_TIMING` | 1 | `update_id`, `time_diff`, `rp_update_len` | Echoes `update_id` (seq-in); RP processing time |
-| `REPLY_JOINT_MOVEMENT` | 2 | `abs_pos_achieved[4]`, `velocity_achieved[4]`, `enabled[4]`, `update_period_us` | Position and velocity feedback |
-| `REPLY_JOINT_CONFIG` | 3 | mirrors `MSG_SET_JOINT_CONFIG` | Config echo/acknowledgement |
-| `REPLY_JOINT_METRICS` | 4 | `overrun_occurred`, `underrun_occurred` | Per-period overrun/underrun flags |
-| `REPLY_GPIO` | 5 | `bank`, `values` | Current GPIO input state |
-| `REPLY_GPIO_CONFIG` | 6 | mirrors `MSG_SET_GPIO_CONFIG` | Config echo |
-| `REPLY_SPINDLE_SPEED` | 7 | `speed`, `crc_errors`, `unanswered` | Spindle speed and Modbus diagnostics |
-| `REPLY_SPINDLE_CONFIG` | 8 | mirrors `MSG_SET_SPINDLE_CONFIG` | Config echo |
+| `REPLY_VERSION` | 1 | `version_major`, `version_minor`, `version_patch` | Firmware protocol version response |
+| `REPLY_TIMING` | 2 | `update_id`, `time_diff`, `rp_update_len` | Echoes `update_id` (seq-in); RP processing time |
+| `REPLY_JOINT_MOVEMENT` | 3 | `abs_pos_achieved[8]`, `velocity_achieved[8]`, `enabled[8]`, `update_period_us` | Position and velocity feedback |
+| `REPLY_JOINT_CONFIG` | 4 | mirrors `MSG_SET_JOINT_CONFIG` | Config echo/acknowledgement |
+| `REPLY_JOINT_METRICS` | 5 | `overrun_occurred`, `underrun_occurred` | Per-period overrun/underrun flags |
+| `REPLY_GPIO` | 6 | `bank`, `values` | Current GPIO input state |
+| `REPLY_GPIO_CONFIG` | 7 | mirrors `MSG_SET_GPIO_CONFIG` | Config echo |
+| `REPLY_SPINDLE_SPEED` | 8 | `speed`, `crc_errors`, `unanswered` | Spindle speed and Modbus diagnostics |
+| `REPLY_SPINDLE_CONFIG` | 9 | mirrors `MSG_SET_SPINDLE_CONFIG` | Config echo |
 
 ---
 

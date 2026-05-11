@@ -8,6 +8,8 @@ rp2040_pio_stepper sits between these worlds: low-cost, open hardware with a rea
 
 A verified starting point is the [W5500-EVB-Pico](https://docs.wiznet.io/Product/Chip/Ethernet/W5500/w5500-evb-pico) — a dev board combining the RP2040 with a W5500 Ethernet chip. Up to 8-axis operation has been tested and confirmed.
 
+See [Setup](docs/setup.md) to build the firmware, install the driver, and configure LinuxCNC. Working HAL and INI configs for 3, 4, 6, and 8-axis machines are in `config/`.
+
 # Specifications
 
 | Property | Value |

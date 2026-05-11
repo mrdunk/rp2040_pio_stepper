@@ -96,7 +96,7 @@ protocol version at startup alongside branch, commit, and build info — connect
 a [UART serial console](#advanced-connecting-to-the-rp2040-uart) to read it.
 
 Rerun this command any time you change `src/driver/hal_rp2040_eth.c` or
-`src/driver/messages.h`. A version mismatch between the driver and firmware
+`src/shared/messages.h`. A version mismatch between the driver and firmware
 (e.g. a reflashed RP2040 without reinstalling the driver) can cause erratic
 behaviour — incorrect position feedback, unexpected faults, or garbled data.
 `WARN: Unconsumed RX buffer remainder: N bytes` is one possible symptom but
