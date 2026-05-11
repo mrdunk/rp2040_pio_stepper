@@ -69,6 +69,7 @@ int main() {
   printf("Branch: %s\n", BUILD_GIT_BRANCH);
   printf("Commit: %s\n", BUILD_GIT_COMMIT);
   printf("Built:  %s %s by %s\n", __DATE__, __TIME__, BUILD_USERNAME);
+  printf("Joints: %d\n", MAX_JOINT);
   printf("--------------------------------\n");
 
   gpio_init(LED_PIN);
