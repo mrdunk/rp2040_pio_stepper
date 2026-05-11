@@ -618,7 +618,7 @@ bool configure(
     static bool warned = false;
     if(!warned) {
       rtapi_print_msg(RTAPI_MSG_ERR,
-          "RP2040: ERROR: firmware has %u joints but LinuxCNC expects %d; "
+          "RP2040: ERROR: firmware has %u joints but config expects %d; "
           "reflash firmware with MAX_JOINT>=%d\n",
           fw_joints, num_joints, num_joints);
       warned = true;
