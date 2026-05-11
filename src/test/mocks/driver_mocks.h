@@ -9,7 +9,8 @@
 #include "../../shared/messages.h"
 
 
-#define RTAPI_MSG_ERR 1
+#define RTAPI_MSG_ERR  1
+#define RTAPI_MSG_INFO 3
 
 typedef uint32_t hal_u32_t;
 typedef int32_t hal_s32_t;

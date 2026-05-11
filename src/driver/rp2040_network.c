@@ -23,6 +23,7 @@
 
 /* Network globals. */
 static uint8_t detected_joint_count = 0;  /* set from first Reply_joint_movement.count */
+static bool version_confirmed = false;     /* set when REPLY_VERSION received */
 struct sockaddr_in remote_addr[MAX_DEVICES];
 int sockfd[MAX_DEVICES] = {-1};
 
@@ -405,6 +406,40 @@ uint8_t get_detected_joint_count(void) {
   return detected_joint_count;
 }
 
+size_t serialize_version_request(struct NWBuffer* buffer) {
+  union MessageAny message;
+  message.version_request.type = MSG_VERSION_REQUEST;
+  return pack_nw_buff(buffer, &message, sizeof(struct Message_version_request));
+}
+
+bool get_version_confirmed(void) {
+  return version_confirmed;
+}
+
+bool unpack_version_reply(
+    struct NWBuffer* rx_buf,
+    size_t* rx_offset,
+    size_t* received_count
+) {
+  UNPACK_MSG(struct Reply_version, reply, rx_buf, rx_offset);
+  if (reply->version_major != PROTOCOL_VERSION_MAJOR ||
+      reply->version_minor != PROTOCOL_VERSION_MINOR ||
+      reply->version_patch != PROTOCOL_VERSION_PATCH) {
+    rtapi_print_msg(RTAPI_MSG_ERR,
+        "RP2040: ERROR: version mismatch — firmware %d.%d.%d, driver %d.%d.%d. "
+        "Reflash firmware and reinstall driver from the same source.\n",
+        reply->version_major, reply->version_minor, reply->version_patch,
+        PROTOCOL_VERSION_MAJOR, PROTOCOL_VERSION_MINOR, PROTOCOL_VERSION_PATCH);
+  } else {
+    rtapi_print_msg(RTAPI_MSG_INFO,
+        "RP2040: INFO: version OK (%d.%d.%d)\n",
+        reply->version_major, reply->version_minor, reply->version_patch);
+  }
+  version_confirmed = true;
+  (*received_count)++;
+  return true;
+}
+
 /* Update last_joint_config with the values the RP confirmed — this stops
  * configure_joint() from retransmitting (diff disappears). If the reply never
  * arrives the diff persists and the config is resent next rotation. */
@@ -585,6 +620,10 @@ void process_data(
       break;
     }
     switch(header->type) {
+      case REPLY_VERSION:
+        unpack_success = unpack_success && unpack_version_reply(
+            rx_buf, &rx_offset, received_count);
+        break;
       case REPLY_TIMING:
         ;
         unpack_success = unpack_success && unpack_timing(

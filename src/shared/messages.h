@@ -3,6 +3,7 @@
 
 #include <sys/types.h>
 #include <stdint.h>
+#include "version.h"
 
 /* This file contains objects that are passed over Ethernet UDP between host and RP2040.
  * Multiple structs can be packed in an array.
@@ -35,17 +36,22 @@
 
 
 #define MSG_NONE                     0
-#define MSG_TIMING                   1  // Contains packet count and time sent.
-#define MSG_SET_JOINT_ENABLED        2  // Enable/disable joint.
-#define MSG_SET_JOINT_ABS_POS        3  // Set absolute joint position.
-#define MSG_SET_JOINT_CONFIG         4  // Set all config for a joint.
-#define MSG_SET_GPIO                 5  // Set values for a bank (32) of GPIO.
-#define MSG_SET_GPIO_CONFIG          6  // Set config for a single GPIO.
-#define MSG_SET_SPINDLE_CONFIG       7  // Set spindle configuration
-#define MSG_SET_SPINDLE_SPEED        8  // Set spindle speed
+#define MSG_VERSION_REQUEST          1  // Query firmware protocol version.
+#define MSG_TIMING                   2  // Contains packet count and time sent.
+#define MSG_SET_JOINT_ENABLED        3  // Enable/disable joint.
+#define MSG_SET_JOINT_ABS_POS        4  // Set absolute joint position.
+#define MSG_SET_JOINT_CONFIG         5  // Set all config for a joint.
+#define MSG_SET_GPIO                 6  // Set values for a bank (32) of GPIO.
+#define MSG_SET_GPIO_CONFIG          7  // Set config for a single GPIO.
+#define MSG_SET_SPINDLE_CONFIG       8  // Set spindle configuration
+#define MSG_SET_SPINDLE_SPEED        9  // Set spindle speed
 
 struct __attribute__((packed)) Message_header {
   uint8_t type;
+};
+
+struct __attribute__((packed)) Message_version_request {
+  uint8_t type;  // MSG_VERSION_REQUEST — no payload; reply carries the version
 };
 
 struct __attribute__((packed)) Message_timing {
@@ -110,6 +116,7 @@ struct __attribute__((packed)) Message_gpio_config {
 
 union MessageAny {
   struct Message_header header;
+  struct Message_version_request version_request;
   struct Message_timing timing;
   struct Message_set_joints_pos set_abs_pos;
   struct Message_joint_enable joint_enable;
@@ -122,17 +129,25 @@ union MessageAny {
 
 
 #define REPLY_NONE                   0
-#define REPLY_TIMING                 1
-#define REPLY_JOINT_MOVEMENT         2
-#define REPLY_JOINT_CONFIG           3
-#define REPLY_JOINT_METRICS          4
-#define REPLY_GPIO                   5
-#define REPLY_GPIO_CONFIG            6
-#define REPLY_SPINDLE_SPEED          7
-#define REPLY_SPINDLE_CONFIG         8
+#define REPLY_VERSION                1  // Firmware protocol version response.
+#define REPLY_TIMING                 2
+#define REPLY_JOINT_MOVEMENT         3
+#define REPLY_JOINT_CONFIG           4
+#define REPLY_JOINT_METRICS          5
+#define REPLY_GPIO                   6
+#define REPLY_GPIO_CONFIG            7
+#define REPLY_SPINDLE_SPEED          8
+#define REPLY_SPINDLE_CONFIG         9
 
 struct __attribute__((packed)) Reply_header {
   uint8_t type;
+};
+
+struct __attribute__((packed)) Reply_version {
+  uint8_t type;            // REPLY_VERSION
+  uint8_t version_major;
+  uint8_t version_minor;
+  uint8_t version_patch;
 };
 
 struct __attribute__((packed)) Reply_timing {
@@ -213,6 +228,7 @@ struct __attribute__((packed)) Reply_spindle_config {
 
 union ReplyAny {
   struct Reply_header header;
+  struct Reply_version version;
   struct Reply_timing timing;
   struct Reply_joint_movement joint_movement;
   struct Reply_joint_config joint_config;

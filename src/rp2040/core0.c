@@ -52,6 +52,29 @@ bool unpack_timing(
   return true;
 }
 
+bool unpack_version_request(
+    struct NWBuffer* rx_buf,
+    size_t* rx_offset,
+    struct NWBuffer* tx_buf,
+    size_t* received_count
+) {
+  void* data_p = unpack_nw_buff(
+      rx_buf, *rx_offset, rx_offset, NULL, sizeof(struct Message_version_request));
+  if (!data_p) return false;
+
+  union ReplyAny reply;
+  reply.version.type          = REPLY_VERSION;
+  reply.version.version_major = PROTOCOL_VERSION_MAJOR;
+  reply.version.version_minor = PROTOCOL_VERSION_MINOR;
+  reply.version.version_patch = PROTOCOL_VERSION_PATCH;
+  if (!pack_nw_buff(tx_buf, &reply, sizeof(struct Reply_version))) {
+    printf("WARN: TX buffer full, dropping version reply.\n");
+  }
+
+  (*received_count)++;
+  return true;
+}
+
 bool unpack_joint_enable(
     struct NWBuffer* rx_buf,
     size_t* rx_offset,
@@ -368,6 +391,10 @@ void process_received_buffer(
     }
 
     switch(header->type) {
+      case MSG_VERSION_REQUEST:
+        unpack_success = unpack_success && unpack_version_request(
+            rx_buf, &rx_offset, tx_buf, received_count);
+        break;
       case MSG_TIMING:
         ;
         unpack_success = unpack_success && unpack_timing(

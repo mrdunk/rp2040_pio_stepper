@@ -1,9 +1,26 @@
 #!/bin/sh
 
 # Add this file to .git/hooks/ to automatically build and run tests before git commit.
+# Also auto-increments PROTOCOL_VERSION_PATCH in src/shared/version.h on every commit.
 
 # Exit on any error
 set -e
+
+# Bump protocol version patch number
+python3 - <<'EOF'
+import re
+path = 'src/shared/version.h'
+with open(path) as f:
+    content = f.read()
+content = re.sub(
+    r'(#define\s+PROTOCOL_VERSION_PATCH\s+)(\d+)',
+    lambda m: m.group(1) + str(int(m.group(2)) + 1),
+    content
+)
+with open(path, 'w') as f:
+    f.write(content)
+EOF
+git add src/shared/version.h
 
 # Setup and build tests
 mkdir -p build_tests/

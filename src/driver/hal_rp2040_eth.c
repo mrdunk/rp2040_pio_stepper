@@ -672,6 +672,9 @@ static void write_port(void *arg, long period)
   *data->seq_out = (uint32_t)count;
   pack_success = pack_success && serialize_timing(&buffer, count, rtapi_get_time());
 
+  if (!get_version_confirmed())
+    serialize_version_request(&buffer);
+
   // Put GPIO values in network buffer.
   // serialize_gpio() return value is not checked: a failed pack still allows
   // the rest of the buffer to be sent with whatever was packed.
@@ -837,5 +840,7 @@ void reset_rp_config(
   for(size_t spindle = 0; spindle < MAX_SPINDLE; spindle++) {
     last_spindle_config[spindle].vfd_type = MODBUS_TYPE_NOT_SET;
   }
+
+  version_confirmed = false;
 }
 
