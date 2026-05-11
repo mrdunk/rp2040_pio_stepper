@@ -338,13 +338,13 @@ Then open a terminal at 115200 8N1. Examples:
 
 ```bash
 # minicom
-minicom -b 115200 -D /dev/ttyUSB0
+minicom -b 115200 -D /dev/ttyACM0
 
 # screen
-screen /dev/ttyUSB0 115200
+screen /dev/ttyACM0 115200
 
 # picocom
-picocom -b 115200 /dev/ttyUSB0
+picocom -b 115200 /dev/ttyACM0
 ```
 
 On power-up or reset the firmware prints a startup block:
