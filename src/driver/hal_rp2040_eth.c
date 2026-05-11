@@ -569,8 +569,7 @@ static size_t count_confirmed_configs(
   for(int j = 0; j < num_joints; j++) {
     float vel = (float)((*data->joint_vel_limit[j]) * (*data->joint_scale[j]));
     float acc = (float)((*data->joint_accel_limit[j]) * (*data->joint_scale[j]));
-    if(last_joint_config[j].enable    == *data->joint_enable_cmd[j]
-    && last_joint_config[j].gpio_step == data->joint_gpio_step[j]
+    if(last_joint_config[j].gpio_step == data->joint_gpio_step[j]
     && last_joint_config[j].gpio_dir  == data->joint_gpio_dir[j]
     && last_joint_config[j].max_velocity == vel
     && last_joint_config[j].max_accel    == acc
