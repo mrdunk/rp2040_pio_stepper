@@ -15,6 +15,7 @@ add_compile_options(
   )
 
 add_definitions(-DBUILD_TESTS)
+add_definitions(-DMAX_JOINT=4)
 
 add_executable(
   ringBufferTest

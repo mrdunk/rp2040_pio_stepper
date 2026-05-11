@@ -22,6 +22,7 @@
     if (!(var)) return false;
 
 /* Network globals. */
+static uint8_t detected_joint_count = 0;  /* set from first Reply_joint_movement.count */
 struct sockaddr_in remote_addr[MAX_DEVICES];
 int sockfd[MAX_DEVICES] = {-1};
 
@@ -147,8 +148,9 @@ size_t serialize_joint_pos(
     struct NWBuffer* buffer,
     skeleton_t* data
 ) {
-  struct Message_set_joints_pos message;
-  message.type = MSG_SET_JOINT_ABS_POS;
+  struct Message_set_joints_pos message = {0};
+  message.type  = MSG_SET_JOINT_ABS_POS;
+  message.count = detected_joint_count;  /* firmware reads only this many */
 
   for(size_t joint = 0; joint < MAX_JOINT; joint++) {
     double position = *data->joint_scale[joint] * *data->joint_pos_cmd[joint];
@@ -367,7 +369,17 @@ bool unpack_joint_movement(
 ) {
   UNPACK_MSG(struct Reply_joint_movement, reply, rx_buf, rx_offset);
 
-  for(size_t joint = 0; joint < MAX_JOINT; joint++) {
+  if(detected_joint_count == 0) {
+    detected_joint_count = reply->count;
+    printf("INFO: firmware reports %u joints\n", detected_joint_count);
+  } else if(detected_joint_count != reply->count) {
+    printf("WARN: joint count changed %u -> %u; reflash firmware and reinstall driver\n",
+        detected_joint_count, reply->count);
+    detected_joint_count = reply->count;
+  }
+
+  size_t n = reply->count < MAX_JOINT ? reply->count : MAX_JOINT;
+  for(size_t joint = 0; joint < n; joint++) {
     *data->joint_pos_fb[joint] =
       ((double)reply->abs_pos_achieved[joint]) / *data->joint_scale[joint];
 
@@ -387,6 +399,10 @@ bool unpack_joint_movement(
 
   (*received_count)++;
   return true;
+}
+
+uint8_t get_detected_joint_count(void) {
+  return detected_joint_count;
 }
 
 /* Update last_joint_config with the values the RP confirmed — this stops

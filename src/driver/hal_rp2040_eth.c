@@ -16,6 +16,10 @@ MODULE_AUTHOR("Duncan Law");
 MODULE_DESCRIPTION("RP2040 based IO for LinuxCNC HAL");
 MODULE_LICENSE("GPL");
 
+static int num_joints = 0;
+MODULE_PARM(num_joints, "i");
+MODULE_PARM_DESC(num_joints, "Number of joints configured in LinuxCNC ([KINS]JOINTS)");
+
 
 /***********************************************************************
  *                STRUCTURES AND GLOBAL VARIABLES                       *
@@ -255,6 +259,7 @@ static const PinDef scalar_pins[] = {
     { U32,   HAL_OUT, offsetof(skeleton_t, seq_in),          0, "seq-in",          -1, 0, NULL }, // Sequence number echoed back by RP2040; seq-out − seq-in gives round-trip latency in cycles
     { U32,   HAL_OUT, offsetof(skeleton_t, rx_miss_count),   0, "rx-miss-count",   -1, 0, NULL }, // Consecutive cycles without a response; resets to 0 on success; triggers network-down at MAX_SKIPPED_PACKETS
     { PIN,   HAL_OUT, offsetof(skeleton_t, eth_up),          0, "eth-up",          -1, 0, NULL }, // Ethernet link state as seen by the driver
+    { PIN,   HAL_OUT, offsetof(skeleton_t, config_complete), 0, "config-complete",  -1, 0, NULL }, // All joint/GPIO/spindle configs confirmed by firmware
     { FLOAT, HAL_OUT, offsetof(skeleton_t, update_overrun),  0, "update-overrun",  -1, 0, NULL }, // EMA of cycles where Core1 received more than one update from Core0 per period
     { FLOAT, HAL_OUT, offsetof(skeleton_t, update_underrun), 0, "update-underrun", -1, 0, NULL }, // EMA of cycles where Core1 found no new update from Core0
     { U32,   HAL_OUT, offsetof(skeleton_t, core1_work_us),   0, "core1-work-us",   -1, 0, NULL }, // µs Core1 spent working last period (excludes time waiting for tick)
@@ -275,6 +280,14 @@ int rtapi_app_main(void)
     rtapi_print_msg(RTAPI_MSG_ERR,
         "RP2040: ERROR: hal_init() failed\n");
     return -1;
+  }
+
+  if (num_joints <= 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR,
+        "RP2040: ERROR: num_joints not set — defaulting to %d. "
+        "Add num_joints=[KINS]JOINTS to your loadrt line: "
+        "loadrt hal_rp2040_eth num_joints=[KINS]JOINTS\n", MAX_JOINT);
+    num_joints = MAX_JOINT;
   }
 
   /* STEP 2: allocate shared memory for skeleton data */
@@ -554,6 +567,42 @@ bool configure_spindle(
     return pack_success;
 }
 
+static size_t count_confirmed_configs(
+    struct Message_joint_config* last_joint_config,
+    struct Message_gpio_config* last_gpio_config,
+    struct Message_spindle_config* last_spindle_config,
+    skeleton_t *data
+) {
+  size_t confirmed = 0;
+  for(int j = 0; j < num_joints; j++) {
+    float vel = (float)((*data->joint_vel_limit[j]) * (*data->joint_scale[j]));
+    float acc = (float)((*data->joint_accel_limit[j]) * (*data->joint_scale[j]));
+    if(last_joint_config[j].gpio_step == data->joint_gpio_step[j]
+    && last_joint_config[j].gpio_dir  == data->joint_gpio_dir[j]
+    && last_joint_config[j].max_velocity == vel
+    && last_joint_config[j].max_accel    == acc
+    && last_joint_config[j].cmd_type  == data->joint_cmd_type[j]) {
+      confirmed++;
+    }
+  }
+  for(int g = 0; g < MAX_GPIO; g++) {
+    if(last_gpio_config[g].gpio_type == data->gpio_type[g]
+    && last_gpio_config[g].index     == data->gpio_index[g]
+    && last_gpio_config[g].address   == data->gpio_address[g]) {
+      confirmed++;
+    }
+  }
+  for(int s = 0; s < MAX_SPINDLE; s++) {
+    if(data->spindle_vfd_type[s] == MODBUS_TYPE_NOT_SET
+    || (last_spindle_config[s].vfd_type        == data->spindle_vfd_type[s]
+     && last_spindle_config[s].modbus_address  == data->spindle_address[s]
+     && last_spindle_config[s].bitrate         == data->spindle_bitrate[s])) {
+      confirmed++;
+    }
+  }
+  return confirmed;
+}
+
 /* Only try to configure one parameter per 1ms cycle since they change infrequently
  * and don't need low latency when they do. */
 bool configure(
@@ -564,17 +613,29 @@ bool configure(
     struct Message_spindle_config* last_spindle_config,
     skeleton_t *data
 ) {
-  size_t total_things = MAX_JOINT + MAX_GPIO + MAX_SPINDLE;
+  uint8_t fw_joints = get_detected_joint_count();
+  if(fw_joints > 0 && fw_joints < (uint8_t)num_joints) {
+    static bool warned = false;
+    if(!warned) {
+      rtapi_print_msg(RTAPI_MSG_ERR,
+          "RP2040: ERROR: firmware has %u joints but config expects %d; "
+          "reflash firmware with MAX_JOINT>=%d\n",
+          fw_joints, num_joints, num_joints);
+      warned = true;
+    }
+  }
+  size_t active_joints = (fw_joints > 0) ? fw_joints : (size_t)num_joints;
+  size_t total_things = active_joints + MAX_GPIO + MAX_SPINDLE;
   size_t joint_or_gpio_or_spindle = count % total_things;
 
-  if(joint_or_gpio_or_spindle < MAX_JOINT) {
+  if(joint_or_gpio_or_spindle < active_joints) {
     uint8_t joint = joint_or_gpio_or_spindle;
     return configure_joint(tx_buffer, joint, last_joint_config, data);
-  } else if(joint_or_gpio_or_spindle < MAX_JOINT + MAX_GPIO) {
-    uint8_t gpio = joint_or_gpio_or_spindle - MAX_JOINT;
+  } else if(joint_or_gpio_or_spindle < active_joints + MAX_GPIO) {
+    uint8_t gpio = joint_or_gpio_or_spindle - active_joints;
     return configure_gpio(tx_buffer, gpio, last_gpio_config, data);
-  } else if(joint_or_gpio_or_spindle < MAX_JOINT + MAX_GPIO + MAX_SPINDLE) {
-    uint8_t spindle = joint_or_gpio_or_spindle - MAX_JOINT - MAX_GPIO;
+  } else if(joint_or_gpio_or_spindle < active_joints + MAX_GPIO + MAX_SPINDLE) {
+    uint8_t spindle = joint_or_gpio_or_spindle - active_joints - MAX_GPIO;
     return configure_spindle(tx_buffer, spindle, last_spindle_config, data);
   }
   return true;
@@ -663,8 +724,23 @@ static void write_port(void *arg, long period)
       on_eth_up(data, count);
     }
 
-    if(last_update_id +1 != *data->seq_in && last_update_id != 0) {
-      printf("WARN: %i missing updates. %u %u\n",
+    size_t total_configs = (size_t)num_joints + MAX_GPIO + MAX_SPINDLE;
+    size_t confirmed = count_confirmed_configs(
+        last_joint_config, last_gpio_config, last_spindle_config, data);
+    *data->config_complete = (confirmed == total_configs);
+
+    static size_t last_confirmed = (size_t)-1;
+    if(confirmed != last_confirmed) {
+      if(*data->config_complete) {
+        printf("INFO: all %zu config updates have completed\n", total_configs);
+      } else {
+        printf("INFO: %zu of %zu config updates have completed\n", confirmed, total_configs);
+      }
+      last_confirmed = confirmed;
+    }
+
+    if(*data->config_complete && last_update_id + 1 != *data->seq_in && last_update_id != 0) {
+      printf("WARN: %i missing updates (seq %u -> %u)\n",
           *data->seq_in - last_update_id - 1, last_update_id, *data->seq_in);
     }
     last_update_id = *data->seq_in;

@@ -24,24 +24,26 @@ The [Getting Started with Raspberry Pi Pico](https://rptl.io/pico-get-started)
 guide covers installing the toolchain and pico-sdk, and also explains how to
 connect a UART serial console for debug output from the firmware.
 
-Edit `CMakeLists.txt` to match your Ethernet chip. Find the section:
-
-```cmake
-# Set ethernet chip
-set(WIZNET_CHIP W5500)
-```
-
-Change `W5500` to `W5100S` if you have that chip instead.
-
 ## Build the Firmware
 
+Two cache variables control the build:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WIZNET_CHIP` | `W5500` | Ethernet chip — `W5500` or `W5100S` |
+| `MAX_JOINT` | `8` | Number of stepper joints (1–8) |
+
 ```bash
-cmake -B build_rp -S . -DBUILD_RP=ON
+cmake -B build_rp -S . -DBUILD_RP=ON -DWIZNET_CHIP=W5500 -DMAX_JOINT=6
 make -C build_rp stepper_control
 ```
 
 Without `-DBUILD_RP=ON`, CMake configures successfully but produces an empty
 Makefile with no firmware targets — no error, no warning.
+
+`MAX_JOINT` determines the PIO layout and feedback channel allocation. It must
+match the number of joints configured in LinuxCNC. Rebuilding with a different
+value requires reflashing the firmware.
 
 The output image:
 
@@ -78,6 +80,18 @@ for debug output, see [Getting Started with Raspberry Pi Pico](https://rptl.io/p
 cd src/driver
 sudo halcompile --compile --install ./hal_rp2040_eth.c
 ```
+
+A single driver binary works with any firmware `MAX_JOINT` (4–8). The driver
+detects the firmware's joint count from the first reply packet and logs it:
+`INFO: firmware reports N joints`. All HAL configs use:
+
+```
+loadrt hal_rp2040_eth num_joints=[KINS]JOINTS
+```
+
+`num_joints` is required — omitting it causes an error at load time and the
+driver defaults to `MAX_JOINT`. The firmware also prints its `MAX_JOINT` at
+startup alongside branch, commit, and build info.
 
 Rerun this command any time you change `src/driver/hal_rp2040_eth.c` or
 `src/driver/messages.h`. A version mismatch between the driver and firmware
@@ -124,14 +138,24 @@ Machine-specific files live in `config/<machine-name>/`:
 
 ```
 config/
-  pico-eth-cnc-3axis/
-    pico-eth-cnc-3axis.ini    -- LinuxCNC machine config
-    pico-eth-cnc-3axis.hal    -- HAL wiring for joints, GPIO, spindle
+  pico-eth-cnc-breakout/
+    pico-eth-cnc-breakout.ini    -- LinuxCNC machine config (3-joint)
+    pico-eth-cnc-breakout.hal    -- HAL wiring for joints, GPIO, spindle
     custom.hal                   -- site-specific overrides
     postgui_call_list.hal        -- post-GUI HAL commands
   pico-eth-cnc-4axis/
     pico-eth-cnc-4axis.ini       -- LinuxCNC machine config (4-joint XYZA)
     pico-eth-cnc-4axis.hal       -- HAL wiring: X(J2), Y(J3), Z(J4), A(J5)
+    custom.hal                   -- site-specific overrides
+    postgui_call_list.hal        -- post-GUI HAL commands
+  pico-eth-cnc-6axis/
+    pico-eth-cnc-6axis.ini       -- LinuxCNC machine config (6-joint XYZABC)
+    pico-eth-cnc-6axis.hal       -- HAL wiring for 6 joints
+    custom.hal                   -- site-specific overrides
+    postgui_call_list.hal        -- post-GUI HAL commands
+  pico-eth-cnc-8axis/
+    pico-eth-cnc-8axis.ini       -- LinuxCNC machine config (8-joint XYZABCUV)
+    pico-eth-cnc-8axis.hal       -- HAL wiring for 8 joints (open-loop, no feedback)
     custom.hal                   -- site-specific overrides
     postgui_call_list.hal        -- post-GUI HAL commands
   shared/
@@ -141,7 +165,7 @@ config/
 Launch [LinuxCNC](https://linuxcnc.org/) with a config:
 
 ```bash
-linuxcnc config/pico-eth-cnc-3axis/pico-eth-cnc-3axis.ini
+linuxcnc config/pico-eth-cnc-breakout/pico-eth-cnc-breakout.ini
 ```
 
 `rp2040_types.ini` lives in `config/shared/` and is included by the machine
@@ -173,7 +197,7 @@ RP2040.
 
 HAL pins available: `.in`, `.in-not`, `.out`, `.out-invert`.
 
-Example from `config/pico-eth-cnc-3axis/pico-eth-cnc-3axis.hal` — the
+Example from `config/pico-eth-cnc-breakout/pico-eth-cnc-breakout.hal` — the
 J6 header exposes GP8–GP15. Direction is not fixed by hardware; set `type` to
 `NATIVE_IN` or `NATIVE_OUT` for your application:
 
@@ -214,7 +238,7 @@ devices on one bus.
 Declare the address in the INI to avoid duplicating it in the HAL:
 
 ```ini
-# config/pico-eth-cnc-3axis/pico-eth-cnc-3axis.ini
+# config/pico-eth-cnc-breakout/pico-eth-cnc-breakout.ini
 [I2C_0]
 TYPE = MCP
 ADDRESS = 32
@@ -226,7 +250,7 @@ Then reference it in the HAL:
 setp rp2040_eth.0.gpio.NN.address  [I2C_0]ADDRESS
 ```
 
-Example from `config/pico-eth-cnc-3axis/pico-eth-cnc-3axis.hal` — fully
+Example from `config/pico-eth-cnc-breakout/pico-eth-cnc-breakout.hal` — fully
 configured I2C inputs and outputs (J8–J11):
 
 ```hal

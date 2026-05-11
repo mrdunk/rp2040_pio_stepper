@@ -114,7 +114,8 @@ static void test_joint_movement(void **state) {
     setup_data(&data);
    
     struct Reply_joint_movement message = {
-        .type = REPLY_JOINT_MOVEMENT,
+        .type              = REPLY_JOINT_MOVEMENT,
+        .count             = MAX_JOINT,
         .abs_pos_achieved  = {1234, 5678, 9, 10},
         .velocity_achieved = {7890, 1234, 5, 6},
         .enabled           = {1, 0, 1, 0},

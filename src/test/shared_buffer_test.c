@@ -677,7 +677,8 @@ static void test_end_to_end_multi(void **state) {
     };
 
     struct Message_set_joints_pos m2 = {
-      .type = MSG_SET_JOINT_ABS_POS
+      .type  = MSG_SET_JOINT_ABS_POS,
+      .count = MAX_JOINT
     };
     for(size_t joint = 0; joint < MAX_JOINT; joint++) {
         m2.velocity[joint] = joint * 0.5;
@@ -744,20 +745,18 @@ static void test_end_to_end_multi(void **state) {
         assert_double_equal(m2_p->velocity[joint], m2.velocity[joint], 0.01);
     }
 
-    // Pack next thing. (Message_set_joints_pos)
-    // Add this one twice.
-    buffered_size = pack_nw_buff(&buffer, &m2, sizeof(m2));
-    expected_size = aligned32(sizeof(m2));
+    // Pack next thing. (Message_timing again — Message_set_joints_pos is now 136 bytes
+    // so two copies exceed the 256-byte NWBuffer limit.)
+    buffered_size = pack_nw_buff(&buffer, &m0, sizeof(m0));
+    expected_size = aligned32(sizeof(m0));
     total_size += expected_size;
     assert_int_equal(buffered_size, expected_size);
     assert_int_equal(total_size, buffer.length);
     // Check buffer has correct data.
-    m2_p = (void*)buffer.payload + aligned32(sizeof(m0)) + aligned32(sizeof(m1)) + aligned32(sizeof(m2));
-    assert_int_equal(m2_p->type, m2.type);
-    for(size_t joint = 0; joint < MAX_JOINT; joint++) {
-        assert_double_equal(m2_p->position[joint], m2.position[joint], 0.01);
-        assert_double_equal(m2_p->velocity[joint], m2.velocity[joint], 0.01);
-    }
+    m0_p = (void*)buffer.payload + aligned32(sizeof(m0)) + aligned32(sizeof(m1)) + aligned32(sizeof(m2));
+    assert_int_equal(m0_p->type, m0.type);
+    assert_int_equal(m0_p->update_id, m0.update_id);
+    assert_int_equal(m0_p->time, m0.time);
 
     
     // Checksum on buffer matches.
@@ -797,16 +796,13 @@ static void test_end_to_end_multi(void **state) {
     }
     assert_int_equal(offset, aligned32(sizeof(m0)) + aligned32(sizeof(m1)) + aligned32(sizeof(m2)));
 
-    m2_p = unpack_nw_buff(&buffer, offset, &offset, NULL, sizeof(struct Message_set_joints_pos));
-    assert_int_not_equal(m2_p, NULL);
-    // Address must be 32 bit aligned. On ARM all memory reads must e 32 bit aligned.
-    assert_int_equal((uintptr_t)m2_p % 4, 0);
-    assert_int_equal(m2.type, m2_p->type);
-    for(size_t joint = 0; joint < MAX_JOINT; joint++) {
-        assert_double_equal(m2.position[joint], m2_p->position[joint], 0.01);
-        assert_double_equal(m2.velocity[joint], m2_p->velocity[joint], 0.01);
-    }
-    assert_int_equal(offset, aligned32(sizeof(m0)) + aligned32(sizeof(m1)) + aligned32(sizeof(m2)) + aligned32(sizeof(m2)));
+    m0_p = unpack_nw_buff(&buffer, offset, &offset, NULL, sizeof(struct Message_timing));
+    assert_int_not_equal(m0_p, NULL);
+    assert_int_equal((uintptr_t)m0_p % 4, 0);
+    assert_int_equal(m0.type, m0_p->type);
+    assert_int_equal(m0.update_id, m0_p->update_id);
+    assert_int_equal(m0.time, m0_p->time);
+    assert_int_equal(offset, aligned32(sizeof(m0)) + aligned32(sizeof(m1)) + aligned32(sizeof(m2)) + aligned32(sizeof(m0)));
 }
 
 int main(void) {

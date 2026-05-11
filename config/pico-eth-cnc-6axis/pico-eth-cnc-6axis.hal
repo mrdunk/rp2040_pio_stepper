@@ -48,7 +48,7 @@ setp rp2040_eth.0.joint.0.gpio-step      0
 setp rp2040_eth.0.joint.0.gpio-dir       1
 
 setp rp2040_eth.0.joint.0.vel-limit    [JOINT_0]MAX_VELOCITY
-setp rp2040_eth.0.joint.0.accel-limit       [JOINT_0]MAX_ACCELERATION
+setp rp2040_eth.0.joint.0.accel-limit  [JOINT_0]MAX_ACCELERATION
 
 net xpos-cmd joint.0.motor-pos-cmd => rp2040_eth.0.joint.0.pos-cmd
 net xvel-cmd joint.0.vel-cmd       => rp2040_eth.0.joint.0.vel-cmd
@@ -63,7 +63,7 @@ setp rp2040_eth.0.joint.1.gpio-step      2
 setp rp2040_eth.0.joint.1.gpio-dir       3
 
 setp rp2040_eth.0.joint.1.vel-limit    [JOINT_1]MAX_VELOCITY
-setp rp2040_eth.0.joint.1.accel-limit       [JOINT_1]MAX_ACCELERATION
+setp rp2040_eth.0.joint.1.accel-limit  [JOINT_1]MAX_ACCELERATION
 
 net ypos-cmd joint.1.motor-pos-cmd => rp2040_eth.0.joint.1.pos-cmd
 net yvel-cmd joint.1.vel-cmd       => rp2040_eth.0.joint.1.vel-cmd
@@ -78,7 +78,7 @@ setp rp2040_eth.0.joint.2.gpio-step      4
 setp rp2040_eth.0.joint.2.gpio-dir       5
 
 setp rp2040_eth.0.joint.2.vel-limit    [JOINT_2]MAX_VELOCITY
-setp rp2040_eth.0.joint.2.accel-limit       [JOINT_2]MAX_ACCELERATION
+setp rp2040_eth.0.joint.2.accel-limit  [JOINT_2]MAX_ACCELERATION
 
 net zpos-cmd joint.2.motor-pos-cmd => rp2040_eth.0.joint.2.pos-cmd
 net zvel-cmd joint.2.vel-cmd       => rp2040_eth.0.joint.2.vel-cmd
@@ -87,9 +87,49 @@ net zpos-fb  rp2040_eth.0.joint.2.pos-fb => joint.2.motor-pos-fb
 net enable-out => rp2040_eth.0.joint.2.enable-cmd
 
 
-# J5 (A-axis stepper connector) is wired to GP6=STEP, GP7=DIR via 74HCT541 buffer.
-# To enable: add AXIS_A/JOINT_3 to the INI, set JOINTS=4, COORDINATES=XYZA,
-# increase mult2 count to 8, and add the joint.3 block mirroring joint.2 above.
+# Joint 3 — A AXIS (J5: GP6=STEP, GP7=DIR via 74HCT541 buffer)
+setp rp2040_eth.0.joint.3.scale          [JOINT_3]SCALE
+setp rp2040_eth.0.joint.3.gpio-step      6
+setp rp2040_eth.0.joint.3.gpio-dir       7
+
+setp rp2040_eth.0.joint.3.vel-limit    [JOINT_3]MAX_VELOCITY
+setp rp2040_eth.0.joint.3.accel-limit  [JOINT_3]MAX_ACCELERATION
+
+net apos-cmd joint.3.motor-pos-cmd => rp2040_eth.0.joint.3.pos-cmd
+net avel-cmd joint.3.vel-cmd       => rp2040_eth.0.joint.3.vel-cmd
+net apos-fb  rp2040_eth.0.joint.3.pos-fb => joint.3.motor-pos-fb
+
+net enable-out => rp2040_eth.0.joint.3.enable-cmd
+
+
+# Joint 4 — B AXIS (J6: GP8=STEP, GP9=DIR via 74HCT541 buffer)
+setp rp2040_eth.0.joint.4.scale          [JOINT_4]SCALE
+setp rp2040_eth.0.joint.4.gpio-step      8
+setp rp2040_eth.0.joint.4.gpio-dir       9
+
+setp rp2040_eth.0.joint.4.vel-limit    [JOINT_4]MAX_VELOCITY
+setp rp2040_eth.0.joint.4.accel-limit  [JOINT_4]MAX_ACCELERATION
+
+net bpos-cmd joint.4.motor-pos-cmd => rp2040_eth.0.joint.4.pos-cmd
+net bvel-cmd joint.4.vel-cmd       => rp2040_eth.0.joint.4.vel-cmd
+net bpos-fb  rp2040_eth.0.joint.4.pos-fb => joint.4.motor-pos-fb
+
+net enable-out => rp2040_eth.0.joint.4.enable-cmd
+
+
+# Joint 5 — C AXIS (J6: GP10=STEP, GP11=DIR via 74HCT541 buffer)
+setp rp2040_eth.0.joint.5.scale          [JOINT_5]SCALE
+setp rp2040_eth.0.joint.5.gpio-step      10
+setp rp2040_eth.0.joint.5.gpio-dir       11
+
+setp rp2040_eth.0.joint.5.vel-limit    [JOINT_5]MAX_VELOCITY
+setp rp2040_eth.0.joint.5.accel-limit  [JOINT_5]MAX_ACCELERATION
+
+net cpos-cmd joint.5.motor-pos-cmd => rp2040_eth.0.joint.5.pos-cmd
+net cvel-cmd joint.5.vel-cmd       => rp2040_eth.0.joint.5.vel-cmd
+net cpos-fb  rp2040_eth.0.joint.5.pos-fb => joint.5.motor-pos-fb
+
+net enable-out => rp2040_eth.0.joint.5.enable-cmd
 
 
 # Metrics
@@ -110,119 +150,108 @@ net spindle-speed-fb  spindle.0.speed-in  <= rp2040_eth.0.spindle.0.speed-fb
 net spindle-at-speed  spindle.0.at-speed  <= rp2040_eth.0.spindle.0.at-speed
 
 
-# GPIO — J6 GPIO_FAST (native RP2040 GPIO, GP8-GP15)
+# GPIO — J6 GPIO_FAST (native RP2040 GPIO, GP12-GP15)
+# GP8-11 are used by joints 4 and 5 (step/dir). Fast GPIO starts at GP12.
 # Direction not fixed by hardware: set each to NATIVE_IN or NATIVE_OUT for your application.
-setp rp2040_eth.0.gpio.00.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_OUT_DEBUG
-setp rp2040_eth.0.gpio.00.index     8
+setp rp2040_eth.0.gpio.00.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio.00.index     12
 
-setp rp2040_eth.0.gpio.01.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_IN_DEBUG
-setp rp2040_eth.0.gpio.01.index     9
+setp rp2040_eth.0.gpio.01.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio.01.index     13
 
 setp rp2040_eth.0.gpio.02.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.02.index     10
+setp rp2040_eth.0.gpio.02.index     14
 
 setp rp2040_eth.0.gpio.03.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.03.index     11
-
-setp rp2040_eth.0.gpio.04.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.04.index     12
-
-setp rp2040_eth.0.gpio.05.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.05.index     13
-
-setp rp2040_eth.0.gpio.06.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.06.index     14
-
-setp rp2040_eth.0.gpio.07.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.07.index     15
+setp rp2040_eth.0.gpio.03.index     15
 
 
 # GPIO — J7 GPIO_SLOW (MCP23017 GPB0-6 + GPA0, address=[I2C_0]ADDRESS)
 # Direction not fixed by hardware: set each to I2C_MCP_IN or I2C_MCP_OUT for your application.
+setp rp2040_eth.0.gpio.04.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio.04.index     0
+setp rp2040_eth.0.gpio.04.address   [I2C_0]ADDRESS
+
+setp rp2040_eth.0.gpio.05.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio.05.index     1
+setp rp2040_eth.0.gpio.05.address   [I2C_0]ADDRESS
+
+setp rp2040_eth.0.gpio.06.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio.06.index     2
+setp rp2040_eth.0.gpio.06.address   [I2C_0]ADDRESS
+
+setp rp2040_eth.0.gpio.07.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
+setp rp2040_eth.0.gpio.07.index     3
+setp rp2040_eth.0.gpio.07.address   [I2C_0]ADDRESS
+
 setp rp2040_eth.0.gpio.08.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.08.index     0
+setp rp2040_eth.0.gpio.08.index     4
 setp rp2040_eth.0.gpio.08.address   [I2C_0]ADDRESS
 
 setp rp2040_eth.0.gpio.09.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.09.index     1
+setp rp2040_eth.0.gpio.09.index     5
 setp rp2040_eth.0.gpio.09.address   [I2C_0]ADDRESS
 
 setp rp2040_eth.0.gpio.10.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.10.index     2
+setp rp2040_eth.0.gpio.10.index     6
 setp rp2040_eth.0.gpio.10.address   [I2C_0]ADDRESS
 
 setp rp2040_eth.0.gpio.11.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.11.index     3
+setp rp2040_eth.0.gpio.11.index     8
 setp rp2040_eth.0.gpio.11.address   [I2C_0]ADDRESS
-
-setp rp2040_eth.0.gpio.12.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.12.index     4
-setp rp2040_eth.0.gpio.12.address   [I2C_0]ADDRESS
-
-setp rp2040_eth.0.gpio.13.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.13.index     5
-setp rp2040_eth.0.gpio.13.address   [I2C_0]ADDRESS
-
-setp rp2040_eth.0.gpio.14.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.14.index     6
-setp rp2040_eth.0.gpio.14.address   [I2C_0]ADDRESS
-
-setp rp2040_eth.0.gpio.15.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.15.index     8
-setp rp2040_eth.0.gpio.15.address   [I2C_0]ADDRESS
 
 
 # GPIO — J8 I/O 1 (MCP23017 GPA5-6, address=[I2C_0]ADDRESS)
 # J8:0 probe — input from probe/tool-setter
-setp rp2040_eth.0.gpio.16.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_IN
-setp rp2040_eth.0.gpio.16.index     13
-setp rp2040_eth.0.gpio.16.address   [I2C_0]ADDRESS
-net probe-in  rp2040_eth.0.gpio.16.in
+setp rp2040_eth.0.gpio.12.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_IN
+setp rp2040_eth.0.gpio.12.index     13
+setp rp2040_eth.0.gpio.12.address   [I2C_0]ADDRESS
+net probe-in  rp2040_eth.0.gpio.12.in
 
 # J8:2 alarm — input (e.g. stepper driver fault)
-setp rp2040_eth.0.gpio.17.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_IN
-setp rp2040_eth.0.gpio.17.index     14
-setp rp2040_eth.0.gpio.17.address   [I2C_0]ADDRESS
-net alarm-in  rp2040_eth.0.gpio.17.in
+setp rp2040_eth.0.gpio.13.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_IN
+setp rp2040_eth.0.gpio.13.index     14
+setp rp2040_eth.0.gpio.13.address   [I2C_0]ADDRESS
+net alarm-in  rp2040_eth.0.gpio.13.in
 
 
 # GPIO — J9 I/O 2 (MCP23017 GPA3-4, address=[I2C_0]ADDRESS)
 # J9:0 hold — input (feed hold)
-setp rp2040_eth.0.gpio.18.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_IN
-setp rp2040_eth.0.gpio.18.index     12
-setp rp2040_eth.0.gpio.18.address   [I2C_0]ADDRESS
-net hold-in   rp2040_eth.0.gpio.18.in
+setp rp2040_eth.0.gpio.14.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_IN
+setp rp2040_eth.0.gpio.14.index     12
+setp rp2040_eth.0.gpio.14.address   [I2C_0]ADDRESS
+net hold-in   rp2040_eth.0.gpio.14.in
 
 # J9:2 start — input (cycle start)
-setp rp2040_eth.0.gpio.19.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_IN
-setp rp2040_eth.0.gpio.19.index     11
-setp rp2040_eth.0.gpio.19.address   [I2C_0]ADDRESS
-net start-in  rp2040_eth.0.gpio.19.in
+setp rp2040_eth.0.gpio.15.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_IN
+setp rp2040_eth.0.gpio.15.index     11
+setp rp2040_eth.0.gpio.15.address   [I2C_0]ADDRESS
+net start-in  rp2040_eth.0.gpio.15.in
 
 
 # GPIO — J10 I/O 3 (MCP23017 GPA1-2, address=[I2C_0]ADDRESS)
 # J10:0 pump — output (coolant pump)
-setp rp2040_eth.0.gpio.20.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_OUT
-setp rp2040_eth.0.gpio.20.index     10
-setp rp2040_eth.0.gpio.20.address   [I2C_0]ADDRESS
-net pump-out  rp2040_eth.0.gpio.20.out
+setp rp2040_eth.0.gpio.16.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_OUT
+setp rp2040_eth.0.gpio.16.index     10
+setp rp2040_eth.0.gpio.16.address   [I2C_0]ADDRESS
+net pump-out  rp2040_eth.0.gpio.16.out
 
 # J10:2 mist — output (mist coolant)
-setp rp2040_eth.0.gpio.21.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_OUT
-setp rp2040_eth.0.gpio.21.index     9
-setp rp2040_eth.0.gpio.21.address   [I2C_0]ADDRESS
-net mist-out  rp2040_eth.0.gpio.21.out
+setp rp2040_eth.0.gpio.17.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_OUT
+setp rp2040_eth.0.gpio.17.index     9
+setp rp2040_eth.0.gpio.17.address   [I2C_0]ADDRESS
+net mist-out  rp2040_eth.0.gpio.17.out
 
 
 # GPIO — J11 LED (MCP23017 GPB7 + GPA7, address=[I2C_0]ADDRESS)
 # J11:0 pkt — output (packet activity LED)
-setp rp2040_eth.0.gpio.22.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_OUT
-setp rp2040_eth.0.gpio.22.index     7
-setp rp2040_eth.0.gpio.22.address   [I2C_0]ADDRESS
-net pkt-out   rp2040_eth.0.gpio.22.out
+setp rp2040_eth.0.gpio.18.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_OUT
+setp rp2040_eth.0.gpio.18.index     7
+setp rp2040_eth.0.gpio.18.address   [I2C_0]ADDRESS
+net pkt-out   rp2040_eth.0.gpio.18.out
 
 # J11:2 err — output (error LED)
-setp rp2040_eth.0.gpio.23.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_OUT
-setp rp2040_eth.0.gpio.23.index     15
-setp rp2040_eth.0.gpio.23.address   [I2C_0]ADDRESS
-net err-out   rp2040_eth.0.gpio.23.out
+setp rp2040_eth.0.gpio.19.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_OUT
+setp rp2040_eth.0.gpio.19.index     15
+setp rp2040_eth.0.gpio.19.address   [I2C_0]ADDRESS
+net err-out   rp2040_eth.0.gpio.19.out

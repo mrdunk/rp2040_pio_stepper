@@ -12,23 +12,26 @@
  * RP2040 firmware. A stale driver binary shows: "WARN: Unconsumed RX buffer
  * remainder: N bytes" where N equals the size of the new/changed field(s). */
 
+/* WIRE_MAX_JOINT is the fixed slot count used in all wire-format joint arrays.
+ * Both firmware and driver always send/receive structs with this many slots;
+ * the count field indicates how many are actually populated.
+ * MAX_JOINT controls firmware-internal arrays and is set via cmake -DMAX_JOINT=N.
+ * The driver, compiled without an explicit define, defaults to WIRE_MAX_JOINT. */
+#define WIRE_MAX_JOINT 8
+
+#ifndef MAX_JOINT
+  #define MAX_JOINT WIRE_MAX_JOINT
+#endif
+
 #ifdef BUILD_TESTS
-
-#define MAX_JOINT 4
 #define MAX_GPIO 64
-#define MAX_GPIO_BANK (MAX_GPIO / 32)
-#define MAX_SPINDLE 4
-#define MAX_I2C_MCP 4
-
-#else // BUILD_TESTS
-
-#define MAX_JOINT 4
+#else
 #define MAX_GPIO 32
+#endif
+
 #define MAX_GPIO_BANK (MAX_GPIO / 32)
 #define MAX_SPINDLE 4
 #define MAX_I2C_MCP 4
-
-#endif  // BUILD_TESTS
 
 
 #define MSG_NONE                     0
@@ -53,9 +56,10 @@ struct __attribute__((packed)) Message_timing {
 
 struct __attribute__((packed)) Message_set_joints_pos {
   uint8_t type;                   // MSG_SET_JOINT_ABS_POS
-  uint8_t _pad[7];                // align doubles to 8-byte boundary
-  double position[MAX_JOINT];
-  double velocity[MAX_JOINT];
+  uint8_t count;                  // number of valid joints in this packet (= firmware MAX_JOINT)
+  uint8_t _pad[6];                // align doubles to 8-byte boundary
+  double position[WIRE_MAX_JOINT];
+  double velocity[WIRE_MAX_JOINT];
 };
 
 struct __attribute__((packed)) Message_joint_enable {
@@ -140,10 +144,11 @@ struct __attribute__((packed)) Reply_timing {
 
 struct __attribute__((packed)) Reply_joint_movement {
   uint8_t type;
-  int32_t abs_pos_achieved[MAX_JOINT];
-  int32_t velocity_achieved[MAX_JOINT];
-  uint8_t enabled[MAX_JOINT];
-  float velocity_cmd[MAX_JOINT];
+  uint8_t count;                          // number of valid joints (= firmware MAX_JOINT)
+  int32_t abs_pos_achieved[WIRE_MAX_JOINT];
+  int32_t velocity_achieved[WIRE_MAX_JOINT];
+  uint8_t enabled[WIRE_MAX_JOINT];
+  float velocity_cmd[WIRE_MAX_JOINT];
   uint32_t update_period_us;
   uint32_t core1_tick;
 };

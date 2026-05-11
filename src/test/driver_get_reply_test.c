@@ -12,7 +12,7 @@
 /* sockfd[] is defined in rp2040_network.c which is linked into this test. */
 extern int sockfd[];
 
-static uint8_t recvfrom_data[300];
+static uint8_t recvfrom_data[700];
 static ssize_t recvfrom_return;
 
 ssize_t __wrap_recvfrom(

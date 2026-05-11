@@ -3,8 +3,9 @@
 
 #include <stdint.h>
 
-/* Initialize a pair of PIO programmes.
- * One for step generation on pio0 and one for counting said steps on pio1.
+/* Initialize PIO state machines for a joint.
+ * Always sets up a step_gen SM on the appropriate PIO block.
+ * Also sets up a step_count SM on PIO1 for joints 0..NUM_FEEDBACK-1.
  */
 void init_pio(const uint32_t joint);
 
