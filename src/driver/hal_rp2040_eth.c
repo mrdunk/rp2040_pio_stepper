@@ -16,7 +16,7 @@ MODULE_AUTHOR("Duncan Law");
 MODULE_DESCRIPTION("RP2040 based IO for LinuxCNC HAL");
 MODULE_LICENSE("GPL");
 
-static int num_joints = -1;
+static int num_joints = 0;
 MODULE_PARM(num_joints, "i");
 MODULE_PARM_DESC(num_joints, "Number of joints configured in LinuxCNC ([KINS]JOINTS)");
 
@@ -282,9 +282,9 @@ int rtapi_app_main(void)
     return -1;
   }
 
-  if (num_joints == -1) {
-    rtapi_print_msg(RTAPI_MSG_WARN,
-        "RP2040: WARNING: num_joints not set — defaulting to %d. "
+  if (num_joints <= 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR,
+        "RP2040: ERROR: num_joints not set — defaulting to %d. "
         "Add num_joints=[KINS]JOINTS to your loadrt line: "
         "loadrt hal_rp2040_eth num_joints=[KINS]JOINTS\n", MAX_JOINT);
     num_joints = MAX_JOINT;
