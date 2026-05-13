@@ -174,28 +174,28 @@ setp rp2040_eth.0.gpio.15.address   [I2C_0]ADDRESS
 
 # GPIO — J8 I/O 1 (MCP23017 GPA5-6, address=[I2C_0]ADDRESS)
 # J8:0 probe — input from probe/tool-setter
-setp rp2040_eth.0.gpio.16.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_IN
-setp rp2040_eth.0.gpio.16.index     13
+setp rp2040_eth.0.gpio.16.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_IN_PULLUP
+setp rp2040_eth.0.gpio.16.index     5
 setp rp2040_eth.0.gpio.16.address   [I2C_0]ADDRESS
 net probe-in  rp2040_eth.0.gpio.16.in
 
 # J8:2 alarm — input (e.g. stepper driver fault)
-setp rp2040_eth.0.gpio.17.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_IN
-setp rp2040_eth.0.gpio.17.index     14
+setp rp2040_eth.0.gpio.17.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_IN_PULLUP
+setp rp2040_eth.0.gpio.17.index     6
 setp rp2040_eth.0.gpio.17.address   [I2C_0]ADDRESS
 net alarm-in  rp2040_eth.0.gpio.17.in
 
 
 # GPIO — J9 I/O 2 (MCP23017 GPA3-4, address=[I2C_0]ADDRESS)
 # J9:0 hold — input (feed hold)
-setp rp2040_eth.0.gpio.18.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_IN
-setp rp2040_eth.0.gpio.18.index     12
+setp rp2040_eth.0.gpio.18.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_IN_PULLUP
+setp rp2040_eth.0.gpio.18.index     4
 setp rp2040_eth.0.gpio.18.address   [I2C_0]ADDRESS
 net hold-in   rp2040_eth.0.gpio.18.in
 
 # J9:2 start — input (cycle start)
-setp rp2040_eth.0.gpio.19.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_IN
-setp rp2040_eth.0.gpio.19.index     11
+setp rp2040_eth.0.gpio.19.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_IN_PULLUP
+setp rp2040_eth.0.gpio.19.index     3
 setp rp2040_eth.0.gpio.19.address   [I2C_0]ADDRESS
 net start-in  rp2040_eth.0.gpio.19.in
 
@@ -203,13 +203,13 @@ net start-in  rp2040_eth.0.gpio.19.in
 # GPIO — J10 I/O 3 (MCP23017 GPA1-2, address=[I2C_0]ADDRESS)
 # J10:0 pump — output (coolant pump)
 setp rp2040_eth.0.gpio.20.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_OUT
-setp rp2040_eth.0.gpio.20.index     10
+setp rp2040_eth.0.gpio.20.index     3
 setp rp2040_eth.0.gpio.20.address   [I2C_0]ADDRESS
 net pump-out  rp2040_eth.0.gpio.20.out
 
 # J10:2 mist — output (mist coolant)
 setp rp2040_eth.0.gpio.21.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_OUT
-setp rp2040_eth.0.gpio.21.index     9
+setp rp2040_eth.0.gpio.21.index     1
 setp rp2040_eth.0.gpio.21.address   [I2C_0]ADDRESS
 net mist-out  rp2040_eth.0.gpio.21.out
 
