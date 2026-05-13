@@ -208,7 +208,7 @@ void gpio_serialize(struct NWBuffer* tx_buf, size_t* tx_buf_len) {
         break;
       case GPIO_TYPE_I2C_MCP_IN:
       case GPIO_TYPE_I2C_MCP_IN_PULLUP:
-        new_value = gpio_i2c_mcp_get_pin(index, address, 0);
+        new_value = gpio_i2c_mcp_get_pin(index, address, type == GPIO_TYPE_I2C_MCP_IN_PULLUP);
         if(previous_value != new_value) {
           to_send[bank] = true;
           config.gpio_confirmation_pending[bank] = true;
