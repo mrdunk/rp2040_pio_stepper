@@ -282,12 +282,12 @@ uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
       case GPIO_TYPE_NATIVE_IN_DEBUG:
       case GPIO_TYPE_NATIVE_IN:
       case GPIO_TYPE_I2C_MCP_IN:
+      case GPIO_TYPE_I2C_MCP_IN_PULLUP:
         current_value = *data->gpio_data_in[gpio];
         break;
       case GPIO_TYPE_NATIVE_OUT:
       case GPIO_TYPE_NATIVE_OUT_DEBUG:
       case GPIO_TYPE_I2C_MCP_OUT:
-      case GPIO_TYPE_I2C_MCP_OUT_PULLUP:
         current_value = *data->gpio_data_out_invert[gpio] ? ! *data->gpio_data_out[gpio] : *data->gpio_data_out[gpio];
         break;
       default:
@@ -304,6 +304,7 @@ uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
           // Note: no break here.
         case GPIO_TYPE_NATIVE_IN:
         case GPIO_TYPE_I2C_MCP_IN:
+        case GPIO_TYPE_I2C_MCP_IN_PULLUP:
           // Network update to apply.
           *data->gpio_data_in[gpio] = received_value;
           *data->gpio_data_in_not[gpio] = !received_value;
@@ -316,7 +317,6 @@ uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
           // Note: no break here.
         case GPIO_TYPE_NATIVE_OUT:
         case GPIO_TYPE_I2C_MCP_OUT:
-        case GPIO_TYPE_I2C_MCP_OUT_PULLUP:
           // HAL update to send on network.
           confirmation_pending[bank] = true;
           break;

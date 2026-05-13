@@ -83,9 +83,9 @@ void i2c_gpio_set_pin_config(struct i2c_gpio_state *gpio, uint8_t device, uint8_
       gpio->config[device].pullup_bitmask[bank] &= ~bitmask;
       gpio->config[device].input_bitmask[bank] &= ~bitmask;  /* IODIR=0 → output */
       break;
-    case GPIO_TYPE_I2C_MCP_OUT_PULLUP:
+    case GPIO_TYPE_I2C_MCP_IN_PULLUP:
       gpio->config[device].pullup_bitmask[bank] |= bitmask;
-      gpio->config[device].input_bitmask[bank] &= ~bitmask;  /* IODIR=0 → output */
+      gpio->config[device].input_bitmask[bank] |= bitmask;   /* IODIR=1 → input */
       break;
     default:
       return;
