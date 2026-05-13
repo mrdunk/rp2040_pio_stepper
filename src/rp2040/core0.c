@@ -326,7 +326,7 @@ bool unpack_gpio_config(
 #ifndef BUILD_TESTS
     case GPIO_TYPE_I2C_MCP_IN:
     case GPIO_TYPE_I2C_MCP_OUT:
-    case GPIO_TYPE_I2C_MCP_OUT_PULLUP:
+    case GPIO_TYPE_I2C_MCP_IN_PULLUP:
       ;
     {
       int i2c = gpio_i2c_mcp_alloc(address);

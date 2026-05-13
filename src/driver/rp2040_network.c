@@ -23,7 +23,7 @@
 
 /* Network globals. */
 static uint8_t detected_joint_count = 0;  /* set from first Reply_joint_movement.count */
-static bool version_confirmed = false;     /* set when REPLY_VERSION received */
+static bool version_checked = false;     /* set when REPLY_VERSION received */
 struct sockaddr_in remote_addr[MAX_DEVICES];
 int sockfd[MAX_DEVICES] = {-1};
 
@@ -282,12 +282,12 @@ uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
       case GPIO_TYPE_NATIVE_IN_DEBUG:
       case GPIO_TYPE_NATIVE_IN:
       case GPIO_TYPE_I2C_MCP_IN:
+      case GPIO_TYPE_I2C_MCP_IN_PULLUP:
         current_value = *data->gpio_data_in[gpio];
         break;
       case GPIO_TYPE_NATIVE_OUT:
       case GPIO_TYPE_NATIVE_OUT_DEBUG:
       case GPIO_TYPE_I2C_MCP_OUT:
-      case GPIO_TYPE_I2C_MCP_OUT_PULLUP:
         current_value = *data->gpio_data_out_invert[gpio] ? ! *data->gpio_data_out[gpio] : *data->gpio_data_out[gpio];
         break;
       default:
@@ -304,6 +304,7 @@ uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
           // Note: no break here.
         case GPIO_TYPE_NATIVE_IN:
         case GPIO_TYPE_I2C_MCP_IN:
+        case GPIO_TYPE_I2C_MCP_IN_PULLUP:
           // Network update to apply.
           *data->gpio_data_in[gpio] = received_value;
           *data->gpio_data_in_not[gpio] = !received_value;
@@ -316,7 +317,6 @@ uint16_t serialize_gpio(struct NWBuffer* buffer, skeleton_t* data) {
           // Note: no break here.
         case GPIO_TYPE_NATIVE_OUT:
         case GPIO_TYPE_I2C_MCP_OUT:
-        case GPIO_TYPE_I2C_MCP_OUT_PULLUP:
           // HAL update to send on network.
           confirmation_pending[bank] = true;
           break;
@@ -412,8 +412,8 @@ size_t serialize_version_request(struct NWBuffer* buffer) {
   return pack_nw_buff(buffer, &message, sizeof(struct Message_version_request));
 }
 
-bool get_version_confirmed(void) {
-  return version_confirmed;
+bool get_version_checked(void) {
+  return version_checked;
 }
 
 bool unpack_version_reply(
@@ -422,7 +422,7 @@ bool unpack_version_reply(
     size_t* received_count
 ) {
   UNPACK_MSG(struct Reply_version, reply, rx_buf, rx_offset);
-  if (!version_confirmed) {
+  if (!version_checked) {
     if (reply->version_major != PROTOCOL_VERSION_MAJOR ||
         reply->version_minor != PROTOCOL_VERSION_MINOR ||
         reply->version_patch != PROTOCOL_VERSION_PATCH) {
@@ -436,7 +436,7 @@ bool unpack_version_reply(
           "RP2040: INFO: version OK (%d.%d.%d)\n",
           reply->version_major, reply->version_minor, reply->version_patch);
     }
-    version_confirmed = true;
+    version_checked = true;
   }
   (*received_count)++;
   return true;

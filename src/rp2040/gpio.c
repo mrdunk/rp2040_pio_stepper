@@ -104,7 +104,6 @@ void gpio_set_values(const uint8_t bank, uint32_t values) {
         gpio_local_set_out_pin(index, new_value);
         break;
       case GPIO_TYPE_I2C_MCP_OUT:
-      case GPIO_TYPE_I2C_MCP_OUT_PULLUP:
         gpio_i2c_mcp_set_out_pin(index, address, new_value);
         break;
       default:
@@ -208,15 +207,15 @@ void gpio_serialize(struct NWBuffer* tx_buf, size_t* tx_buf_len) {
         }
         break;
       case GPIO_TYPE_I2C_MCP_IN:
-        new_value = gpio_i2c_mcp_get_pin(index, address, 0);
+      case GPIO_TYPE_I2C_MCP_IN_PULLUP:
+        new_value = gpio_i2c_mcp_get_pin(index, address, type == GPIO_TYPE_I2C_MCP_IN_PULLUP);
         if(previous_value != new_value) {
           to_send[bank] = true;
           config.gpio_confirmation_pending[bank] = true;
         }
         break;
       case GPIO_TYPE_I2C_MCP_OUT:
-      case GPIO_TYPE_I2C_MCP_OUT_PULLUP:
-        new_value = gpio_i2c_mcp_get_pin(index, address, type == GPIO_TYPE_I2C_MCP_OUT_PULLUP);
+        new_value = gpio_i2c_mcp_get_pin(index, address, 0);
         if(previous_value != new_value) {
           to_send[bank] = true;
           config.gpio_confirmation_pending[bank] = true;

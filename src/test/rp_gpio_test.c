@@ -525,7 +525,7 @@ static void test_send_RP_to_PC_out_gpio_changed(void **state) {
     assert_int_equal(reply_p->values, 0b00000000000000000000000000000100);
 }
 
-/* i2c_gpio_set_pin_config sets IODIR bitmask correctly: IN→1, OUT→0, OUT_PULLUP→0 */
+/* i2c_gpio_set_pin_config sets IODIR bitmask correctly: IN→1, OUT→0, IN_PULLUP→1+pullup */
 static void test_i2c_gpio_set_pin_config_iodir(void **state) {
     (void) state;
 
@@ -544,9 +544,9 @@ static void test_i2c_gpio_set_pin_config_iodir(void **state) {
     assert_false(gpio.config[0].input_bitmask[0] & (1 << 1));
     assert_false(gpio.config[0].pullup_bitmask[0] & (1 << 1));
 
-    /* pin 2 (bank 0, bit 2): configure as OUT_PULLUP → IODIR bit CLEAR, pullup SET */
-    i2c_gpio_set_pin_config(&gpio, 0, 2, GPIO_TYPE_I2C_MCP_OUT_PULLUP);
-    assert_false(gpio.config[0].input_bitmask[0] & (1 << 2));
+    /* pin 2 (bank 0, bit 2): configure as IN_PULLUP → IODIR bit SET, pullup SET */
+    i2c_gpio_set_pin_config(&gpio, 0, 2, GPIO_TYPE_I2C_MCP_IN_PULLUP);
+    assert_true(gpio.config[0].input_bitmask[0] & (1 << 2));
     assert_true(gpio.config[0].pullup_bitmask[0] & (1 << 2));
 
     /* pin 8 crosses into bank 1 (bit 0 of bank 1): configure as IN */
