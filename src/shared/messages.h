@@ -144,10 +144,11 @@ struct __attribute__((packed)) Reply_header {
 };
 
 struct __attribute__((packed)) Reply_version {
-  uint8_t type;            // REPLY_VERSION
-  uint8_t version_major;
-  uint8_t version_minor;
-  uint8_t version_patch;
+  uint8_t  type;            // REPLY_VERSION
+  uint8_t  version_major;
+  uint8_t  version_minor;
+  uint8_t  version_patch;
+  uint32_t version_branch;  // 0 = main; FNV-1a hash of branch name otherwise
 };
 
 struct __attribute__((packed)) Reply_timing {

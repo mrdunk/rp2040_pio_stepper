@@ -63,10 +63,11 @@ bool unpack_version_request(
   if (!data_p) return false;
 
   union ReplyAny reply;
-  reply.version.type          = REPLY_VERSION;
-  reply.version.version_major = PROTOCOL_VERSION_MAJOR;
-  reply.version.version_minor = PROTOCOL_VERSION_MINOR;
-  reply.version.version_patch = PROTOCOL_VERSION_PATCH;
+  reply.version.type           = REPLY_VERSION;
+  reply.version.version_major  = PROTOCOL_VERSION_MAJOR;
+  reply.version.version_minor  = PROTOCOL_VERSION_MINOR;
+  reply.version.version_patch  = PROTOCOL_VERSION_PATCH;
+  reply.version.version_branch = PROTOCOL_VERSION_BRANCH;
   if (!pack_nw_buff(tx_buf, &reply, sizeof(struct Reply_version))) {
     printf("WARN: TX buffer full, dropping version reply.\n");
   }

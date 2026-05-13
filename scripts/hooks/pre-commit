@@ -1,0 +1,56 @@
+#!/bin/sh
+
+# Add this file to .git/hooks/ to automatically build and run tests before git commit.
+# Also auto-increments PROTOCOL_VERSION_PATCH in src/shared/version.h on every commit.
+
+# Exit on any error
+set -e
+
+# Bump protocol version patch number and update branch hash
+python3 - <<'EOF'
+import re, subprocess
+
+def fnv1a_32(s):
+    h = 2166136261
+    for c in s.encode():
+        h ^= c
+        h = (h * 16777619) & 0xFFFFFFFF
+    return h
+
+path = 'src/shared/version.h'
+with open(path) as f:
+    content = f.read()
+
+content = re.sub(
+    r'(#define\s+PROTOCOL_VERSION_PATCH\s+)(\d+)',
+    lambda m: m.group(1) + str(int(m.group(2)) + 1),
+    content
+)
+
+branch = subprocess.check_output(
+    ['git', 'rev-parse', '--abbrev-ref', 'HEAD']
+).decode().strip()
+branch_hash = 0 if branch == 'main' else fnv1a_32(branch)
+content = re.sub(
+    r'(#define\s+PROTOCOL_VERSION_BRANCH\s+)\S+',
+    lambda m: m.group(1) + str(branch_hash),
+    content
+)
+
+with open(path, 'w') as f:
+    f.write(content)
+EOF
+git add src/shared/version.h
+
+# Setup and build tests
+mkdir -p build_tests/
+cmake -B ./build_tests -S . -D BUILD_TESTS=ON
+cd build_tests
+make
+
+# Run tests.
+tests=$(find ./src/test/ -executable -type f)
+for test in $tests; do
+  echo "executing test: $test"
+  $test
+done

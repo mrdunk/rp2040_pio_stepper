@@ -40,9 +40,10 @@ Without `-DBUILD_RP=ON`, CMake configures successfully but produces an empty Mak
 
 ### Pre-commit hook
 
-`.git/hooks/pre-commit` runs the full test build and all tests on every commit.
-All tests must pass before a commit lands. The hook uses `set -e` so a single
-failure blocks the commit.
+`scripts/hooks/pre-commit` runs the full test build and all tests on every commit.
+CMake registers it automatically (`git config core.hooksPath scripts/hooks`) so
+any developer who runs cmake gets the hook. All tests must pass before a commit
+lands. The hook uses `set -e` so a single failure blocks the commit.
 
 ## Test conventions
 

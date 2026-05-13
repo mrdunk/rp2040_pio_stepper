@@ -381,6 +381,121 @@ static void test_unpack_spindle_config(void **state) {
     assert_int_equal(last_spindle_config[0].bitrate, 19200);
 }
 
+static void reset_version_state(void) {
+    version_checked = false;
+    version_match   = false;
+}
+
+static void test_version__matching__ok(void **state) {
+    (void)state;
+    reset_version_state();
+
+    struct NWBuffer buffer = {0};
+    size_t rx_offset = 0;
+    size_t received_count = 0;
+
+    struct Reply_version reply = {
+        .type           = REPLY_VERSION,
+        .version_major  = PROTOCOL_VERSION_MAJOR,
+        .version_minor  = PROTOCOL_VERSION_MINOR,
+        .version_patch  = PROTOCOL_VERSION_PATCH,
+        .version_branch = PROTOCOL_VERSION_BRANCH,
+    };
+    memcpy(buffer.payload, &reply, sizeof(reply));
+    buffer.length = aligned32(sizeof(reply));
+
+    bool result = unpack_version_reply(&buffer, &rx_offset, &received_count);
+
+    assert_true(result);
+    assert_true(version_checked);
+    assert_true(get_version_match());
+    assert_int_equal(received_count, 1);
+    assert_int_equal(rx_offset, aligned32(sizeof(reply)));
+}
+
+static void test_version__patch_mismatch__not_ok(void **state) {
+    (void)state;
+    reset_version_state();
+
+    struct NWBuffer buffer = {0};
+    size_t rx_offset = 0;
+    size_t received_count = 0;
+
+    struct Reply_version reply = {
+        .type           = REPLY_VERSION,
+        .version_major  = PROTOCOL_VERSION_MAJOR,
+        .version_minor  = PROTOCOL_VERSION_MINOR,
+        .version_patch  = PROTOCOL_VERSION_PATCH + 1,
+        .version_branch = PROTOCOL_VERSION_BRANCH,
+    };
+    memcpy(buffer.payload, &reply, sizeof(reply));
+    buffer.length = aligned32(sizeof(reply));
+
+    bool result = unpack_version_reply(&buffer, &rx_offset, &received_count);
+
+    assert_true(result);
+    assert_true(version_checked);
+    assert_false(get_version_match());
+    assert_int_equal(received_count, 1);
+}
+
+static void test_version__branch_mismatch__not_ok(void **state) {
+    (void)state;
+    reset_version_state();
+
+    struct NWBuffer buffer = {0};
+    size_t rx_offset = 0;
+    size_t received_count = 0;
+
+    struct Reply_version reply = {
+        .type           = REPLY_VERSION,
+        .version_major  = PROTOCOL_VERSION_MAJOR,
+        .version_minor  = PROTOCOL_VERSION_MINOR,
+        .version_patch  = PROTOCOL_VERSION_PATCH,
+        .version_branch = PROTOCOL_VERSION_BRANCH + 1,
+    };
+    memcpy(buffer.payload, &reply, sizeof(reply));
+    buffer.length = aligned32(sizeof(reply));
+
+    bool result = unpack_version_reply(&buffer, &rx_offset, &received_count);
+
+    assert_true(result);
+    assert_true(version_checked);
+    assert_false(get_version_match());
+    assert_int_equal(received_count, 1);
+}
+
+static void test_version__already_checked__skips_second_check(void **state) {
+    (void)state;
+    reset_version_state();
+
+    struct NWBuffer buffer = {0};
+    size_t rx_offset = 0;
+    size_t received_count = 0;
+
+    /* First reply: matching. */
+    struct Reply_version reply = {
+        .type           = REPLY_VERSION,
+        .version_major  = PROTOCOL_VERSION_MAJOR,
+        .version_minor  = PROTOCOL_VERSION_MINOR,
+        .version_patch  = PROTOCOL_VERSION_PATCH,
+        .version_branch = PROTOCOL_VERSION_BRANCH,
+    };
+    memcpy(buffer.payload, &reply, sizeof(reply));
+    buffer.length = aligned32(sizeof(reply));
+    unpack_version_reply(&buffer, &rx_offset, &received_count);
+    assert_true(get_version_match());
+
+    /* Second reply: mismatching — should be ignored since already checked. */
+    rx_offset = 0;
+    reply.version_patch = PROTOCOL_VERSION_PATCH + 99;
+    memcpy(buffer.payload, &reply, sizeof(reply));
+    unpack_version_reply(&buffer, &rx_offset, &received_count);
+
+    assert_true(get_version_match());  /* still true — second check was skipped */
+    assert_int_equal(received_count, 2);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_timing),
@@ -390,7 +505,11 @@ int main(void) {
         cmocka_unit_test(test_joint_metrics_ema_ratios),
         cmocka_unit_test(test_unpack_spindle_speed),
         cmocka_unit_test(test_unpack_spindle_not_at_speed),
-        cmocka_unit_test(test_unpack_spindle_config)
+        cmocka_unit_test(test_unpack_spindle_config),
+        cmocka_unit_test(test_version__matching__ok),
+        cmocka_unit_test(test_version__patch_mismatch__not_ok),
+        cmocka_unit_test(test_version__branch_mismatch__not_ok),
+        cmocka_unit_test(test_version__already_checked__skips_second_check),
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);
