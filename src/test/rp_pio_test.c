@@ -416,6 +416,65 @@ static void test_do_steps_accel_clamped(void **state) {
     assert_int_equal(second_word & 0x1, 1);
 }
 
+/* --- compute_velocity_cmd unit tests --- */
+
+/* Velocity mode, enabled, updated: returns velocity_requested unchanged. */
+static void test_compute_velocity_cmd_velmode_passthrough(void **state) {
+    (void)state;
+    double result = compute_velocity_cmd(
+        JOINT_CMD_VELOCITY, 5000.0, 0.0, 0, /*enabled=*/1, /*updated=*/1, 1000);
+    assert_float_equal(result, 5000.0, 1e-6);
+}
+
+/* Position mode, zero error: returns vel_ff with no correction. */
+static void test_compute_velocity_cmd_posmode_at_target(void **state) {
+    (void)state;
+    double result = compute_velocity_cmd(
+        JOINT_CMD_POSITION, 1000.0, 100.0, 100, /*enabled=*/1, /*updated=*/1, 1000);
+    assert_float_equal(result, 1000.0, 1e-6);
+}
+
+/* Position mode, dead zone (|error| < 1 step): no correction applied. */
+static void test_compute_velocity_cmd_posmode_dead_zone(void **state) {
+    (void)state;
+    double result = compute_velocity_cmd(
+        JOINT_CMD_POSITION, 500.0, 100.4, 100, /*enabled=*/1, /*updated=*/1, 1000);
+    assert_float_equal(result, 500.0, 1e-6);
+}
+
+/* Position mode, positive error: vel_ff + Kp*error*rate.
+ * error=10 steps, period=1000µs: correction = 10*(1e6/1000)*0.5 = 5000 steps/s. */
+static void test_compute_velocity_cmd_posmode_forward_correction(void **state) {
+    (void)state;
+    double result = compute_velocity_cmd(
+        JOINT_CMD_POSITION, 1000.0, 110.0, 100, /*enabled=*/1, /*updated=*/1, 1000);
+    assert_float_equal(result, 1000.0 + 5000.0, 1e-6);
+}
+
+/* Position mode, negative error: vel_ff + negative correction. */
+static void test_compute_velocity_cmd_posmode_reverse_correction(void **state) {
+    (void)state;
+    double result = compute_velocity_cmd(
+        JOINT_CMD_POSITION, 1000.0, 90.0, 100, /*enabled=*/1, /*updated=*/1, 1000);
+    assert_float_equal(result, 1000.0 - 5000.0, 1e-6);
+}
+
+/* Disabled: returns 0 regardless of mode and error. */
+static void test_compute_velocity_cmd_disabled_returns_zero(void **state) {
+    (void)state;
+    double result = compute_velocity_cmd(
+        JOINT_CMD_POSITION, 1000.0, 200.0, 100, /*enabled=*/0, /*updated=*/1, 1000);
+    assert_float_equal(result, 0.0, 1e-6);
+}
+
+/* Underrun (updated=0): returns 0 regardless of mode. */
+static void test_compute_velocity_cmd_underrun_returns_zero(void **state) {
+    (void)state;
+    double result = compute_velocity_cmd(
+        JOINT_CMD_VELOCITY, 5000.0, 0.0, 0, /*enabled=*/1, /*updated=*/0, 1000);
+    assert_float_equal(result, 0.0, 1e-6);
+}
+
 /* do_steps: position mode drives toward abs_pos_requested.
  * vel_ff=0 (velocity_requested=0 in test), error=1000, Kp=0.5:
  * velocity = 0 + 1000*(1e6/1000)*0.5 = 500 000 steps/s >> MIN_STEP_COUNT_Q.
@@ -736,6 +795,13 @@ int main(void) {
         cmocka_unit_test_setup(test_plan_steps_excess_returned_to_accumulator, test_setup),
         cmocka_unit_test_setup(test_plan_steps_zero_velocity,                  test_setup),
         cmocka_unit_test_setup(test_plan_steps_skip_preserves_accumulator,     test_setup),
+        cmocka_unit_test_setup(test_compute_velocity_cmd_velmode_passthrough,        test_setup),
+        cmocka_unit_test_setup(test_compute_velocity_cmd_posmode_at_target,          test_setup),
+        cmocka_unit_test_setup(test_compute_velocity_cmd_posmode_dead_zone,          test_setup),
+        cmocka_unit_test_setup(test_compute_velocity_cmd_posmode_forward_correction, test_setup),
+        cmocka_unit_test_setup(test_compute_velocity_cmd_posmode_reverse_correction, test_setup),
+        cmocka_unit_test_setup(test_compute_velocity_cmd_disabled_returns_zero,      test_setup),
+        cmocka_unit_test_setup(test_compute_velocity_cmd_underrun_returns_zero,      test_setup),
         cmocka_unit_test_setup(test_do_steps_zero_period,               test_setup),
         cmocka_unit_test_setup(test_do_steps_disabled,                  test_setup),
         cmocka_unit_test_setup(test_do_steps_disabled_drains_rx_fifo,  test_setup),

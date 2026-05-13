@@ -251,6 +251,34 @@ static void issue_pio_step(uint32_t joint, int32_t step_len_ticks,
     }
 }
 
+/* Compute the commanded velocity (steps/s) for this period.
+ *
+ * In position mode: vel_ff + Kp*error, with a 1-step dead zone.
+ * Returns 0.0 when disabled or no new Core0 data (underrun/network loss). */
+double compute_velocity_cmd(
+    uint8_t  cmd_type,
+    double   velocity_requested,
+    double   abs_pos_requested,
+    int32_t  abs_pos_achieved,
+    uint8_t  enabled,
+    uint32_t updated,
+    uint32_t update_period_us)
+{
+  if (cmd_type == JOINT_CMD_POSITION) {
+    double vel_ff      = velocity_requested;
+    double error_steps = abs_pos_requested - (double)abs_pos_achieved;
+    double correction  = 0.0;
+    if (error_steps >= 1.0 || error_steps <= -1.0) {
+      correction = error_steps * (1.0e6 / (double)update_period_us) * 0.5;
+    }
+    velocity_requested = vel_ff + correction;
+  }
+  if (!enabled || updated == 0) {
+    velocity_requested = 0.0;
+  }
+  return velocity_requested;
+}
+
 /* Generate step counts and send to PIOs. */
 uint8_t do_steps(const uint8_t joint) {
   uint32_t update_period_us = get_period();
@@ -293,32 +321,9 @@ uint8_t do_steps(const uint8_t joint) {
     return 0;
   }
 
-  if(cmd_type == JOINT_CMD_POSITION) {
-    /* Velocity feed-forward + Kp=0.5 position correction.
-     * velocity_requested holds scale×vel_cmd (steps/s) from the driver;
-     * using it as feed-forward cancels the trajectory velocity, keeping
-     * following error near zero during motion.
-     * With 1-period measurement delay, Kp=1.0 gives poles on the unit
-     * circle (sustained oscillation). Kp=0.5 places poles at z=0.5±0.5i
-     * (|z|=0.707), giving stable convergence in ~10 periods.
-     *
-     * Dead zone: suppress correction when |error| < 1 step.  Sub-step
-     * errors cannot be resolved without oscillation — a correction step
-     * moves abs_pos_achieved by 1, which reverses the error sign and
-     * fires an opposite correction next cycle.  Errors up to ±0.5 step
-     * are inherent in mapping a float trajectory onto integer steps. */
-    double vel_ff      = velocity_requested;
-    double error_steps = abs_pos_requested - (double)abs_pos_achieved;
-    double correction  = 0.0;
-    if (error_steps >= 1.0 || error_steps <= -1.0) {
-        correction = error_steps * (1.0e6 / (double)update_period_us) * 0.5;
-    }
-    velocity_requested = vel_ff + correction;
-  }
-
-  if (!enabled || updated == 0) {
-    velocity_requested = 0.0;  /* ramp to stop: disabled, or no new Core0 data (network loss) */
-  }
+  velocity_requested = compute_velocity_cmd(
+      cmd_type, velocity_requested, abs_pos_requested, abs_pos_achieved,
+      enabled, updated, update_period_us);
 
   int32_t velocity_q   = (int32_t)((velocity_requested / (double)update_period_us) * 65536.0);
   int32_t max_vel_q    = (int32_t)((max_velocity / (double)update_period_us) * 65536.0);
