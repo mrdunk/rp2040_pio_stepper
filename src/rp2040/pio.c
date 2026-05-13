@@ -285,9 +285,8 @@ uint8_t do_steps(const uint8_t joint) {
     }
     return 0;
   }
-  if(updated == 0 && (enabled || joint_state[joint].last_velocity_q == 0)) {
-    /* Underrun while enabled (no new trajectory data — safe-stop), or disabled
-     * and already at rest. Either way, nothing useful to compute this period. */
+  if(updated == 0 && joint_state[joint].last_velocity_q == 0) {
+    /* No new Core0 data and already at rest: nothing to compute. */
     if (pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
       pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, 0);
     }
@@ -317,8 +316,8 @@ uint8_t do_steps(const uint8_t joint) {
     velocity_requested = vel_ff + correction;
   }
 
-  if (!enabled) {
-    velocity_requested = 0.0;  /* ramp to stop using clamp_accel */
+  if (!enabled || updated == 0) {
+    velocity_requested = 0.0;  /* ramp to stop: disabled, or no new Core0 data (network loss) */
   }
 
   int32_t velocity_q   = (int32_t)((velocity_requested / (double)update_period_us) * 65536.0);

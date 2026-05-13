@@ -501,8 +501,9 @@ static void test_do_steps_no_motion(void **state) {
     assert_int_equal(last_pio_put_value, 0);
 }
 
-/* do_steps: underrun (no new data from Core0) always writes 0 to PIO to prevent
- * the state machine re-executing a stale step_len and generating spurious steps. */
+/* do_steps: underrun (no new data from Core0) with max_accel=0 -> velocity snaps
+ * to 0 immediately -> writes 0 to PIO.  With max_accel>0 it decelerates instead
+ * (see test_do_steps_underrun_while_enabled_decelerates). */
 static void test_do_steps_underrun_stops_pio(void **state) {
     (void)state;
     config.joint[0].enabled            = 1;
@@ -525,6 +526,35 @@ static void test_do_steps_underrun_stops_pio(void **state) {
     assert_int_equal(result, 0);
     assert_int_equal(pio_put_call_count, 1);
     assert_int_equal(last_pio_put_value, 0);
+}
+
+/* do_steps: underrun (no new data) while enabled and moving with max_accel>0 ->
+ * decelerates instead of hard-stopping.  This is the key network-loss scenario:
+ * Core0 is blocked at get_UDP(), updated==0, but the joint is still enabled and
+ * last_velocity_q is non-zero.  Motor must keep stepping (decelerate) rather than
+ * crash-stopping before handle_network_timeout() fires. */
+static void test_do_steps_underrun_while_enabled_decelerates(void **state) {
+    (void)state;
+    /* Prime last_velocity_q at 10 steps/period via an enabled cycle. */
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = 10000.0;  /* 10 steps/period at 1000µs */
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000.0;   /* 5 steps/period -> won't reach 0 in one shot */
+    mock_tx_fifo_empty                 = 1;
+    do_steps(0);  /* enable snap: last_velocity_q = 10 steps/period */
+
+    /* Underrun while still enabled (Core0 blocked on network). */
+    config.joint[0].updated_from_c0 = 0;
+    last_pio_put_value               = 0;
+    pio_put_call_count               = 0;
+    mock_tx_fifo_empty               = 1;
+    uint8_t result = do_steps(0);
+
+    assert_int_equal(result, 0);
+    assert_true(last_pio_put_value != 0);  /* still decelerating, not hard-stopped */
 }
 
 /* Integration test: position-mode stationary hold at fractional step position.
@@ -716,7 +746,8 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_normal_step,               test_setup),
         cmocka_unit_test_setup(test_do_steps_accel_clamped,                      test_setup),
         cmocka_unit_test_setup(test_do_steps_no_motion,                          test_setup),
-        cmocka_unit_test_setup(test_do_steps_underrun_stops_pio,                 test_setup),
+        cmocka_unit_test_setup(test_do_steps_underrun_stops_pio,                      test_setup),
+        cmocka_unit_test_setup(test_do_steps_underrun_while_enabled_decelerates,      test_setup),
         cmocka_unit_test_setup(test_do_steps_position_mode_drives_forward,       test_setup),
         cmocka_unit_test_setup(test_do_steps_position_mode_reverses,             test_setup),
         cmocka_unit_test_setup(test_do_steps_position_mode_at_target,            test_setup),
