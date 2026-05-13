@@ -256,6 +256,58 @@ static void test_do_steps_disabled_drains_rx_fifo(void **state) {
     assert_int_equal(config.joint[0].abs_pos_achieved, 103);
 }
 
+/* do_steps: joint disabling with non-zero velocity -> continues stepping while decelerating. */
+static void test_do_steps_disabling_decelerates(void **state) {
+    (void)state;
+    /* Prime last_velocity_q at 10 steps/period via an enabled cycle. */
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = 10000.0;  /* 10 steps/period at 1000µs */
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000.0;   /* 5 steps/period -> won't reach 0 in one shot */
+    mock_tx_fifo_empty                 = 1;
+    do_steps(0);  /* enable snap: last_velocity_q = 10 steps/period */
+
+    /* Disable: clamp brings velocity 10 -> 5 (not zero yet) -> steps still issued. */
+    config.joint[0].enabled         = 0;
+    config.joint[0].updated_from_c0 = 1;
+    last_pio_put_value               = 0;
+    pio_put_call_count               = 0;
+    mock_tx_fifo_empty               = 1;
+    uint8_t result = do_steps(0);
+
+    assert_int_equal(result, 0);
+    assert_true(last_pio_put_value != 0);  /* still decelerating, not hard-stopped */
+}
+
+/* do_steps: joint disabling with velocity equal to one max_accel step -> reaches zero -> hard stop. */
+static void test_do_steps_disabling_stops_when_zero(void **state) {
+    (void)state;
+    /* Prime last_velocity_q at exactly 5 steps/period (= max_accel_q). */
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = 5000.0;   /* 5 steps/period */
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000.0;   /* 5 steps/period */
+    mock_tx_fifo_empty                 = 1;
+    do_steps(0);  /* enable snap: last_velocity_q = 5 steps/period */
+
+    /* Disable: clamp_accel(0, 5, 5) = 0 -> velocity_q == 0 -> hard stop. */
+    config.joint[0].enabled          = 0;
+    config.joint[0].updated_from_c0  = 1;
+    last_pio_put_value                = 0xDEADBEEF;
+    pio_put_call_count                = 0;
+    mock_tx_fifo_empty                = 1;
+    uint8_t result = do_steps(0);
+
+    assert_int_equal(result, 0);
+    assert_int_equal(last_pio_put_value, 0);  /* hard-stopped */
+}
+
 /* do_steps: no new core0 data (updated == 0), slow last_velocity -> writes 0 to PIO, returns 0 */
 static void test_do_steps_no_update(void **state) {
     (void)state;
@@ -631,6 +683,8 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_zero_period,               test_setup),
         cmocka_unit_test_setup(test_do_steps_disabled,                  test_setup),
         cmocka_unit_test_setup(test_do_steps_disabled_drains_rx_fifo,  test_setup),
+        cmocka_unit_test_setup(test_do_steps_disabling_decelerates,    test_setup),
+        cmocka_unit_test_setup(test_do_steps_disabling_stops_when_zero, test_setup),
         cmocka_unit_test_setup(test_do_steps_no_update,                 test_setup),
         cmocka_unit_test_setup(test_do_steps_normal_step,               test_setup),
         cmocka_unit_test_setup(test_do_steps_accel_clamped,                      test_setup),

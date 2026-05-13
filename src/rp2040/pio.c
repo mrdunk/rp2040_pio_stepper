@@ -309,6 +309,10 @@ uint8_t do_steps(const uint8_t joint) {
     velocity_requested = vel_ff + correction;
   }
 
+  if (!enabled) {
+    velocity_requested = 0.0;  /* ramp to stop using clamp_accel */
+  }
+
   int32_t velocity_q   = (int32_t)((velocity_requested / (double)update_period_us) * 65536.0);
   int32_t max_vel_q    = (int32_t)((max_velocity / (double)update_period_us) * 65536.0);
   int32_t max_accel_q  = (int32_t)((max_accel / (double)update_period_us) * 65536.0);
@@ -327,21 +331,22 @@ uint8_t do_steps(const uint8_t joint) {
     }
   }
 
-  if(!enabled) {
-    // Switch off PIO stepgen.
-    if(pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
+  if(joint < NUM_FEEDBACK) {
+    abs_pos_achieved = drain_rx_fifo(joint_state[joint].sm_count, abs_pos_achieved);
+  }
+
+  velocity_q = clamp_accel(velocity_q, joint_state[joint].last_velocity_q, max_accel_q);
+  joint_state[joint].last_velocity_q = velocity_q;
+
+  if (!enabled && velocity_q == 0) {
+    /* Fully decelerated: issue hard stop and keep pos_fb current while disabled.
+     * abs_pos_achieved already reflects any in-flight steps drained above. */
+    if (pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
       pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, 0);
     }
-    // Keep abs_pos_achieved current while disabled so pos_fb stays accurate.
-    // Without this, in-flight steps accumulate in the PIO FIFO unread; on
-    // re-enable they all land at once, creating a position error that triggers
-    // a correction move (jitter).
-    if(joint < NUM_FEEDBACK) {
-      abs_pos_achieved = drain_rx_fifo(joint_state[joint].sm_count, abs_pos_achieved);
-      velocity_achieved = abs_pos_achieved - joint_state[joint].last_pos_achieved;
-    } else {
-      velocity_achieved = 0;
-    }
+    velocity_achieved = (joint < NUM_FEEDBACK)
+                        ? abs_pos_achieved - joint_state[joint].last_pos_achieved
+                        : 0;
     update_joint_config(
         joint, CORE1,
         NULL, NULL, NULL, NULL, NULL,
@@ -352,13 +357,6 @@ uint8_t do_steps(const uint8_t joint) {
     joint_state[joint].last_pos_achieved = abs_pos_achieved;
     return 0;
   }
-
-  if(joint < NUM_FEEDBACK) {
-    abs_pos_achieved = drain_rx_fifo(joint_state[joint].sm_count, abs_pos_achieved);
-  }
-
-  velocity_q = clamp_accel(velocity_q, joint_state[joint].last_velocity_q, max_accel_q);
-  joint_state[joint].last_velocity_q = velocity_q;
 
   int32_t step_count_q  = abs(velocity_q);
   int32_t step_len_ceil = calculate_step_len(step_count_q, period_ticks, max_vel_q);
@@ -397,7 +395,7 @@ uint8_t do_steps(const uint8_t joint) {
 
   joint_state[joint].last_pos_achieved  = abs_pos_achieved;
 
-  return updated;
+  return enabled ? updated : 0;
 }
 
 #ifdef BUILD_TESTS
