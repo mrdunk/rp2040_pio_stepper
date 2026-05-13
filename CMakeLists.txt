@@ -2,6 +2,12 @@ cmake_minimum_required(VERSION 3.13)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
+# Point git at the tracked hooks directory so all developers get the pre-commit hook.
+execute_process(
+    COMMAND git config core.hooksPath scripts/hooks
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+)
+
 include_directories (./src/shared/)
 
 
