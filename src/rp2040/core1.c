@@ -30,14 +30,13 @@ void wait_for_packet(void) {
   }
 
   /* Spin until Core0 finishes writing all joint configs for this packet.
-   * Also break when the timer tick advances (tick != entry_tick): this
-   * ensures step_all_joints() runs every period even while waiting, so
-   * the PIO FIFO never drains and motors keep stepping.  The underrun path
-   * in do_steps() handles this gracefully (last known config re-used).
-   * The hard-timeout check is a belt-and-braces fallback. */
-  uint32_t entry_tick = tick;
+   * Also break as soon as last_packet_tick < tick: this means no packet has
+   * arrived for the current tick, so Core0 is either slow or gone.  Exiting
+   * immediately keeps the loop period at exactly one timer tick (1 ms) so
+   * step_all_joints() runs every period and the PIO FIFO stays fed during
+   * deceleration.  The hard-timeout check is a belt-and-braces fallback. */
   while (packet_generation == last_packet_generation) {
-    if (tick != entry_tick || (tick - last_packet_tick) > MAX_MISSED_PACKET) {
+    if (last_packet_tick < tick || (tick - last_packet_tick) > MAX_MISSED_PACKET) {
       break;
     }
   }

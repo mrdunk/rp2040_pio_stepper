@@ -63,20 +63,17 @@ static void test_wait_for_packet_returns_on_network_loss(void **state) {
     /* Reaching this line proves the network-loss fallback fired. */
 }
 
-/* wait_for_packet: exits via inner-loop timeout when tick advances past the limit
- * WHILE spinning for packet_generation.  Simulates Core0 stuck at get_UDP() with
- * tick having already crossed MAX_MISSED_PACKET by the time we check inside the spin. */
+/* wait_for_packet: exits inner spin immediately when last_packet_tick < tick.
+ * One missed packet (gap == 1) is enough — no need to wait a full extra tick.
+ * Simulates Core0 stuck at get_UDP() with exactly one tick elapsed since the
+ * last packet; the pre-spin check (gap > MAX_MISSED_PACKET) does NOT fire. */
 static void test_wait_for_packet_exits_mid_spin_on_network_loss(void **state) {
     (void)state;
-    /* last_packet_tick = MAX_MISSED_PACKET so the pre-spin check (gap == MAX_MISSED_PACKET)
-     * is exactly at the boundary and does NOT fire (strictly greater-than).
-     * tick = MAX_MISSED_PACKET * 2 + 1 so the inner-loop check (gap > MAX_MISSED_PACKET)
-     * fires immediately on the first iteration. */
-    tick              = MAX_MISSED_PACKET * 2 + 1;
-    last_packet_tick  = MAX_MISSED_PACKET;   /* gap == MAX_MISSED_PACKET: pre-spin check misses */
-    packet_generation = 0;                   /* Core0 never advances it */
+    tick              = 2;
+    last_packet_tick  = 1;   /* gap == 1: pre-spin check does not fire */
+    packet_generation = 0;   /* Core0 never advances it */
     wait_for_packet();
-    /* Reaching this line proves the inner-loop timeout fired. */
+    /* Reaching this line proves the inner-loop exited on last_packet_tick < tick. */
 }
 
 /* check_network_health: healthy when gap <= MAX_MISSED_PACKET. */
