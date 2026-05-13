@@ -118,59 +118,6 @@ setp rp2040_eth.0.gpio.00.index     8
 setp rp2040_eth.0.gpio.01.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_IN_DEBUG
 setp rp2040_eth.0.gpio.01.index     9
 
-setp rp2040_eth.0.gpio.02.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.02.index     10
-
-setp rp2040_eth.0.gpio.03.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.03.index     11
-
-setp rp2040_eth.0.gpio.04.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.04.index     12
-
-setp rp2040_eth.0.gpio.05.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.05.index     13
-
-setp rp2040_eth.0.gpio.06.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.06.index     14
-
-setp rp2040_eth.0.gpio.07.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.07.index     15
-
-
-# GPIO — J7 GPIO_SLOW (MCP23017 GPB0-6 + GPA0, address=[I2C_0]ADDRESS)
-# Direction not fixed by hardware: set each to I2C_MCP_IN or I2C_MCP_OUT for your application.
-setp rp2040_eth.0.gpio.08.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.08.index     0
-setp rp2040_eth.0.gpio.08.address   [I2C_0]ADDRESS
-
-setp rp2040_eth.0.gpio.09.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.09.index     1
-setp rp2040_eth.0.gpio.09.address   [I2C_0]ADDRESS
-
-setp rp2040_eth.0.gpio.10.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.10.index     2
-setp rp2040_eth.0.gpio.10.address   [I2C_0]ADDRESS
-
-setp rp2040_eth.0.gpio.11.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.11.index     3
-setp rp2040_eth.0.gpio.11.address   [I2C_0]ADDRESS
-
-setp rp2040_eth.0.gpio.12.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.12.index     4
-setp rp2040_eth.0.gpio.12.address   [I2C_0]ADDRESS
-
-setp rp2040_eth.0.gpio.13.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.13.index     5
-setp rp2040_eth.0.gpio.13.address   [I2C_0]ADDRESS
-
-setp rp2040_eth.0.gpio.14.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.14.index     6
-setp rp2040_eth.0.gpio.14.address   [I2C_0]ADDRESS
-
-setp rp2040_eth.0.gpio.15.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NOT_SET
-setp rp2040_eth.0.gpio.15.index     8
-setp rp2040_eth.0.gpio.15.address   [I2C_0]ADDRESS
-
 
 # GPIO — J8 I/O 1 (MCP23017 GPA5-6, address=[I2C_0]ADDRESS)
 # J8:0 probe — input from probe/tool-setter
@@ -203,7 +150,7 @@ net start-in  rp2040_eth.0.gpio.19.in
 # GPIO — J10 I/O 3 (MCP23017 GPA1-2, address=[I2C_0]ADDRESS)
 # J10:0 pump — output (coolant pump)
 setp rp2040_eth.0.gpio.20.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_I2C_MCP_OUT
-setp rp2040_eth.0.gpio.20.index     3
+setp rp2040_eth.0.gpio.20.index     2
 setp rp2040_eth.0.gpio.20.address   [I2C_0]ADDRESS
 net pump-out  rp2040_eth.0.gpio.20.out
 
