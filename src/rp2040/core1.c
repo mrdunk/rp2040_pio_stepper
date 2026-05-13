@@ -74,8 +74,8 @@ static void core1_tick(void) {
     handle_network_timeout();
   } else {
     handle_network_recovery();
-    step_all_joints();
   }
+  step_all_joints();
 #ifndef BUILD_TESTS
   i2c_gpio_poll(&i2c_gpio);
 #endif

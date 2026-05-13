@@ -121,8 +121,8 @@ static void test_step_all_joints_calls_do_steps_for_each_joint(void **state) {
 }
 
 /* core1_main loop: when linuxcnc_restart_detected is set, one iteration must
- * disable all joints and clear the flag. last_packet_tick is set equal to tick
- * so check_network_health() returns healthy — restart detection fires first. */
+ * disable all joints, clear the flag, and still call step_all_joints so motors
+ * can decelerate. */
 static void test_core1_disables_joints_on_linuxcnc_restart(void **state) {
     (void)state;
     linuxcnc_restart_detected = true;
@@ -130,6 +130,7 @@ static void test_core1_disables_joints_on_linuxcnc_restart(void **state) {
     last_packet_tick = 1;   /* network appears healthy; restart flag should fire first */
     core1_run_once_for_test();
     assert_int_equal(MAX_JOINT, disable_joint_call_count);
+    assert_int_equal(MAX_JOINT, do_steps_call_count);  /* step_all_joints always runs */
     assert_false(linuxcnc_restart_detected);
 }
 
