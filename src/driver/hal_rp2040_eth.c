@@ -282,8 +282,9 @@ int rtapi_app_main(void)
     return -1;
   }
 
-  printf("RP2040: INFO: driver version %d.%d.%d\n",
-      PROTOCOL_VERSION_MAJOR, PROTOCOL_VERSION_MINOR, PROTOCOL_VERSION_PATCH);
+  printf("RP2040: INFO: driver version %d.%d.%d branch 0x%08x\n",
+      PROTOCOL_VERSION_MAJOR, PROTOCOL_VERSION_MINOR, PROTOCOL_VERSION_PATCH,
+      PROTOCOL_VERSION_BRANCH);
 
   if (num_joints <= 0) {
     rtapi_print_msg(RTAPI_MSG_ERR,
@@ -845,5 +846,6 @@ void reset_rp_config(
   }
 
   version_checked = false;
+  version_match   = false;
 }
 

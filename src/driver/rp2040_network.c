@@ -24,6 +24,7 @@
 /* Network globals. */
 static uint8_t detected_joint_count = 0;  /* set from first Reply_joint_movement.count */
 static bool version_checked = false;     /* set when REPLY_VERSION received */
+static bool version_match   = false;     /* set when version + branch both matched */
 struct sockaddr_in remote_addr[MAX_DEVICES];
 int sockfd[MAX_DEVICES] = {-1};
 
@@ -416,6 +417,10 @@ bool get_version_checked(void) {
   return version_checked;
 }
 
+bool get_version_match(void) {
+  return version_match;
+}
+
 bool unpack_version_reply(
     struct NWBuffer* rx_buf,
     size_t* rx_offset,
@@ -423,19 +428,28 @@ bool unpack_version_reply(
 ) {
   UNPACK_MSG(struct Reply_version, reply, rx_buf, rx_offset);
   if (!version_checked) {
-    if (reply->version_major != PROTOCOL_VERSION_MAJOR ||
-        reply->version_minor != PROTOCOL_VERSION_MINOR ||
-        reply->version_patch != PROTOCOL_VERSION_PATCH) {
+    bool ver_ok = (reply->version_major == PROTOCOL_VERSION_MAJOR &&
+                   reply->version_minor == PROTOCOL_VERSION_MINOR &&
+                   reply->version_patch == PROTOCOL_VERSION_PATCH);
+    bool branch_ok = (reply->version_branch == PROTOCOL_VERSION_BRANCH);
+    if (!ver_ok) {
       rtapi_print_msg(RTAPI_MSG_ERR,
           "RP2040: ERROR: version mismatch — firmware %d.%d.%d, driver %d.%d.%d. "
           "Reflash firmware and reinstall driver from the same source.\n",
           reply->version_major, reply->version_minor, reply->version_patch,
           PROTOCOL_VERSION_MAJOR, PROTOCOL_VERSION_MINOR, PROTOCOL_VERSION_PATCH);
+    } else if (!branch_ok) {
+      rtapi_print_msg(RTAPI_MSG_ERR,
+          "RP2040: ERROR: branch mismatch — firmware 0x%08x, driver 0x%08x. "
+          "Reflash firmware and reinstall driver from the same branch.\n",
+          reply->version_branch, PROTOCOL_VERSION_BRANCH);
     } else {
       rtapi_print_msg(RTAPI_MSG_INFO,
-          "RP2040: INFO: version OK (%d.%d.%d)\n",
-          reply->version_major, reply->version_minor, reply->version_patch);
+          "RP2040: INFO: version OK (%d.%d.%d branch 0x%08x)\n",
+          reply->version_major, reply->version_minor, reply->version_patch,
+          reply->version_branch);
     }
+    version_match   = ver_ok && branch_ok;
     version_checked = true;
   }
   (*received_count)++;
