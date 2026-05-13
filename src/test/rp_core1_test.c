@@ -63,6 +63,22 @@ static void test_wait_for_packet_returns_on_network_loss(void **state) {
     /* Reaching this line proves the network-loss fallback fired. */
 }
 
+/* wait_for_packet: exits via inner-loop timeout when tick advances past the limit
+ * WHILE spinning for packet_generation.  Simulates Core0 stuck at get_UDP() with
+ * tick having already crossed MAX_MISSED_PACKET by the time we check inside the spin. */
+static void test_wait_for_packet_exits_mid_spin_on_network_loss(void **state) {
+    (void)state;
+    /* last_packet_tick = MAX_MISSED_PACKET so the pre-spin check (gap == MAX_MISSED_PACKET)
+     * is exactly at the boundary and does NOT fire (strictly greater-than).
+     * tick = MAX_MISSED_PACKET * 2 + 1 so the inner-loop check (gap > MAX_MISSED_PACKET)
+     * fires immediately on the first iteration. */
+    tick              = MAX_MISSED_PACKET * 2 + 1;
+    last_packet_tick  = MAX_MISSED_PACKET;   /* gap == MAX_MISSED_PACKET: pre-spin check misses */
+    packet_generation = 0;                   /* Core0 never advances it */
+    wait_for_packet();
+    /* Reaching this line proves the inner-loop timeout fired. */
+}
+
 /* check_network_health: healthy when gap <= MAX_MISSED_PACKET. */
 static void test_check_network_health_ok(void **state) {
     (void)state;
@@ -152,6 +168,7 @@ int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_wait_for_packet_returns_when_generation_advances, test_setup),
         cmocka_unit_test_setup(test_wait_for_packet_returns_on_network_loss,          test_setup),
+        cmocka_unit_test_setup(test_wait_for_packet_exits_mid_spin_on_network_loss,  test_setup),
         cmocka_unit_test_setup(test_check_network_health_ok,                 test_setup),
         cmocka_unit_test_setup(test_check_network_health_at_limit,           test_setup),
         cmocka_unit_test_setup(test_check_network_health_loss,               test_setup),

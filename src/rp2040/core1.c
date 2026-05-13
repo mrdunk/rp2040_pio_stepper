@@ -29,8 +29,15 @@ void wait_for_packet(void) {
     return;
   }
 
-  /* Spin until Core0 finishes writing all joint configs for this packet. */
-  while (packet_generation == last_packet_generation) {}
+  /* Spin until Core0 finishes writing all joint configs for this packet,
+   * or until the network-loss timeout fires (tick advancing past the limit
+   * while we spin here — Core0 blocks at get_UDP so packet_generation
+   * never advances on disconnect). */
+  while (packet_generation == last_packet_generation) {
+    if ((tick - last_packet_tick) > MAX_MISSED_PACKET) {
+      break;
+    }
+  }
   last_packet_generation = packet_generation;
 }
 
