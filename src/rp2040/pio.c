@@ -327,7 +327,11 @@ uint8_t do_steps(const uint8_t joint) {
 
   int32_t velocity_q   = (int32_t)((velocity_requested / (double)update_period_us) * 65536.0);
   int32_t max_vel_q    = (int32_t)((max_velocity / (double)update_period_us) * 65536.0);
-  int32_t max_accel_q  = (int32_t)((max_accel / (double)update_period_us) * 65536.0);
+  /* Accel is steps/s²; convert to Q16.16 steps/period/period → multiply by period_s².
+   * The velocity formula (/ update_period_us) accidentally works for 1ms because
+   * 1/1000µs == 1e-3s, but for accel the period must be squared. */
+  double   period_s    = (double)update_period_us * 1e-6;
+  int32_t max_accel_q  = (int32_t)(max_accel * period_s * period_s * 65536.0);
   int32_t period_ticks = (int32_t)((int64_t)update_period_us * RP2040_CLOCK_MHZ);
 
   if(enabled != joint_state[joint].last_enabled) {

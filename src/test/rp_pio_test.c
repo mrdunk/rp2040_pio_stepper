@@ -266,7 +266,7 @@ static void test_do_steps_disabling_decelerates(void **state) {
     config.joint[0].updated_from_c0    = 1;
     config.joint[0].velocity_requested = 10000.0;  /* 10 steps/period at 1000µs */
     config.joint[0].max_velocity       = 50000.0;
-    config.joint[0].max_accel          = 5000.0;   /* 5 steps/period -> won't reach 0 in one shot */
+    config.joint[0].max_accel          = 5000000.0; /* 5 steps/period/period: 5e6 × (1e-3)² = 5 */
     mock_tx_fifo_empty                 = 1;
     do_steps(0);  /* enable snap: last_velocity_q = 10 steps/period */
 
@@ -292,7 +292,7 @@ static void test_do_steps_disabling_stops_when_zero(void **state) {
     config.joint[0].updated_from_c0    = 1;
     config.joint[0].velocity_requested = 5000.0;   /* 5 steps/period */
     config.joint[0].max_velocity       = 50000.0;
-    config.joint[0].max_accel          = 5000.0;   /* 5 steps/period */
+    config.joint[0].max_accel          = 5000000.0; /* 5 steps/period/period: 5e6 × (1e-3)² = 5 */
     mock_tx_fifo_empty                 = 1;
     do_steps(0);  /* enable snap: last_velocity_q = 5 steps/period */
 
@@ -371,8 +371,8 @@ static void test_do_steps_normal_step(void **state) {
 static void test_do_steps_accel_clamped(void **state) {
     (void)state;
     /* Set up a joint with small max_accel so the clamp activates after enable.
-     * With update_period_us=1000, max_accel=5000 (steps/s/s) normalises to
-     * 5000/1000 = 5.0 steps/period.
+     * With update_period_us=1000, max_accel=5000000 (steps/s²) normalises to
+     * 5000000 × (1e-3)² = 5.0 steps/period.
      *
      * On enable the RP2040 snaps last_velocity_q to the commanded velocity, so
      * the first call must use a low velocity (5.0 steps/period) to prime state.
@@ -391,7 +391,7 @@ static void test_do_steps_accel_clamped(void **state) {
     config.joint[0].abs_pos_achieved   = 0;
     config.joint[0].velocity_requested = 5.0 * update_period_us;  /* low: snap primes to 5.0 */
     config.joint[0].max_velocity       = 100000.0;  /* steps/s */
-    config.joint[0].max_accel          = 5000.0;    /* steps/s/s -> 5.0 steps/period */
+    config.joint[0].max_accel          = 5000000.0;  /* 5e6 steps/s² → 5.0 steps/period/period */
 
     /* First call: enable transition snaps last_velocity_q to 5.0 steps/period.
      * velocity=5.0 -> step_len=(133000/(5*2))-9=13291 */
@@ -601,7 +601,7 @@ static void test_do_steps_underrun_while_enabled_decelerates(void **state) {
     config.joint[0].updated_from_c0    = 1;
     config.joint[0].velocity_requested = 10000.0;  /* 10 steps/period at 1000µs */
     config.joint[0].max_velocity       = 50000.0;
-    config.joint[0].max_accel          = 5000.0;   /* 5 steps/period -> won't reach 0 in one shot */
+    config.joint[0].max_accel          = 5000000.0; /* 5e6 steps/s² → 5.0 steps/period/period */
     mock_tx_fifo_empty                 = 1;
     do_steps(0);  /* enable snap: last_velocity_q = 10 steps/period */
 
