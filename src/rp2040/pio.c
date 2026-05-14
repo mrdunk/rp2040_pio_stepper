@@ -343,8 +343,8 @@ uint8_t do_steps(const uint8_t joint) {
       // is already moving (joint was enabled before motion started).
       joint_state[joint].last_velocity_q = velocity_q;
     } else {
-      printf("J%u disab: vel_q=%d max_accel_q=%d\n",
-             joint, joint_state[joint].last_velocity_q, max_accel_q);
+      printf("J%u disab tick=%u vel_q=%d max_accel_q=%d\n",
+             joint, tick, joint_state[joint].last_velocity_q, max_accel_q);
       if (max_accel_q <= 0) {
         printf("WARN: J%u max_accel_q=0 (max_accel=%.3f us=%u) — snap to zero\n",
                joint, max_accel, update_period_us);
@@ -372,7 +372,7 @@ uint8_t do_steps(const uint8_t joint) {
     /* Fully decelerated: issue hard stop and keep pos_fb current while disabled.
      * abs_pos_achieved already reflects any in-flight steps drained above. */
     if (prev_velocity_q != 0) {
-      printf("J%u: decel done (accel_q=%d)\n", joint, max_accel_q);
+      printf("J%u: decel done tick=%u accel_q=%d\n", joint, tick, max_accel_q);
     }
     if (pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
       pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, 0);
