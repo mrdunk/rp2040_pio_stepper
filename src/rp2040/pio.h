@@ -11,7 +11,10 @@ void init_pio(const uint32_t joint);
 
 /* Compute the commanded velocity (steps/s) for this period.
  * Applies the position controller (position mode) and collapses to 0 when
- * disabled or when no new Core0 data is available (underrun / network loss). */
+ * disabled or when no new Core0 data is available (underrun / network loss).
+ * max_accel (steps/s²) caps the position correction to sqrt(2*max_accel*|error|)
+ * — the bang-bang stopping profile — so the motor can always decelerate to rest
+ * within the remaining error distance.  Pass 0.0 to disable the cap. */
 double compute_velocity_cmd(
     uint8_t  cmd_type,
     double   velocity_requested,
@@ -19,7 +22,8 @@ double compute_velocity_cmd(
     int32_t  abs_pos_achieved,
     uint8_t  enabled,
     uint32_t updated,
-    uint32_t update_period_us);
+    uint32_t update_period_us,
+    double   max_accel);
 
 /* Generate step counts and send to PIOs. */
 uint8_t do_steps(const uint8_t joint);

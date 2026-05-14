@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #ifdef BUILD_TESTS
 
@@ -254,6 +255,10 @@ static void issue_pio_step(uint32_t joint, int32_t step_len_ticks,
 /* Compute the commanded velocity (steps/s) for this period.
  *
  * In position mode: vel_ff + Kp*error, with a 1-step dead zone.
+ * The correction is capped to sqrt(2*max_accel*|error|) steps/s so the motor
+ * can always decelerate to rest within the remaining error distance (bang-bang
+ * stopping profile).  Without this cap, large errors after emergency decel
+ * produce a correction that saturates clamp_accel every period — limit cycle.
  * Returns 0.0 when disabled or no new Core0 data (underrun/network loss). */
 double compute_velocity_cmd(
     uint8_t  cmd_type,
@@ -262,7 +267,8 @@ double compute_velocity_cmd(
     int32_t  abs_pos_achieved,
     uint8_t  enabled,
     uint32_t updated,
-    uint32_t update_period_us)
+    uint32_t update_period_us,
+    double   max_accel)
 {
   if (cmd_type == JOINT_CMD_POSITION) {
     double vel_ff      = velocity_requested;
@@ -270,6 +276,11 @@ double compute_velocity_cmd(
     double correction  = 0.0;
     if (error_steps >= 1.0 || error_steps <= -1.0) {
       correction = error_steps * (1.0e6 / (double)update_period_us) * 0.5;
+      if (max_accel > 0.0) {
+        double max_correction = sqrt(2.0 * max_accel * fabs(error_steps));
+        if (correction >  max_correction) correction =  max_correction;
+        if (correction < -max_correction) correction = -max_correction;
+      }
     }
     velocity_requested = vel_ff + correction;
   }
@@ -323,14 +334,14 @@ uint8_t do_steps(const uint8_t joint) {
 
   velocity_requested = compute_velocity_cmd(
       cmd_type, velocity_requested, abs_pos_requested, abs_pos_achieved,
-      enabled, updated, update_period_us);
+      enabled, updated, update_period_us, max_accel);
 
   int32_t velocity_q   = (int32_t)((velocity_requested / (double)update_period_us) * 65536.0);
   int32_t max_vel_q    = (int32_t)((max_velocity / (double)update_period_us) * 65536.0);
   /* Accel is steps/s²; convert to Q16.16 steps/period/period → multiply by period_s².
    * The velocity formula (/ update_period_us) accidentally works for 1ms because
    * 1/1000µs == 1e-3s, but for accel the period must be squared. */
-  double   period_s    = (double)update_period_us * 1e-6;
+  double  period_s     = (double)update_period_us * 1e-6;
   int32_t max_accel_q  = (int32_t)(max_accel * period_s * period_s * 65536.0);
   int32_t period_ticks = (int32_t)((int64_t)update_period_us * RP2040_CLOCK_MHZ);
 
@@ -353,11 +364,28 @@ uint8_t do_steps(const uint8_t joint) {
   }
 
   if(joint < NUM_FEEDBACK) {
+    // Spare PIO blocks are used to count actual steps performed.
     abs_pos_achieved = drain_rx_fifo(joint_state[joint].sm_count, abs_pos_achieved);
   }
 
   int32_t prev_velocity_q = joint_state[joint].last_velocity_q;
   velocity_q = clamp_accel(velocity_q, joint_state[joint].last_velocity_q, max_accel_q);
+
+  /* Hard velocity cap (bang-bang stopping profile): when approaching the
+   * target position, ensure |velocity| ≤ sqrt(2·max_accel_q·|error|·65536)
+   * so the motor can always decelerate to rest within the remaining distance.
+   * Applies only while enabled and receiving updates (no emergency decel). */
+  if (cmd_type == JOINT_CMD_POSITION && max_accel_q > 0 && enabled && updated) {
+    int32_t err_int = (int32_t)(abs_pos_requested - (double)abs_pos_achieved);
+    /* Only cap when moving toward target (velocity and error share a sign). */
+    if (err_int != 0 && (int64_t)velocity_q * err_int > 0) {
+      int32_t max_pos_vel_q = (int32_t)sqrt(
+          2.0 * (double)max_accel_q * (double)abs(err_int) * 65536.0);
+      if (velocity_q > max_pos_vel_q)  velocity_q = max_pos_vel_q;
+      if (velocity_q < -max_pos_vel_q) velocity_q = -max_pos_vel_q;
+    }
+  }
+
   joint_state[joint].last_velocity_q = velocity_q;
 
   /* One-shot: velocity reached zero while decelerating under network loss

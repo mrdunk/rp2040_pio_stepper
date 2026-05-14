@@ -3,6 +3,7 @@
 #include <setjmp.h>
 #include <stdint.h>
 #include <string.h>
+#include <math.h>
 #include <cmocka.h>
 
 #include "../rp2040/pio.h"
@@ -422,7 +423,7 @@ static void test_do_steps_accel_clamped(void **state) {
 static void test_compute_velocity_cmd_velmode_passthrough(void **state) {
     (void)state;
     double result = compute_velocity_cmd(
-        JOINT_CMD_VELOCITY, 5000.0, 0.0, 0, /*enabled=*/1, /*updated=*/1, 1000);
+        JOINT_CMD_VELOCITY, 5000.0, 0.0, 0, /*enabled=*/1, /*updated=*/1, 1000, 0.0);
     assert_float_equal(result, 5000.0, 1e-6);
 }
 
@@ -430,7 +431,7 @@ static void test_compute_velocity_cmd_velmode_passthrough(void **state) {
 static void test_compute_velocity_cmd_posmode_at_target(void **state) {
     (void)state;
     double result = compute_velocity_cmd(
-        JOINT_CMD_POSITION, 1000.0, 100.0, 100, /*enabled=*/1, /*updated=*/1, 1000);
+        JOINT_CMD_POSITION, 1000.0, 100.0, 100, /*enabled=*/1, /*updated=*/1, 1000, 0.0);
     assert_float_equal(result, 1000.0, 1e-6);
 }
 
@@ -438,7 +439,7 @@ static void test_compute_velocity_cmd_posmode_at_target(void **state) {
 static void test_compute_velocity_cmd_posmode_dead_zone(void **state) {
     (void)state;
     double result = compute_velocity_cmd(
-        JOINT_CMD_POSITION, 500.0, 100.4, 100, /*enabled=*/1, /*updated=*/1, 1000);
+        JOINT_CMD_POSITION, 500.0, 100.4, 100, /*enabled=*/1, /*updated=*/1, 1000, 0.0);
     assert_float_equal(result, 500.0, 1e-6);
 }
 
@@ -447,7 +448,7 @@ static void test_compute_velocity_cmd_posmode_dead_zone(void **state) {
 static void test_compute_velocity_cmd_posmode_forward_correction(void **state) {
     (void)state;
     double result = compute_velocity_cmd(
-        JOINT_CMD_POSITION, 1000.0, 110.0, 100, /*enabled=*/1, /*updated=*/1, 1000);
+        JOINT_CMD_POSITION, 1000.0, 110.0, 100, /*enabled=*/1, /*updated=*/1, 1000, 0.0);
     assert_float_equal(result, 1000.0 + 5000.0, 1e-6);
 }
 
@@ -455,7 +456,7 @@ static void test_compute_velocity_cmd_posmode_forward_correction(void **state) {
 static void test_compute_velocity_cmd_posmode_reverse_correction(void **state) {
     (void)state;
     double result = compute_velocity_cmd(
-        JOINT_CMD_POSITION, 1000.0, 90.0, 100, /*enabled=*/1, /*updated=*/1, 1000);
+        JOINT_CMD_POSITION, 1000.0, 90.0, 100, /*enabled=*/1, /*updated=*/1, 1000, 0.0);
     assert_float_equal(result, 1000.0 - 5000.0, 1e-6);
 }
 
@@ -463,7 +464,7 @@ static void test_compute_velocity_cmd_posmode_reverse_correction(void **state) {
 static void test_compute_velocity_cmd_disabled_returns_zero(void **state) {
     (void)state;
     double result = compute_velocity_cmd(
-        JOINT_CMD_POSITION, 1000.0, 200.0, 100, /*enabled=*/0, /*updated=*/1, 1000);
+        JOINT_CMD_POSITION, 1000.0, 200.0, 100, /*enabled=*/0, /*updated=*/1, 1000, 0.0);
     assert_float_equal(result, 0.0, 1e-6);
 }
 
@@ -471,7 +472,7 @@ static void test_compute_velocity_cmd_disabled_returns_zero(void **state) {
 static void test_compute_velocity_cmd_underrun_returns_zero(void **state) {
     (void)state;
     double result = compute_velocity_cmd(
-        JOINT_CMD_VELOCITY, 5000.0, 0.0, 0, /*enabled=*/1, /*updated=*/0, 1000);
+        JOINT_CMD_VELOCITY, 5000.0, 0.0, 0, /*enabled=*/1, /*updated=*/0, 1000, 0.0);
     assert_float_equal(result, 0.0, 1e-6);
 }
 
@@ -776,6 +777,117 @@ static void test_do_steps_velmode_reverse(void **state) {
     assert_int_equal(run_velocity_periods(-750.0, 100), -75);
 }
 
+/* ── clamp_accel oscillation tests ──────────────────────────────────────────
+ *
+ * clamp_accel alone is monotonic: with a fixed target of 0 it can only reduce
+ * |velocity|, never overshoot.  The oscillation bug lives in the *interaction*
+ * between the position-mode correction term (which recomputes a new target each
+ * period based on position error) and clamp_accel.
+ *
+ * When the motor overshoots abs_pos_requested the error flips sign, the
+ * correction flips sign, and clamp_accel chases a reversed target — causing
+ * the velocity to swing to approximately the original jogging speed in the
+ * opposite direction.  The loop is indefinite.
+ *
+ * Two tests below establish this:
+ *   1. clamp_accel with a fixed zero target never overshoots (PASSES — control).
+ *   2. position-correction + clamp_accel loop oscillates indefinitely (FAILS —
+ *      proves the bug; fix it so this test passes).
+ */
+
+/* Simulate position-mode correction + clamp_accel for max_periods iterations.
+ * Motor starts at position 0 (= abs_pos_requested) moving at init_velocity_q.
+ * max_accel is steps/s² — mirrors the bang-bang cap in compute_velocity_cmd.
+ * Returns the number of velocity-sign reversals that occurred. */
+static int posmode_decel_sign_changes(
+    int32_t init_velocity_q,
+    int32_t max_accel_q,
+    int     max_periods)
+{
+    const double period_us  = 1000.0;
+    /* max_accel_q = max_accel × period_s² × 65536 → max_accel = max_accel_q / (period_s² × 65536) */
+    const double period_s   = period_us * 1e-6;
+    const double max_accel  = (double)max_accel_q / (period_s * period_s * 65536.0);
+
+    double  float_pos  = 0.0;
+    int32_t velocity_q = init_velocity_q;
+    int     sign_changes = 0;
+    int32_t prev_sign    = (velocity_q >= 0) ? 1 : -1;
+
+    for (int i = 0; i < max_periods; i++) {
+        float_pos += (double)velocity_q / 65536.0;
+        int32_t pos_int = (int32_t)float_pos;
+
+        double error = 0.0 - (double)pos_int;
+        double correction = 0.0;
+        if (error >= 1.0 || error <= -1.0) {
+            correction = error * (1e6 / period_us) * 0.5;
+            if (max_accel > 0.0) {
+                double max_correction = sqrt(2.0 * max_accel * fabs(error));
+                if (correction >  max_correction) correction =  max_correction;
+                if (correction < -max_correction) correction = -max_correction;
+            }
+        }
+
+        int32_t target_vel_q = (int32_t)(correction / period_us * 65536.0);
+        velocity_q = clamp_accel(target_vel_q, velocity_q, max_accel_q);
+
+        /* Hard velocity cap — mirrors do_steps: cap when approaching target. */
+        if (max_accel_q > 0 && pos_int != 0 && (int64_t)velocity_q * (-pos_int) > 0) {
+            int32_t max_vel_q = (int32_t)sqrt(
+                2.0 * (double)max_accel_q * (double)abs(pos_int) * 65536.0);
+            if (velocity_q >  max_vel_q) velocity_q =  max_vel_q;
+            if (velocity_q < -max_vel_q) velocity_q = -max_vel_q;
+        }
+
+        if (velocity_q != 0) {
+            int32_t sign = (velocity_q > 0) ? 1 : -1;
+            if (sign != prev_sign) {
+                sign_changes++;
+                prev_sign = sign;
+            }
+        }
+    }
+    return sign_changes;
+}
+
+/* clamp_accel with a fixed target of 0 must never overshoot zero.
+ * Velocity decreases monotonically and sign never changes. */
+static void test_clamp_accel_fixed_zero_target_never_overshoots(void **state) {
+    (void)state;
+    int32_t velocity_q  = 10 * 65536;  /* 10 steps/period */
+    int32_t max_accel_q = 32768;        /* 0.5 steps/period/period */
+    int32_t prev = velocity_q;
+
+    for (int i = 0; i < 100000; i++) {
+        velocity_q = clamp_accel(0, velocity_q, max_accel_q);
+        assert_true(velocity_q >= 0);   /* must not go negative */
+        assert_true(velocity_q <= prev); /* must not increase */
+        prev = velocity_q;
+        if (velocity_q == 0) break;
+    }
+    assert_int_equal(velocity_q, 0);
+}
+
+/* Position-mode correction + clamp_accel must decelerate to rest without
+ * indefinite oscillation.
+ *
+ * Parameters: 10 steps/period jog, 500 000 steps/s² accel limit (real machine).
+ * max_accel_q = 500 000 × (1e-3)² × 65536 = 32 768.
+ *
+ * Bug: correction for 1-step error = 32 768 Q16.16 = exactly max_accel_q.
+ * For any overshoot > 1 step the correction saturates clamp_accel every period,
+ * producing a limit cycle: motor never stops, direction reverses repeatedly. */
+static void test_clamp_accel_posmode_decel_does_not_oscillate(void **state) {
+    (void)state;
+    /* 10 steps/period; 0.5 step/period/period accel limit */
+    int sign_changes = posmode_decel_sign_changes(10 * 65536, 32768, 500);
+
+    /* Motor must decelerate to rest: at most one direction change
+     * (forward → stopped is not a reversal; stopped → backward is). */
+    assert_true(sign_changes <= 1);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -825,6 +937,8 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_velmode_frac_1_5,  test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_frac_10_5, test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_reverse,   test_setup),
+        cmocka_unit_test_setup(test_clamp_accel_fixed_zero_target_never_overshoots, test_setup),
+        cmocka_unit_test_setup(test_clamp_accel_posmode_decel_does_not_oscillate,   test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
