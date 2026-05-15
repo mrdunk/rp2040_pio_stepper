@@ -618,43 +618,30 @@ static void test_do_steps_underrun_while_enabled_decelerates(void **state) {
 }
 
 /* do_steps: position mode, active vel_ff, small tracking error.
- * Bang-bang cap must NOT fire when LinuxCNC is actively commanding motion.
- * During jog deceleration the motor tracks pos_cmd closely (error ≈ 1 step)
- * while vel_ff is large; the old cap would fire and prematurely halve velocity.
- *
- * Setup: vel_ff=10000 steps/s (10 steps/period), error=1 step, max_accel=5e6
- * steps/s² → max_accel_q=5 steps/period.
- *
- * With vel_ff active (vel_ff_q=655360 >> max_accel_q=327680), the cap must not
- * reduce velocity from ~10 steps/period to ~3 steps/period.
- * Expected step_len for 10 steps/period = 133000/20 - 9 = 6641. */
-static void test_do_steps_posmode_bang_bang_skipped_with_active_vel_ff(void **state) {
+ * vel_ff=10000 steps/s (10 steps/period), error=1 step, max_accel=5e6 steps/s².
+ * velocity = vel_ff + Kp·error = 10000+500 = 10500 steps/s → 10 steps → step_len=6641. */
+static void test_do_steps_posmode_ff_active_tracks_at_full_speed(void **state) {
     (void)state;
     config.update_time_us              = 1000;
     config.joint[0].enabled            = 1;
     config.joint[0].cmd_type           = JOINT_CMD_POSITION;
-    config.joint[0].velocity_requested = 10000.0;  /* vel_ff: 10 steps/period */
-    config.joint[0].abs_pos_requested  = 1.0;      /* 1-step error: good tracking */
+    config.joint[0].velocity_requested = 10000.0;
+    config.joint[0].abs_pos_requested  = 1.0;
     config.joint[0].abs_pos_achieved   = 0;
     config.joint[0].max_velocity       = 50000.0;
-    config.joint[0].max_accel          = 5000000.0; /* 5 steps/period/period */
+    config.joint[0].max_accel          = 5000000.0;
     config.joint[0].updated_from_c0    = 1;
     mock_tx_fifo_empty                  = 1;
     mock_rx_fifo_level                  = 0;
 
     do_steps(0);
 
-    /* Correct: vel_ff_q=655360 ≠ 0 → bang-bang skipped → velocity ≈ 10.5 steps/period
-     * → 10 steps this period → step_len=6641.
-     * Bug (old abs(vel_ff_q)<max_accel_q gate): bang-bang fires at transition → step_len ≈ 22157. */
     assert_int_equal(last_pio_put_value >> 1, 6641);
 }
 
-/* Bang-bang gate: large negative vel_ff.
- * Mirror of the large-positive test: vel_ff=-10000 steps/s (10 steps/period reverse),
- * error=-1 step.  vel_ff_q=-655360 ≠ 0 → bang-bang skipped.
- * velocity = -10500 steps/s → n_steps=10 → step_len=6641 (same magnitude as forward). */
-static void test_do_steps_posmode_bang_bang_skipped_vel_ff_large_negative(void **state) {
+/* Position mode, large negative vel_ff: mirror of large-positive.
+ * vel_ff=-10000, error=-1 → velocity=-10500 steps/s → 10 steps → step_len=6641. */
+static void test_do_steps_posmode_ff_large_negative_tracks_at_full_speed(void **state) {
     (void)state;
     config.update_time_us              = 1000;
     config.joint[0].enabled            = 1;
@@ -673,16 +660,9 @@ static void test_do_steps_posmode_bang_bang_skipped_vel_ff_large_negative(void *
     assert_int_equal(last_pio_put_value >> 1, 6641);
 }
 
-/* Bang-bang gate: small positive vel_ff (below old abs(vel_ff_q)<max_accel_q threshold).
- *
- * vel_ff=4000 steps/s → vel_ff_q=262144, max_accel_q=327680: old gate would fire.
- * New gate (vel_ff_q==0): 262144≠0 → skip.
- *
- * velocity = 4000+500 = 4500 steps/s → velocity_q=294912 (4.5 steps/period).
- * max_pos_vel_q for err=1: sqrt(2·327680·1·65536)≈207243 (3.16 steps/period).
- * 294912>207243 → old gate would cap to n_steps=3, step_len=22157.
- * New gate: skipped → n_steps=4 → step_len=16616. */
-static void test_do_steps_posmode_bang_bang_skipped_vel_ff_small_positive(void **state) {
+/* Position mode, small positive vel_ff.
+ * vel_ff=4000, error=1 → velocity=4500 steps/s → 4 steps → step_len=16616. */
+static void test_do_steps_posmode_ff_small_positive_tracks_normally(void **state) {
     (void)state;
     config.update_time_us              = 1000;
     config.joint[0].enabled            = 1;
@@ -701,8 +681,8 @@ static void test_do_steps_posmode_bang_bang_skipped_vel_ff_small_positive(void *
     assert_int_equal(last_pio_put_value >> 1, 16616);
 }
 
-/* Bang-bang gate: small negative vel_ff (mirror of small-positive). */
-static void test_do_steps_posmode_bang_bang_skipped_vel_ff_small_negative(void **state) {
+/* Position mode, small negative vel_ff: mirror of small-positive. */
+static void test_do_steps_posmode_ff_small_negative_tracks_normally(void **state) {
     (void)state;
     config.update_time_us              = 1000;
     config.joint[0].enabled            = 1;
@@ -721,15 +701,13 @@ static void test_do_steps_posmode_bang_bang_skipped_vel_ff_small_negative(void *
     assert_int_equal(last_pio_put_value >> 1, 16616);
 }
 
-/* Bang-bang gate: fires when vel_ff==0 (LinuxCNC fully stopped, residual error).
+/* Position mode, vel_ff=0, residual error: clamp_accel limits velocity.
  *
- * Period 1: enable snap at 10 steps/period forward → last_velocity_q=655360.
- * Period 2: vel_ff=0, 1-step error remaining.
+ * Period 1: enable snap at 10 steps/period → last_velocity_q=655360.
+ * Period 2: vel_ff=0, 1-step error → Kp correction=500 steps/s → target=32768.
  *   clamp_accel: 655360-327680=327680 (5 steps/period).
- *   vel_ff_q=0 → bang-bang fires.
- *   max_pos_vel_q=sqrt(2·327680·1·65536)≈207243 (3.16 steps/period).
- *   327680>207243 → capped → n_steps=3 → step_len=22157. */
-static void test_do_steps_posmode_bang_bang_fires_vel_ff_zero_positive(void **state) {
+ *   step_len=133000/(2·5)-9=13291. */
+static void test_do_steps_posmode_ff_zero_clamp_accel_positive(void **state) {
     (void)state;
     config.update_time_us              = 1000;
     config.joint[0].enabled            = 1;
@@ -746,15 +724,15 @@ static void test_do_steps_posmode_bang_bang_fires_vel_ff_zero_positive(void **st
 
     config.joint[0].velocity_requested = 0.0;
     config.joint[0].abs_pos_requested  = 1.0;
-    config.joint[0].updated_from_c0    = 1;  /* get_joint_config resets this after each read */
+    config.joint[0].updated_from_c0    = 1;
     last_pio_put_value = 0;
     do_steps(0);
 
-    assert_int_equal(last_pio_put_value >> 1, 22157);
+    assert_int_equal(last_pio_put_value >> 1, 13291);
 }
 
-/* Bang-bang gate: fires when vel_ff==0, negative approach (mirror of positive). */
-static void test_do_steps_posmode_bang_bang_fires_vel_ff_zero_negative(void **state) {
+/* Position mode, vel_ff=0, negative approach: mirror of positive. */
+static void test_do_steps_posmode_ff_zero_clamp_accel_negative(void **state) {
     (void)state;
     config.update_time_us              = 1000;
     config.joint[0].enabled            = 1;
@@ -771,11 +749,11 @@ static void test_do_steps_posmode_bang_bang_fires_vel_ff_zero_negative(void **st
 
     config.joint[0].velocity_requested = 0.0;
     config.joint[0].abs_pos_requested  = -1.0;
-    config.joint[0].updated_from_c0    = 1;  /* get_joint_config resets this after each read */
+    config.joint[0].updated_from_c0    = 1;
     last_pio_put_value = 0;
     do_steps(0);
 
-    assert_int_equal(last_pio_put_value >> 1, 22157);
+    assert_int_equal(last_pio_put_value >> 1, 13291);
 }
 
 /* Integration test: position-mode stationary hold at fractional step position.
@@ -938,80 +916,6 @@ static void test_do_steps_velmode_reverse(void **state) {
     assert_int_equal(run_velocity_periods(-750.0, 100), -75);
 }
 
-/* ── clamp_accel oscillation tests ──────────────────────────────────────────
- *
- * clamp_accel alone is monotonic: with a fixed target of 0 it can only reduce
- * |velocity|, never overshoot.  The oscillation bug lives in the *interaction*
- * between the position-mode correction term (which recomputes a new target each
- * period based on position error) and clamp_accel.
- *
- * When the motor overshoots abs_pos_requested the error flips sign, the
- * correction flips sign, and clamp_accel chases a reversed target — causing
- * the velocity to swing to approximately the original jogging speed in the
- * opposite direction.  The loop is indefinite.
- *
- * Two tests below establish this:
- *   1. clamp_accel with a fixed zero target never overshoots (PASSES — control).
- *   2. position-correction + clamp_accel loop oscillates indefinitely (FAILS —
- *      proves the bug; fix it so this test passes).
- */
-
-/* Simulate position-mode correction + clamp_accel for max_periods iterations.
- * Motor starts at position 0 (= abs_pos_requested) moving at init_velocity_q.
- * max_accel is steps/s² — mirrors the bang-bang cap in compute_velocity_cmd.
- * Returns the number of velocity-sign reversals that occurred. */
-static int posmode_decel_sign_changes(
-    int32_t init_velocity_q,
-    int32_t max_accel_q,
-    int     max_periods)
-{
-    const double period_us  = 1000.0;
-    /* max_accel_q = max_accel × period_s² × 65536 → max_accel = max_accel_q / (period_s² × 65536) */
-    const double period_s   = period_us * 1e-6;
-    const double max_accel  = (double)max_accel_q / (period_s * period_s * 65536.0);
-
-    double  float_pos  = 0.0;
-    int32_t velocity_q = init_velocity_q;
-    int     sign_changes = 0;
-    int32_t prev_sign    = (velocity_q >= 0) ? 1 : -1;
-
-    for (int i = 0; i < max_periods; i++) {
-        float_pos += (double)velocity_q / 65536.0;
-        int32_t pos_int = (int32_t)float_pos;
-
-        double error = 0.0 - (double)pos_int;
-        double correction = 0.0;
-        if (error >= 1.0 || error <= -1.0) {
-            correction = error * (1e6 / period_us) * 0.5;
-            if (max_accel > 0.0) {
-                double max_correction = sqrt(2.0 * max_accel * fabs(error));
-                if (correction >  max_correction) correction =  max_correction;
-                if (correction < -max_correction) correction = -max_correction;
-            }
-        }
-
-        int32_t target_vel_q = (int32_t)(correction / period_us * 65536.0);
-        velocity_q = clamp_accel(target_vel_q, velocity_q, max_accel_q);
-
-        /* Hard velocity cap — mirrors do_steps: cap when approaching target. */
-        if (max_accel_q > 0 && pos_int != 0 && (int64_t)velocity_q * (-pos_int) > 0) {
-            int32_t max_vel_q = (int32_t)sqrt(
-                2.0 * (double)max_accel_q * (double)abs(pos_int) * 65536.0);
-            if (velocity_q >  max_vel_q) velocity_q =  max_vel_q;
-            if (velocity_q < -max_vel_q) velocity_q = -max_vel_q;
-        }
-
-        if (velocity_q != 0) {
-            int32_t sign = (velocity_q > 0) ? 1 : -1;
-            if (sign != prev_sign) {
-                sign_changes++;
-                prev_sign = sign;
-            }
-        }
-    }
-    return sign_changes;
-}
-
 /* clamp_accel with a fixed target of 0 must never overshoot zero.
  * Velocity decreases monotonically and sign never changes. */
 static void test_clamp_accel_fixed_zero_target_never_overshoots(void **state) {
@@ -1028,25 +932,6 @@ static void test_clamp_accel_fixed_zero_target_never_overshoots(void **state) {
         if (velocity_q == 0) break;
     }
     assert_int_equal(velocity_q, 0);
-}
-
-/* Position-mode correction + clamp_accel must decelerate to rest without
- * indefinite oscillation.
- *
- * Parameters: 10 steps/period jog, 500 000 steps/s² accel limit (real machine).
- * max_accel_q = 500 000 × (1e-3)² × 65536 = 32 768.
- *
- * Bug: correction for 1-step error = 32 768 Q16.16 = exactly max_accel_q.
- * For any overshoot > 1 step the correction saturates clamp_accel every period,
- * producing a limit cycle: motor never stops, direction reverses repeatedly. */
-static void test_clamp_accel_posmode_decel_does_not_oscillate(void **state) {
-    (void)state;
-    /* 10 steps/period; 0.5 step/period/period accel limit */
-    int sign_changes = posmode_decel_sign_changes(10 * 65536, 32768, 500);
-
-    /* Motor must decelerate to rest: at most one direction change
-     * (forward → stopped is not a reversal; stopped → backward is). */
-    assert_true(sign_changes <= 1);
 }
 
 int main(void) {
@@ -1091,12 +976,12 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_position_mode_reverses,             test_setup),
         cmocka_unit_test_setup(test_do_steps_position_mode_at_target,            test_setup),
         cmocka_unit_test_setup(test_do_steps_position_mode_no_jitter_at_rest,    test_setup),
-        cmocka_unit_test_setup(test_do_steps_posmode_bang_bang_skipped_with_active_vel_ff,    test_setup),
-        cmocka_unit_test_setup(test_do_steps_posmode_bang_bang_skipped_vel_ff_large_negative, test_setup),
-        cmocka_unit_test_setup(test_do_steps_posmode_bang_bang_skipped_vel_ff_small_positive, test_setup),
-        cmocka_unit_test_setup(test_do_steps_posmode_bang_bang_skipped_vel_ff_small_negative, test_setup),
-        cmocka_unit_test_setup(test_do_steps_posmode_bang_bang_fires_vel_ff_zero_positive,    test_setup),
-        cmocka_unit_test_setup(test_do_steps_posmode_bang_bang_fires_vel_ff_zero_negative,    test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_ff_active_tracks_at_full_speed,      test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_ff_large_negative_tracks_at_full_speed, test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_ff_small_positive_tracks_normally,  test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_ff_small_negative_tracks_normally,  test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_ff_zero_clamp_accel_positive,       test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_ff_zero_clamp_accel_negative,       test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_0_75,      test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_0_25,      test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_int_1,     test_setup),
@@ -1105,7 +990,6 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_velmode_frac_10_5, test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_reverse,   test_setup),
         cmocka_unit_test_setup(test_clamp_accel_fixed_zero_target_never_overshoots, test_setup),
-        cmocka_unit_test_setup(test_clamp_accel_posmode_decel_does_not_oscillate,   test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

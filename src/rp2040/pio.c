@@ -332,13 +332,11 @@ uint8_t do_steps(const uint8_t joint) {
     return 0;
   }
 
-  double vel_ff = velocity_requested;  /* save before correction is added */
   velocity_requested = compute_velocity_cmd(
       cmd_type, velocity_requested, abs_pos_requested, abs_pos_achieved,
       enabled, updated, update_period_us, max_accel);
 
   int32_t velocity_q   = (int32_t)((velocity_requested / (double)update_period_us) * 65536.0);
-  int32_t vel_ff_q     = (int32_t)((vel_ff / (double)update_period_us) * 65536.0);
   int32_t max_vel_q    = (int32_t)((max_velocity / (double)update_period_us) * 65536.0);
   /* Accel is steps/s²; convert to Q16.16 steps/period/period → multiply by period_s².
    * The velocity formula (/ update_period_us) accidentally works for 1ms because
@@ -372,26 +370,6 @@ uint8_t do_steps(const uint8_t joint) {
 
   int32_t prev_velocity_q = joint_state[joint].last_velocity_q;
   velocity_q = clamp_accel(velocity_q, joint_state[joint].last_velocity_q, max_accel_q);
-
-  /* Hard velocity cap (bang-bang stopping profile): when approaching the
-   * target position, ensure |velocity| ≤ sqrt(2·max_accel_q·|error|·65536)
-   * so the motor can always decelerate to rest within the remaining distance.
-   * Only applied when vel_ff == 0 (LinuxCNC has fully stopped commanding motion).
-   * During active jog or jog deceleration vel_ff > 0, and applying the cap at
-   * the vel_ff→0 transition causes a sudden velocity snap that triggers a follow
-   * error.  The correction cap in compute_velocity_cmd handles overshoot
-   * prevention while vel_ff is non-zero. */
-  if (cmd_type == JOINT_CMD_POSITION && max_accel_q > 0 && enabled && updated
-      && vel_ff_q == 0) {
-    int32_t err_int = (int32_t)(abs_pos_requested - (double)abs_pos_achieved);
-    /* Only cap when moving toward target (velocity and error share a sign). */
-    if (err_int != 0 && (int64_t)velocity_q * err_int > 0) {
-      int32_t max_pos_vel_q = (int32_t)sqrt(
-          2.0 * (double)max_accel_q * (double)abs(err_int) * 65536.0);
-      if (velocity_q > max_pos_vel_q)  velocity_q = max_pos_vel_q;
-      if (velocity_q < -max_pos_vel_q) velocity_q = -max_pos_vel_q;
-    }
-  }
 
   joint_state[joint].last_velocity_q = velocity_q;
 
