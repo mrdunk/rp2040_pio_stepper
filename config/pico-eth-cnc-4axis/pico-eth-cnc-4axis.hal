@@ -46,9 +46,8 @@ net enable-out       <= and2.2.out
 setp rp2040_eth.0.joint.0.scale          [JOINT_0]SCALE
 setp rp2040_eth.0.joint.0.gpio-step      0
 setp rp2040_eth.0.joint.0.gpio-dir       1
-
-setp rp2040_eth.0.joint.0.vel-limit    [JOINT_0]MAX_VELOCITY
-setp rp2040_eth.0.joint.0.accel-limit  [JOINT_0]MAX_ACCELERATION
+setp rp2040_eth.0.joint.0.vel-limit      [JOINT_0]MAX_VELOCITY
+setp rp2040_eth.0.joint.0.accel-limit    [JOINT_0]MAX_ACCELERATION
 
 net xpos-cmd joint.0.motor-pos-cmd => rp2040_eth.0.joint.0.pos-cmd
 net xvel-cmd joint.0.vel-cmd       => rp2040_eth.0.joint.0.vel-cmd
@@ -61,9 +60,8 @@ net enable-out => rp2040_eth.0.joint.0.enable-cmd
 setp rp2040_eth.0.joint.1.scale          [JOINT_1]SCALE
 setp rp2040_eth.0.joint.1.gpio-step      2
 setp rp2040_eth.0.joint.1.gpio-dir       3
-
-setp rp2040_eth.0.joint.1.vel-limit    [JOINT_1]MAX_VELOCITY
-setp rp2040_eth.0.joint.1.accel-limit  [JOINT_1]MAX_ACCELERATION
+setp rp2040_eth.0.joint.1.vel-limit      [JOINT_1]MAX_VELOCITY
+setp rp2040_eth.0.joint.1.accel-limit    [JOINT_1]MAX_ACCELERATION
 
 net ypos-cmd joint.1.motor-pos-cmd => rp2040_eth.0.joint.1.pos-cmd
 net yvel-cmd joint.1.vel-cmd       => rp2040_eth.0.joint.1.vel-cmd
@@ -76,9 +74,8 @@ net enable-out => rp2040_eth.0.joint.1.enable-cmd
 setp rp2040_eth.0.joint.2.scale          [JOINT_2]SCALE
 setp rp2040_eth.0.joint.2.gpio-step      4
 setp rp2040_eth.0.joint.2.gpio-dir       5
-
-setp rp2040_eth.0.joint.2.vel-limit    [JOINT_2]MAX_VELOCITY
-setp rp2040_eth.0.joint.2.accel-limit  [JOINT_2]MAX_ACCELERATION
+setp rp2040_eth.0.joint.2.vel-limit      [JOINT_2]MAX_VELOCITY
+setp rp2040_eth.0.joint.2.accel-limit    [JOINT_2]MAX_ACCELERATION
 
 net zpos-cmd joint.2.motor-pos-cmd => rp2040_eth.0.joint.2.pos-cmd
 net zvel-cmd joint.2.vel-cmd       => rp2040_eth.0.joint.2.vel-cmd

@@ -617,6 +617,38 @@ static void test_do_steps_underrun_while_enabled_decelerates(void **state) {
     assert_true(last_pio_put_value != 0);  /* still decelerating, not hard-stopped */
 }
 
+/* do_steps: position mode, active vel_ff, small tracking error.
+ * Bang-bang cap must NOT fire when LinuxCNC is actively commanding motion.
+ * During jog deceleration the motor tracks pos_cmd closely (error ≈ 1 step)
+ * while vel_ff is large; the old cap would fire and prematurely halve velocity.
+ *
+ * Setup: vel_ff=10000 steps/s (10 steps/period), error=1 step, max_accel=5e6
+ * steps/s² → max_accel_q=5 steps/period.
+ *
+ * With vel_ff active (vel_ff_q=655360 >> max_accel_q=327680), the cap must not
+ * reduce velocity from ~10 steps/period to ~3 steps/period.
+ * Expected step_len for 10 steps/period = 133000/20 - 9 = 6641. */
+static void test_do_steps_posmode_bang_bang_skipped_with_active_vel_ff(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = 10000.0;  /* vel_ff: 10 steps/period */
+    config.joint[0].abs_pos_requested  = 1.0;      /* 1-step error: good tracking */
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000000.0; /* 5 steps/period/period */
+    config.joint[0].updated_from_c0    = 1;
+    mock_tx_fifo_empty                  = 1;
+    mock_rx_fifo_level                  = 0;
+
+    do_steps(0);
+
+    /* Correct: velocity ≈ 10.5 steps/period → 10 steps this period → step_len=6641.
+     * Bug: bang-bang caps to ~3 steps/period → step_len ≈ 22157. */
+    assert_int_equal(last_pio_put_value >> 1, 6641);
+}
+
 /* Integration test: position-mode stationary hold at fractional step position.
  *
  * Uses pico-eth-cnc-3axis.ini parameters:
@@ -930,6 +962,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_position_mode_reverses,             test_setup),
         cmocka_unit_test_setup(test_do_steps_position_mode_at_target,            test_setup),
         cmocka_unit_test_setup(test_do_steps_position_mode_no_jitter_at_rest,    test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_bang_bang_skipped_with_active_vel_ff, test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_0_75,      test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_0_25,      test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_int_1,     test_setup),
