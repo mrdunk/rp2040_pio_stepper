@@ -376,12 +376,13 @@ uint8_t do_steps(const uint8_t joint) {
   /* Hard velocity cap (bang-bang stopping profile): when approaching the
    * target position, ensure |velocity| ≤ sqrt(2·max_accel_q·|error|·65536)
    * so the motor can always decelerate to rest within the remaining distance.
-   * Skipped when vel_ff is significant (|vel_ff_q| ≥ max_accel_q): LinuxCNC is
-   * actively commanding motion and the tracking error is small by design, not
-   * because the target is near.  The correction cap in compute_velocity_cmd
-   * handles overshoot prevention while vel_ff is active. */
+   * Only applied when vel_ff == 0 (LinuxCNC has fully stopped commanding motion).
+   * During active jog or jog deceleration vel_ff > 0, and applying the cap at
+   * the vel_ff→0 transition causes a sudden velocity snap that triggers a follow
+   * error.  The correction cap in compute_velocity_cmd handles overshoot
+   * prevention while vel_ff is non-zero. */
   if (cmd_type == JOINT_CMD_POSITION && max_accel_q > 0 && enabled && updated
-      && abs(vel_ff_q) < max_accel_q) {
+      && vel_ff_q == 0) {
     int32_t err_int = (int32_t)(abs_pos_requested - (double)abs_pos_achieved);
     /* Only cap when moving toward target (velocity and error share a sign). */
     if (err_int != 0 && (int64_t)velocity_q * err_int > 0) {

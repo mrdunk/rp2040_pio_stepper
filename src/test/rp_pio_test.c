@@ -644,9 +644,138 @@ static void test_do_steps_posmode_bang_bang_skipped_with_active_vel_ff(void **st
 
     do_steps(0);
 
-    /* Correct: velocity ≈ 10.5 steps/period → 10 steps this period → step_len=6641.
-     * Bug: bang-bang caps to ~3 steps/period → step_len ≈ 22157. */
+    /* Correct: vel_ff_q=655360 ≠ 0 → bang-bang skipped → velocity ≈ 10.5 steps/period
+     * → 10 steps this period → step_len=6641.
+     * Bug (old abs(vel_ff_q)<max_accel_q gate): bang-bang fires at transition → step_len ≈ 22157. */
     assert_int_equal(last_pio_put_value >> 1, 6641);
+}
+
+/* Bang-bang gate: large negative vel_ff.
+ * Mirror of the large-positive test: vel_ff=-10000 steps/s (10 steps/period reverse),
+ * error=-1 step.  vel_ff_q=-655360 ≠ 0 → bang-bang skipped.
+ * velocity = -10500 steps/s → n_steps=10 → step_len=6641 (same magnitude as forward). */
+static void test_do_steps_posmode_bang_bang_skipped_vel_ff_large_negative(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = -10000.0;
+    config.joint[0].abs_pos_requested  = -1.0;
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000000.0;
+    config.joint[0].updated_from_c0    = 1;
+    mock_tx_fifo_empty                 = 1;
+    mock_rx_fifo_level                 = 0;
+
+    do_steps(0);
+
+    assert_int_equal(last_pio_put_value >> 1, 6641);
+}
+
+/* Bang-bang gate: small positive vel_ff (below old abs(vel_ff_q)<max_accel_q threshold).
+ *
+ * vel_ff=4000 steps/s → vel_ff_q=262144, max_accel_q=327680: old gate would fire.
+ * New gate (vel_ff_q==0): 262144≠0 → skip.
+ *
+ * velocity = 4000+500 = 4500 steps/s → velocity_q=294912 (4.5 steps/period).
+ * max_pos_vel_q for err=1: sqrt(2·327680·1·65536)≈207243 (3.16 steps/period).
+ * 294912>207243 → old gate would cap to n_steps=3, step_len=22157.
+ * New gate: skipped → n_steps=4 → step_len=16616. */
+static void test_do_steps_posmode_bang_bang_skipped_vel_ff_small_positive(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = 4000.0;
+    config.joint[0].abs_pos_requested  = 1.0;
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000000.0;
+    config.joint[0].updated_from_c0    = 1;
+    mock_tx_fifo_empty                 = 1;
+    mock_rx_fifo_level                 = 0;
+
+    do_steps(0);
+
+    assert_int_equal(last_pio_put_value >> 1, 16616);
+}
+
+/* Bang-bang gate: small negative vel_ff (mirror of small-positive). */
+static void test_do_steps_posmode_bang_bang_skipped_vel_ff_small_negative(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = -4000.0;
+    config.joint[0].abs_pos_requested  = -1.0;
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000000.0;
+    config.joint[0].updated_from_c0    = 1;
+    mock_tx_fifo_empty                 = 1;
+    mock_rx_fifo_level                 = 0;
+
+    do_steps(0);
+
+    assert_int_equal(last_pio_put_value >> 1, 16616);
+}
+
+/* Bang-bang gate: fires when vel_ff==0 (LinuxCNC fully stopped, residual error).
+ *
+ * Period 1: enable snap at 10 steps/period forward → last_velocity_q=655360.
+ * Period 2: vel_ff=0, 1-step error remaining.
+ *   clamp_accel: 655360-327680=327680 (5 steps/period).
+ *   vel_ff_q=0 → bang-bang fires.
+ *   max_pos_vel_q=sqrt(2·327680·1·65536)≈207243 (3.16 steps/period).
+ *   327680>207243 → capped → n_steps=3 → step_len=22157. */
+static void test_do_steps_posmode_bang_bang_fires_vel_ff_zero_positive(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = 10000.0;
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000000.0;
+    config.joint[0].updated_from_c0    = 1;
+    mock_tx_fifo_empty                 = 1;
+    mock_rx_fifo_level                 = 0;
+    do_steps(0);  /* enable snap: last_velocity_q=655360 */
+
+    config.joint[0].velocity_requested = 0.0;
+    config.joint[0].abs_pos_requested  = 1.0;
+    config.joint[0].updated_from_c0    = 1;  /* get_joint_config resets this after each read */
+    last_pio_put_value = 0;
+    do_steps(0);
+
+    assert_int_equal(last_pio_put_value >> 1, 22157);
+}
+
+/* Bang-bang gate: fires when vel_ff==0, negative approach (mirror of positive). */
+static void test_do_steps_posmode_bang_bang_fires_vel_ff_zero_negative(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = -10000.0;
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000000.0;
+    config.joint[0].updated_from_c0    = 1;
+    mock_tx_fifo_empty                 = 1;
+    mock_rx_fifo_level                 = 0;
+    do_steps(0);  /* enable snap: last_velocity_q=-655360 */
+
+    config.joint[0].velocity_requested = 0.0;
+    config.joint[0].abs_pos_requested  = -1.0;
+    config.joint[0].updated_from_c0    = 1;  /* get_joint_config resets this after each read */
+    last_pio_put_value = 0;
+    do_steps(0);
+
+    assert_int_equal(last_pio_put_value >> 1, 22157);
 }
 
 /* Integration test: position-mode stationary hold at fractional step position.
@@ -962,7 +1091,12 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_position_mode_reverses,             test_setup),
         cmocka_unit_test_setup(test_do_steps_position_mode_at_target,            test_setup),
         cmocka_unit_test_setup(test_do_steps_position_mode_no_jitter_at_rest,    test_setup),
-        cmocka_unit_test_setup(test_do_steps_posmode_bang_bang_skipped_with_active_vel_ff, test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_bang_bang_skipped_with_active_vel_ff,    test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_bang_bang_skipped_vel_ff_large_negative, test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_bang_bang_skipped_vel_ff_small_positive, test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_bang_bang_skipped_vel_ff_small_negative, test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_bang_bang_fires_vel_ff_zero_positive,    test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_bang_bang_fires_vel_ff_zero_negative,    test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_0_75,      test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_0_25,      test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_int_1,     test_setup),
