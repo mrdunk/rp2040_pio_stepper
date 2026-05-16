@@ -352,9 +352,14 @@ uint8_t do_steps(const uint8_t joint) {
     if(enabled) {
       printf("J%u enab: max_accel_q=%d\n", joint, max_accel_q);
       init_pio(joint);
-      // Snap to commanded velocity so we don't ramp from zero when LinuxCNC
-      // is already moving (joint was enabled before motion started).
-      joint_state[joint].last_velocity_q = velocity_q;
+      // Snap to commanded velocity when stopped so we don't ramp from zero
+      // when LinuxCNC is already moving (joint enabled before motion started).
+      // When last_velocity_q is non-zero the joint is mid-deceleration (network
+      // reconnect before reaching zero); preserve it so clamp_accel limits the
+      // velocity change normally and avoids a jitter step.
+      if (joint_state[joint].last_velocity_q == 0) {
+        joint_state[joint].last_velocity_q = velocity_q;
+      }
     } else {
       printf("J%u disab tick=%u vel_q=%d max_accel_q=%d\n",
              joint, tick, joint_state[joint].last_velocity_q, max_accel_q);

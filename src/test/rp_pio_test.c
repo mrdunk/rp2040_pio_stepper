@@ -335,6 +335,75 @@ static void test_do_steps_network_loss_decelerates(void **state) {
     assert_true(last_pio_put_value != 0);  /* decelerating, not hard-stopped */
 }
 
+/* do_steps: network reconnects while joint is mid-deceleration -> acceleration limit honoured.
+ *
+ * Bug: on the enable 0->1 transition, last_velocity_q was unconditionally snapped to the
+ * new commanded velocity, bypassing clamp_accel.  If the motor was still decelerating,
+ * this caused a velocity jump (jitter).
+ *
+ * Scenario: max_accel=2 steps/period², velocity=10 steps/period.
+ *   Tick 1: enable snap → last_velocity_q=10.
+ *   Tick 2-4: decel (enabled=0, updated=0) → 8 → 6 → 4 steps/period.
+ *   Tick 5: re-enable (enabled=1, updated=1) at velocity=10.
+ *     WRONG (old): snap last_velocity_q=10 → clamp_accel(10,10,2)=10 → jump from 4 to 10.
+ *     CORRECT: no snap (last_velocity_q=4 != 0) → clamp_accel(10,4,2)=6 → accel-limited. */
+static void test_do_steps_reconnect_mid_decel_no_jitter(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = 10000.0;  /* 10 steps/period at 1000µs */
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 2000000.0; /* 2e6 steps/s² → 2 steps/period/period */
+    mock_tx_fifo_empty                 = 1;
+    do_steps(0);  /* tick 1: enable snap → last_velocity_q=10 */
+
+    /* Ticks 2-4: network lost, decelerate 10→8→6→4 steps/period. */
+    config.joint[0].enabled          = 0;
+    config.joint[0].updated_from_c0  = 0;
+    mock_tx_fifo_empty               = 1;
+    do_steps(0);  /* 10→8 */
+    do_steps(0);  /* 8→6 */
+    do_steps(0);  /* 6→4 */
+
+    /* Tick 5: network reconnects, LinuxCNC re-enables at velocity=10. */
+    config.joint[0].enabled          = 1;
+    config.joint[0].updated_from_c0  = 1;
+    config.joint[0].velocity_requested = 10000.0;
+    last_pio_put_value               = 0;
+    pio_put_call_count               = 0;
+    mock_tx_fifo_empty               = 1;
+    do_steps(0);
+
+    /* Acceleration limit must be honoured: velocity steps from 4 to at most 4+2=6,
+     * not a snap to 10.  step_len for 6 steps/period = 133000/(2*6)-9 = 11074. */
+    assert_int_equal(last_pio_put_value >> 1, 11074);
+}
+
+/* do_steps: fresh enable (last_velocity_q==0) snaps to commanded velocity.
+ *
+ * This is the intentional behaviour for joints enabled from rest when LinuxCNC
+ * is already commanding motion: the motor must not ramp slowly from zero.
+ * Regression guard: the mid-decel fix must not break this snap. */
+static void test_do_steps_fresh_enable_snaps_to_commanded(void **state) {
+    (void)state;
+    /* last_velocity_q starts at 0 (pio_reset_for_test in test_setup). */
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = 10000.0;  /* 10 steps/period */
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 2000000.0; /* 2 steps/period/period */
+    mock_tx_fifo_empty                 = 1;
+    do_steps(0);
+
+    /* Snap applied (last_velocity_q was 0): full commanded velocity immediately.
+     * step_len for 10 steps/period = 133000/(2*10)-9 = 6641. */
+    assert_int_equal(last_pio_put_value >> 1, 6641);
+}
+
 /* do_steps: no new core0 data (updated == 0), slow last_velocity -> writes 0 to PIO, returns 0 */
 static void test_do_steps_no_update(void **state) {
     (void)state;
@@ -1011,6 +1080,8 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_disabling_decelerates,    test_setup),
         cmocka_unit_test_setup(test_do_steps_disabling_stops_when_zero,  test_setup),
         cmocka_unit_test_setup(test_do_steps_network_loss_decelerates,   test_setup),
+        cmocka_unit_test_setup(test_do_steps_reconnect_mid_decel_no_jitter,  test_setup),
+        cmocka_unit_test_setup(test_do_steps_fresh_enable_snaps_to_commanded, test_setup),
         cmocka_unit_test_setup(test_do_steps_no_update,                  test_setup),
         cmocka_unit_test_setup(test_do_steps_normal_step,               test_setup),
         cmocka_unit_test_setup(test_do_steps_accel_clamped,                      test_setup),
