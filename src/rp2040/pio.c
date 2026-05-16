@@ -373,21 +373,19 @@ uint8_t do_steps(const uint8_t joint) {
   int32_t prev_velocity_q = joint_state[joint].last_velocity_q;
   velocity_q = clamp_accel(velocity_q, joint_state[joint].last_velocity_q, max_accel_q);
 
-  /* Stopping-profile cap: ensure the motor can decelerate to vel_ff within the
-   * remaining distance to target.  Formula: |v| ≤ vel_ff + sqrt(2·a·|error|).
-   * When vel_ff=0 this is the classic bang-bang stopping guarantee.
-   * When vel_ff>0 (active jog or G-code move) the extra headroom prevents the
-   * cap from interfering with normal tracking, fixing the apparent halved
-   * acceleration seen with an unconditional sqrt(2·a·|error|) cap. */
-  if (cmd_type == JOINT_CMD_POSITION && max_accel_q > 0 && enabled && updated) {
+  /* Stopping-profile cap: when LinuxCNC has fully stopped commanding motion
+   * (vel_ff=0), ensure the motor can decelerate to rest within the remaining
+   * distance.  Formula: |v| ≤ sqrt(2·a·|error|).
+   * Only fires when vel_ff_q==0 so it doesn't interfere with normal tracking
+   * or deceleration — the trajectory planner handles those phases. */
+  if (cmd_type == JOINT_CMD_POSITION && max_accel_q > 0 && enabled && updated
+      && vel_ff_q == 0) {
     int32_t err_int = (int32_t)(abs_pos_requested - (double)abs_pos_achieved);
     if (err_int != 0 && (int64_t)velocity_q * err_int > 0) {
-      int32_t sqrt_term = (int32_t)sqrt(
+      int32_t max_pos_vel_q = (int32_t)sqrt(
           2.0 * (double)max_accel_q * (double)abs(err_int) * 65536.0);
-      if (err_int > 0 && velocity_q > vel_ff_q + sqrt_term)
-        velocity_q = vel_ff_q + sqrt_term;
-      if (err_int < 0 && velocity_q < vel_ff_q - sqrt_term)
-        velocity_q = vel_ff_q - sqrt_term;
+      if (velocity_q >  max_pos_vel_q) velocity_q =  max_pos_vel_q;
+      if (velocity_q < -max_pos_vel_q) velocity_q = -max_pos_vel_q;
     }
   }
 
