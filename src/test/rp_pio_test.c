@@ -917,6 +917,50 @@ static void test_do_steps_velmode_reverse(void **state) {
     assert_int_equal(run_velocity_periods(-750.0, 100), -75);
 }
 
+/* Position mode: no overshoot after final correction step.
+ *
+ * Models JOINT_0 (scale=160, max_accel=750 mm/s²=120000 steps/s²).
+ * max_accel_q = 120000 * (1e-3)² * 65536 = 7864.
+ * Bang-bang cap at 1-step error = sqrt(2·7864·65536) ≈ 32109 Q16.16 ≈ 490 steps/s.
+ *
+ * Prime last_velocity_q to 32112 (≈ bang-bang cap) via velocity mode enable snap.
+ * Then switch to position mode at target (error=0, vel_ff=0).
+ * Without fix: clamp_accel leaves velocity_q=24248; over 2 periods the Bresenham
+ * accumulator (32112 + 24248 + 16384 = 72744) crosses 65536 → overshoot step fires.
+ * With fix: velocity_q and accumulator are zeroed at err_int=0, vel_ff_q=0. */
+static void test_do_steps_position_mode_no_overshoot_after_correction(void **state) {
+    (void)state;
+
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;   /* velocity mode to prime */
+    config.joint[0].velocity_requested = 490.0;                /* 32112 Q16.16 ≈ bang-bang cap */
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].max_velocity       = 200000.0;
+    config.joint[0].max_accel          = 120000.0;             /* 750 mm/s² × 160 steps/mm */
+    config.joint[0].updated_from_c0    = 1;
+    mock_tx_fifo_empty                 = 1;
+    mock_rx_fifo_level                 = 0;
+    do_steps(0);  /* enable snap: last_velocity_q = 490/1000 * 65536 = 32112 */
+
+    /* Now at target: error=0, vel_ff=0.  Residual velocity must not fire a step. */
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = 0.0;
+    config.joint[0].abs_pos_requested  = 1.0;
+    config.joint[0].abs_pos_achieved   = 1;
+
+    int steps_fired = 0;
+    for (int i = 0; i < 10; i++) {
+        config.joint[0].updated_from_c0 = 1;
+        last_pio_put_value = 0;
+        do_steps(0);
+        if (last_pio_put_value != 0) steps_fired++;
+    }
+
+    assert_int_equal(steps_fired, 0);
+}
+
 /* clamp_accel with a fixed target of 0 must never overshoot zero.
  * Velocity decreases monotonically and sign never changes. */
 static void test_clamp_accel_fixed_zero_target_never_overshoots(void **state) {
@@ -990,6 +1034,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_velmode_frac_1_5,  test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_frac_10_5, test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_reverse,   test_setup),
+        cmocka_unit_test_setup(test_do_steps_position_mode_no_overshoot_after_correction, test_setup),
         cmocka_unit_test_setup(test_clamp_accel_fixed_zero_target_never_overshoots, test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);

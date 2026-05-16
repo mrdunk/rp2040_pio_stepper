@@ -390,6 +390,18 @@ uint8_t do_steps(const uint8_t joint) {
     }
   }
 
+  /* At-target snap: when in the dead zone with no feedforward, zero velocity
+   * and accumulator immediately.  Without this, clamp_accel leaves residual
+   * velocity after the final correction step; the Bresenham accumulator drains
+   * it into an overshoot step. */
+  if (cmd_type == JOINT_CMD_POSITION && vel_ff_q == 0 && enabled && updated) {
+    int32_t err_snap = (int32_t)(abs_pos_requested - (double)abs_pos_achieved);
+    if (err_snap == 0) {
+      velocity_q = 0;
+      joint_state[joint].step_accumulator_q = 0;
+    }
+  }
+
   joint_state[joint].last_velocity_q = velocity_q;
 
   /* One-shot: velocity reached zero while decelerating under network loss
