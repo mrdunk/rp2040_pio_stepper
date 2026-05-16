@@ -701,12 +701,13 @@ static void test_do_steps_posmode_ff_small_negative_tracks_normally(void **state
     assert_int_equal(last_pio_put_value >> 1, 16616);
 }
 
-/* Position mode, vel_ff=0, residual error: clamp_accel limits velocity.
+/* Position mode, vel_ff=0, residual error: stopping-profile cap limits velocity.
  *
  * Period 1: enable snap at 10 steps/period → last_velocity_q=655360.
  * Period 2: vel_ff=0, 1-step error → Kp correction=500 steps/s → target=32768.
  *   clamp_accel: 655360-327680=327680 (5 steps/period).
- *   step_len=133000/(2·5)-9=13291. */
+ *   cap: vel_ff_q=0, sqrt_term=sqrt(2·327680·1·65536)≈207243 (3.16 steps/period).
+ *   327680>207243 → capped → n_steps=3 → step_len=22157. */
 static void test_do_steps_posmode_ff_zero_clamp_accel_positive(void **state) {
     (void)state;
     config.update_time_us              = 1000;
@@ -728,7 +729,7 @@ static void test_do_steps_posmode_ff_zero_clamp_accel_positive(void **state) {
     last_pio_put_value = 0;
     do_steps(0);
 
-    assert_int_equal(last_pio_put_value >> 1, 13291);
+    assert_int_equal(last_pio_put_value >> 1, 22157);
 }
 
 /* Position mode, vel_ff=0, negative approach: mirror of positive. */
@@ -753,7 +754,7 @@ static void test_do_steps_posmode_ff_zero_clamp_accel_negative(void **state) {
     last_pio_put_value = 0;
     do_steps(0);
 
-    assert_int_equal(last_pio_put_value >> 1, 13291);
+    assert_int_equal(last_pio_put_value >> 1, 22157);
 }
 
 /* Integration test: position-mode stationary hold at fractional step position.
