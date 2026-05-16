@@ -1048,6 +1048,29 @@ static void test_clamp_accel_fixed_zero_target_never_overshoots(void **state) {
     assert_int_equal(velocity_q, 0);
 }
 
+/* Reproduce JOINT_1 numbers: max_accel_q = floor(1280 * 1e-6 * 65536) = 83.
+ * LinuxCNC ramps vel_ff_q by floor(n*83.886) each period; the per-period delta
+ * alternates between 83 and 84 as the 0.886 fractional part accumulates.
+ * Without headroom (budget=83) the firmware falls 1 unit short on every "84"
+ * period, accumulating lag that grows into a position error large enough to trip
+ * FERROR over a 12-second ramp.  With ACCEL_HEADROOM=1.1 the budget=91 covers
+ * the worst-case delta of 84, keeping lag at zero. */
+static void test_ramp_accel_headroom_tracks_vel_ff(void **state) {
+    (void)state;
+    int32_t max_accel_q  = 83;
+    int32_t clamp_budget = (int32_t)(max_accel_q * ACCEL_HEADROOM);
+    int32_t firmware_vel = 0;
+    int32_t max_lag      = 0;
+
+    for (int n = 1; n <= 120; n++) {
+        int32_t vel_ff_q = (int32_t)(n * 83.886);
+        firmware_vel = clamp_accel(vel_ff_q, firmware_vel, clamp_budget);
+        int32_t lag = vel_ff_q - firmware_vel;
+        if (lag > max_lag) max_lag = lag;
+    }
+    assert_int_equal(max_lag, 0);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -1107,6 +1130,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_velmode_reverse,   test_setup),
         cmocka_unit_test_setup(test_do_steps_position_mode_no_overshoot_after_correction, test_setup),
         cmocka_unit_test_setup(test_clamp_accel_fixed_zero_target_never_overshoots, test_setup),
+        cmocka_unit_test_setup(test_ramp_accel_headroom_tracks_vel_ff,              test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

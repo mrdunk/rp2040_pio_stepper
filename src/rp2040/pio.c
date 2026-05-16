@@ -345,6 +345,7 @@ uint8_t do_steps(const uint8_t joint) {
    * 1/1000µs == 1e-3s, but for accel the period must be squared. */
   double  period_s     = (double)update_period_us * 1e-6;
   int32_t max_accel_q  = (int32_t)(max_accel * period_s * period_s * 65536.0);
+  int32_t clamp_accel_q = (int32_t)(max_accel_q * ACCEL_HEADROOM);
   int32_t period_ticks = (int32_t)((int64_t)update_period_us * RP2040_CLOCK_MHZ);
 
   if(enabled != joint_state[joint].last_enabled) {
@@ -376,7 +377,7 @@ uint8_t do_steps(const uint8_t joint) {
   }
 
   int32_t prev_velocity_q = joint_state[joint].last_velocity_q;
-  velocity_q = clamp_accel(velocity_q, joint_state[joint].last_velocity_q, max_accel_q);
+  velocity_q = clamp_accel(velocity_q, joint_state[joint].last_velocity_q, clamp_accel_q);
 
   /* Stopping-profile cap: ensure the motor can decelerate to vel_ff within the
    * remaining distance to target.  Formula: |v| ≤ vel_ff + sqrt(2·a·|error|).

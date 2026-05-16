@@ -3,6 +3,10 @@
 
 #include <stdint.h>
 
+/* Allow firmware to accelerate slightly faster than LinuxCNC's ramp rate so
+ * integer truncation of max_accel_q never causes systematic tracking lag. */
+#define ACCEL_HEADROOM 1.1
+
 /* Initialize PIO state machines for a joint.
  * Always sets up a step_gen SM on the appropriate PIO block.
  * Also sets up a step_count SM on PIO1 for joints 0..NUM_FEEDBACK-1.
