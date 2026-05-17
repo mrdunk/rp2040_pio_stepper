@@ -1284,6 +1284,57 @@ static void test_do_steps_posmode_velocity_achieved_zero_reverse(void **state) {
     assert_int_equal(config.joint[0].velocity_achieved, 0);
 }
 
+/* Position mode, 0.3 steps/period: inter-step intervals uniform despite correction.
+ *
+ * At sub-1-step speeds the position-correction term fires whenever error ≥ 1 step,
+ * spiking velocity_q above the feedforward and over-filling the Bresenham accumulator.
+ * This causes steps to cluster (e.g. gap of 2 followed by gap of 4) rather than
+ * being spaced uniformly at 3-4 periods apart.  The fix is to drive plan_steps with
+ * vel_ff_q (feedforward only) in the sub-1-step regime so the correction spike does
+ * not disrupt the accumulator. */
+static void test_do_steps_posmode_uniform_spacing_at_low_speed(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = 300.0;  /* 0.3 steps/period at 1ms */
+    config.joint[0].max_velocity       = 32000.0;
+    config.joint[0].max_accel          = 0.0;
+    mock_tx_fifo_empty                 = 1;
+
+    int     step_at[20];
+    int     n       = 0;
+    int32_t sim_pos = 0;
+    double  pos_req = 0.0;
+
+    for (int p = 0; p < 80 && n < 15; p++) {
+        pos_req += 0.3;
+        config.joint[0].abs_pos_requested = pos_req;
+        mock_rx_values[0]  = sim_pos;
+        mock_rx_fifo_level = 1;
+        mock_rx_index      = 0;
+        config.joint[0].updated_from_c0 = 1;
+        last_pio_put_value = 0;
+        do_steps(0);
+        int32_t fired = pio_word_steps(last_pio_put_value);
+        if (fired > 0) {
+            step_at[n++] = p;
+            sim_pos += fired;
+        }
+    }
+
+    assert_true(n >= 6);
+
+    /* Ideal Bresenham at 0.3 steps/period: gaps are 3 or 4, never 1 or 5+. */
+    int min_gap = 1000, max_gap = 0;
+    for (int i = 1; i < n; i++) {
+        int gap = step_at[i] - step_at[i - 1];
+        if (gap < min_gap) min_gap = gap;
+        if (gap > max_gap) max_gap = gap;
+    }
+    assert_true(max_gap - min_gap <= 1);
+}
+
 /* do_steps: position-mode stopping-profile cap is inactive in velocity mode.
  *
  * In position mode the sqrt(2·a·|error|) cap reduces velocity when the joint is
@@ -1380,6 +1431,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_velocity_achieved_nonzero_while_decelerating, test_setup),
         cmocka_unit_test_setup(test_do_steps_velocity_achieved_zero_reverse,             test_setup),
         cmocka_unit_test_setup(test_do_steps_velocity_mode_no_position_cap,              test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_uniform_spacing_at_low_speed,     test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_velocity_achieved_zero_when_stopped,       test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_velocity_achieved_nonzero_while_decelerating, test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_velocity_achieved_zero_reverse,             test_setup),

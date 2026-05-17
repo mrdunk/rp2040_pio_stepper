@@ -437,8 +437,13 @@ uint8_t do_steps(const uint8_t joint) {
   }
 
   int32_t step_count_q  = abs(velocity_q);
+  /* Sub-1-step with active feedforward: drive Bresenham with vel_ff_q so that
+   * position-correction spikes do not disrupt inter-step intervals.  At ≥1
+   * step/period or with zero feedforward (stationary positioning), use velocity_q. */
+  int32_t plan_vel_q    = (step_count_q > 0 && step_count_q < 65536 && abs(vel_ff_q) > 0)
+                          ? vel_ff_q : velocity_q;
   int32_t step_len_ceil = calculate_step_len(step_count_q, period_ticks, max_vel_q);
-  int32_t n_steps       = plan_steps(velocity_q, joint, period_ticks, step_len_ceil);
+  int32_t n_steps       = plan_steps(plan_vel_q, joint, period_ticks, step_len_ceil);
   /* Derive step_len for the exact n_steps this period (floor or ceil of v),
    * so the PIO pulse rate matches the intended physical step count. */
   int32_t step_len_ticks = calculate_step_len(n_steps * 65536, period_ticks, max_vel_q);
