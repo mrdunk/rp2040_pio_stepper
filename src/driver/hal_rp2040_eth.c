@@ -663,18 +663,8 @@ static void write_port(void *arg, long period)
   static int cooloff = 0;
   static int send_fail_count = 0;
 
-  if (cooloff > 0) {
-    cooloff--;
-    return;
-  }
-
   skeleton_t *data = arg;
   struct NWBuffer buffer;
-  reset_nw_buf(&buffer);
-  bool pack_success = true;
-
-  *data->seq_out = (uint32_t)count;
-  pack_success = pack_success && serialize_timing(&buffer, count, rtapi_get_time());
 
   /* While eth is down, hold joint_enable_cmd=false so the RP2040 keeps
    * decelerating.  LinuxCNC may write enable=true to this HAL pin every
@@ -685,40 +675,53 @@ static void write_port(void *arg, long period)
     }
   }
 
-  if (!get_version_checked())
-    serialize_version_request(&buffer);
+  /* Send — skipped during cooloff, but receive/eth-tracking always runs so
+   * that rx_miss_count and eth_up reflect reality even when we cannot send
+   * (e.g. interface administratively down). */
+  if (cooloff > 0) {
+    cooloff--;
+  } else {
+    reset_nw_buf(&buffer);
+    bool pack_success = true;
 
-  // Put GPIO values in network buffer.
-  // serialize_gpio() return value is not checked: a failed pack still allows
-  // the rest of the buffer to be sent with whatever was packed.
-  serialize_gpio(&buffer, data);
+    *data->seq_out = (uint32_t)count;
+    pack_success = pack_success && serialize_timing(&buffer, count, rtapi_get_time());
 
-  // Send configuration data to RP.
-  pack_success = pack_success && configure(
-      &buffer, count, last_joint_config, last_gpio_config, last_spindle_config, data);
+    if (!get_version_checked())
+      serialize_version_request(&buffer);
 
-  pack_success = pack_success && serialize_joint_pos(&buffer, data);
+    // Put GPIO values in network buffer.
+    // serialize_gpio() return value is not checked: a failed pack still allows
+    // the rest of the buffer to be sent with whatever was packed.
+    serialize_gpio(&buffer, data);
 
-  // No need to update each spindle every cycle.
-  if(count % 100 == 0) {
-    pack_success = pack_success && serialise_spindle_speed_in(&buffer, data);
-  }
+    // Send configuration data to RP.
+    pack_success = pack_success && configure(
+        &buffer, count, last_joint_config, last_gpio_config, last_spindle_config, data);
 
-  if(!pack_success) {
-    printf("WARN: TX packet dropped — buffer overflow packing servo cycle %u\n", count);
-  } else if (send_data(device_num, &buffer) != 0) {
-    cooloff = 2000;
-    if (errno != last_errno) {
-      last_errno = errno;
-      log_network_error("send", device_num, errno);
+    pack_success = pack_success && serialize_joint_pos(&buffer, data);
+
+    // No need to update each spindle every cycle.
+    if(count % 100 == 0) {
+      pack_success = pack_success && serialise_spindle_speed_in(&buffer, data);
     }
-    send_fail_count++;
-    if (!(send_fail_count % 10)) {
-      last_errno = 0;
+
+    if(!pack_success) {
+      printf("WARN: TX packet dropped — buffer overflow packing servo cycle %u\n", count);
+    } else if (send_data(device_num, &buffer) != 0) {
+      cooloff = 2000;
+      if (errno != last_errno) {
+        last_errno = errno;
+        log_network_error("send", device_num, errno);
+      }
+      send_fail_count++;
+      if (!(send_fail_count % 10)) {
+        last_errno = 0;
+      }
+    } else {
+      send_fail_count = 0;
     }
-    return;
   }
-  send_fail_count = 0;
 
   // Receive data and check packets all completed round trip.
   reset_nw_buf(&buffer);
