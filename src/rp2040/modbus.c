@@ -108,10 +108,8 @@ int modbus_rtu_encode(uint8_t address, uint8_t function_code, uint16_t v1, uint1
   *wrptr++ = (uint8_t)v2;
   if (data && size) {
     *wrptr++ = size;
-    while(size > 0) {
-      *wrptr++ = *data++;
-      size--;
-    }
+    memcpy(wrptr, data, size);
+    wrptr += size;
   }
   modbus_pause = vfd_config.type == MODBUS_TYPE_WEIKEN ? 100 : 50;
   return wrptr - modbus_command;
