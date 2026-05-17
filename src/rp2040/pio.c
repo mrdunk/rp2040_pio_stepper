@@ -351,7 +351,7 @@ uint8_t do_steps(const uint8_t joint) {
   if(enabled != joint_state[joint].last_enabled) {
     joint_state[joint].last_enabled = enabled;
     if(enabled) {
-      printf("J%u enab: max_accel_q=%d\n", joint, max_accel_q);
+      printf("J%u enab\n", joint);
       init_pio(joint);
       // Snap to commanded velocity when stopped so we don't ramp from zero
       // when LinuxCNC is already moving (joint enabled before motion started).
@@ -362,12 +362,7 @@ uint8_t do_steps(const uint8_t joint) {
         joint_state[joint].last_velocity_q = velocity_q;
       }
     } else {
-      printf("J%u disab tick=%u vel_q=%d max_accel_q=%d\n",
-             joint, tick, joint_state[joint].last_velocity_q, max_accel_q);
-      if (max_accel_q <= 0) {
-        printf("WARN: J%u max_accel_q=0 (max_accel=%.3f us=%u) — snap to zero\n",
-               joint, max_accel, update_period_us);
-      }
+      printf("J%u disab\n", joint);
     }
   }
 
@@ -410,20 +405,9 @@ uint8_t do_steps(const uint8_t joint) {
 
   joint_state[joint].last_velocity_q = velocity_q;
 
-  /* One-shot: velocity reached zero while decelerating under network loss
-   * (still enabled — disable_joint() hasn't fired yet).  If this fires
-   * immediately after network disconnect, max_accel_q is likely 0. */
-  if (updated == 0 && enabled && velocity_q == 0 && prev_velocity_q != 0) {
-    printf("J%u: vel=0 via network-loss (enabled, accel_q=%d prev_vel_q=%d)\n",
-           joint, max_accel_q, prev_velocity_q);
-  }
-
   if (!enabled && velocity_q == 0) {
     /* Fully decelerated: issue hard stop and keep pos_fb current while disabled.
      * abs_pos_achieved already reflects any in-flight steps drained above. */
-    if (prev_velocity_q != 0) {
-      printf("J%u: decel done tick=%u accel_q=%d\n", joint, tick, max_accel_q);
-    }
     if (pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
       pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, 0);
     }

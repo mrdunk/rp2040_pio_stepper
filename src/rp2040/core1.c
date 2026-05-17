@@ -54,7 +54,7 @@ void handle_network_timeout(void) {
   for (uint8_t joint = 0; joint < MAX_JOINT; joint++) {
     disable_joint(joint, CORE1);
   }
-  printf("No network update. Disabling joints.\n");
+  printf("No NW update. Disable joints\n");
   no_network = true;
 }
 
@@ -62,7 +62,7 @@ void handle_network_recovery(void) {
   if (!no_network) {
     return;
   }
-  printf("Network recovered.\n");
+  printf("Network recovered\n");
   no_network = false;
 }
 
@@ -107,7 +107,7 @@ void init_core1(void) {
   printf("core0: Initializing.\n");
 
   if (MAX_JOINT > 8) {
-    printf("ERROR: Maximum joint count: 8. Configured: %u\n", MAX_JOINT);
+    printf("ERROR: Max joint count: 8. Configured: %u\n", MAX_JOINT);
     while (1) {
       tight_loop_contents();
     }
