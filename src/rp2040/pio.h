@@ -7,6 +7,20 @@
  * integer truncation of max_accel_q never causes systematic tracking lag. */
 #define ACCEL_HEADROOM 1.1
 
+/* Nominal LinuxCNC servo period in µs.  Velocity steps-per-period is computed
+ * from this fixed constant rather than the EMA-measured inter-packet interval
+ * so that network-jitter bias in the EMA cannot cause systematic step
+ * undershoot.  Crystal-frequency disagreement between host and RP is negligible
+ * (±50 ppm → ±0.2 steps/s at 4000 steps/s) and is corrected by the position
+ * feedback loop in velocity mode. */
+#define SERVO_PERIOD_US 1000
+
+/* Allow firmware to reach slightly higher velocity than LinuxCNC's configured
+ * maximum so the position-correction term has headroom at full commanded speed.
+ * Without this the max_vel_q cap in calculate_step_len silently discards
+ * correction steps when vel-cmd is at its limit. */
+#define VEL_HEADROOM 1.01
+
 /* Initialize PIO state machines for a joint.
  * Always sets up a step_gen SM on the appropriate PIO block.
  * Also sets up a step_count SM on PIO1 for joints 0..NUM_FEEDBACK-1.
