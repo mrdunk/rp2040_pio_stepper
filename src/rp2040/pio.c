@@ -448,7 +448,11 @@ uint8_t do_steps(const uint8_t joint) {
    * so the PIO pulse rate matches the intended physical step count. */
   int32_t step_len_ticks = calculate_step_len(n_steps * 65536, period_ticks, max_vel_q);
 
-  uint32_t direction = (velocity_q > 0);
+  /* Direction must match the velocity used for step scheduling (plan_vel_q), not the
+   * raw velocity_q.  In the sub-1-step feedforward path plan_vel_q = vel_ff_q which
+   * stays positive even when a correction spike momentarily flips velocity_q negative;
+   * using velocity_q here would reverse the motor while Bresenham advances forward. */
+  uint32_t direction = (plan_vel_q > 0);
 
   if(joint >= NUM_FEEDBACK) {
     abs_pos_achieved += (direction ? 1 : -1) * n_steps;
@@ -463,7 +467,10 @@ uint8_t do_steps(const uint8_t joint) {
   /* Report Q16.16 internal velocity so the driver can detect velocity_q==0
    * exactly.  Integer step-delta aliased to 0 at low speed (<1 step/period),
    * causing premature network-recovery detection on the driver side. */
-  velocity_achieved = velocity_q;
+  /* Sign velocity_achieved to match the actual step direction (plan_vel_q) so that
+   * vel-fb does not flip negative when a correction spike flips velocity_q negative
+   * while the motor is stepping forward. */
+  velocity_achieved = direction ? (int32_t)abs(velocity_q) : -(int32_t)abs(velocity_q);
 
   update_joint_config(
       joint,

@@ -1335,6 +1335,47 @@ static void test_do_steps_posmode_uniform_spacing_at_low_speed(void **state) {
     assert_true(max_gap - min_gap <= 1);
 }
 
+/* Position mode: overshoot correction does not reverse step direction or vel-fb.
+ *
+ * If pos_ach > pos_req by > 0.6 steps, the correction term exceeds vel_ff and
+ * flips velocity_q negative.  Without the fix, direction = (velocity_q > 0) = 0
+ * (reverse), but plan_vel_q = vel_ff_q > 0, so Bresenham fires forward-rate steps
+ * with the wrong direction bit — the motor steps backward, making position worse.
+ * velocity_achieved = velocity_q also goes negative, causing the vel-fb sign flip.
+ *
+ * With the fix: direction uses plan_vel_q (always forward here), and velocity_achieved
+ * matches the actual step direction. */
+static void test_do_steps_posmode_overshoot_does_not_reverse(void **state) {
+    (void)state;
+    /* pos_ach=2, pos_req=0.5 → error=-1.5 → correction=-750 steps/s
+     * velocity_q = (300-750)/1000 * 65536 = -29490 (negative) */
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = 300.0;   /* vel_ff = 0.3 steps/period */
+    config.joint[0].abs_pos_requested  = 0.5;
+    config.joint[0].max_velocity       = 32000.0;
+    config.joint[0].max_accel          = 0.0;
+    mock_tx_fifo_empty                 = 1;
+
+    int forward_steps = 0, reverse_steps = 0;
+    for (int i = 0; i < 10; i++) {
+        mock_rx_values[0]  = 2;   /* pos_ach held at 2 (1.5 steps ahead) */
+        mock_rx_fifo_level = 1;
+        mock_rx_index      = 0;
+        config.joint[0].updated_from_c0 = 1;
+        last_pio_put_value = 0;
+        do_steps(0);
+        if (last_pio_put_value != 0) {
+            if (last_pio_put_value & 1) forward_steps++;
+            else                        reverse_steps++;
+        }
+        assert_true(config.joint[0].velocity_achieved >= 0);
+    }
+    assert_int_equal(reverse_steps, 0);
+    assert_true(forward_steps > 0);
+}
+
 /* do_steps: position-mode stopping-profile cap is inactive in velocity mode.
  *
  * In position mode the sqrt(2·a·|error|) cap reduces velocity when the joint is
@@ -1432,6 +1473,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_velocity_achieved_zero_reverse,             test_setup),
         cmocka_unit_test_setup(test_do_steps_velocity_mode_no_position_cap,              test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_uniform_spacing_at_low_speed,     test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_overshoot_does_not_reverse,      test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_velocity_achieved_zero_when_stopped,       test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_velocity_achieved_nonzero_while_decelerating, test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_velocity_achieved_zero_reverse,             test_setup),
