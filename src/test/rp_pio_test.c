@@ -1149,6 +1149,80 @@ static void test_do_steps_velocity_achieved_zero_reverse(void **state) {
     assert_int_equal(config.joint[0].velocity_achieved, 0);
 }
 
+/* do_steps: position-mode velocity_achieved is exact 0 when joint has fully decelerated.
+ * Same recovery-gate invariant as the velocity-mode equivalent, but exercising the
+ * JOINT_CMD_POSITION control path through compute_velocity_cmd. */
+static void test_do_steps_posmode_velocity_achieved_zero_when_stopped(void **state) {
+    (void)state;
+    /* vel_ff=5 steps/period, zero position error → velocity_q=5; max_accel=5 → one step to zero. */
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = 5000.0;   /* vel_ff = 5 steps/period at 1000µs */
+    config.joint[0].abs_pos_requested  = 0.0;       /* zero error: no Kp correction */
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000000.0; /* 5 steps/period/period */
+    mock_tx_fifo_empty                 = 1;
+    do_steps(0);  /* enable snap: last_velocity_q = 5 steps/period */
+
+    config.joint[0].enabled          = 0;
+    config.joint[0].updated_from_c0  = 1;
+    mock_tx_fifo_empty               = 1;
+    do_steps(0);  /* clamp_accel(0, 5, ≥5) = 0 → hard stop */
+
+    assert_int_equal(config.joint[0].velocity_achieved, 0);
+}
+
+/* do_steps: position-mode velocity_achieved is non-zero while still decelerating. */
+static void test_do_steps_posmode_velocity_achieved_nonzero_while_decelerating(void **state) {
+    (void)state;
+    /* vel_ff=10 steps/period, max_accel=5; one disable step → 5 (still moving). */
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = 10000.0;  /* vel_ff = 10 steps/period */
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000000.0; /* 5 steps/period/period */
+    mock_tx_fifo_empty                 = 1;
+    do_steps(0);  /* enable snap: last_velocity_q = 10 steps/period */
+
+    config.joint[0].enabled          = 0;
+    config.joint[0].updated_from_c0  = 1;
+    mock_tx_fifo_empty               = 1;
+    do_steps(0);  /* clamp limits decel: velocity_q = 5, still moving */
+
+    assert_true(config.joint[0].velocity_achieved != 0);
+}
+
+/* do_steps: position-mode velocity_achieved is exact 0 after reverse-direction deceleration. */
+static void test_do_steps_posmode_velocity_achieved_zero_reverse(void **state) {
+    (void)state;
+    /* vel_ff=-5 steps/period (reverse), max_accel=5 → one step to zero. */
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = -5000.0;  /* vel_ff = -5 steps/period */
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000000.0; /* 5 steps/period/period */
+    mock_tx_fifo_empty                 = 1;
+    do_steps(0);  /* enable snap: last_velocity_q = -5 steps/period */
+
+    config.joint[0].enabled          = 0;
+    config.joint[0].updated_from_c0  = 1;
+    mock_tx_fifo_empty               = 1;
+    do_steps(0);  /* clamp_accel(0, -5, ≥5) = 0 → hard stop */
+
+    assert_int_equal(config.joint[0].velocity_achieved, 0);
+}
+
 /* do_steps: position-mode stopping-profile cap is inactive in velocity mode.
  *
  * In position mode the sqrt(2·a·|error|) cap reduces velocity when the joint is
@@ -1241,6 +1315,9 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_velocity_achieved_nonzero_while_decelerating, test_setup),
         cmocka_unit_test_setup(test_do_steps_velocity_achieved_zero_reverse,             test_setup),
         cmocka_unit_test_setup(test_do_steps_velocity_mode_no_position_cap,              test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_velocity_achieved_zero_when_stopped,       test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_velocity_achieved_nonzero_while_decelerating, test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_velocity_achieved_zero_reverse,             test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
