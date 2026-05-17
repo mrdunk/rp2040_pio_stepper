@@ -676,6 +676,15 @@ static void write_port(void *arg, long period)
   *data->seq_out = (uint32_t)count;
   pack_success = pack_success && serialize_timing(&buffer, count, rtapi_get_time());
 
+  /* While eth is down, hold joint_enable_cmd=false so the RP2040 keeps
+   * decelerating.  LinuxCNC may write enable=true to this HAL pin every
+   * servo period; we intercept it here before the packet is built. */
+  if (!*data->eth_up) {
+    for (int j = 0; j < num_joints; j++) {
+      *data->joint_enable_cmd[j] = false;
+    }
+  }
+
   if (!get_version_checked())
     serialize_version_request(&buffer);
 
@@ -727,25 +736,25 @@ static void write_port(void *arg, long period)
     );
 
     if(! *data->eth_up) {
-      // Network connection just came up after being down.
-      // Don't signal recovery to LinuxCNC until all joints have stopped: this
-      // prevents LinuxCNC from re-planning a new trajectory from behind-position
-      // while the RP2040 is still decelerating.
+      // Don't signal recovery to LinuxCNC until all joints have stopped moving
+      // AND the RP2040 has confirmed (via REPLY_JOINT_CONFIG) that it has
+      // applied the disable.  Both conditions together mean the RP2040 is
+      // stationary and will not resume on its own.
+      static bool    waiting_logged = false;
+
       bool all_stopped = true;
       for (uint32_t joint = 0; joint < (uint32_t)num_joints; joint++) {
-        if (*data->joint_vel_fb[joint] != 0.0f) {
+        if (*data->joint_vel_fb[joint] != 0.0f || last_joint_config[joint].enable) {
           all_stopped = false;
-          break;
         }
       }
-      static bool waiting_logged = false;
       if (all_stopped) {
         waiting_logged = false;
         on_eth_up(data, count);
       } else {
         if (!waiting_logged) {
-          printf("INFO: waiting for joints to stop before recovery (vel_fb[0]=%.1f)\n",
-                 (double)*data->joint_vel_fb[0]);
+          printf("INFO: waiting for joints to stop before recovery"
+                 " (vel_fb[0]=%.1f)\n", (double)*data->joint_vel_fb[0]);
           waiting_logged = true;
         }
       }
