@@ -54,7 +54,7 @@ void handle_network_timeout(void) {
   for (uint8_t joint = 0; joint < MAX_JOINT; joint++) {
     disable_joint(joint, CORE1);
   }
-  printf("No NW update. Disable joints\n");
+  printf("No NW\n");
   no_network = true;
 }
 
@@ -62,7 +62,7 @@ void handle_network_recovery(void) {
   if (!no_network) {
     return;
   }
-  printf("Network recovered\n");
+  printf("NW up\n");
   no_network = false;
 }
 
