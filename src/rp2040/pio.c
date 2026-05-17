@@ -371,7 +371,6 @@ uint8_t do_steps(const uint8_t joint) {
     abs_pos_achieved = drain_rx_fifo(joint_state[joint].sm_count, abs_pos_achieved);
   }
 
-  int32_t prev_velocity_q = joint_state[joint].last_velocity_q;
   velocity_q = clamp_accel(velocity_q, joint_state[joint].last_velocity_q, clamp_accel_q);
 
   /* Stopping-profile cap: ensure the motor can decelerate to vel_ff within the
