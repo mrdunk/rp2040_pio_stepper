@@ -1284,6 +1284,65 @@ static void test_do_steps_posmode_velocity_achieved_zero_reverse(void **state) {
     assert_int_equal(config.joint[0].velocity_achieved, 0);
 }
 
+/* compute_velocity_cmd: fractional abs_pos_achieved suppresses correction inside dead zone.
+ *
+ * With integer pos: error = -1.05 → |error| > 1 → correction fires.
+ * With fractional pos (-0.9): error = -1.05 - (-0.9) = -0.15 → dead zone, no correction.
+ * Validates that the signature change (int32_t → double) enables the Bresenham fractional
+ * position smoothing fix. */
+static void test_compute_velocity_cmd_posmode_fractional_pos_dead_zone(void **state) {
+    (void)state;
+    /* Integer position: error = -1.05 - 0 = -1.05 → correction = -525 steps/s. */
+    double without_fix = compute_velocity_cmd(
+        JOINT_CMD_POSITION, -300.0, -1.05, 0 /*integer abs_pos*/, 1, 1, 1000, 0.0);
+    assert_float_equal(without_fix, -825.0, 1e-6);
+
+    /* Fractional position: error = -1.05 - (-0.9) = -0.15 → dead zone, no correction. */
+    double with_fix = compute_velocity_cmd(
+        JOINT_CMD_POSITION, -300.0, -1.05, -0.9 /*fractional abs_pos*/, 1, 1, 1000, 0.0);
+    assert_float_equal(with_fix, -300.0, 1e-6);
+}
+
+/* do_steps: Bresenham accumulator damps position correction at sub-1-step/period velocity.
+ *
+ * Run 3 periods at -0.3 steps/period to build step_accumulator_q to 0.9 steps.
+ * Then present abs_pos_requested = -1.05 (integer error > 1 step, fractional error < 1 step).
+ * Without fix: error = -1.05 - 0 = -1.05 → correction fires, velocity_achieved ≠ cmd_q.
+ * With fix: pos_frac = 0 - 0.9 = -0.9; error = -0.15 → dead zone; velocity_achieved = cmd_q. */
+static void test_do_steps_posmode_accumulator_damps_correction(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = -300.0;
+    config.joint[0].max_velocity       = 32000.0;
+    config.joint[0].max_accel          = 0.0;
+    mock_tx_fifo_empty                 = 1;
+
+    /* Build accumulator: 3 periods of -0.3 steps/period, no steps fire. */
+    for (int i = 0; i < 3; i++) {
+        config.joint[0].abs_pos_requested = -0.3 * i;
+        mock_rx_values[0]  = 0;
+        mock_rx_fifo_level = 1;
+        mock_rx_index      = 0;
+        config.joint[0].updated_from_c0 = 1;
+        do_steps(0);
+    }
+    /* Accumulator = 3 × 19660 = 58980 Q16.16 ≈ 0.9 steps; sim_pos = 0. */
+
+    /* Trigger: integer error = -1.05, fractional error = -1.05 - (-0.9) = -0.15. */
+    config.joint[0].abs_pos_requested = -1.05;
+    mock_rx_values[0]  = 0;
+    mock_rx_fifo_level = 1;
+    mock_rx_index      = 0;
+    config.joint[0].updated_from_c0 = 1;
+    last_pio_put_value = 0;
+    do_steps(0);
+
+    int32_t cmd_q   = (int32_t)((-300.0 / 1000.0) * 65536.0);  /* -19660 */
+    assert_int_equal(config.joint[0].velocity_achieved, cmd_q);
+}
+
 /* do_steps: position-mode stopping-profile cap is inactive in velocity mode.
  *
  * In position mode the sqrt(2·a·|error|) cap reduces velocity when the joint is
@@ -1380,6 +1439,8 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_velocity_achieved_nonzero_while_decelerating, test_setup),
         cmocka_unit_test_setup(test_do_steps_velocity_achieved_zero_reverse,             test_setup),
         cmocka_unit_test_setup(test_do_steps_velocity_mode_no_position_cap,              test_setup),
+        cmocka_unit_test_setup(test_compute_velocity_cmd_posmode_fractional_pos_dead_zone, test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_accumulator_damps_correction,        test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_velocity_achieved_zero_when_stopped,       test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_velocity_achieved_nonzero_while_decelerating, test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_velocity_achieved_zero_reverse,             test_setup),

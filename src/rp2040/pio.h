@@ -37,7 +37,7 @@ double compute_velocity_cmd(
     uint8_t  cmd_type,
     double   velocity_requested,
     double   abs_pos_requested,
-    int32_t  abs_pos_achieved,
+    double   abs_pos_achieved,
     uint8_t  enabled,
     uint32_t updated,
     uint32_t update_period_us,
