@@ -1413,6 +1413,36 @@ static void test_do_steps_posmode_boundary_correction_does_not_flip(void **state
     assert_true(forward_steps > 0);
 }
 
+/* Position mode: large overshoot (>3 steps) with max_accel=0 does not produce
+ * negative velocity_achieved.
+ *
+ * A 4-step overshoot gives correction = -2000 steps/s → velocity_q = -98304 Q16.16.
+ * step_count_q = 98304 > 65536 so the Bresenham guard fails; before the fix the
+ * non-ff path then set velocity_achieved = -abs(velocity_q) ≈ -1.5 steps/period.
+ * On hardware the EMA-measured update_period_us fluctuates: even a 3-step overshoot
+ * can give |velocity_q| > 65536 when the period is slightly short, causing the same
+ * spike.  velocity_achieved must stay non-negative whenever vel_ff_q > 0. */
+static void test_do_steps_posmode_large_overshoot_vel_achieved_nonnegative(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = 500.0;   /* vel_ff = 0.5 steps/period */
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].max_velocity       = 32000.0;
+    config.joint[0].max_accel          = 0.0;     /* disable caps so velocity_q = -98304 */
+    mock_tx_fifo_empty                 = 1;
+
+    for (int i = 0; i < 10; i++) {
+        mock_rx_values[0]  = 4;   /* pos_ach=4 ahead: error=-4 → velocity_q = -98304 */
+        mock_rx_fifo_level = 1;
+        mock_rx_index      = 0;
+        config.joint[0].updated_from_c0 = 1;
+        do_steps(0);
+        assert_true(config.joint[0].velocity_achieved >= 0);
+    }
+}
+
 /* do_steps: position-mode stopping-profile cap is inactive in velocity mode.
  *
  * In position mode the sqrt(2·a·|error|) cap reduces velocity when the joint is
@@ -1512,6 +1542,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_posmode_uniform_spacing_at_low_speed,     test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_overshoot_does_not_reverse,      test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_boundary_correction_does_not_flip, test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_large_overshoot_vel_achieved_nonnegative, test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_velocity_achieved_zero_when_stopped,       test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_velocity_achieved_nonzero_while_decelerating, test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_velocity_achieved_zero_reverse,             test_setup),

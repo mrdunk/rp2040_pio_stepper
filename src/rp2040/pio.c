@@ -469,9 +469,11 @@ uint8_t do_steps(const uint8_t joint) {
   /* Report Q16.16 internal velocity so the driver can detect velocity_q==0
    * exactly.  Integer step-delta aliased to 0 at low speed (<1 step/period),
    * causing premature network-recovery detection on the driver side. */
-  /* In the feedforward path report vel_ff_q so vel-fb tracks vel-cmd smoothly.
-   * Outside it, sign velocity_q by direction so reverse steps show negative. */
-  velocity_achieved = in_ff_path
+  /* Report vel_ff_q as vel-fb whenever feedforward is active so that transient
+   * position-correction spikes (which can push |velocity_q| > 65536 when the
+   * EMA-measured period is slightly short) do not flip vel-fb negative.
+   * Without feedforward (pure positioning hold) sign velocity_q by direction. */
+  velocity_achieved = (abs(vel_ff_q) > 0)
                       ? vel_ff_q
                       : (direction ? (int32_t)abs(velocity_q) : -(int32_t)abs(velocity_q));
 
