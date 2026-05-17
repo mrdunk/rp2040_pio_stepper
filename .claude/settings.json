@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /home/duncan/Working/rp2040/rp2040_pio_stepper/scripts/hooks/ctx-session-start.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

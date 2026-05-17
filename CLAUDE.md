@@ -1,5 +1,21 @@
 # rp2040_pio_stepper — Claude guidance
 
+## Context management
+
+Use context-mode MCP tools for all research and analysis. Bash only for: git, mkdir, rm, mv, navigation.
+
+| Task | Tool |
+|------|------|
+| Multi-command research, large output | `ctx_batch_execute` |
+| Single large-output command | `ctx_execute` |
+| Analyse a file (not editing) | `ctx_execute_file` |
+| Follow-up questions on indexed content | `ctx_search` |
+| Fetch URL docs | `ctx_fetch_and_index` |
+
+**Session start:** Before doing anything else, run one `ctx_batch_execute` call to index
+`git log --oneline -20`, open GitHub issues (`gh issue list`), and any source files
+relevant to the current task.
+
 ## Interaction
 
 Be direct but constructive, offering solutions alongside criticism.
