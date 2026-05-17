@@ -354,15 +354,13 @@ uint8_t do_steps(const uint8_t joint) {
       cmd_type, velocity_requested, abs_pos_requested, abs_pos_achieved,
       enabled, updated, update_period_us, max_accel);
 
-  /* Use the fixed nominal SERVO_PERIOD_US (not the EMA-measured update_period_us)
-   * for step-count conversion: LinuxCNC integrates pos-cmd using this constant,
-   * so the firmware must produce exactly vel × SERVO_PERIOD_US steps per tick.
-   * EMA jitter bias would cause systematic undershoot; crystal-frequency error
-   * is negligible and corrected by the velocity-mode position feedback loop.
-   * VEL_HEADROOM on max_vel_q gives the correction term room to act at full speed. */
-  int32_t velocity_q   = (int32_t)((velocity_requested / (double)SERVO_PERIOD_US) * 65536.0);
-  int32_t vel_ff_q     = (int32_t)((vel_ff / (double)SERVO_PERIOD_US) * 65536.0);
-  int32_t max_vel_q    = (int32_t)((max_velocity / (double)SERVO_PERIOD_US) * 65536.0 * VEL_HEADROOM);
+  /* Use the EMA-measured inter-packet interval for step-count conversion so that
+   * crystal-frequency disagreement between host and RP is automatically tracked.
+   * VEL_HEADROOM on max_vel_q gives the correction term room to act at full speed
+   * even when update_period_us is biased slightly above SERVO_PERIOD_US by jitter. */
+  int32_t velocity_q   = (int32_t)((velocity_requested / (double)update_period_us) * 65536.0);
+  int32_t vel_ff_q     = (int32_t)((vel_ff / (double)update_period_us) * 65536.0);
+  int32_t max_vel_q    = (int32_t)((max_velocity / (double)update_period_us) * 65536.0 * VEL_HEADROOM);
   /* Accel is steps/s²; convert to Q16.16 steps/period/period → multiply by period_s². */
   double  period_s     = (double)update_period_us * 1e-6;
   int32_t max_accel_q  = (int32_t)(max_accel * period_s * period_s * 65536.0);
