@@ -1376,6 +1376,43 @@ static void test_do_steps_posmode_overshoot_does_not_reverse(void **state) {
     assert_true(forward_steps > 0);
 }
 
+/* Position mode: boundary correction (velocity_q = -65536) does not flip vel-fb to -1.
+ *
+ * At vel_ff = 0.5 steps/period (vel_ff_q = 32768), a 3-step overshoot gives:
+ *   correction = -3*500 = -1500 steps/s → velocity_q = (500-1500)/1000*65536 = -65536
+ *   step_count_q = abs(-65536) = 65536, which sits exactly on the old guard boundary.
+ * The old condition (< 65536) excludes step_count_q == 65536, so plan_vel_q falls back
+ * to velocity_q = -65536, direction = 0 (reverse), velocity_achieved = -65536 = -1 on
+ * vel-fb.  The fix extends the guard to <= 65536 so the boundary stays in feedforward. */
+static void test_do_steps_posmode_boundary_correction_does_not_flip(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = 500.0;   /* vel_ff = 0.5 steps/period */
+    config.joint[0].abs_pos_requested  = 0.0;     /* overshoot: pos_ach=3 ahead */
+    config.joint[0].max_velocity       = 32000.0;
+    config.joint[0].max_accel          = 0.0;     /* no clamp: velocity_q hits -65536 directly */
+    mock_tx_fifo_empty                 = 1;
+
+    int forward_steps = 0, reverse_steps = 0;
+    for (int i = 0; i < 10; i++) {
+        mock_rx_values[0]  = 3;   /* pos_ach = 3, error = 0-3 = -3 → velocity_q = -65536 */
+        mock_rx_fifo_level = 1;
+        mock_rx_index      = 0;
+        config.joint[0].updated_from_c0 = 1;
+        last_pio_put_value = 0;
+        do_steps(0);
+        if (last_pio_put_value != 0) {
+            if (last_pio_put_value & 1) forward_steps++;
+            else                        reverse_steps++;
+        }
+        assert_true(config.joint[0].velocity_achieved >= 0);
+    }
+    assert_int_equal(reverse_steps, 0);
+    assert_true(forward_steps > 0);
+}
+
 /* do_steps: position-mode stopping-profile cap is inactive in velocity mode.
  *
  * In position mode the sqrt(2·a·|error|) cap reduces velocity when the joint is
@@ -1474,6 +1511,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_velocity_mode_no_position_cap,              test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_uniform_spacing_at_low_speed,     test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_overshoot_does_not_reverse,      test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_boundary_correction_does_not_flip, test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_velocity_achieved_zero_when_stopped,       test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_velocity_achieved_nonzero_while_decelerating, test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_velocity_achieved_zero_reverse,             test_setup),

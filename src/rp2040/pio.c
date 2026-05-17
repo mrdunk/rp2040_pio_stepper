@@ -438,10 +438,12 @@ uint8_t do_steps(const uint8_t joint) {
 
   int32_t step_count_q  = abs(velocity_q);
   /* Sub-1-step with active feedforward: drive Bresenham with vel_ff_q so that
-   * position-correction spikes do not disrupt inter-step intervals.  At ≥1
-   * step/period or with zero feedforward (stationary positioning), use velocity_q. */
-  int32_t plan_vel_q    = (step_count_q > 0 && step_count_q < 65536 && abs(vel_ff_q) > 0)
-                          ? vel_ff_q : velocity_q;
+   * position-correction spikes do not disrupt inter-step intervals.  Boundary
+   * step_count_q==65536 (exactly 1.0 step/period) is included because a correction
+   * spike can land exactly there and fall outside the feedforward guard otherwise.
+   * At >1 step/period or with zero feedforward (stationary positioning), use velocity_q. */
+  int in_ff_path        = step_count_q > 0 && step_count_q <= 65536 && abs(vel_ff_q) > 0;
+  int32_t plan_vel_q    = in_ff_path ? vel_ff_q : velocity_q;
   int32_t step_len_ceil = calculate_step_len(step_count_q, period_ticks, max_vel_q);
   int32_t n_steps       = plan_steps(plan_vel_q, joint, period_ticks, step_len_ceil);
   /* Derive step_len for the exact n_steps this period (floor or ceil of v),
@@ -467,10 +469,11 @@ uint8_t do_steps(const uint8_t joint) {
   /* Report Q16.16 internal velocity so the driver can detect velocity_q==0
    * exactly.  Integer step-delta aliased to 0 at low speed (<1 step/period),
    * causing premature network-recovery detection on the driver side. */
-  /* Sign velocity_achieved to match the actual step direction (plan_vel_q) so that
-   * vel-fb does not flip negative when a correction spike flips velocity_q negative
-   * while the motor is stepping forward. */
-  velocity_achieved = direction ? (int32_t)abs(velocity_q) : -(int32_t)abs(velocity_q);
+  /* In the feedforward path report vel_ff_q so vel-fb tracks vel-cmd smoothly.
+   * Outside it, sign velocity_q by direction so reverse steps show negative. */
+  velocity_achieved = in_ff_path
+                      ? vel_ff_q
+                      : (direction ? (int32_t)abs(velocity_q) : -(int32_t)abs(velocity_q));
 
   update_joint_config(
       joint,
