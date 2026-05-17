@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #ifdef BUILD_TESTS
 
@@ -251,6 +252,44 @@ static void issue_pio_step(uint32_t joint, int32_t step_len_ticks,
     }
 }
 
+/* Compute the commanded velocity (steps/s) for this period.
+ *
+ * In position mode: vel_ff + Kp*error, with a 1-step dead zone.
+ * The correction is capped to sqrt(2*max_accel*|error|) steps/s so the motor
+ * can always decelerate to rest within the remaining error distance (bang-bang
+ * stopping profile).  Without this cap, large errors after emergency decel
+ * produce a correction that saturates clamp_accel every period — limit cycle.
+ * Returns 0.0 when disabled or no new Core0 data (underrun/network loss). */
+double compute_velocity_cmd(
+    uint8_t  cmd_type,
+    double   velocity_requested,
+    double   abs_pos_requested,
+    int32_t  abs_pos_achieved,
+    uint8_t  enabled,
+    uint32_t updated,
+    uint32_t update_period_us,
+    double   max_accel)
+{
+  if (cmd_type == JOINT_CMD_POSITION) {
+    double vel_ff      = velocity_requested;
+    double error_steps = abs_pos_requested - (double)abs_pos_achieved;
+    double correction  = 0.0;
+    if (error_steps >= 1.0 || error_steps <= -1.0) {
+      correction = error_steps * (1.0e6 / (double)update_period_us) * 0.5;
+      if (max_accel > 0.0) {
+        double max_correction = sqrt(2.0 * max_accel * fabs(error_steps));
+        if (correction >  max_correction) correction =  max_correction;
+        if (correction < -max_correction) correction = -max_correction;
+      }
+    }
+    velocity_requested = vel_ff + correction;
+  }
+  if (!enabled || updated == 0) {
+    velocity_requested = 0.0;
+  }
+  return velocity_requested;
+}
+
 /* Generate step counts and send to PIOs. */
 uint8_t do_steps(const uint8_t joint) {
   uint32_t update_period_us = get_period();
@@ -278,40 +317,35 @@ uint8_t do_steps(const uint8_t joint) {
       &cmd_type
       );
 
-  if(updated == 0 || update_period_us == 0) {
-    /* Not ready: config not yet received (updated==0) or period unknown. */
+  if(update_period_us == 0) {
+    /* Period unknown: can't compute step timing. */
+    if (pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
+      pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, 0);
+    }
+    return 0;
+  }
+  if(updated == 0 && joint_state[joint].last_velocity_q == 0) {
+    /* No new Core0 data and already at rest: nothing to compute. */
     if (pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
       pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, 0);
     }
     return 0;
   }
 
-  if(cmd_type == JOINT_CMD_POSITION) {
-    /* Velocity feed-forward + Kp=0.5 position correction.
-     * velocity_requested holds scale×vel_cmd (steps/s) from the driver;
-     * using it as feed-forward cancels the trajectory velocity, keeping
-     * following error near zero during motion.
-     * With 1-period measurement delay, Kp=1.0 gives poles on the unit
-     * circle (sustained oscillation). Kp=0.5 places poles at z=0.5±0.5i
-     * (|z|=0.707), giving stable convergence in ~10 periods.
-     *
-     * Dead zone: suppress correction when |error| < 1 step.  Sub-step
-     * errors cannot be resolved without oscillation — a correction step
-     * moves abs_pos_achieved by 1, which reverses the error sign and
-     * fires an opposite correction next cycle.  Errors up to ±0.5 step
-     * are inherent in mapping a float trajectory onto integer steps. */
-    double vel_ff      = velocity_requested;
-    double error_steps = abs_pos_requested - (double)abs_pos_achieved;
-    double correction  = 0.0;
-    if (error_steps >= 1.0 || error_steps <= -1.0) {
-        correction = error_steps * (1.0e6 / (double)update_period_us) * 0.5;
-    }
-    velocity_requested = vel_ff + correction;
-  }
+  double vel_ff = velocity_requested;  /* save before correction is added */
+  velocity_requested = compute_velocity_cmd(
+      cmd_type, velocity_requested, abs_pos_requested, abs_pos_achieved,
+      enabled, updated, update_period_us, max_accel);
 
   int32_t velocity_q   = (int32_t)((velocity_requested / (double)update_period_us) * 65536.0);
+  int32_t vel_ff_q     = (int32_t)((vel_ff / (double)update_period_us) * 65536.0);
   int32_t max_vel_q    = (int32_t)((max_velocity / (double)update_period_us) * 65536.0);
-  int32_t max_accel_q  = (int32_t)((max_accel / (double)update_period_us) * 65536.0);
+  /* Accel is steps/s²; convert to Q16.16 steps/period/period → multiply by period_s².
+   * The velocity formula (/ update_period_us) accidentally works for 1ms because
+   * 1/1000µs == 1e-3s, but for accel the period must be squared. */
+  double  period_s     = (double)update_period_us * 1e-6;
+  int32_t max_accel_q  = (int32_t)(max_accel * period_s * period_s * 65536.0);
+  int32_t clamp_accel_q = (int32_t)(max_accel_q * ACCEL_HEADROOM);
   int32_t period_ticks = (int32_t)((int64_t)update_period_us * RP2040_CLOCK_MHZ);
 
   if(enabled != joint_state[joint].last_enabled) {
@@ -319,29 +353,64 @@ uint8_t do_steps(const uint8_t joint) {
     if(enabled) {
       printf("J%u enab\n", joint);
       init_pio(joint);
-      // Snap to commanded velocity so we don't ramp from zero when LinuxCNC
-      // is already moving (joint was enabled before motion started).
-      joint_state[joint].last_velocity_q = velocity_q;
+      // Snap to commanded velocity when stopped so we don't ramp from zero
+      // when LinuxCNC is already moving (joint enabled before motion started).
+      // When last_velocity_q is non-zero the joint is mid-deceleration (network
+      // reconnect before reaching zero); preserve it so clamp_accel limits the
+      // velocity change normally and avoids a jitter step.
+      if (joint_state[joint].last_velocity_q == 0) {
+        joint_state[joint].last_velocity_q = velocity_q;
+      }
     } else {
       printf("J%u disab\n", joint);
     }
   }
 
-  if(!enabled) {
-    // Switch off PIO stepgen.
-    if(pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
+  if(joint < NUM_FEEDBACK) {
+    // Spare PIO blocks are used to count actual steps performed.
+    abs_pos_achieved = drain_rx_fifo(joint_state[joint].sm_count, abs_pos_achieved);
+  }
+
+  velocity_q = clamp_accel(velocity_q, joint_state[joint].last_velocity_q, clamp_accel_q);
+
+  /* Stopping-profile cap: ensure the motor can decelerate to vel_ff within the
+   * remaining distance to target.  Formula: |v| ≤ vel_ff + sqrt(2·a·|error|).
+   * When vel_ff=0 this is the classic bang-bang stopping guarantee.
+   * When vel_ff>0 (active jog or G-code move) the extra headroom prevents the
+   * cap from interfering with normal tracking. */
+  if (cmd_type == JOINT_CMD_POSITION && max_accel_q > 0 && enabled && updated) {
+    int32_t err_int = (int32_t)(abs_pos_requested - (double)abs_pos_achieved);
+    if (err_int != 0 && (int64_t)velocity_q * err_int > 0) {
+      int32_t sqrt_term = (int32_t)sqrt(
+          2.0 * (double)max_accel_q * (double)abs(err_int) * 65536.0);
+      if (err_int > 0 && velocity_q > vel_ff_q + sqrt_term)
+        velocity_q = vel_ff_q + sqrt_term;
+      if (err_int < 0 && velocity_q < vel_ff_q - sqrt_term)
+        velocity_q = vel_ff_q - sqrt_term;
+    }
+  }
+
+  /* At-target snap: when in the dead zone with no feedforward, zero velocity
+   * and accumulator immediately.  Without this, clamp_accel leaves residual
+   * velocity after the final correction step; the Bresenham accumulator drains
+   * it into an overshoot step. */
+  if (cmd_type == JOINT_CMD_POSITION && vel_ff_q == 0 && enabled && updated) {
+    int32_t err_snap = (int32_t)(abs_pos_requested - (double)abs_pos_achieved);
+    if (err_snap == 0) {
+      velocity_q = 0;
+      joint_state[joint].step_accumulator_q = 0;
+    }
+  }
+
+  joint_state[joint].last_velocity_q = velocity_q;
+
+  if (!enabled && velocity_q == 0) {
+    /* Fully decelerated: issue hard stop and keep pos_fb current while disabled.
+     * abs_pos_achieved already reflects any in-flight steps drained above. */
+    if (pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
       pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, 0);
     }
-    // Keep abs_pos_achieved current while disabled so pos_fb stays accurate.
-    // Without this, in-flight steps accumulate in the PIO FIFO unread; on
-    // re-enable they all land at once, creating a position error that triggers
-    // a correction move (jitter).
-    if(joint < NUM_FEEDBACK) {
-      abs_pos_achieved = drain_rx_fifo(joint_state[joint].sm_count, abs_pos_achieved);
-      velocity_achieved = abs_pos_achieved - joint_state[joint].last_pos_achieved;
-    } else {
-      velocity_achieved = 0;
-    }
+    velocity_achieved = 0;  /* velocity_q == 0: joint has stopped */
     update_joint_config(
         joint, CORE1,
         NULL, NULL, NULL, NULL, NULL,
@@ -352,13 +421,6 @@ uint8_t do_steps(const uint8_t joint) {
     joint_state[joint].last_pos_achieved = abs_pos_achieved;
     return 0;
   }
-
-  if(joint < NUM_FEEDBACK) {
-    abs_pos_achieved = drain_rx_fifo(joint_state[joint].sm_count, abs_pos_achieved);
-  }
-
-  velocity_q = clamp_accel(velocity_q, joint_state[joint].last_velocity_q, max_accel_q);
-  joint_state[joint].last_velocity_q = velocity_q;
 
   int32_t step_count_q  = abs(velocity_q);
   int32_t step_len_ceil = calculate_step_len(step_count_q, period_ticks, max_vel_q);
@@ -379,7 +441,10 @@ uint8_t do_steps(const uint8_t joint) {
     pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, 0);
   }
 
-  velocity_achieved = abs_pos_achieved - joint_state[joint].last_pos_achieved;
+  /* Report Q16.16 internal velocity so the driver can detect velocity_q==0
+   * exactly.  Integer step-delta aliased to 0 at low speed (<1 step/period),
+   * causing premature network-recovery detection on the driver side. */
+  velocity_achieved = velocity_q;
 
   update_joint_config(
       joint,
@@ -397,7 +462,7 @@ uint8_t do_steps(const uint8_t joint) {
 
   joint_state[joint].last_pos_achieved  = abs_pos_achieved;
 
-  return updated;
+  return enabled ? updated : 0;
 }
 
 #ifdef BUILD_TESTS

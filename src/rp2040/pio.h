@@ -3,11 +3,31 @@
 
 #include <stdint.h>
 
+/* Allow firmware to accelerate slightly faster than LinuxCNC's ramp rate so
+ * integer truncation of max_accel_q never causes systematic tracking lag. */
+#define ACCEL_HEADROOM 1.1
+
 /* Initialize PIO state machines for a joint.
  * Always sets up a step_gen SM on the appropriate PIO block.
  * Also sets up a step_count SM on PIO1 for joints 0..NUM_FEEDBACK-1.
  */
 void init_pio(const uint32_t joint);
+
+/* Compute the commanded velocity (steps/s) for this period.
+ * Applies the position controller (position mode) and collapses to 0 when
+ * disabled or when no new Core0 data is available (underrun / network loss).
+ * max_accel (steps/s²) caps the position correction to sqrt(2*max_accel*|error|)
+ * — the bang-bang stopping profile — so the motor can always decelerate to rest
+ * within the remaining error distance.  Pass 0.0 to disable the cap. */
+double compute_velocity_cmd(
+    uint8_t  cmd_type,
+    double   velocity_requested,
+    double   abs_pos_requested,
+    int32_t  abs_pos_achieved,
+    uint8_t  enabled,
+    uint32_t updated,
+    uint32_t update_period_us,
+    double   max_accel);
 
 /* Generate step counts and send to PIOs. */
 uint8_t do_steps(const uint8_t joint);

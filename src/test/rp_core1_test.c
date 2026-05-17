@@ -63,6 +63,19 @@ static void test_wait_for_packet_returns_on_network_loss(void **state) {
     /* Reaching this line proves the network-loss fallback fired. */
 }
 
+/* wait_for_packet: exits inner spin immediately when last_packet_tick < tick.
+ * One missed packet (gap == 1) is enough — no need to wait a full extra tick.
+ * Simulates Core0 stuck at get_UDP() with exactly one tick elapsed since the
+ * last packet; the pre-spin check (gap > MAX_MISSED_PACKET) does NOT fire. */
+static void test_wait_for_packet_exits_mid_spin_on_network_loss(void **state) {
+    (void)state;
+    tick              = 2;
+    last_packet_tick  = 1;   /* gap == 1: pre-spin check does not fire */
+    packet_generation = 0;   /* Core0 never advances it */
+    wait_for_packet();
+    /* Reaching this line proves the inner-loop exited on last_packet_tick < tick. */
+}
+
 /* check_network_health: healthy when gap <= MAX_MISSED_PACKET. */
 static void test_check_network_health_ok(void **state) {
     (void)state;
@@ -121,8 +134,8 @@ static void test_step_all_joints_calls_do_steps_for_each_joint(void **state) {
 }
 
 /* core1_main loop: when linuxcnc_restart_detected is set, one iteration must
- * disable all joints and clear the flag. last_packet_tick is set equal to tick
- * so check_network_health() returns healthy — restart detection fires first. */
+ * disable all joints, clear the flag, and still call step_all_joints so motors
+ * can decelerate. */
 static void test_core1_disables_joints_on_linuxcnc_restart(void **state) {
     (void)state;
     linuxcnc_restart_detected = true;
@@ -130,6 +143,7 @@ static void test_core1_disables_joints_on_linuxcnc_restart(void **state) {
     last_packet_tick = 1;   /* network appears healthy; restart flag should fire first */
     core1_run_once_for_test();
     assert_int_equal(MAX_JOINT, disable_joint_call_count);
+    assert_int_equal(MAX_JOINT, do_steps_call_count);  /* step_all_joints always runs */
     assert_false(linuxcnc_restart_detected);
 }
 
@@ -151,6 +165,7 @@ int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_wait_for_packet_returns_when_generation_advances, test_setup),
         cmocka_unit_test_setup(test_wait_for_packet_returns_on_network_loss,          test_setup),
+        cmocka_unit_test_setup(test_wait_for_packet_exits_mid_spin_on_network_loss,  test_setup),
         cmocka_unit_test_setup(test_check_network_health_ok,                 test_setup),
         cmocka_unit_test_setup(test_check_network_health_at_limit,           test_setup),
         cmocka_unit_test_setup(test_check_network_health_loss,               test_setup),

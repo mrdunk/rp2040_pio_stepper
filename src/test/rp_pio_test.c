@@ -3,6 +3,7 @@
 #include <setjmp.h>
 #include <stdint.h>
 #include <string.h>
+#include <math.h>
 #include <cmocka.h>
 
 #include "../rp2040/pio.h"
@@ -256,6 +257,153 @@ static void test_do_steps_disabled_drains_rx_fifo(void **state) {
     assert_int_equal(config.joint[0].abs_pos_achieved, 103);
 }
 
+/* do_steps: joint disabling with non-zero velocity -> continues stepping while decelerating. */
+static void test_do_steps_disabling_decelerates(void **state) {
+    (void)state;
+    /* Prime last_velocity_q at 10 steps/period via an enabled cycle. */
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = 10000.0;  /* 10 steps/period at 1000µs */
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000000.0; /* 5 steps/period/period: 5e6 × (1e-3)² = 5 */
+    mock_tx_fifo_empty                 = 1;
+    do_steps(0);  /* enable snap: last_velocity_q = 10 steps/period */
+
+    /* Disable: clamp brings velocity 10 -> 5 (not zero yet) -> steps still issued. */
+    config.joint[0].enabled         = 0;
+    config.joint[0].updated_from_c0 = 1;
+    last_pio_put_value               = 0;
+    pio_put_call_count               = 0;
+    mock_tx_fifo_empty               = 1;
+    uint8_t result = do_steps(0);
+
+    assert_int_equal(result, 0);
+    assert_true(last_pio_put_value != 0);  /* still decelerating, not hard-stopped */
+}
+
+/* do_steps: joint disabling with velocity equal to one max_accel step -> reaches zero -> hard stop. */
+static void test_do_steps_disabling_stops_when_zero(void **state) {
+    (void)state;
+    /* Prime last_velocity_q at exactly 5 steps/period (= max_accel_q). */
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = 5000.0;   /* 5 steps/period */
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000000.0; /* 5 steps/period/period: 5e6 × (1e-3)² = 5 */
+    mock_tx_fifo_empty                 = 1;
+    do_steps(0);  /* enable snap: last_velocity_q = 5 steps/period */
+
+    /* Disable: clamp_accel(0, 5, 5) = 0 -> velocity_q == 0 -> hard stop. */
+    config.joint[0].enabled          = 0;
+    config.joint[0].updated_from_c0  = 1;
+    last_pio_put_value                = 0xDEADBEEF;
+    pio_put_call_count                = 0;
+    mock_tx_fifo_empty                = 1;
+    uint8_t result = do_steps(0);
+
+    assert_int_equal(result, 0);
+    assert_int_equal(last_pio_put_value, 0);  /* hard-stopped */
+}
+
+/* do_steps: network lost (updated==0) while disabled and still moving -> continues decelerating. */
+static void test_do_steps_network_loss_decelerates(void **state) {
+    (void)state;
+    /* Prime last_velocity_q at 10 steps/period via an enabled cycle. */
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = 10000.0;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000.0;
+    mock_tx_fifo_empty                 = 1;
+    do_steps(0);  /* enable snap: last_velocity_q = 10 steps/period */
+
+    /* Simulate network loss: disabled, no new packet. */
+    config.joint[0].enabled          = 0;
+    config.joint[0].updated_from_c0  = 0;  /* no new Core0 data */
+    last_pio_put_value               = 0;
+    pio_put_call_count               = 0;
+    mock_tx_fifo_empty               = 1;
+    uint8_t result = do_steps(0);
+
+    assert_int_equal(result, 0);
+    assert_true(last_pio_put_value != 0);  /* decelerating, not hard-stopped */
+}
+
+/* do_steps: network reconnects while joint is mid-deceleration -> acceleration limit honoured.
+ *
+ * Bug: on the enable 0->1 transition, last_velocity_q was unconditionally snapped to the
+ * new commanded velocity, bypassing clamp_accel.  If the motor was still decelerating,
+ * this caused a velocity jump (jitter).
+ *
+ * Scenario: max_accel=2 steps/period², velocity=10 steps/period.
+ *   Tick 1: enable snap → last_velocity_q=10.
+ *   Tick 2-4: decel (enabled=0, updated=0) → 8 → 6 → 4 steps/period.
+ *   Tick 5: re-enable (enabled=1, updated=1) at velocity=10.
+ *     WRONG (old): snap last_velocity_q=10 → clamp_accel(10,10,2)=10 → jump from 4 to 10.
+ *     CORRECT: no snap (last_velocity_q=4 != 0) → clamp_accel(10,4,2)=6 → accel-limited. */
+static void test_do_steps_reconnect_mid_decel_no_jitter(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = 10000.0;  /* 10 steps/period at 1000µs */
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 2000000.0; /* 2e6 steps/s² → 2 steps/period/period */
+    mock_tx_fifo_empty                 = 1;
+    do_steps(0);  /* tick 1: enable snap → last_velocity_q=10 */
+
+    /* Ticks 2-4: network lost, decelerate 10→8→6→4 steps/period. */
+    config.joint[0].enabled          = 0;
+    config.joint[0].updated_from_c0  = 0;
+    mock_tx_fifo_empty               = 1;
+    do_steps(0);  /* 10→8 */
+    do_steps(0);  /* 8→6 */
+    do_steps(0);  /* 6→4 */
+
+    /* Tick 5: network reconnects, LinuxCNC re-enables at velocity=10. */
+    config.joint[0].enabled          = 1;
+    config.joint[0].updated_from_c0  = 1;
+    config.joint[0].velocity_requested = 10000.0;
+    last_pio_put_value               = 0;
+    pio_put_call_count               = 0;
+    mock_tx_fifo_empty               = 1;
+    do_steps(0);
+
+    /* Acceleration limit must be honoured: velocity steps from 4 to at most 4+2=6,
+     * not a snap to 10.  step_len for 6 steps/period = 133000/(2*6)-9 = 11074. */
+    assert_int_equal(last_pio_put_value >> 1, 11074);
+}
+
+/* do_steps: fresh enable (last_velocity_q==0) snaps to commanded velocity.
+ *
+ * This is the intentional behaviour for joints enabled from rest when LinuxCNC
+ * is already commanding motion: the motor must not ramp slowly from zero.
+ * Regression guard: the mid-decel fix must not break this snap. */
+static void test_do_steps_fresh_enable_snaps_to_commanded(void **state) {
+    (void)state;
+    /* last_velocity_q starts at 0 (pio_reset_for_test in test_setup). */
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = 10000.0;  /* 10 steps/period */
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 2000000.0; /* 2 steps/period/period */
+    mock_tx_fifo_empty                 = 1;
+    do_steps(0);
+
+    /* Snap applied (last_velocity_q was 0): full commanded velocity immediately.
+     * step_len for 10 steps/period = 133000/(2*10)-9 = 6641. */
+    assert_int_equal(last_pio_put_value >> 1, 6641);
+}
+
 /* do_steps: no new core0 data (updated == 0), slow last_velocity -> writes 0 to PIO, returns 0 */
 static void test_do_steps_no_update(void **state) {
     (void)state;
@@ -293,8 +441,8 @@ static void test_do_steps_normal_step(void **state) {
 static void test_do_steps_accel_clamped(void **state) {
     (void)state;
     /* Set up a joint with small max_accel so the clamp activates after enable.
-     * With update_period_us=1000, max_accel=5000 (steps/s/s) normalises to
-     * 5000/1000 = 5.0 steps/period.
+     * With update_period_us=1000, max_accel=5000000 (steps/s²) normalises to
+     * 5000000 × (1e-3)² = 5.0 steps/period.
      *
      * On enable the RP2040 snaps last_velocity_q to the commanded velocity, so
      * the first call must use a low velocity (5.0 steps/period) to prime state.
@@ -313,7 +461,7 @@ static void test_do_steps_accel_clamped(void **state) {
     config.joint[0].abs_pos_achieved   = 0;
     config.joint[0].velocity_requested = 5.0 * update_period_us;  /* low: snap primes to 5.0 */
     config.joint[0].max_velocity       = 100000.0;  /* steps/s */
-    config.joint[0].max_accel          = 5000.0;    /* steps/s/s -> 5.0 steps/period */
+    config.joint[0].max_accel          = 5000000.0;  /* 5e6 steps/s² → 5.0 steps/period/period */
 
     /* First call: enable transition snaps last_velocity_q to 5.0 steps/period.
      * velocity=5.0 -> step_len=(133000/(5*2))-9=13291 */
@@ -336,6 +484,65 @@ static void test_do_steps_accel_clamped(void **state) {
     assert_int_equal(first_word & 0x1, 1);
     assert_int_equal(second_word >> 1, 6641);
     assert_int_equal(second_word & 0x1, 1);
+}
+
+/* --- compute_velocity_cmd unit tests --- */
+
+/* Velocity mode, enabled, updated: returns velocity_requested unchanged. */
+static void test_compute_velocity_cmd_velmode_passthrough(void **state) {
+    (void)state;
+    double result = compute_velocity_cmd(
+        JOINT_CMD_VELOCITY, 5000.0, 0.0, 0, /*enabled=*/1, /*updated=*/1, 1000, 0.0);
+    assert_float_equal(result, 5000.0, 1e-6);
+}
+
+/* Position mode, zero error: returns vel_ff with no correction. */
+static void test_compute_velocity_cmd_posmode_at_target(void **state) {
+    (void)state;
+    double result = compute_velocity_cmd(
+        JOINT_CMD_POSITION, 1000.0, 100.0, 100, /*enabled=*/1, /*updated=*/1, 1000, 0.0);
+    assert_float_equal(result, 1000.0, 1e-6);
+}
+
+/* Position mode, dead zone (|error| < 1 step): no correction applied. */
+static void test_compute_velocity_cmd_posmode_dead_zone(void **state) {
+    (void)state;
+    double result = compute_velocity_cmd(
+        JOINT_CMD_POSITION, 500.0, 100.4, 100, /*enabled=*/1, /*updated=*/1, 1000, 0.0);
+    assert_float_equal(result, 500.0, 1e-6);
+}
+
+/* Position mode, positive error: vel_ff + Kp*error*rate.
+ * error=10 steps, period=1000µs: correction = 10*(1e6/1000)*0.5 = 5000 steps/s. */
+static void test_compute_velocity_cmd_posmode_forward_correction(void **state) {
+    (void)state;
+    double result = compute_velocity_cmd(
+        JOINT_CMD_POSITION, 1000.0, 110.0, 100, /*enabled=*/1, /*updated=*/1, 1000, 0.0);
+    assert_float_equal(result, 1000.0 + 5000.0, 1e-6);
+}
+
+/* Position mode, negative error: vel_ff + negative correction. */
+static void test_compute_velocity_cmd_posmode_reverse_correction(void **state) {
+    (void)state;
+    double result = compute_velocity_cmd(
+        JOINT_CMD_POSITION, 1000.0, 90.0, 100, /*enabled=*/1, /*updated=*/1, 1000, 0.0);
+    assert_float_equal(result, 1000.0 - 5000.0, 1e-6);
+}
+
+/* Disabled: returns 0 regardless of mode and error. */
+static void test_compute_velocity_cmd_disabled_returns_zero(void **state) {
+    (void)state;
+    double result = compute_velocity_cmd(
+        JOINT_CMD_POSITION, 1000.0, 200.0, 100, /*enabled=*/0, /*updated=*/1, 1000, 0.0);
+    assert_float_equal(result, 0.0, 1e-6);
+}
+
+/* Underrun (updated=0): returns 0 regardless of mode. */
+static void test_compute_velocity_cmd_underrun_returns_zero(void **state) {
+    (void)state;
+    double result = compute_velocity_cmd(
+        JOINT_CMD_VELOCITY, 5000.0, 0.0, 0, /*enabled=*/1, /*updated=*/0, 1000, 0.0);
+    assert_float_equal(result, 0.0, 1e-6);
 }
 
 /* do_steps: position mode drives toward abs_pos_requested.
@@ -423,8 +630,9 @@ static void test_do_steps_no_motion(void **state) {
     assert_int_equal(last_pio_put_value, 0);
 }
 
-/* do_steps: underrun (no new data from Core0) always writes 0 to PIO to prevent
- * the state machine re-executing a stale step_len and generating spurious steps. */
+/* do_steps: underrun (no new data from Core0) with max_accel=0 -> velocity snaps
+ * to 0 immediately -> writes 0 to PIO.  With max_accel>0 it decelerates instead
+ * (see test_do_steps_underrun_while_enabled_decelerates). */
 static void test_do_steps_underrun_stops_pio(void **state) {
     (void)state;
     config.joint[0].enabled            = 1;
@@ -447,6 +655,175 @@ static void test_do_steps_underrun_stops_pio(void **state) {
     assert_int_equal(result, 0);
     assert_int_equal(pio_put_call_count, 1);
     assert_int_equal(last_pio_put_value, 0);
+}
+
+/* do_steps: underrun (no new data) while enabled and moving with max_accel>0 ->
+ * decelerates instead of hard-stopping.  This is the key network-loss scenario:
+ * Core0 is blocked at get_UDP(), updated==0, but the joint is still enabled and
+ * last_velocity_q is non-zero.  Motor must keep stepping (decelerate) rather than
+ * crash-stopping before handle_network_timeout() fires. */
+static void test_do_steps_underrun_while_enabled_decelerates(void **state) {
+    (void)state;
+    /* Prime last_velocity_q at 10 steps/period via an enabled cycle. */
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = 10000.0;  /* 10 steps/period at 1000µs */
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000000.0; /* 5e6 steps/s² → 5.0 steps/period/period */
+    mock_tx_fifo_empty                 = 1;
+    do_steps(0);  /* enable snap: last_velocity_q = 10 steps/period */
+
+    /* Underrun while still enabled (Core0 blocked on network). */
+    config.joint[0].updated_from_c0 = 0;
+    last_pio_put_value               = 0;
+    pio_put_call_count               = 0;
+    mock_tx_fifo_empty               = 1;
+    uint8_t result = do_steps(0);
+
+    assert_int_equal(result, 0);
+    assert_true(last_pio_put_value != 0);  /* still decelerating, not hard-stopped */
+}
+
+/* do_steps: position mode, active vel_ff, small tracking error.
+ * vel_ff=10000 steps/s (10 steps/period), error=1 step, max_accel=5e6 steps/s².
+ * velocity = vel_ff + Kp·error = 10000+500 = 10500 steps/s → 10 steps → step_len=6641. */
+static void test_do_steps_posmode_ff_active_tracks_at_full_speed(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = 10000.0;
+    config.joint[0].abs_pos_requested  = 1.0;
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000000.0;
+    config.joint[0].updated_from_c0    = 1;
+    mock_tx_fifo_empty                  = 1;
+    mock_rx_fifo_level                  = 0;
+
+    do_steps(0);
+
+    assert_int_equal(last_pio_put_value >> 1, 6641);
+}
+
+/* Position mode, large negative vel_ff: mirror of large-positive.
+ * vel_ff=-10000, error=-1 → velocity=-10500 steps/s → 10 steps → step_len=6641. */
+static void test_do_steps_posmode_ff_large_negative_tracks_at_full_speed(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = -10000.0;
+    config.joint[0].abs_pos_requested  = -1.0;
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000000.0;
+    config.joint[0].updated_from_c0    = 1;
+    mock_tx_fifo_empty                 = 1;
+    mock_rx_fifo_level                 = 0;
+
+    do_steps(0);
+
+    assert_int_equal(last_pio_put_value >> 1, 6641);
+}
+
+/* Position mode, small positive vel_ff.
+ * vel_ff=4000, error=1 → velocity=4500 steps/s → 4 steps → step_len=16616. */
+static void test_do_steps_posmode_ff_small_positive_tracks_normally(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = 4000.0;
+    config.joint[0].abs_pos_requested  = 1.0;
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000000.0;
+    config.joint[0].updated_from_c0    = 1;
+    mock_tx_fifo_empty                 = 1;
+    mock_rx_fifo_level                 = 0;
+
+    do_steps(0);
+
+    assert_int_equal(last_pio_put_value >> 1, 16616);
+}
+
+/* Position mode, small negative vel_ff: mirror of small-positive. */
+static void test_do_steps_posmode_ff_small_negative_tracks_normally(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = -4000.0;
+    config.joint[0].abs_pos_requested  = -1.0;
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000000.0;
+    config.joint[0].updated_from_c0    = 1;
+    mock_tx_fifo_empty                 = 1;
+    mock_rx_fifo_level                 = 0;
+
+    do_steps(0);
+
+    assert_int_equal(last_pio_put_value >> 1, 16616);
+}
+
+/* Position mode, vel_ff=0, residual error: stopping-profile cap limits velocity.
+ *
+ * Period 1: enable snap at 10 steps/period → last_velocity_q=655360.
+ * Period 2: vel_ff=0, 1-step error → Kp correction=500 steps/s → target=32768.
+ *   clamp_accel: 655360-327680=327680 (5 steps/period).
+ *   cap: vel_ff_q=0, sqrt_term=sqrt(2·327680·1·65536)≈207243 (3.16 steps/period).
+ *   327680>207243 → capped → n_steps=3 → step_len=22157. */
+static void test_do_steps_posmode_ff_zero_clamp_accel_positive(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = 10000.0;
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000000.0;
+    config.joint[0].updated_from_c0    = 1;
+    mock_tx_fifo_empty                 = 1;
+    mock_rx_fifo_level                 = 0;
+    do_steps(0);  /* enable snap: last_velocity_q=655360 */
+
+    config.joint[0].velocity_requested = 0.0;
+    config.joint[0].abs_pos_requested  = 1.0;
+    config.joint[0].updated_from_c0    = 1;
+    last_pio_put_value = 0;
+    do_steps(0);
+
+    assert_int_equal(last_pio_put_value >> 1, 22157);
+}
+
+/* Position mode, vel_ff=0, negative approach: mirror of positive. */
+static void test_do_steps_posmode_ff_zero_clamp_accel_negative(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = -10000.0;
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000000.0;
+    config.joint[0].updated_from_c0    = 1;
+    mock_tx_fifo_empty                 = 1;
+    mock_rx_fifo_level                 = 0;
+    do_steps(0);  /* enable snap: last_velocity_q=-655360 */
+
+    config.joint[0].velocity_requested = 0.0;
+    config.joint[0].abs_pos_requested  = -1.0;
+    config.joint[0].updated_from_c0    = 1;
+    last_pio_put_value = 0;
+    do_steps(0);
+
+    assert_int_equal(last_pio_put_value >> 1, 22157);
 }
 
 /* Integration test: position-mode stationary hold at fractional step position.
@@ -609,6 +986,91 @@ static void test_do_steps_velmode_reverse(void **state) {
     assert_int_equal(run_velocity_periods(-750.0, 100), -75);
 }
 
+/* Position mode: no overshoot after final correction step.
+ *
+ * Models JOINT_0 (scale=160, max_accel=750 mm/s²=120000 steps/s²).
+ * max_accel_q = 120000 * (1e-3)² * 65536 = 7864.
+ * Bang-bang cap at 1-step error = sqrt(2·7864·65536) ≈ 32109 Q16.16 ≈ 490 steps/s.
+ *
+ * Prime last_velocity_q to 32112 (≈ bang-bang cap) via velocity mode enable snap.
+ * Then switch to position mode at target (error=0, vel_ff=0).
+ * Without fix: clamp_accel leaves velocity_q=24248; over 2 periods the Bresenham
+ * accumulator (32112 + 24248 + 16384 = 72744) crosses 65536 → overshoot step fires.
+ * With fix: velocity_q and accumulator are zeroed at err_int=0, vel_ff_q=0. */
+static void test_do_steps_position_mode_no_overshoot_after_correction(void **state) {
+    (void)state;
+
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;   /* velocity mode to prime */
+    config.joint[0].velocity_requested = 490.0;                /* 32112 Q16.16 ≈ bang-bang cap */
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].max_velocity       = 200000.0;
+    config.joint[0].max_accel          = 120000.0;             /* 750 mm/s² × 160 steps/mm */
+    config.joint[0].updated_from_c0    = 1;
+    mock_tx_fifo_empty                 = 1;
+    mock_rx_fifo_level                 = 0;
+    do_steps(0);  /* enable snap: last_velocity_q = 490/1000 * 65536 = 32112 */
+
+    /* Now at target: error=0, vel_ff=0.  Residual velocity must not fire a step. */
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = 0.0;
+    config.joint[0].abs_pos_requested  = 1.0;
+    config.joint[0].abs_pos_achieved   = 1;
+
+    int steps_fired = 0;
+    for (int i = 0; i < 10; i++) {
+        config.joint[0].updated_from_c0 = 1;
+        last_pio_put_value = 0;
+        do_steps(0);
+        if (last_pio_put_value != 0) steps_fired++;
+    }
+
+    assert_int_equal(steps_fired, 0);
+}
+
+/* clamp_accel with a fixed target of 0 must never overshoot zero.
+ * Velocity decreases monotonically and sign never changes. */
+static void test_clamp_accel_fixed_zero_target_never_overshoots(void **state) {
+    (void)state;
+    int32_t velocity_q  = 10 * 65536;  /* 10 steps/period */
+    int32_t max_accel_q = 32768;        /* 0.5 steps/period/period */
+    int32_t prev = velocity_q;
+
+    for (int i = 0; i < 100000; i++) {
+        velocity_q = clamp_accel(0, velocity_q, max_accel_q);
+        assert_true(velocity_q >= 0);   /* must not go negative */
+        assert_true(velocity_q <= prev); /* must not increase */
+        prev = velocity_q;
+        if (velocity_q == 0) break;
+    }
+    assert_int_equal(velocity_q, 0);
+}
+
+/* Reproduce JOINT_1 numbers: max_accel_q = floor(1280 * 1e-6 * 65536) = 83.
+ * LinuxCNC ramps vel_ff_q by floor(n*83.886) each period; the per-period delta
+ * alternates between 83 and 84 as the 0.886 fractional part accumulates.
+ * Without headroom (budget=83) the firmware falls 1 unit short on every "84"
+ * period, accumulating lag that grows into a position error large enough to trip
+ * FERROR over a 12-second ramp.  With ACCEL_HEADROOM=1.1 the budget=91 covers
+ * the worst-case delta of 84, keeping lag at zero. */
+static void test_ramp_accel_headroom_tracks_vel_ff(void **state) {
+    (void)state;
+    int32_t max_accel_q  = 83;
+    int32_t clamp_budget = (int32_t)(max_accel_q * ACCEL_HEADROOM);
+    int32_t firmware_vel = 0;
+    int32_t max_lag      = 0;
+
+    for (int n = 1; n <= 120; n++) {
+        int32_t vel_ff_q = (int32_t)(n * 83.886);
+        firmware_vel = clamp_accel(vel_ff_q, firmware_vel, clamp_budget);
+        int32_t lag = vel_ff_q - firmware_vel;
+        if (lag > max_lag) max_lag = lag;
+    }
+    assert_int_equal(max_lag, 0);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -628,18 +1090,37 @@ int main(void) {
         cmocka_unit_test_setup(test_plan_steps_excess_returned_to_accumulator, test_setup),
         cmocka_unit_test_setup(test_plan_steps_zero_velocity,                  test_setup),
         cmocka_unit_test_setup(test_plan_steps_skip_preserves_accumulator,     test_setup),
+        cmocka_unit_test_setup(test_compute_velocity_cmd_velmode_passthrough,        test_setup),
+        cmocka_unit_test_setup(test_compute_velocity_cmd_posmode_at_target,          test_setup),
+        cmocka_unit_test_setup(test_compute_velocity_cmd_posmode_dead_zone,          test_setup),
+        cmocka_unit_test_setup(test_compute_velocity_cmd_posmode_forward_correction, test_setup),
+        cmocka_unit_test_setup(test_compute_velocity_cmd_posmode_reverse_correction, test_setup),
+        cmocka_unit_test_setup(test_compute_velocity_cmd_disabled_returns_zero,      test_setup),
+        cmocka_unit_test_setup(test_compute_velocity_cmd_underrun_returns_zero,      test_setup),
         cmocka_unit_test_setup(test_do_steps_zero_period,               test_setup),
         cmocka_unit_test_setup(test_do_steps_disabled,                  test_setup),
         cmocka_unit_test_setup(test_do_steps_disabled_drains_rx_fifo,  test_setup),
-        cmocka_unit_test_setup(test_do_steps_no_update,                 test_setup),
+        cmocka_unit_test_setup(test_do_steps_disabling_decelerates,    test_setup),
+        cmocka_unit_test_setup(test_do_steps_disabling_stops_when_zero,  test_setup),
+        cmocka_unit_test_setup(test_do_steps_network_loss_decelerates,   test_setup),
+        cmocka_unit_test_setup(test_do_steps_reconnect_mid_decel_no_jitter,  test_setup),
+        cmocka_unit_test_setup(test_do_steps_fresh_enable_snaps_to_commanded, test_setup),
+        cmocka_unit_test_setup(test_do_steps_no_update,                  test_setup),
         cmocka_unit_test_setup(test_do_steps_normal_step,               test_setup),
         cmocka_unit_test_setup(test_do_steps_accel_clamped,                      test_setup),
         cmocka_unit_test_setup(test_do_steps_no_motion,                          test_setup),
-        cmocka_unit_test_setup(test_do_steps_underrun_stops_pio,                 test_setup),
+        cmocka_unit_test_setup(test_do_steps_underrun_stops_pio,                      test_setup),
+        cmocka_unit_test_setup(test_do_steps_underrun_while_enabled_decelerates,      test_setup),
         cmocka_unit_test_setup(test_do_steps_position_mode_drives_forward,       test_setup),
         cmocka_unit_test_setup(test_do_steps_position_mode_reverses,             test_setup),
         cmocka_unit_test_setup(test_do_steps_position_mode_at_target,            test_setup),
         cmocka_unit_test_setup(test_do_steps_position_mode_no_jitter_at_rest,    test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_ff_active_tracks_at_full_speed,      test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_ff_large_negative_tracks_at_full_speed, test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_ff_small_positive_tracks_normally,  test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_ff_small_negative_tracks_normally,  test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_ff_zero_clamp_accel_positive,       test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_ff_zero_clamp_accel_negative,       test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_0_75,      test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_0_25,      test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_int_1,     test_setup),
@@ -647,6 +1128,9 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_velmode_frac_1_5,  test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_frac_10_5, test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_reverse,   test_setup),
+        cmocka_unit_test_setup(test_do_steps_position_mode_no_overshoot_after_correction, test_setup),
+        cmocka_unit_test_setup(test_clamp_accel_fixed_zero_target_never_overshoots, test_setup),
+        cmocka_unit_test_setup(test_ramp_accel_headroom_tracks_vel_ff,              test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

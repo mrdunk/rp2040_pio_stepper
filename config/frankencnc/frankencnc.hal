@@ -53,7 +53,7 @@ setp rp2040_eth.0.joint.0.gpio-step      0
 setp rp2040_eth.0.joint.0.gpio-dir       1
 
 setp mult2.0.in0 [JOINT_0]MAX_VELOCITY
-setp mult2.0.in1 1.1
+setp mult2.0.in1 1.0
 net x-vel-limit rp2040_eth.0.joint.0.vel-limit <= mult2.0.out
 
 setp mult2.1.in0 [JOINT_0]MAX_ACCELERATION
@@ -79,7 +79,7 @@ setp rp2040_eth.0.joint.1.gpio-step      2
 setp rp2040_eth.0.joint.1.gpio-dir       3
 
 setp mult2.2.in0 [JOINT_1]MAX_VELOCITY
-setp mult2.2.in1 1.1
+setp mult2.2.in1 1.0
 net y-vel-limit rp2040_eth.0.joint.1.vel-limit <= mult2.2.out
 
 setp mult2.3.in0 [JOINT_1]MAX_ACCELERATION
@@ -104,7 +104,7 @@ setp rp2040_eth.0.joint.2.gpio-step      4
 setp rp2040_eth.0.joint.2.gpio-dir       5
 
 setp mult2.4.in0 [JOINT_2]MAX_VELOCITY
-setp mult2.4.in1 1.1
+setp mult2.4.in1 1.0
 net z-vel-limit rp2040_eth.0.joint.2.vel-limit <= mult2.4.out
 
 setp mult2.5.in0 [JOINT_2]MAX_ACCELERATION

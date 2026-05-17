@@ -29,8 +29,17 @@ void wait_for_packet(void) {
     return;
   }
 
-  /* Spin until Core0 finishes writing all joint configs for this packet. */
-  while (packet_generation == last_packet_generation) {}
+  /* Spin until Core0 finishes writing all joint configs for this packet.
+   * Also break as soon as last_packet_tick < tick: this means no packet has
+   * arrived for the current tick, so Core0 is either slow or gone.  Exiting
+   * immediately keeps the loop period at exactly one timer tick (1 ms) so
+   * step_all_joints() runs every period and the PIO FIFO stays fed during
+   * deceleration.  The hard-timeout check is a belt-and-braces fallback. */
+  while (packet_generation == last_packet_generation) {
+    if (last_packet_tick < tick || (tick - last_packet_tick) > MAX_MISSED_PACKET) {
+      break;
+    }
+  }
   last_packet_generation = packet_generation;
 }
 
@@ -45,7 +54,7 @@ void handle_network_timeout(void) {
   for (uint8_t joint = 0; joint < MAX_JOINT; joint++) {
     disable_joint(joint, CORE1);
   }
-  printf("No network update. Disabling joints.\n");
+  printf("No NW\n");
   no_network = true;
 }
 
@@ -53,7 +62,7 @@ void handle_network_recovery(void) {
   if (!no_network) {
     return;
   }
-  printf("Network recovered.\n");
+  printf("NW up\n");
   no_network = false;
 }
 
@@ -74,8 +83,8 @@ static void core1_tick(void) {
     handle_network_timeout();
   } else {
     handle_network_recovery();
-    step_all_joints();
   }
+  step_all_joints();
 #ifndef BUILD_TESTS
   i2c_gpio_poll(&i2c_gpio);
 #endif
@@ -98,7 +107,7 @@ void init_core1(void) {
   printf("core0: Initializing.\n");
 
   if (MAX_JOINT > 8) {
-    printf("ERROR: Maximum joint count: 8. Configured: %u\n", MAX_JOINT);
+    printf("ERROR: Max joint count: 8. Configured: %u\n", MAX_JOINT);
     while (1) {
       tight_loop_contents();
     }

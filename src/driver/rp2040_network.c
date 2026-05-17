@@ -385,8 +385,10 @@ bool unpack_joint_movement(
     *data->joint_pos_fb[joint] =
       ((double)reply->abs_pos_achieved[joint]) / *data->joint_scale[joint];
 
+    /* velocity_achieved is Q16.16 steps/period (exact internal value);
+     * divide by 65536 to get steps/period as a float. */
     *data->joint_vel_fb[joint] =
-      (double)reply->velocity_achieved[joint];
+      (double)reply->velocity_achieved[joint] / 65536.0;
 
     *data->joint_pos_error_fb[joint] = (int32_t)round(
         (*data->joint_pos_cmd[joint] - *data->joint_pos_fb[joint])

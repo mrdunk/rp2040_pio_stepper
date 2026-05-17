@@ -45,7 +45,7 @@ bool unpack_timing(
   int32_t time_diff;
   update_packet_metrics(message, &id_diff, &time_diff);
   if(!serialise_timing(tx_buf, message->update_id, time_diff)) {
-    printf("WARN: TX buffer full, dropping timing reply.\n");
+    printf("WARN: TX buf full, drop timing rep\n");
   }
 
   (*received_count)++;
@@ -69,7 +69,7 @@ bool unpack_version_request(
   reply.version.version_patch  = PROTOCOL_VERSION_PATCH;
   reply.version.version_branch = PROTOCOL_VERSION_BRANCH;
   if (!pack_nw_buff(tx_buf, &reply, sizeof(struct Reply_version))) {
-    printf("WARN: TX buffer full, dropping version reply.\n");
+    printf("WARN: TX buf full, drop version rep\n");
   }
 
   (*received_count)++;
@@ -167,7 +167,7 @@ bool unpack_spindle_config(
 
 
   if(!serialise_spindle_config(spindle, tx_buf)) {
-    printf("WARN: TX buffer full, dropping spindle config reply.\n");
+    printf("WARN: TX buf full, drop spindle config rep\n");
   }
 
   (*received_count)++;
@@ -243,7 +243,7 @@ bool unpack_joint_config(
       &cmd_type);
 
   if(!serialise_joint_config(joint, tx_buf)) {
-    printf("WARN: TX buffer full, dropping joint config reply.\n");
+    printf("WARN: TX buf full, drop joint config rep\n");
   }
 
   (*received_count)++;
@@ -342,7 +342,7 @@ bool unpack_gpio_config(
   }
 
   if(!serialise_gpio_config(gpio_count, tx_buf)) {
-    printf("WARN: TX buffer full, dropping gpio config reply.\n");
+    printf("WARN: TX buf full, drop gpio conf rep\n");
   }
 
   (*received_count)++;
@@ -361,18 +361,18 @@ void process_received_buffer(
   size_t rx_offset = 0;
 
   if(rx_buf->length + sizeof(rx_buf->length) + sizeof(rx_buf->checksum) != expected_length) {
-    printf("WARN: RX length not equal to expected. %u\n", *received_count);
+    printf("WARN: RX len incorrect %u\n", *received_count);
     reset_nw_buf(rx_buf);
     return;
   }
   if(rx_buf->length > NW_BUF_LEN) {
-    printf("WARN: RX length greater than buffer size. %u\n", *received_count);
+    printf("WARN: RX len > buf size %u\n", *received_count);
     reset_nw_buf(rx_buf);
     return;
   }
 
   if(!checkNWBuff(rx_buf)) {
-    printf("WARN: RX checksum fail.\n");
+    printf("WARN: RX checksum\n");
 
     reset_nw_buf(rx_buf);
     reset_nw_buf(tx_buf);
@@ -492,10 +492,10 @@ void core0_main() {
        * the timer free-runs at the current period, which is correct behaviour. */
       /* Serialise before waking Core1 — avoids joint mutex contention. */
       if(!serialise_joint_movement(&tx_buf, false)) {
-        printf("WARN: TX buffer full, dropping joint movement.\n");
+        printf("WARN: TX buf full, drop joint movement\n");
       }
       if(!serialise_joint_metrics(&tx_buf)) {
-        printf("WARN: TX buffer full, dropping joint metrics.\n");
+        printf("WARN: TX buf full, drop joint metrics\n");
       }
 
       packet_generation++;   /* all joint configs from this packet are now written */
@@ -509,7 +509,7 @@ void core0_main() {
       // No need to update each spindle every cycle.
       if(count % 100 == 0) {
         if(!serialise_spindle_speed_out(&tx_buf, act_spindle_frequency, &vfd.stats)) {
-          printf("WARN: TX buffer full, dropping spindle speed.\n");
+          printf("WARN: TX buff full, drop spindle speed\n");
         }
       }
 

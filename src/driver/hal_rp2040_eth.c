@@ -235,7 +235,7 @@ static const PinDef joint_pins[] = {
     { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_pos_cmd),        sizeof(hal_float_t*), "joint", 0, 1, "pos-cmd"          }, // Position command; consumed by firmware in position mode (cmd-type=0); also used to compute pos-error-fb
     { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_vel_cmd),        sizeof(hal_float_t*), "joint", 0, 1, "vel-cmd"          }, // Velocity command from LinuxCNC
     { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_pos_fb),         sizeof(hal_float_t*), "joint", 0, 1, "pos-fb"           }, // Position feedback (cumulative step count ÷ scale)
-    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_vel_fb),         sizeof(hal_float_t*), "joint", 0, 1, "vel-fb"           }, // Velocity feedback (raw steps per servo period, unscaled)
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_vel_fb),         sizeof(hal_float_t*), "joint", 0, 1, "vel-fb"           }, // Velocity feedback (steps/period; Q16.16 from firmware, exact zero when stopped)
     { S32,   HAL_OUT, offsetof(skeleton_t, joint_pos_error_fb),   sizeof(hal_s32_t*),   "joint", 0, 1, "pos-error-fb"     }, // Difference between commanded and actual step count (raw steps, unscaled)
     { PIN,   HAL_OUT, offsetof(skeleton_t, joint_enable_fb),      sizeof(hal_bit_t*),   "joint", 0, 1, "enable-fb"        }, // RP2040's actual enabled state; may remain false after network recovery until protocol re-enables
     { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_vel_calculated), sizeof(hal_float_t*), "joint", 0, 1, "vel-calculated"   }, // Velocity the RP2040 computed after applying vel-limit and accel-limit
@@ -663,53 +663,65 @@ static void write_port(void *arg, long period)
   static int cooloff = 0;
   static int send_fail_count = 0;
 
-  if (cooloff > 0) {
-    cooloff--;
-    return;
-  }
-
   skeleton_t *data = arg;
   struct NWBuffer buffer;
-  reset_nw_buf(&buffer);
-  bool pack_success = true;
 
-  *data->seq_out = (uint32_t)count;
-  pack_success = pack_success && serialize_timing(&buffer, count, rtapi_get_time());
-
-  if (!get_version_checked())
-    serialize_version_request(&buffer);
-
-  // Put GPIO values in network buffer.
-  // serialize_gpio() return value is not checked: a failed pack still allows
-  // the rest of the buffer to be sent with whatever was packed.
-  serialize_gpio(&buffer, data);
-
-  // Send configuration data to RP.
-  pack_success = pack_success && configure(
-      &buffer, count, last_joint_config, last_gpio_config, last_spindle_config, data);
-
-  pack_success = pack_success && serialize_joint_pos(&buffer, data);
-
-  // No need to update each spindle every cycle.
-  if(count % 100 == 0) {
-    pack_success = pack_success && serialise_spindle_speed_in(&buffer, data);
+  /* While eth is down, hold joint_enable_cmd=false so the RP2040 keeps
+   * decelerating.  LinuxCNC may write enable=true to this HAL pin every
+   * servo period; we intercept it here before the packet is built. */
+  if (!*data->eth_up) {
+    for (int j = 0; j < num_joints; j++) {
+      *data->joint_enable_cmd[j] = false;
+    }
   }
 
-  if(!pack_success) {
-    printf("WARN: TX packet dropped — buffer overflow packing servo cycle %u\n", count);
-  } else if (send_data(device_num, &buffer) != 0) {
-    cooloff = 2000;
-    if (errno != last_errno) {
-      last_errno = errno;
-      log_network_error("send", device_num, errno);
+  /* Send — skipped during cooloff, but receive/eth-tracking always runs so
+   * that rx_miss_count and eth_up reflect reality even when we cannot send
+   * (e.g. interface administratively down). */
+  if (cooloff > 0) {
+    cooloff--;
+  } else {
+    reset_nw_buf(&buffer);
+    bool pack_success = true;
+
+    *data->seq_out = (uint32_t)count;
+    pack_success = pack_success && serialize_timing(&buffer, count, rtapi_get_time());
+
+    if (!get_version_checked())
+      serialize_version_request(&buffer);
+
+    // Put GPIO values in network buffer.
+    // serialize_gpio() return value is not checked: a failed pack still allows
+    // the rest of the buffer to be sent with whatever was packed.
+    serialize_gpio(&buffer, data);
+
+    // Send configuration data to RP.
+    pack_success = pack_success && configure(
+        &buffer, count, last_joint_config, last_gpio_config, last_spindle_config, data);
+
+    pack_success = pack_success && serialize_joint_pos(&buffer, data);
+
+    // No need to update each spindle every cycle.
+    if(count % 100 == 0) {
+      pack_success = pack_success && serialise_spindle_speed_in(&buffer, data);
     }
-    send_fail_count++;
-    if (!(send_fail_count % 10)) {
-      last_errno = 0;
+
+    if(!pack_success) {
+      printf("WARN: TX packet dropped — buffer overflow packing servo cycle %u\n", count);
+    } else if (send_data(device_num, &buffer) != 0) {
+      cooloff = 2000;
+      if (errno != last_errno) {
+        last_errno = errno;
+        log_network_error("send", device_num, errno);
+      }
+      send_fail_count++;
+      if (!(send_fail_count % 10)) {
+        last_errno = 0;
+      }
+    } else {
+      send_fail_count = 0;
     }
-    return;
   }
-  send_fail_count = 0;
 
   // Receive data and check packets all completed round trip.
   reset_nw_buf(&buffer);
@@ -727,8 +739,32 @@ static void write_port(void *arg, long period)
     );
 
     if(! *data->eth_up) {
-      // Network connection just came up after being down.
-      on_eth_up(data, count);
+      // Don't signal recovery to LinuxCNC until all joints have stopped moving
+      // AND the RP2040 has confirmed (via REPLY_JOINT_CONFIG) that it has
+      // applied the disable.  Both conditions together mean the RP2040 is
+      // stationary and will not resume on its own.
+      //
+      // vel_fb is Q16.16 steps/period (exact internal velocity_q); == 0.0
+      // only when the firmware's velocity_q is exactly zero, so one reading
+      // is sufficient — no hysteresis needed.
+      static bool waiting_logged = false;
+
+      bool all_stopped = true;
+      for (uint32_t joint = 0; joint < (uint32_t)num_joints; joint++) {
+        if (*data->joint_vel_fb[joint] != 0.0 || last_joint_config[joint].enable) {
+          all_stopped = false;
+        }
+      }
+      if (all_stopped) {
+        waiting_logged = false;
+        on_eth_up(data, count);
+      } else {
+        if (!waiting_logged) {
+          printf("INFO: waiting for joints to stop before recovery"
+                 " (vel_fb[0]=%g)\n", (double)*data->joint_vel_fb[0]);
+          waiting_logged = true;
+        }
+      }
     }
 
     size_t total_configs = (size_t)num_joints + MAX_GPIO + MAX_SPINDLE;
