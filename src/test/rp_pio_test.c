@@ -1071,6 +1071,112 @@ static void test_ramp_accel_headroom_tracks_vel_ff(void **state) {
     assert_int_equal(max_lag, 0);
 }
 
+/* do_steps: velocity_achieved reports exact 0 when joint has fully decelerated.
+ *
+ * Regression guard for the driver recovery gate: vel_fb == 0.0 (exact) triggers
+ * machine-on after network recovery.  velocity_achieved carries last_velocity_q;
+ * it must be exactly 0 — not a small residual — when the joint has stopped. */
+static void test_do_steps_velocity_achieved_zero_when_stopped(void **state) {
+    (void)state;
+    /* Prime at 5 steps/period (= max_accel); one disable step reaches zero. */
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = 5000.0;    /* 5 steps/period at 1000µs */
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000000.0; /* 5 steps/period/period */
+    mock_tx_fifo_empty                 = 1;
+    do_steps(0);  /* enable snap: last_velocity_q = 5 steps/period */
+
+    /* Disable: clamp_accel(0, 5, 5) = 0 → hard stop → velocity_achieved = 0 exactly. */
+    config.joint[0].enabled          = 0;
+    config.joint[0].updated_from_c0  = 1;
+    mock_tx_fifo_empty               = 1;
+    do_steps(0);
+
+    assert_int_equal(config.joint[0].velocity_achieved, 0);
+}
+
+/* do_steps: velocity_achieved is non-zero while joint is still decelerating.
+ *
+ * The driver recovery gate blocks machine-on while vel_fb != 0.0.  If velocity_achieved
+ * dropped to 0 prematurely, recovery would fire while the motor is still moving. */
+static void test_do_steps_velocity_achieved_nonzero_while_decelerating(void **state) {
+    (void)state;
+    /* Prime at 10 steps/period, max_accel=5; one disable step → 5 (still moving). */
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = 10000.0;   /* 10 steps/period at 1000µs */
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000000.0; /* 5 steps/period/period */
+    mock_tx_fifo_empty                 = 1;
+    do_steps(0);  /* enable snap: last_velocity_q = 10 steps/period */
+
+    /* Disable: clamp_accel(0, 10, 5) = 5 → still decelerating → velocity_achieved != 0. */
+    config.joint[0].enabled          = 0;
+    config.joint[0].updated_from_c0  = 1;
+    mock_tx_fifo_empty               = 1;
+    do_steps(0);
+
+    assert_true(config.joint[0].velocity_achieved != 0);
+}
+
+/* do_steps: velocity_achieved is exact 0 after reverse-direction deceleration.
+ *
+ * Confirms the hard-stop path works regardless of direction; clamp_accel must not
+ * overshoot zero when last_velocity_q is negative. */
+static void test_do_steps_velocity_achieved_zero_reverse(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = -5000.0;   /* -5 steps/period (reverse) */
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000000.0; /* 5 steps/period/period */
+    mock_tx_fifo_empty                 = 1;
+    do_steps(0);  /* enable snap: last_velocity_q = -5 steps/period */
+
+    /* Disable: clamp_accel(0, -5, 5) = 0 → hard stop → velocity_achieved = 0 exactly. */
+    config.joint[0].enabled          = 0;
+    config.joint[0].updated_from_c0  = 1;
+    mock_tx_fifo_empty               = 1;
+    do_steps(0);
+
+    assert_int_equal(config.joint[0].velocity_achieved, 0);
+}
+
+/* do_steps: position-mode stopping-profile cap is inactive in velocity mode.
+ *
+ * In position mode the sqrt(2·a·|error|) cap reduces velocity when the joint is
+ * close to its target; in velocity mode this branch must not fire regardless of the
+ * position error.  Without the cmd_type guard an implementation bug could reduce
+ * velocity_requested to a fraction of the commanded value. */
+static void test_do_steps_velocity_mode_no_position_cap(void **state) {
+    (void)state;
+    /* 3-step position error: in position mode this would trigger the sqrt cap and
+     * reduce velocity_q below 10 steps/period.  In velocity mode it must not. */
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = 10000.0;  /* 10 steps/period at 1000µs */
+    config.joint[0].abs_pos_requested  = 3.0;       /* small error: would cap in position mode */
+    config.joint[0].abs_pos_achieved   = 0;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 5000000.0; /* 5 steps/period/period */
+    mock_tx_fifo_empty                 = 1;
+
+    do_steps(0);  /* enable snap: last_velocity_q = 10 steps/period */
+
+    /* Velocity mode: full 10 steps/period → step_len = 133000/(2*10)-9 = 6641.
+     * If the position cap had fired, step_len would be larger (fewer steps). */
+    assert_int_equal(last_pio_put_value >> 1, 6641);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -1131,6 +1237,10 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_position_mode_no_overshoot_after_correction, test_setup),
         cmocka_unit_test_setup(test_clamp_accel_fixed_zero_target_never_overshoots, test_setup),
         cmocka_unit_test_setup(test_ramp_accel_headroom_tracks_vel_ff,              test_setup),
+        cmocka_unit_test_setup(test_do_steps_velocity_achieved_zero_when_stopped,       test_setup),
+        cmocka_unit_test_setup(test_do_steps_velocity_achieved_nonzero_while_decelerating, test_setup),
+        cmocka_unit_test_setup(test_do_steps_velocity_achieved_zero_reverse,             test_setup),
+        cmocka_unit_test_setup(test_do_steps_velocity_mode_no_position_cap,              test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

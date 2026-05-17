@@ -241,12 +241,38 @@ static void test_force_disable_while_eth_down(void **state) {
 }
 
 
+/* Recovery requires ALL joints stopped: one moving joint blocks machine-on.
+ *
+ * The existing test covers a single joint.  This test verifies that with two
+ * joints, recovery stays blocked as long as any joint still reports vel_fb != 0.0,
+ * and fires only when both are stopped. */
+static void test_recovery_requires_all_joints_stopped_multi_joint(void **state) {
+    (void)state;
+    reset_mocks();
+    skeleton_t data = make_data();
+    *data.eth_up   = false;
+    g_reply_length = 1;
+
+    /* Joint 0 stopped, joint 1 still moving. */
+    v_joint_vel_fb[0] = 0.0;
+    v_joint_vel_fb[1] = 5.0;
+    eth_state_update(&data, 0, 0, 0, 2);  /* num_joints=2 */
+    assert_false(*data.eth_up);
+
+    /* Both stopped: recovery fires. */
+    v_joint_vel_fb[1] = 0.0;
+    eth_state_update(&data, 0, 1, 0, 2);
+    assert_true(*data.eth_up);
+    assert_true(*data.machine_on);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_cable_unplug_sets_eth_down),
         cmocka_unit_test(test_send_failure_sets_eth_down),
         cmocka_unit_test(test_cooloff_skips_send_but_not_receive),
         cmocka_unit_test(test_recovery_waits_for_all_stopped),
+        cmocka_unit_test(test_recovery_requires_all_joints_stopped_multi_joint),
         cmocka_unit_test(test_force_disable_while_eth_down),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
