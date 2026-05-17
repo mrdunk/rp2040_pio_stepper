@@ -283,6 +283,16 @@ double compute_velocity_cmd(
       }
     }
     velocity_requested = vel_ff + correction;
+  } else {
+    /* Velocity mode: gentle position correction to prevent drift accumulation.
+     * Pure velocity mode has no feedback — any systematic step-rate undershoot
+     * (e.g. from update_period_us bias or dropped periods) accumulates without
+     * bound.  Kp = 0.01× of position-mode gain limits steady-state lag to
+     * ~50× the per-period undershoot without fighting the trajectory planner. */
+    double error_steps = abs_pos_requested - (double)abs_pos_achieved;
+    if (error_steps >= 1.0 || error_steps <= -1.0) {
+      velocity_requested += error_steps * (1.0e6 / (double)update_period_us) * 0.01;
+    }
   }
   if (!enabled || updated == 0) {
     velocity_requested = 0.0;
@@ -332,6 +342,13 @@ uint8_t do_steps(const uint8_t joint) {
     return 0;
   }
 
+  if(joint < NUM_FEEDBACK) {
+    /* Read step_count FIFO before computing velocity correction so
+     * compute_velocity_cmd sees the current-period position, not the
+     * stale value written to config at the end of the previous period. */
+    abs_pos_achieved = drain_rx_fifo(joint_state[joint].sm_count, abs_pos_achieved);
+  }
+
   double vel_ff = velocity_requested;  /* save before correction is added */
   velocity_requested = compute_velocity_cmd(
       cmd_type, velocity_requested, abs_pos_requested, abs_pos_achieved,
@@ -364,11 +381,6 @@ uint8_t do_steps(const uint8_t joint) {
     } else {
       printf("J%u disab\n", joint);
     }
-  }
-
-  if(joint < NUM_FEEDBACK) {
-    // Spare PIO blocks are used to count actual steps performed.
-    abs_pos_achieved = drain_rx_fifo(joint_state[joint].sm_count, abs_pos_achieved);
   }
 
   velocity_q = clamp_accel(velocity_q, joint_state[joint].last_velocity_q, clamp_accel_q);

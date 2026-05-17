@@ -457,8 +457,6 @@ static void test_do_steps_accel_clamped(void **state) {
     config.joint[0].io_pos_dir         = 2;
     config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
     config.joint[0].updated_from_c0    = 1;
-    config.joint[0].abs_pos_requested  = 10000.0;
-    config.joint[0].abs_pos_achieved   = 0;
     config.joint[0].velocity_requested = 5.0 * update_period_us;  /* low: snap primes to 5.0 */
     config.joint[0].max_velocity       = 100000.0;  /* steps/s */
     config.joint[0].max_accel          = 5000000.0;  /* 5e6 steps/s² → 5.0 steps/period/period */
@@ -493,6 +491,32 @@ static void test_compute_velocity_cmd_velmode_passthrough(void **state) {
     (void)state;
     double result = compute_velocity_cmd(
         JOINT_CMD_VELOCITY, 5000.0, 0.0, 0, /*enabled=*/1, /*updated=*/1, 1000, 0.0);
+    assert_float_equal(result, 5000.0, 1e-6);
+}
+
+/* Velocity mode, lagging: adds gentle position correction to close the gap.
+ * error=10 steps, period=1000µs: correction = 10*(1e6/1000)*0.01 = 100 steps/s. */
+static void test_compute_velocity_cmd_velmode_lag_correction(void **state) {
+    (void)state;
+    double result = compute_velocity_cmd(
+        JOINT_CMD_VELOCITY, 5000.0, 10.0, 0, /*enabled=*/1, /*updated=*/1, 1000, 0.0);
+    assert_float_equal(result, 5100.0, 1e-6);
+}
+
+/* Velocity mode, ahead of target: reduces velocity to let position catch up.
+ * error=-10 steps (10 steps ahead): correction = -100 steps/s. */
+static void test_compute_velocity_cmd_velmode_lead_correction(void **state) {
+    (void)state;
+    double result = compute_velocity_cmd(
+        JOINT_CMD_VELOCITY, 5000.0, 0.0, 10, /*enabled=*/1, /*updated=*/1, 1000, 0.0);
+    assert_float_equal(result, 4900.0, 1e-6);
+}
+
+/* Velocity mode, sub-1-step error: dead zone suppresses correction. */
+static void test_compute_velocity_cmd_velmode_dead_zone(void **state) {
+    (void)state;
+    double result = compute_velocity_cmd(
+        JOINT_CMD_VELOCITY, 5000.0, 0.5, 0, /*enabled=*/1, /*updated=*/1, 1000, 0.0);
     assert_float_equal(result, 5000.0, 1e-6);
 }
 
@@ -908,27 +932,30 @@ static int32_t pio_word_steps(uint32_t word) {
 
 /* Run n servo periods in JOINT_CMD_VELOCITY mode; return accumulated position.
  * No acceleration limit so the commanded velocity takes effect immediately.
- * Uses pico-eth-cnc-3axis parameters: 1ms period, max_vel=32000 steps/s. */
+ * Uses pico-eth-cnc-3axis parameters: 1ms period, max_vel=32000 steps/s.
+ * abs_pos_requested advances each period to match the commanded velocity so
+ * the position correction term stays near zero (error < 1 step). */
 static int32_t run_velocity_periods(double vel_steps_per_s, int n) {
     config.update_time_us              = 1000;
     config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
     config.joint[0].enabled            = 1;
     config.joint[0].velocity_requested = vel_steps_per_s;
-    config.joint[0].abs_pos_requested  = 0.0;
-    config.joint[0].abs_pos_achieved   = 0;
     config.joint[0].max_velocity       = 32000.0;
     config.joint[0].max_accel          = 0.0;
     mock_tx_fifo_empty                 = 1;
 
-    int32_t sim_pos = 0;
+    int32_t sim_pos      = 0;
+    double  pos_requested = 0.0;
     for (int i = 0; i < n; i++) {
+        config.joint[0].abs_pos_requested = pos_requested;
         mock_rx_values[0]  = sim_pos;
         mock_rx_fifo_level = 1;
         mock_rx_index      = 0;
         config.joint[0].updated_from_c0 = 1;
         last_pio_put_value = 0;
         do_steps(0);
-        sim_pos += pio_word_steps(last_pio_put_value);
+        sim_pos       += pio_word_steps(last_pio_put_value);
+        pos_requested += vel_steps_per_s * 1e-3;  /* advance 1ms per period */
     }
     return sim_pos;
 }
@@ -984,6 +1011,40 @@ static void test_do_steps_velmode_frac_10_5(void **state) {
 static void test_do_steps_velmode_reverse(void **state) {
     (void)state;
     assert_int_equal(run_velocity_periods(-750.0, 100), -75);
+}
+
+/* do_steps velocity mode corrects accumulated position lag over time.
+ *
+ * A 10-step initial lag (pos_requested = 10, sim_pos = 0) generates a
+ * +100 steps/s correction each period the motor is behind.  The Bresenham
+ * accumulator fills faster than for the bare 10000 steps/s command, producing
+ * an extra step roughly every 10 periods.  After 100 periods the motor has
+ * taken more than the 1000 steps it would without correction, closing the lag.
+ * (Without correction: exactly 1000 steps; with correction: ≥ 1001.) */
+static void test_do_steps_velmode_lag_corrected_over_time(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].enabled            = 1;
+    config.joint[0].velocity_requested = 10000.0;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 0.0;
+    mock_tx_fifo_empty                 = 1;
+
+    int32_t sim_pos      = 0;
+    double  pos_requested = 10.0;  /* start with 10-step lag */
+    for (int i = 0; i < 100; i++) {
+        config.joint[0].abs_pos_requested = pos_requested;
+        mock_rx_values[0]  = sim_pos;
+        mock_rx_fifo_level = 1;
+        mock_rx_index      = 0;
+        config.joint[0].updated_from_c0 = 1;
+        last_pio_put_value = 0;
+        do_steps(0);
+        sim_pos       += pio_word_steps(last_pio_put_value);
+        pos_requested += 10.0;  /* LinuxCNC advances pos by 10 steps/period */
+    }
+    assert_true(sim_pos > 1000);
 }
 
 /* Position mode: no overshoot after final correction step.
@@ -1226,19 +1287,19 @@ static void test_do_steps_posmode_velocity_achieved_zero_reverse(void **state) {
 /* do_steps: position-mode stopping-profile cap is inactive in velocity mode.
  *
  * In position mode the sqrt(2·a·|error|) cap reduces velocity when the joint is
- * close to its target; in velocity mode this branch must not fire regardless of the
- * position error.  Without the cmd_type guard an implementation bug could reduce
- * velocity_requested to a fraction of the commanded value. */
+ * close to its target; in velocity mode this branch must not fire regardless of
+ * acceleration setting.  Without the cmd_type guard an implementation bug could
+ * reduce velocity_requested to a fraction of the commanded value. */
 static void test_do_steps_velocity_mode_no_position_cap(void **state) {
     (void)state;
-    /* 3-step position error: in position mode this would trigger the sqrt cap and
-     * reduce velocity_q below 10 steps/period.  In velocity mode it must not. */
+    /* Zero position error so the gentle velocity-mode correction doesn't apply;
+     * only the stopping-profile cap guard (cmd_type == JOINT_CMD_POSITION) is tested. */
     config.update_time_us              = 1000;
     config.joint[0].enabled            = 1;
     config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
     config.joint[0].updated_from_c0    = 1;
     config.joint[0].velocity_requested = 10000.0;  /* 10 steps/period at 1000µs */
-    config.joint[0].abs_pos_requested  = 3.0;       /* small error: would cap in position mode */
+    config.joint[0].abs_pos_requested  = 0.0;
     config.joint[0].abs_pos_achieved   = 0;
     config.joint[0].max_velocity       = 50000.0;
     config.joint[0].max_accel          = 5000000.0; /* 5 steps/period/period */
@@ -1247,7 +1308,7 @@ static void test_do_steps_velocity_mode_no_position_cap(void **state) {
     do_steps(0);  /* enable snap: last_velocity_q = 10 steps/period */
 
     /* Velocity mode: full 10 steps/period → step_len = 133000/(2*10)-9 = 6641.
-     * If the position cap had fired, step_len would be larger (fewer steps). */
+     * If the stopping-profile cap had fired, step_len would be larger (fewer steps). */
     assert_int_equal(last_pio_put_value >> 1, 6641);
 }
 
@@ -1271,6 +1332,9 @@ int main(void) {
         cmocka_unit_test_setup(test_plan_steps_zero_velocity,                  test_setup),
         cmocka_unit_test_setup(test_plan_steps_skip_preserves_accumulator,     test_setup),
         cmocka_unit_test_setup(test_compute_velocity_cmd_velmode_passthrough,        test_setup),
+        cmocka_unit_test_setup(test_compute_velocity_cmd_velmode_lag_correction,    test_setup),
+        cmocka_unit_test_setup(test_compute_velocity_cmd_velmode_lead_correction,   test_setup),
+        cmocka_unit_test_setup(test_compute_velocity_cmd_velmode_dead_zone,         test_setup),
         cmocka_unit_test_setup(test_compute_velocity_cmd_posmode_at_target,          test_setup),
         cmocka_unit_test_setup(test_compute_velocity_cmd_posmode_dead_zone,          test_setup),
         cmocka_unit_test_setup(test_compute_velocity_cmd_posmode_forward_correction, test_setup),
@@ -1307,7 +1371,8 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_velmode_int_10,    test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_frac_1_5,  test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_frac_10_5, test_setup),
-        cmocka_unit_test_setup(test_do_steps_velmode_reverse,   test_setup),
+        cmocka_unit_test_setup(test_do_steps_velmode_reverse,                  test_setup),
+        cmocka_unit_test_setup(test_do_steps_velmode_lag_corrected_over_time,  test_setup),
         cmocka_unit_test_setup(test_do_steps_position_mode_no_overshoot_after_correction, test_setup),
         cmocka_unit_test_setup(test_clamp_accel_fixed_zero_target_never_overshoots, test_setup),
         cmocka_unit_test_setup(test_ramp_accel_headroom_tracks_vel_ff,              test_setup),
