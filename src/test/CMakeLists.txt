@@ -184,6 +184,21 @@ add_test(
 
 
 add_executable(
+  driverEthStateTest
+  ${CMAKE_CURRENT_SOURCE_DIR}/driver_eth_state_test.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/driver_mocks.c
+  )
+target_link_libraries(
+  driverEthStateTest
+  cmocka
+  )
+add_test(
+  driverEthStateTest
+  driverEthStateTest
+  )
+
+
+add_executable(
   rpGetUdpTest
   ${CMAKE_CURRENT_SOURCE_DIR}/rp_get_udp_test.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/network.c

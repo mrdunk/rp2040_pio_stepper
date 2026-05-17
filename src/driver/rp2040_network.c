@@ -423,6 +423,11 @@ bool get_version_match(void) {
   return version_match;
 }
 
+void reset_version_check(void) {
+  version_checked = false;
+  version_match   = false;
+}
+
 bool unpack_version_reply(
     struct NWBuffer* rx_buf,
     size_t* rx_offset,
