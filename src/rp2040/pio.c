@@ -264,7 +264,7 @@ double compute_velocity_cmd(
     uint8_t  cmd_type,
     double   velocity_requested,
     double   abs_pos_requested,
-    double   abs_pos_achieved,
+    int32_t  abs_pos_achieved,
     uint8_t  enabled,
     uint32_t updated,
     uint32_t update_period_us,
@@ -272,7 +272,7 @@ double compute_velocity_cmd(
 {
   if (cmd_type == JOINT_CMD_POSITION) {
     double vel_ff      = velocity_requested;
-    double error_steps = abs_pos_requested - abs_pos_achieved;
+    double error_steps = abs_pos_requested - (double)abs_pos_achieved;
     double correction  = 0.0;
     if (error_steps >= 1.0 || error_steps <= -1.0) {
       correction = error_steps * (1.0e6 / (double)update_period_us) * 0.5;
@@ -289,7 +289,7 @@ double compute_velocity_cmd(
      * (e.g. from update_period_us bias or dropped periods) accumulates without
      * bound.  Kp = 0.01× of position-mode gain limits steady-state lag to
      * ~50× the per-period undershoot without fighting the trajectory planner. */
-    double error_steps = abs_pos_requested - abs_pos_achieved;
+    double error_steps = abs_pos_requested - (double)abs_pos_achieved;
     if (error_steps >= 1.0 || error_steps <= -1.0) {
       velocity_requested += error_steps * (1.0e6 / (double)update_period_us) * 0.01;
     }
@@ -349,23 +349,9 @@ uint8_t do_steps(const uint8_t joint) {
     abs_pos_achieved = drain_rx_fifo(joint_state[joint].sm_count, abs_pos_achieved);
   }
 
-  /* Fractional Bresenham position: add accumulated-but-unfired steps so the
-   * position controller sees sub-step position.  This keeps the correction
-   * inside the 1-step dead zone at sub-1-step-per-period velocities, preventing
-   * velocity_q from oscillating when the Bresenham accumulator fires 0 or 1 step
-   * per period.  See issue #39. */
-  double pos_frac = (double)abs_pos_achieved;
-  {
-    double frac = joint_state[joint].step_accumulator_q / 65536.0;
-    if (frac > 0.0) {
-      double sign = (joint_state[joint].last_velocity_q >= 0) ? 1.0 : -1.0;
-      pos_frac += sign * frac;
-    }
-  }
-
   double vel_ff = velocity_requested;  /* save before correction is added */
   velocity_requested = compute_velocity_cmd(
-      cmd_type, velocity_requested, abs_pos_requested, pos_frac,
+      cmd_type, velocity_requested, abs_pos_requested, abs_pos_achieved,
       enabled, updated, update_period_us, max_accel);
 
   /* Use the EMA-measured inter-packet interval for step-count conversion so that
