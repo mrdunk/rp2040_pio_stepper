@@ -22,8 +22,8 @@
 // Technically, this is the 'communication setting', and the range is -10000 to 10000 (corresponding to -100%..100% of the maximum frequency)
 #define WEIKEN_CMD_SPEED 0x1000
 
-#define WEIKEN_CMD_STATUS_SET_FREQ 0x7000
-#define WEIKEN_CMD_STATUS_RUN_FREQ 0x7001
+#define WEIKEN_CMD_STATUS_RUN_FREQ 0x7000
+#define WEIKEN_CMD_STATUS_SET_FREQ 0x7001
 
 static void modbus_weiken_receive(void)
 {
@@ -49,8 +49,8 @@ static void modbus_weiken_receive(void)
           break;
         case 4:
           vfd.last_set_freq_update = vfd.cycle;
-          vfd.set_freq_x10 = (4 * (modbus_command[4] * 256U + modbus_command[5]) + 5) / 10; // freq setting -10000...10000
-          vfd.act_freq_x10 = modbus_command[6] * 256U + modbus_command[7];
+          vfd.set_freq_x10 = (4 * (modbus_command[6] * 256U + modbus_command[7]) + 5) / 10; // freq setting -10000...10000
+          vfd.act_freq_x10 = modbus_command[4] * 256U + modbus_command[5];
           modbus_printf("Freqs %d %d (%d)\n", (int)vfd.set_freq_x10, (int)vfd.act_freq_x10, (int)(vfd.req_freq_x10));
           break;
         default:
@@ -114,7 +114,7 @@ float modbus_loop_weiken(float frequency)
         }
       }
     } else if (vfd.cycle - vfd.last_set_freq_update > refresh_delay) {
-      modbus_read_holding_registers(vfd_config.address, WEIKEN_CMD_STATUS_SET_FREQ, 2);
+      modbus_read_holding_registers(vfd_config.address, WEIKEN_CMD_STATUS_RUN_FREQ, 2);
     } else {
       // This assumes top frequency of 400 Hz (2-pole motor with max RPM of 24000).
       // Scales the -4000 to 4000 range to -10000 to 10000 expected by the inverter.
