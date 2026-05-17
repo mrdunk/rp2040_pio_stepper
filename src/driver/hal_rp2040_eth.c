@@ -740,15 +740,29 @@ static void write_port(void *arg, long period)
       // AND the RP2040 has confirmed (via REPLY_JOINT_CONFIG) that it has
       // applied the disable.  Both conditions together mean the RP2040 is
       // stationary and will not resume on its own.
-      static bool    waiting_logged = false;
+      //
+      // Bresenham stepping causes vel_fb to report 0 for multiple consecutive
+      // periods even when velocity_q is still non-zero (< 1 step/period).
+      // Require STOPPED_CONFIRM_PERIODS consecutive zero readings per joint
+      // before trusting that the joint has genuinely stopped.
+#define STOPPED_CONFIRM_PERIODS 5
+      static bool     waiting_logged = false;
+      static uint32_t stopped_count[MAX_JOINT] = {0};
 
       bool all_stopped = true;
       for (uint32_t joint = 0; joint < (uint32_t)num_joints; joint++) {
         if (*data->joint_vel_fb[joint] != 0.0f || last_joint_config[joint].enable) {
+          stopped_count[joint] = 0;
           all_stopped = false;
+        } else {
+          if (stopped_count[joint] < STOPPED_CONFIRM_PERIODS) {
+            stopped_count[joint]++;
+            all_stopped = false;
+          }
         }
       }
       if (all_stopped) {
+        memset(stopped_count, 0, sizeof(stopped_count));
         waiting_logged = false;
         on_eth_up(data, count);
       } else {
