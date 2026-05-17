@@ -235,7 +235,7 @@ static const PinDef joint_pins[] = {
     { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_pos_cmd),        sizeof(hal_float_t*), "joint", 0, 1, "pos-cmd"          }, // Position command; consumed by firmware in position mode (cmd-type=0); also used to compute pos-error-fb
     { FLOAT, HAL_IN,  offsetof(skeleton_t, joint_vel_cmd),        sizeof(hal_float_t*), "joint", 0, 1, "vel-cmd"          }, // Velocity command from LinuxCNC
     { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_pos_fb),         sizeof(hal_float_t*), "joint", 0, 1, "pos-fb"           }, // Position feedback (cumulative step count ÷ scale)
-    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_vel_fb),         sizeof(hal_float_t*), "joint", 0, 1, "vel-fb"           }, // Velocity feedback (raw steps per servo period, unscaled)
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_vel_fb),         sizeof(hal_float_t*), "joint", 0, 1, "vel-fb"           }, // Velocity feedback (steps/period; Q16.16 from firmware, exact zero when stopped)
     { S32,   HAL_OUT, offsetof(skeleton_t, joint_pos_error_fb),   sizeof(hal_s32_t*),   "joint", 0, 1, "pos-error-fb"     }, // Difference between commanded and actual step count (raw steps, unscaled)
     { PIN,   HAL_OUT, offsetof(skeleton_t, joint_enable_fb),      sizeof(hal_bit_t*),   "joint", 0, 1, "enable-fb"        }, // RP2040's actual enabled state; may remain false after network recovery until protocol re-enables
     { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_vel_calculated), sizeof(hal_float_t*), "joint", 0, 1, "vel-calculated"   }, // Velocity the RP2040 computed after applying vel-limit and accel-limit
@@ -741,34 +741,24 @@ static void write_port(void *arg, long period)
       // applied the disable.  Both conditions together mean the RP2040 is
       // stationary and will not resume on its own.
       //
-      // Bresenham stepping causes vel_fb to report 0 for multiple consecutive
-      // periods even when velocity_q is still non-zero (< 1 step/period).
-      // Require STOPPED_CONFIRM_PERIODS consecutive zero readings per joint
-      // before trusting that the joint has genuinely stopped.
-#define STOPPED_CONFIRM_PERIODS 5
-      static bool     waiting_logged = false;
-      static uint32_t stopped_count[MAX_JOINT] = {0};
+      // vel_fb is Q16.16 steps/period (exact internal velocity_q); == 0.0
+      // only when the firmware's velocity_q is exactly zero, so one reading
+      // is sufficient — no hysteresis needed.
+      static bool waiting_logged = false;
 
       bool all_stopped = true;
       for (uint32_t joint = 0; joint < (uint32_t)num_joints; joint++) {
-        if (*data->joint_vel_fb[joint] != 0.0f || last_joint_config[joint].enable) {
-          stopped_count[joint] = 0;
+        if (*data->joint_vel_fb[joint] != 0.0 || last_joint_config[joint].enable) {
           all_stopped = false;
-        } else {
-          if (stopped_count[joint] < STOPPED_CONFIRM_PERIODS) {
-            stopped_count[joint]++;
-            all_stopped = false;
-          }
         }
       }
       if (all_stopped) {
-        memset(stopped_count, 0, sizeof(stopped_count));
         waiting_logged = false;
         on_eth_up(data, count);
       } else {
         if (!waiting_logged) {
           printf("INFO: waiting for joints to stop before recovery"
-                 " (vel_fb[0]=%.1f)\n", (double)*data->joint_vel_fb[0]);
+                 " (vel_fb[0]=%g)\n", (double)*data->joint_vel_fb[0]);
           waiting_logged = true;
         }
       }

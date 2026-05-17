@@ -143,7 +143,10 @@ static void test_joint_movement(void **state) {
                 (*data.joint_pos_fb)[joint],
                 (double)message.abs_pos_achieved[joint] / (*data.joint_scale)[joint],
                 0.0001);
-        assert_int_equal((*data.joint_vel_fb)[joint], message.velocity_achieved[joint]);
+        assert_double_equal(
+                (*data.joint_vel_fb)[joint],
+                (double)message.velocity_achieved[joint] / 65536.0,
+                0.0001);
         assert_int_equal(*data.joint_enable_fb[joint], message.enabled[joint]);
         assert_double_equal(*data.joint_vel_calculated[joint], message.velocity_cmd[joint], 0.001);
     }

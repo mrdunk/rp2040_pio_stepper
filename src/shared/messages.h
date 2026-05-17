@@ -162,7 +162,7 @@ struct __attribute__((packed)) Reply_joint_movement {
   uint8_t type;
   uint8_t count;                          // number of valid joints (= firmware MAX_JOINT)
   int32_t abs_pos_achieved[WIRE_MAX_JOINT];
-  int32_t velocity_achieved[WIRE_MAX_JOINT];
+  int32_t velocity_achieved[WIRE_MAX_JOINT]; // Q16.16 internal velocity_q (exact; != step-delta)
   uint8_t enabled[WIRE_MAX_JOINT];
   float velocity_cmd[WIRE_MAX_JOINT];
   uint32_t update_period_us;

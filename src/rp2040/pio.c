@@ -427,9 +427,7 @@ uint8_t do_steps(const uint8_t joint) {
     if (pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
       pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, 0);
     }
-    velocity_achieved = (joint < NUM_FEEDBACK)
-                        ? abs_pos_achieved - joint_state[joint].last_pos_achieved
-                        : 0;
+    velocity_achieved = 0;  /* velocity_q == 0: joint has stopped */
     update_joint_config(
         joint, CORE1,
         NULL, NULL, NULL, NULL, NULL,
@@ -460,7 +458,10 @@ uint8_t do_steps(const uint8_t joint) {
     pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, 0);
   }
 
-  velocity_achieved = abs_pos_achieved - joint_state[joint].last_pos_achieved;
+  /* Report Q16.16 internal velocity so the driver can detect velocity_q==0
+   * exactly.  Integer step-delta aliased to 0 at low speed (<1 step/period),
+   * causing premature network-recovery detection on the driver side. */
+  velocity_achieved = velocity_q;
 
   update_joint_config(
       joint,
