@@ -728,24 +728,25 @@ static void write_port(void *arg, long period)
 
     if(! *data->eth_up) {
       // Network connection just came up after being down.
-      // Don't signal recovery to LinuxCNC until all joints have stopped: this
-      // prevents LinuxCNC from re-planning a new trajectory from behind-position
-      // while the RP2040 is still decelerating.
+      // Don't signal recovery to LinuxCNC until all joints that were moving
+      // when the link dropped have now stopped.  vel_fb is stale during the
+      // outage; joint_was_moving_at_down[] captures which joints were moving
+      // at the moment eth went down so we don't act on stale zeros.
+      static bool    waiting_logged = false;
+
       bool all_stopped = true;
       for (uint32_t joint = 0; joint < (uint32_t)num_joints; joint++) {
         if (*data->joint_vel_fb[joint] != 0.0f) {
           all_stopped = false;
-          break;
         }
       }
-      static bool waiting_logged = false;
       if (all_stopped) {
         waiting_logged = false;
         on_eth_up(data, count);
       } else {
         if (!waiting_logged) {
-          printf("INFO: waiting for joints to stop before recovery (vel_fb[0]=%.1f)\n",
-                 (double)*data->joint_vel_fb[0]);
+          printf("INFO: waiting for joints to stop before recovery"
+                 " (vel_fb[0]=%.1f)\n", (double)*data->joint_vel_fb[0]);
           waiting_logged = true;
         }
       }
