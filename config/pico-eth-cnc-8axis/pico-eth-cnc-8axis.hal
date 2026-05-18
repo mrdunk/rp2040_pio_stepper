@@ -47,10 +47,10 @@ net enable-out       <= and2.2.out
 # Joints 0-3 use PIO0 for step_gen; joints 4-7 use PIO1.
 # GP8-GP15 are consumed by step/dir for joints 4-7; J6 GPIO fast port unavailable.
 
-# Joint 0 — X AXIS (GP0=STEP, GP1=DIR)
+# Joint 0 — X AXIS (J5: GP7=STEP, GP6=DIR via 74HCT541 buffer)
 setp rp2040_eth.0.joint.0.scale          [JOINT_0]SCALE
-setp rp2040_eth.0.joint.0.gpio-step      6
-setp rp2040_eth.0.joint.0.gpio-dir       7
+setp rp2040_eth.0.joint.0.gpio-step      7
+setp rp2040_eth.0.joint.0.gpio-dir       6
 
 setp rp2040_eth.0.joint.0.vel-limit    [JOINT_0]MAX_VELOCITY
 setp rp2040_eth.0.joint.0.accel-limit  [JOINT_0]MAX_ACCELERATION
@@ -62,10 +62,10 @@ net xpos-fb  rp2040_eth.0.joint.0.pos-fb => joint.0.motor-pos-fb
 net enable-out => rp2040_eth.0.joint.0.enable-cmd
 
 
-# Joint 1 — Y AXIS (GP2=STEP, GP3=DIR)
+# Joint 1 — Y AXIS (J4: GP5=STEP, GP4=DIR via 74HCT541 buffer)
 setp rp2040_eth.0.joint.1.scale          [JOINT_1]SCALE
-setp rp2040_eth.0.joint.1.gpio-step      4
-setp rp2040_eth.0.joint.1.gpio-dir       5
+setp rp2040_eth.0.joint.1.gpio-step      5
+setp rp2040_eth.0.joint.1.gpio-dir       4
 
 setp rp2040_eth.0.joint.1.vel-limit    [JOINT_1]MAX_VELOCITY
 setp rp2040_eth.0.joint.1.accel-limit  [JOINT_1]MAX_ACCELERATION
@@ -77,10 +77,10 @@ net ypos-fb  rp2040_eth.0.joint.1.pos-fb => joint.1.motor-pos-fb
 net enable-out => rp2040_eth.0.joint.1.enable-cmd
 
 
-# Joint 2 — Z AXIS (GP4=STEP, GP5=DIR)
+# Joint 2 — Z AXIS (J3: GP3=STEP, GP2=DIR via 74HCT541 buffer)
 setp rp2040_eth.0.joint.2.scale          [JOINT_2]SCALE
-setp rp2040_eth.0.joint.2.gpio-step      2
-setp rp2040_eth.0.joint.2.gpio-dir       3
+setp rp2040_eth.0.joint.2.gpio-step      3
+setp rp2040_eth.0.joint.2.gpio-dir       2
 
 setp rp2040_eth.0.joint.2.vel-limit    [JOINT_2]MAX_VELOCITY
 setp rp2040_eth.0.joint.2.accel-limit  [JOINT_2]MAX_ACCELERATION
@@ -92,10 +92,10 @@ net zpos-fb  rp2040_eth.0.joint.2.pos-fb => joint.2.motor-pos-fb
 net enable-out => rp2040_eth.0.joint.2.enable-cmd
 
 
-# Joint 3 — A AXIS (GP6=STEP, GP7=DIR)
+# Joint 3 — A AXIS (J2: GP1=STEP, GP0=DIR via 74HCT541 buffer)
 setp rp2040_eth.0.joint.3.scale          [JOINT_3]SCALE
-setp rp2040_eth.0.joint.3.gpio-step      0
-setp rp2040_eth.0.joint.3.gpio-dir       1
+setp rp2040_eth.0.joint.3.gpio-step      1
+setp rp2040_eth.0.joint.3.gpio-dir       0
 
 setp rp2040_eth.0.joint.3.vel-limit    [JOINT_3]MAX_VELOCITY
 setp rp2040_eth.0.joint.3.accel-limit  [JOINT_3]MAX_ACCELERATION
