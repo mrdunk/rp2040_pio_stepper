@@ -469,13 +469,18 @@ uint8_t do_steps(const uint8_t joint) {
   /* Report Q16.16 internal velocity so the driver can detect velocity_q==0
    * exactly.  Integer step-delta aliased to 0 at low speed (<1 step/period),
    * causing premature network-recovery detection on the driver side. */
-  /* Report vel_ff_q as vel-fb whenever feedforward is active so that transient
-   * position-correction spikes (which can push |velocity_q| > 65536 when the
-   * EMA-measured period is slightly short) do not flip vel-fb negative.
-   * Without feedforward (pure positioning hold) sign velocity_q by direction. */
-  velocity_achieved = (abs(vel_ff_q) > 0)
-                      ? vel_ff_q
-                      : (direction ? (int32_t)abs(velocity_q) : -(int32_t)abs(velocity_q));
+  /* Always report vel_ff_q (= velocity_requested before position correction) as
+   * vel-fb.  This matches LinuxCNC's view of commanded velocity in both position
+   * and velocity mode, and prevents two classes of spike:
+   *   (a) EMA period jitter pushes |velocity_q| just past the Bresenham guard
+   *       while vel_ff > 0 → correction term flips vel-fb negative.
+   *   (b) vel_ff reaches 0 at end of move while a 1-step overshoot correction
+   *       is still active → correction term (fixed gain: 500 steps/s per step
+   *       error) appears as a spike an order of magnitude above the near-zero
+   *       velocity at the moment of stop, then ramps down via clamp_accel.
+   * velocity_achieved is reporting-only; correction steps still fire through
+   * velocity_q → plan_vel_q → plan_steps regardless of what we report here. */
+  velocity_achieved = vel_ff_q;
 
   update_joint_config(
       joint,

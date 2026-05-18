@@ -1443,6 +1443,36 @@ static void test_do_steps_posmode_large_overshoot_vel_achieved_nonnegative(void 
     }
 }
 
+/* Position mode: velocity_achieved stays at 0 when vel_ff reaches 0 at stop, even
+ * when a position correction is active (overshoot).
+ *
+ * When LinuxCNC decelerates to rest vel_ff_q → 0.  At that moment a 1-step overshoot
+ * fires correction = -500 steps/s → velocity_q = -32768 Q16.16.  Before the fix,
+ * vel_ff_q == 0 caused the non-ff path: direction=0, velocity_achieved = -32768 ≈ -0.5
+ * steps/period — an order-of-magnitude spike vs the near-zero vel_ff at the moment of
+ * stop.  The fix (velocity_achieved = vel_ff_q always) reports 0 at rest regardless of
+ * the correction term, consistent with "motor is commanded to stand still". */
+static void test_do_steps_posmode_correction_at_stop_does_not_spike_vel_achieved(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = 0.0;   /* vel_ff = 0: LinuxCNC has stopped commanding */
+    config.joint[0].abs_pos_requested  = 0.0;   /* 1-step overshoot: pos_ach will be 1 */
+    config.joint[0].max_velocity       = 32000.0;
+    config.joint[0].max_accel          = 0.0;   /* no clamping: correction reaches -32768 */
+    mock_tx_fifo_empty                 = 1;
+
+    mock_rx_values[0]  = 1;   /* pos_ach=1, error=0-1=-1 → correction=-500 → velocity_q=-32768 */
+    mock_rx_fifo_level = 1;
+    mock_rx_index      = 0;
+    config.joint[0].updated_from_c0 = 1;
+    do_steps(0);
+
+    /* velocity_achieved must be 0 (= vel_ff_q), not -32768 (= direction × velocity_q). */
+    assert_int_equal(config.joint[0].velocity_achieved, 0);
+}
+
 /* do_steps: position-mode stopping-profile cap is inactive in velocity mode.
  *
  * In position mode the sqrt(2·a·|error|) cap reduces velocity when the joint is
@@ -1543,6 +1573,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_posmode_overshoot_does_not_reverse,      test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_boundary_correction_does_not_flip, test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_large_overshoot_vel_achieved_nonnegative, test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_correction_at_stop_does_not_spike_vel_achieved, test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_velocity_achieved_zero_when_stopped,       test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_velocity_achieved_nonzero_while_decelerating, test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_velocity_achieved_zero_reverse,             test_setup),
