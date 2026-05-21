@@ -276,8 +276,10 @@ double compute_velocity_cmd(
     uint32_t update_period_us,
     double   max_accel)
 {
+  if (!enabled || updated == 0) {
+    return 0.0;
+  }
   if (cmd_type == JOINT_CMD_POSITION) {
-    double vel_ff      = velocity_requested;
     double error_steps = abs_pos_requested - (double)abs_pos_achieved;
     double correction  = 0.0;
     if (error_steps >= 1.0 || error_steps <= -1.0) {
@@ -288,7 +290,7 @@ double compute_velocity_cmd(
         if (correction < -max_correction) correction = -max_correction;
       }
     }
-    velocity_requested = vel_ff + correction;
+    velocity_requested += correction;
   } else {
     /* Velocity mode: gentle position correction to prevent drift accumulation.
      * Pure velocity mode has no feedback — any systematic step-rate undershoot
@@ -299,9 +301,6 @@ double compute_velocity_cmd(
     if (error_steps >= 1.0 || error_steps <= -1.0) {
       velocity_requested += error_steps * (1.0e6 / (double)update_period_us) * 0.01;
     }
-  }
-  if (!enabled || updated == 0) {
-    velocity_requested = 0.0;
   }
   return velocity_requested;
 }
@@ -393,16 +392,29 @@ uint8_t do_steps(const uint8_t joint) {
    * remaining distance to target.  Formula: |v| ≤ vel_ff + sqrt(2·a·|error|).
    * When vel_ff=0 this is the classic bang-bang stopping guarantee.
    * When vel_ff>0 (active jog or G-code move) the extra headroom prevents the
-   * cap from interfering with normal tracking. */
+   * cap from interfering with normal tracking.
+   * Use floating-point error (not truncated integer) so the cap stays active
+   * during the final sub-1-step approach and prevents overshoot.
+   * When the cap fires, also clear the Bresenham accumulator so that its
+   * residual fraction cannot drain into an extra overshoot step. */
   if (cmd_type == JOINT_CMD_POSITION && max_accel_q > 0 && enabled && updated) {
-    int32_t err_int = (int32_t)(abs_pos_requested - (double)abs_pos_achieved);
-    if (err_int != 0 && (int64_t)velocity_q * err_int > 0) {
+    double err_f = abs_pos_requested - (double)abs_pos_achieved;
+    if (err_f != 0.0 && (velocity_q > 0) == (err_f > 0.0)) {
       int32_t sqrt_term = (int32_t)sqrt(
-          2.0 * (double)max_accel_q * (double)abs(err_int) * 65536.0);
-      if (err_int > 0 && velocity_q > vel_ff_q + sqrt_term)
-        velocity_q = vel_ff_q + sqrt_term;
-      if (err_int < 0 && velocity_q < vel_ff_q - sqrt_term)
-        velocity_q = vel_ff_q - sqrt_term;
+          2.0 * (double)max_accel_q * fabs(err_f) * 65536.0);
+      if (err_f > 0.0) {
+        int32_t cap_v = vel_ff_q + sqrt_term;
+        if (velocity_q > cap_v) {
+          velocity_q = cap_v;
+          joint_state[joint].step_accumulator_q = 0;
+        }
+      } else {
+        int32_t floor_v = vel_ff_q - sqrt_term;
+        if (velocity_q < floor_v) {
+          velocity_q = floor_v;
+          joint_state[joint].step_accumulator_q = 0;
+        }
+      }
     }
   }
 
