@@ -395,16 +395,24 @@ uint8_t do_steps(const uint8_t joint) {
    * When vel_ff>0 (active jog or G-code move) the extra headroom prevents the
    * cap from interfering with normal tracking.
    * Use floating-point error (not truncated integer) so the cap stays active
-   * during the final sub-1-step approach and prevents overshoot. */
+   * during the final sub-1-step approach and prevents overshoot.
+   * Subtract the Bresenham accumulator residual from the cap so that the total
+   * forward motion this period (velocity + residual) stays within the profile. */
   if (cmd_type == JOINT_CMD_POSITION && max_accel_q > 0 && enabled && updated) {
     double err_f = abs_pos_requested - (double)abs_pos_achieved;
-    if (err_f != 0.0 && (int64_t)velocity_q * (err_f > 0.0 ? 1 : -1) > 0) {
+    if (err_f != 0.0 && (velocity_q > 0) == (err_f > 0.0)) {
       int32_t sqrt_term = (int32_t)sqrt(
           2.0 * (double)max_accel_q * fabs(err_f) * 65536.0);
-      if (err_f > 0.0 && velocity_q > vel_ff_q + sqrt_term)
-        velocity_q = vel_ff_q + sqrt_term;
-      if (err_f < 0.0 && velocity_q < vel_ff_q - sqrt_term)
-        velocity_q = vel_ff_q - sqrt_term;
+      int32_t accum_q = joint_state[joint].step_accumulator_q;
+      if (err_f > 0.0) {
+        int32_t cap_v = vel_ff_q + sqrt_term - accum_q;
+        if (cap_v < 0) cap_v = 0;
+        if (velocity_q > cap_v) velocity_q = cap_v;
+      } else {
+        int32_t floor_v = vel_ff_q - sqrt_term + accum_q;
+        if (floor_v > 0) floor_v = 0;
+        if (velocity_q < floor_v) velocity_q = floor_v;
+      }
     }
   }
 
