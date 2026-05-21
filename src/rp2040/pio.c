@@ -335,16 +335,12 @@ uint8_t do_steps(const uint8_t joint) {
 
   if(update_period_us == 0) {
     /* Period unknown: can't compute step timing. */
-    if (pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
-      issue_pio_step(joint, 0, 0);
-    }
+    issue_pio_step(joint, 0, 0);
     return 0;
   }
   if(updated == 0 && joint_state[joint].last_velocity_q == 0) {
     /* No new Core0 data and already at rest: nothing to compute. */
-    if (pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
-      issue_pio_step(joint, 0, 0);
-    }
+    issue_pio_step(joint, 0, 0);
     return 0;
   }
 
@@ -427,9 +423,7 @@ uint8_t do_steps(const uint8_t joint) {
   if (!enabled && velocity_q == 0) {
     /* Fully decelerated: issue hard stop and keep pos_fb current while disabled.
      * abs_pos_achieved already reflects any in-flight steps drained above. */
-    if (pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
-      issue_pio_step(joint, 0, 0);
-    }
+    issue_pio_step(joint, 0, 0);
     velocity_achieved = 0;  /* velocity_q == 0: joint has stopped */
     update_joint_config(
         joint, CORE1,
