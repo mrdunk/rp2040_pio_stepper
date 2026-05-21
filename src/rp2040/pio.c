@@ -393,15 +393,17 @@ uint8_t do_steps(const uint8_t joint) {
    * remaining distance to target.  Formula: |v| ≤ vel_ff + sqrt(2·a·|error|).
    * When vel_ff=0 this is the classic bang-bang stopping guarantee.
    * When vel_ff>0 (active jog or G-code move) the extra headroom prevents the
-   * cap from interfering with normal tracking. */
+   * cap from interfering with normal tracking.
+   * Use floating-point error (not truncated integer) so the cap stays active
+   * during the final sub-1-step approach and prevents overshoot. */
   if (cmd_type == JOINT_CMD_POSITION && max_accel_q > 0 && enabled && updated) {
-    int32_t err_int = (int32_t)(abs_pos_requested - (double)abs_pos_achieved);
-    if (err_int != 0 && (int64_t)velocity_q * err_int > 0) {
+    double err_f = abs_pos_requested - (double)abs_pos_achieved;
+    if (err_f != 0.0 && (int64_t)velocity_q * (err_f > 0.0 ? 1 : -1) > 0) {
       int32_t sqrt_term = (int32_t)sqrt(
-          2.0 * (double)max_accel_q * (double)abs(err_int) * 65536.0);
-      if (err_int > 0 && velocity_q > vel_ff_q + sqrt_term)
+          2.0 * (double)max_accel_q * fabs(err_f) * 65536.0);
+      if (err_f > 0.0 && velocity_q > vel_ff_q + sqrt_term)
         velocity_q = vel_ff_q + sqrt_term;
-      if (err_int < 0 && velocity_q < vel_ff_q - sqrt_term)
+      if (err_f < 0.0 && velocity_q < vel_ff_q - sqrt_term)
         velocity_q = vel_ff_q - sqrt_term;
     }
   }
