@@ -276,8 +276,10 @@ double compute_velocity_cmd(
     uint32_t update_period_us,
     double   max_accel)
 {
+  if (!enabled || updated == 0) {
+    return 0.0;
+  }
   if (cmd_type == JOINT_CMD_POSITION) {
-    double vel_ff      = velocity_requested;
     double error_steps = abs_pos_requested - (double)abs_pos_achieved;
     double correction  = 0.0;
     if (error_steps >= 1.0 || error_steps <= -1.0) {
@@ -288,7 +290,7 @@ double compute_velocity_cmd(
         if (correction < -max_correction) correction = -max_correction;
       }
     }
-    velocity_requested = vel_ff + correction;
+    velocity_requested += correction;
   } else {
     /* Velocity mode: gentle position correction to prevent drift accumulation.
      * Pure velocity mode has no feedback — any systematic step-rate undershoot
@@ -299,9 +301,6 @@ double compute_velocity_cmd(
     if (error_steps >= 1.0 || error_steps <= -1.0) {
       velocity_requested += error_steps * (1.0e6 / (double)update_period_us) * 0.01;
     }
-  }
-  if (!enabled || updated == 0) {
-    velocity_requested = 0.0;
   }
   return velocity_requested;
 }
