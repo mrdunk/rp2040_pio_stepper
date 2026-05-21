@@ -150,7 +150,8 @@ static inline void step_count_program_init(
   // Setup GPIO
   // IO pins are set to be read by this PIO.
   // This assumes they have already be set as output pins by the other PIO.
-  pio_sm_set_consecutive_pindirs(pio, sm, pin_step, 2, false);
+  pio_sm_set_consecutive_pindirs(pio, sm, pin_step,      1, false);
+  pio_sm_set_consecutive_pindirs(pio, sm, pin_direction, 1, false);
   sm_config_set_in_pins(&config, pin_step);   // for WAIT, IN
   sm_config_set_jmp_pin(&config, pin_direction);   // for JMP
 
