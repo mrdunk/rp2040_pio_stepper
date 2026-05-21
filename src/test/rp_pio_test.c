@@ -306,7 +306,7 @@ static void test_do_steps_disabling_stops_when_zero(void **state) {
     uint8_t result = do_steps(0);
 
     assert_int_equal(result, 0);
-    assert_int_equal(last_pio_put_value, 0);  /* hard-stopped */
+    assert_int_equal(last_pio_put_value >> 1, 0);  /* hard-stopped: step_len==0 */
 }
 
 /* do_steps: network lost (updated==0) while disabled and still moving -> continues decelerating. */
@@ -678,7 +678,7 @@ static void test_do_steps_underrun_stops_pio(void **state) {
 
     assert_int_equal(result, 0);
     assert_int_equal(pio_put_call_count, 1);
-    assert_int_equal(last_pio_put_value, 0);
+    assert_int_equal(last_pio_put_value >> 1, 0);  /* step_len==0: motor idle */
 }
 
 /* do_steps: underrun (no new data) while enabled and moving with max_accel>0 ->
@@ -922,10 +922,12 @@ static void test_do_steps_position_mode_no_jitter_at_rest(void **state) {
  */
 
 /* Convert one PIO FIFO word to the physical step count it causes.
- * Returns negative for direction=0 (reverse). */
+ * Returns negative for direction=0 (reverse).
+ * Idle/stop words have step_len==0 (upper bits zero) regardless of the
+ * direction bit (which now preserves the last cached direction). */
 static int32_t pio_word_steps(uint32_t word) {
-    if (word == 0) return 0;
     int32_t step_len  = (int32_t)(word >> 1);
+    if (step_len == 0) return 0;
     int32_t max_steps = 133000 / (2 * (step_len + 9));
     return (word & 1) ? max_steps : -max_steps;
 }

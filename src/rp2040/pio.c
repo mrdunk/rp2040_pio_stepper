@@ -51,6 +51,7 @@ typedef struct {
     uint32_t last_enabled;
     int32_t  last_velocity_q;
     int32_t  step_accumulator_q;
+    uint32_t last_direction;
 } JointPioState;
 
 static JointPioState joint_state[MAX_JOINT];
@@ -242,13 +243,24 @@ int32_t plan_steps(int32_t velocity_q, uint8_t joint,
     return n_steps;
 }
 
+/* Wrapper for pio_sm_put encoding direction in bit 0.
+ * When step_len_ticks > 0 the passed direction is cached and used.
+ * When step_len_ticks == 0 the cached direction is reused so the DIR pin
+ * does not toggle unnecessarily, making oscilloscope triggering easier. */
+static void put_step_cmd(uint32_t joint, int32_t step_len_ticks, uint32_t direction) {
+    if (step_len_ticks > 0) {
+        joint_state[joint].last_direction = direction;
+    }
+    pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen,
+               ((uint32_t)step_len_ticks << 1) | joint_state[joint].last_direction);
+}
+
 /* Write the packed step command to the joint's step_gen TX FIFO if it is empty.
  * Encoding: lower bit = direction, upper bits = half-period in ticks. */
 static void issue_pio_step(uint32_t joint, int32_t step_len_ticks,
                            uint32_t direction) {
     if (pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
-        pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen,
-                   ((uint32_t)step_len_ticks << 1) | direction);
+        put_step_cmd(joint, step_len_ticks, direction);
     }
 }
 
@@ -330,14 +342,14 @@ uint8_t do_steps(const uint8_t joint) {
   if(update_period_us == 0) {
     /* Period unknown: can't compute step timing. */
     if (pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
-      pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, 0);
+      put_step_cmd(joint, 0, 0);
     }
     return 0;
   }
   if(updated == 0 && joint_state[joint].last_velocity_q == 0) {
     /* No new Core0 data and already at rest: nothing to compute. */
     if (pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
-      pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, 0);
+      put_step_cmd(joint, 0, 0);
     }
     return 0;
   }
@@ -422,7 +434,7 @@ uint8_t do_steps(const uint8_t joint) {
     /* Fully decelerated: issue hard stop and keep pos_fb current while disabled.
      * abs_pos_achieved already reflects any in-flight steps drained above. */
     if (pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
-      pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, 0);
+      put_step_cmd(joint, 0, 0);
     }
     velocity_achieved = 0;  /* velocity_q == 0: joint has stopped */
     update_joint_config(
@@ -457,7 +469,7 @@ uint8_t do_steps(const uint8_t joint) {
   if (n_steps > 0) {
     issue_pio_step(joint, step_len_ticks, direction);
   } else if (pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
-    pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, 0);
+    put_step_cmd(joint, 0, 0);
   }
 
   /* Report Q16.16 internal velocity so the driver can detect velocity_q==0
