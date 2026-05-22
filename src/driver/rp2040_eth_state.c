@@ -197,6 +197,42 @@ static size_t count_confirmed_configs(skeleton_t *data, int num_joints) {
   return confirmed;
 }
 
+static void warn_pin_conflicts_driver(skeleton_t *data, int num_joints) {
+  char labels[MAX_JOINT * 2 + MAX_GPIO][16];
+  const char *owner[32] = {0};
+  uint8_t n = 0;
+
+  for (int j = 0; j < num_joints; j++) {
+    int32_t pins[2]     = { data->joint_gpio_step[j], data->joint_gpio_dir[j] };
+    const char *role[2] = { "step", "dir" };
+    for (int p = 0; p < 2; p++) {
+      if (pins[p] < 0 || pins[p] >= 32) continue;
+      snprintf(labels[n], sizeof(labels[0]), "joint%d-%s", j, role[p]);
+      if (owner[pins[p]])
+        rtapi_print_msg(RTAPI_MSG_WARN,
+            "RP2040: GP%d conflict: %s and %s\n", (int)pins[p], owner[pins[p]], labels[n]);
+      else
+        owner[pins[p]] = labels[n];
+      n++;
+    }
+  }
+
+  for (int g = 0; g < MAX_GPIO; g++) {
+    uint32_t t = data->gpio_type[g];
+    if (t != GPIO_TYPE_NATIVE_OUT && t != GPIO_TYPE_NATIVE_IN &&
+        t != GPIO_TYPE_NATIVE_OUT_DEBUG && t != GPIO_TYPE_NATIVE_IN_DEBUG) continue;
+    uint32_t pin = data->gpio_index[g];
+    if (pin >= 32) continue;
+    snprintf(labels[n], sizeof(labels[0]), "gpio%d", g);
+    if (owner[pin])
+      rtapi_print_msg(RTAPI_MSG_WARN,
+          "RP2040: GP%u conflict: %s and %s\n", pin, owner[pin], labels[n]);
+    else
+      owner[pin] = labels[n];
+    n++;
+  }
+}
+
 /* Only try to configure one parameter per 1ms cycle since they change infrequently
  * and don't need low latency when they do. */
 static bool configure(
@@ -396,6 +432,7 @@ void eth_state_update(skeleton_t *data, int device_num, size_t count, uint32_t n
     if(confirmed != last_confirmed) {
       if(*data->config_complete) {
         printf("INFO: all %zu config updates have completed\n", total_configs);
+        warn_pin_conflicts_driver(data, num_joints);
       } else {
         printf("INFO: %zu of %zu config updates have completed\n", confirmed, total_configs);
       }

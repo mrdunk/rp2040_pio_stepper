@@ -10,6 +10,7 @@
 
 
 #define RTAPI_MSG_ERR  1
+#define RTAPI_MSG_WARN 2
 #define RTAPI_MSG_INFO 3
 
 typedef uint32_t hal_u32_t;
