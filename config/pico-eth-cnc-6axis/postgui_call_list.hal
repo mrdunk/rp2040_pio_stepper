@@ -1,0 +1,2 @@
+# Post-GUI HAL commands — loaded after the GUI is running.
+# Add 'source custom_postgui.hal' here if you need PyVCP/GladeVCP connections.
