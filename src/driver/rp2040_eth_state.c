@@ -209,8 +209,8 @@ static void warn_pin_conflicts_driver(skeleton_t *data, int num_joints) {
       if (pins[p] < 0 || pins[p] >= 32) continue;
       snprintf(labels[n], sizeof(labels[0]), "joint%d-%s", j, role[p]);
       if (owner[pins[p]])
-        rtapi_print_msg(RTAPI_MSG_WARN,
-            "RP2040: GP%d conflict: %s and %s\n", (int)pins[p], owner[pins[p]], labels[n]);
+        printf("WARN: RP2040: GP%d conflict: %s and %s\n",
+               (int)pins[p], owner[pins[p]], labels[n]);
       else
         owner[pins[p]] = labels[n];
       n++;
@@ -225,8 +225,8 @@ static void warn_pin_conflicts_driver(skeleton_t *data, int num_joints) {
     if (pin >= 32) continue;
     snprintf(labels[n], sizeof(labels[0]), "gpio%d", g);
     if (owner[pin])
-      rtapi_print_msg(RTAPI_MSG_WARN,
-          "RP2040: GP%u conflict: %s and %s\n", pin, owner[pin], labels[n]);
+      printf("WARN: RP2040: GP%u conflict: %s and %s\n",
+             pin, owner[pin], labels[n]);
     else
       owner[pin] = labels[n];
     n++;
