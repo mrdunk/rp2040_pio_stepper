@@ -141,6 +141,21 @@ static void test_calculate_step_len_allows_bresenham_ceiling(void **state) {
     assert_true(max_steps >= 26);
 }
 
+/* When correction pushes v_ceil above v_ceil_max, the clamped step_len must still
+ * allow v_ceil_max steps per period (not v_ceil_max-1). */
+static void test_calculate_step_len_clamped_allows_v_ceil_max_steps(void **state) {
+    (void)state;
+    int32_t period_ticks = 133000;
+    /* position correction pushes velocity to 27 steps/period; max is 25.6 × 1.01 */
+    int32_t velocity_q = (int32_t)(27.0 * 65536.0);           /* 1769472; v_ceil=27 */
+    int32_t max_vel_q  = (int32_t)(25.6 * 1.01 * 65536.0);   /* 1694498; v_ceil_max=26 */
+
+    int32_t step_len  = calculate_step_len(velocity_q, period_ticks, max_vel_q);
+    int32_t max_steps = period_ticks / (2 * (step_len + 9)); /* 9 = STEP_PIO_LEN_OVERHEAD */
+    /* clamp fires (v_ceil=27 > v_ceil_max=26) but must still allow v_ceil_max=26 steps */
+    assert_true(max_steps >= 26);
+}
+
 /* clamp_accel: velocity unchanged -> returns same velocity */
 static void test_clamp_accel_no_change(void **state) {
     (void)state;
@@ -1421,6 +1436,7 @@ int main(void) {
         cmocka_unit_test_setup(test_calculate_step_len_below_threshold, test_setup),
         cmocka_unit_test_setup(test_calculate_step_len_too_slow_skip,              test_setup),
         cmocka_unit_test_setup(test_calculate_step_len_allows_bresenham_ceiling, test_setup),
+        cmocka_unit_test_setup(test_calculate_step_len_clamped_allows_v_ceil_max_steps, test_setup),
         cmocka_unit_test_setup(test_clamp_accel_no_change,                       test_setup),
         cmocka_unit_test_setup(test_clamp_accel_under_limit,            test_setup),
         cmocka_unit_test_setup(test_clamp_accel_over_limit_positive,    test_setup),

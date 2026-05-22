@@ -200,8 +200,12 @@ int32_t calculate_step_len(int32_t step_count_q, int32_t period_ticks, int32_t m
     if (max_vel_q > 0) {
         int32_t v_ceil_max = (max_vel_q + 65535) >> 16;
         if (v_ceil > v_ceil_max) {
-            int32_t min_len = (int32_t)((int64_t)period_ticks * 65536
-                                        / ((int64_t)max_vel_q << 1) - STEP_PIO_LEN_OVERHEAD);
+            /* Compute min_len from v_ceil_max (integer ceiling) not from max_vel_q
+             * (fractional).  The fractional formula gives a min_len that only fits
+             * floor(max_vel_q/65536) = v_ceil_max-1 steps, so the clamp itself would
+             * reduce max_steps below v_ceil_max and re-introduce the deficit.
+             * Using v_ceil_max guarantees max_steps == v_ceil_max after clamping. */
+            int32_t min_len = period_ticks / (2 * v_ceil_max) - STEP_PIO_LEN_OVERHEAD;
             int32_t clamped = len < min_len ? min_len : len;
             return clamped > max_len ? max_len : clamped;
         }
