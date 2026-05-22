@@ -59,19 +59,19 @@ Hardware wiring — set once at config time.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `cmd-type` | u32 | Step command mode: `0` = position (default), `1` = velocity |
+| `cmd-type` | u32 | Step command mode: `0` = position, `1` = velocity (default) |
 | `gpio-dir` | s32 | RP2040 GPIO pin number for the direction signal |
 | `gpio-step` | s32 | RP2040 GPIO pin number for the step signal |
 
 **`cmd-type` modes:**
 
-- `0` (position, default): The RP2040 stepgen acts as a position follower. Each servo
-  period it computes velocity = `abs_pos_requested − abs_pos_achieved` and drives that
-  many steps, subject to `vel-limit` and `accel-limit`. Connect `joint.N.motor-pos-cmd`
-  to `pos-cmd`; `vel-cmd` is ignored.
-- `1` (velocity): The RP2040 stepgen integrates the `vel-cmd` value each period
-  (scaled by `scale`). This is the legacy mode. `pos-cmd` is still transmitted but
-  ignored by the firmware.
+- `0` (position): The RP2040 stepgen acts as a position follower. Each servo period it
+  computes velocity = `abs_pos_requested − abs_pos_achieved` and drives that many steps,
+  subject to `vel-limit` and `accel-limit`. Connect `joint.N.motor-pos-cmd` to `pos-cmd`;
+  `vel-cmd` is ignored.
+- `1` (velocity, default): The RP2040 stepgen integrates the `vel-cmd` value each period
+  (scaled by `scale`). `pos-cmd` is still transmitted and used by the firmware for gentle
+  drift correction.
 
 ### Joint setup example
 

@@ -205,7 +205,7 @@ static const ParamDef gpio_params[] = {
 static const ParamDef joint_params[] = {
     { S32, offsetof(skeleton_t, joint_gpio_step), sizeof(hal_s32_t), "joint", 1, "gpio-step" }, // RP2040 GPIO pin number for the step signal
     { S32, offsetof(skeleton_t, joint_gpio_dir),  sizeof(hal_s32_t), "joint", 1, "gpio-dir"  }, // RP2040 GPIO pin number for the direction signal
-    { U32, offsetof(skeleton_t, joint_cmd_type),  sizeof(hal_u32_t), "joint", 1, "cmd-type"  }, // Step command mode: 0=position (default), 1=velocity
+    { U32, offsetof(skeleton_t, joint_cmd_type),  sizeof(hal_u32_t), "joint", 1, "cmd-type"  }, // Step command mode: 0=position, 1=velocity (default)
 };
 
 static const PinDef joint_pins[] = {
@@ -352,7 +352,7 @@ int rtapi_app_main(void)
     *port_data_array->joint_enable_cmd[i]  = false;
     port_data_array->joint_gpio_step[i]    = -1;
     port_data_array->joint_gpio_dir[i]     = -1;
-    port_data_array->joint_cmd_type[i]     = JOINT_CMD_POSITION;
+    port_data_array->joint_cmd_type[i]     = JOINT_CMD_VELOCITY;
   }
 
   /* Export spindle pins. */

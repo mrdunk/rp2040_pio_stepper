@@ -49,6 +49,7 @@ setp rp2040_eth.0.joint.0.gpio-dir       6
 setp rp2040_eth.0.joint.0.vel-limit      [JOINT_0]MAX_VELOCITY
 setp rp2040_eth.0.joint.0.accel-limit    [JOINT_0]MAX_ACCELERATION
 
+# Send velocity command (primary in velocity mode) and position for firmware drift correction.
 net xpos-cmd joint.0.motor-pos-cmd => rp2040_eth.0.joint.0.pos-cmd
 net xvel-cmd joint.0.vel-cmd       => rp2040_eth.0.joint.0.vel-cmd
 net xpos-fb  rp2040_eth.0.joint.0.pos-fb => joint.0.motor-pos-fb
@@ -63,6 +64,7 @@ setp rp2040_eth.0.joint.1.gpio-dir       4
 setp rp2040_eth.0.joint.1.vel-limit      [JOINT_1]MAX_VELOCITY
 setp rp2040_eth.0.joint.1.accel-limit    [JOINT_1]MAX_ACCELERATION
 
+# Send velocity command (primary in velocity mode) and position for firmware drift correction.
 net ypos-cmd joint.1.motor-pos-cmd => rp2040_eth.0.joint.1.pos-cmd
 net yvel-cmd joint.1.vel-cmd       => rp2040_eth.0.joint.1.vel-cmd
 net ypos-fb  rp2040_eth.0.joint.1.pos-fb => joint.1.motor-pos-fb
@@ -77,6 +79,7 @@ setp rp2040_eth.0.joint.2.gpio-dir       2
 setp rp2040_eth.0.joint.2.vel-limit      [JOINT_2]MAX_VELOCITY
 setp rp2040_eth.0.joint.2.accel-limit    [JOINT_2]MAX_ACCELERATION
 
+# Send velocity command (primary in velocity mode) and position for firmware drift correction.
 net zpos-cmd joint.2.motor-pos-cmd => rp2040_eth.0.joint.2.pos-cmd
 net zvel-cmd joint.2.vel-cmd       => rp2040_eth.0.joint.2.vel-cmd
 net zpos-fb  rp2040_eth.0.joint.2.pos-fb => joint.2.motor-pos-fb
@@ -92,6 +95,7 @@ setp rp2040_eth.0.joint.3.gpio-dir       0
 setp rp2040_eth.0.joint.3.vel-limit    [JOINT_3]MAX_VELOCITY
 setp rp2040_eth.0.joint.3.accel-limit  [JOINT_3]MAX_ACCELERATION
 
+# Send velocity command (primary in velocity mode) and position for firmware drift correction.
 net apos-cmd joint.3.motor-pos-cmd => rp2040_eth.0.joint.3.pos-cmd
 net avel-cmd joint.3.vel-cmd       => rp2040_eth.0.joint.3.vel-cmd
 net apos-fb  rp2040_eth.0.joint.3.pos-fb => joint.3.motor-pos-fb
