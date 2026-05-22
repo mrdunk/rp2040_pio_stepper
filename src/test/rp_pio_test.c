@@ -127,6 +127,20 @@ static void test_calculate_step_len_too_slow_skip(void **state) {
     assert_int_equal(calculate_step_len(1, 133000, 3276800), 66491);
 }
 
+/* calculate_step_len: non-integer velocity (25.6 steps/period) must not clamp below v_ceil
+ * SCALE=1024, vel=25mm/s, 1ms period @ 133MHz → v_ceil=26; min_len must not prevent 26 steps */
+static void test_calculate_step_len_allows_bresenham_ceiling(void **state) {
+    (void)state;
+    int32_t period_ticks = 133000;
+    int32_t velocity_q   = (int32_t)(25.6 * 65536.0);          /* 1677721 */
+    int32_t max_vel_q    = (int32_t)(25.6 * 1.01 * 65536.0);   /* 1694498 */
+
+    int32_t step_len    = calculate_step_len(velocity_q, period_ticks, max_vel_q);
+    int32_t step_period = 2 * (step_len + 9); /* 9 = STEP_PIO_LEN_OVERHEAD */
+    int32_t max_steps   = period_ticks / step_period;
+    assert_true(max_steps >= 26);
+}
+
 /* clamp_accel: velocity unchanged -> returns same velocity */
 static void test_clamp_accel_no_change(void **state) {
     (void)state;
@@ -1049,6 +1063,38 @@ static void test_do_steps_velmode_lag_corrected_over_time(void **state) {
     assert_true(sim_pos > 1000);
 }
 
+/* Non-integer velocity must not drift: 25.6 steps/period (SCALE=1024 × 25mm/s).
+ * max_velocity = vel × 1.01 matches the VEL_HEADROOM applied by the driver, which
+ * triggers the min_len clamp bug when v_ceil == v_ceil_max.
+ * Over 100 periods Bresenham must average exactly 25.6 steps → 2560 ± 1 steps. */
+static void test_do_steps_noninteger_velocity_no_drift(void **state) {
+    (void)state;
+    double vel = 25600.0; /* 25.6 steps/period at 1ms, matching SCALE=1024 × 25mm/s */
+    config.update_time_us              = 1000;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].enabled            = 1;
+    config.joint[0].velocity_requested = vel;
+    config.joint[0].max_velocity       = vel * 1.01;
+    config.joint[0].max_accel          = 0.0;
+    mock_tx_fifo_empty                 = 1;
+
+    int32_t sim_pos       = 0;
+    double  pos_requested = 0.0;
+    for (int i = 0; i < 100; i++) {
+        config.joint[0].abs_pos_requested = pos_requested;
+        mock_rx_values[0]  = sim_pos;
+        mock_rx_fifo_level = 1;
+        mock_rx_index      = 0;
+        config.joint[0].updated_from_c0 = 1;
+        last_pio_put_value = 0;
+        do_steps(0);
+        sim_pos       += pio_word_steps(last_pio_put_value);
+        pos_requested += vel * 1e-3;
+    }
+    assert_true(sim_pos >= 2559);
+    assert_true(sim_pos <= 2561);
+}
+
 /* Position mode: no overshoot after final correction step.
  *
  * Models JOINT_0 (scale=160, max_accel=750 mm/s²=120000 steps/s²).
@@ -1373,8 +1419,9 @@ int main(void) {
         cmocka_unit_test_setup(test_calculate_step_len_normal,          test_setup),
         cmocka_unit_test_setup(test_calculate_step_len_clamped,         test_setup),
         cmocka_unit_test_setup(test_calculate_step_len_below_threshold, test_setup),
-        cmocka_unit_test_setup(test_calculate_step_len_too_slow_skip,  test_setup),
-        cmocka_unit_test_setup(test_clamp_accel_no_change,              test_setup),
+        cmocka_unit_test_setup(test_calculate_step_len_too_slow_skip,              test_setup),
+        cmocka_unit_test_setup(test_calculate_step_len_allows_bresenham_ceiling, test_setup),
+        cmocka_unit_test_setup(test_clamp_accel_no_change,                       test_setup),
         cmocka_unit_test_setup(test_clamp_accel_under_limit,            test_setup),
         cmocka_unit_test_setup(test_clamp_accel_over_limit_positive,    test_setup),
         cmocka_unit_test_setup(test_clamp_accel_over_limit_negative,    test_setup),
@@ -1425,7 +1472,8 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_velmode_frac_1_5,  test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_frac_10_5, test_setup),
         cmocka_unit_test_setup(test_do_steps_velmode_reverse,                  test_setup),
-        cmocka_unit_test_setup(test_do_steps_velmode_lag_corrected_over_time,  test_setup),
+        cmocka_unit_test_setup(test_do_steps_velmode_lag_corrected_over_time,        test_setup),
+        cmocka_unit_test_setup(test_do_steps_noninteger_velocity_no_drift,           test_setup),
         cmocka_unit_test_setup(test_do_steps_position_mode_no_overshoot_after_correction, test_setup),
         cmocka_unit_test_setup(test_clamp_accel_fixed_zero_target_never_overshoots, test_setup),
         cmocka_unit_test_setup(test_ramp_accel_headroom_tracks_vel_ff,              test_setup),

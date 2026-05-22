@@ -192,11 +192,19 @@ int32_t calculate_step_len(int32_t step_count_q, int32_t period_ticks, int32_t m
     int32_t v_ceil = (step_count_q + 65535) >> 16;
     int32_t len    = period_ticks / (2 * v_ceil) - STEP_PIO_LEN_OVERHEAD;
     if (len > max_len) len = max_len;
+    /* Only enforce the velocity ceiling when the commanded v_ceil exceeds the
+     * max-velocity ceiling. For in-range velocities (v_ceil <= v_ceil_max),
+     * clamping would shrink step_len below what Bresenham needs to produce
+     * v_ceil steps/period, preventing non-integer velocities from averaging
+     * correctly and causing cumulative position error. */
     if (max_vel_q > 0) {
-        int32_t min_len = (int32_t)((int64_t)period_ticks * 65536
-                                    / ((int64_t)max_vel_q << 1) - STEP_PIO_LEN_OVERHEAD);
-        int32_t clamped = len < min_len ? min_len : len;
-        return clamped > max_len ? max_len : clamped;
+        int32_t v_ceil_max = (max_vel_q + 65535) >> 16;
+        if (v_ceil > v_ceil_max) {
+            int32_t min_len = (int32_t)((int64_t)period_ticks * 65536
+                                        / ((int64_t)max_vel_q << 1) - STEP_PIO_LEN_OVERHEAD);
+            int32_t clamped = len < min_len ? min_len : len;
+            return clamped > max_len ? max_len : clamped;
+        }
     }
     return len;
 }
