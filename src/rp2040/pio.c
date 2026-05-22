@@ -317,6 +317,134 @@ double compute_velocity_cmd(
   return velocity_requested;
 }
 
+/* Fixed-point dynamics for one servo period.  All velocity/accel values are
+ * Q16.16 steps/period; period_ticks is in RP2040 clock cycles. */
+typedef struct {
+    int32_t velocity_q;
+    int32_t vel_ff_q;
+    int32_t max_vel_q;
+    int32_t max_accel_q;
+    int32_t clamp_accel_q;
+    int32_t period_ticks;
+} joint_dynamics_q_t;
+
+/* Convert double velocity/accel inputs to fixed-point for one servo period.
+ * Use the EMA-measured inter-packet interval so crystal disagreement between
+ * host and RP is automatically tracked.  VEL_HEADROOM on max_vel_q gives the
+ * correction term room to act at full speed even when update_period_us is
+ * biased slightly above SERVO_PERIOD_US by jitter. */
+static joint_dynamics_q_t dynamics_to_fixed(
+    double velocity_requested, double vel_ff,
+    double max_velocity, double max_accel,
+    uint32_t update_period_us)
+{
+    double  period_s    = (double)update_period_us * 1e-6;
+    int32_t max_accel_q = (int32_t)(max_accel * period_s * period_s * 65536.0);
+    return (joint_dynamics_q_t){
+        .velocity_q    = (int32_t)((velocity_requested / (double)update_period_us) * 65536.0),
+        .vel_ff_q      = (int32_t)((vel_ff / (double)update_period_us) * 65536.0),
+        .max_vel_q     = (int32_t)((max_velocity / (double)update_period_us) * 65536.0 * VEL_HEADROOM),
+        .max_accel_q   = max_accel_q,
+        .clamp_accel_q = (int32_t)(max_accel_q * ACCEL_HEADROOM),
+        .period_ticks  = (int32_t)((int64_t)update_period_us * RP2040_CLOCK_MHZ),
+    };
+}
+
+/* Handle joint enable/disable transitions.
+ * On rising edge: initialise PIO and snap last_velocity_q to the commanded
+ * velocity when stopped, so clamp_accel does not ramp from zero when LinuxCNC
+ * is already moving.  When last_velocity_q is non-zero the joint is
+ * mid-deceleration (network reconnect); preserve it so clamp_accel limits the
+ * change and avoids a jitter step. */
+static void handle_enable_transition(uint8_t joint, uint8_t enabled, int32_t velocity_q) {
+    if (enabled == joint_state[joint].last_enabled)
+        return;
+    joint_state[joint].last_enabled = enabled;
+    if (enabled) {
+        printf("J%u enab\n", joint);
+        init_pio(joint);
+        if (joint_state[joint].last_velocity_q == 0)
+            joint_state[joint].last_velocity_q = velocity_q;
+    } else {
+        printf("J%u disab\n", joint);
+    }
+}
+
+/* Stopping-profile cap: ensure the motor can decelerate to vel_ff_q within the
+ * remaining distance to target.  Formula: |v| ≤ vel_ff + sqrt(2·a·|error|).
+ * When vel_ff=0 this is the classic bang-bang stopping guarantee.
+ * When vel_ff>0 (active jog or G-code move) the extra headroom prevents the
+ * cap from interfering with normal tracking.
+ * Uses floating-point error (not truncated integer) so the cap stays active
+ * during the final sub-1-step approach and prevents overshoot.
+ * When the cap fires, clears the Bresenham accumulator so its residual
+ * fraction cannot drain into an extra overshoot step. */
+static int32_t apply_stopping_cap(
+    uint8_t cmd_type, uint8_t enabled, uint32_t updated,
+    int32_t velocity_q, int32_t vel_ff_q, int32_t max_accel_q,
+    double abs_pos_requested, int32_t abs_pos_achieved,
+    int32_t *step_accumulator_q)
+{
+    if (!(cmd_type == JOINT_CMD_POSITION && max_accel_q > 0 && enabled && updated))
+        return velocity_q;
+    double err_f = abs_pos_requested - (double)abs_pos_achieved;
+    if (err_f == 0.0 || (velocity_q > 0) != (err_f > 0.0))
+        return velocity_q;
+    int32_t sqrt_term = (int32_t)sqrt(2.0 * (double)max_accel_q * fabs(err_f) * 65536.0);
+    if (err_f > 0.0) {
+        int32_t cap_v = vel_ff_q + sqrt_term;
+        if (velocity_q > cap_v) { velocity_q = cap_v; *step_accumulator_q = 0; }
+    } else {
+        int32_t floor_v = vel_ff_q - sqrt_term;
+        if (velocity_q < floor_v) { velocity_q = floor_v; *step_accumulator_q = 0; }
+    }
+    return velocity_q;
+}
+
+/* At-target snap: when in the dead zone with no feedforward, zero velocity and
+ * accumulator immediately.  Without this, clamp_accel leaves residual velocity
+ * after the final correction step; the Bresenham accumulator drains it into an
+ * overshoot step. */
+static int32_t apply_at_target_snap(
+    uint8_t cmd_type, uint8_t enabled, uint32_t updated,
+    int32_t velocity_q, int32_t vel_ff_q,
+    double abs_pos_requested, int32_t abs_pos_achieved,
+    int32_t *step_accumulator_q)
+{
+    if (!(cmd_type == JOINT_CMD_POSITION && vel_ff_q == 0 && enabled && updated))
+        return velocity_q;
+    if ((int32_t)(abs_pos_requested - (double)abs_pos_achieved) == 0) {
+        velocity_q = 0;
+        *step_accumulator_q = 0;
+    }
+    return velocity_q;
+}
+
+/* Compute step count, pulse timing, direction; write to PIO and update
+ * abs_pos_achieved for open-loop joints (no feedback counter).
+ * Sub-1-step with active feedforward: drive Bresenham with vel_ff_q so that
+ * position-correction spikes do not disrupt inter-step intervals.  At ≥1
+ * step/period or with zero feedforward (stationary positioning), use velocity_q.
+ * Returns velocity_q for use as velocity_achieved in the config reply. */
+static int32_t commit_steps(
+    uint8_t joint, const joint_dynamics_q_t *dq,
+    int32_t velocity_q, int32_t *abs_pos_achieved)
+{
+    int32_t step_count_q   = abs(velocity_q);
+    int32_t plan_vel_q     = (step_count_q > 0 && step_count_q < 65536 && abs(dq->vel_ff_q) > 0)
+                             ? dq->vel_ff_q : velocity_q;
+    int32_t step_len_ceil  = calculate_step_len(step_count_q, dq->period_ticks, dq->max_vel_q);
+    int32_t n_steps        = plan_steps(plan_vel_q, joint, dq->period_ticks, step_len_ceil);
+    /* Derive step_len for the exact n_steps this period (floor or ceil of v),
+     * so the PIO pulse rate matches the intended physical step count. */
+    int32_t step_len_ticks = calculate_step_len(n_steps * 65536, dq->period_ticks, dq->max_vel_q);
+    uint32_t direction     = (velocity_q > 0);
+    if (joint >= NUM_FEEDBACK)
+        *abs_pos_achieved += (direction ? 1 : -1) * n_steps;
+    issue_pio_step(joint, step_len_ticks, direction);
+    return velocity_q;
+}
+
 /* Generate step counts and send to PIOs. */
 uint8_t do_steps(const uint8_t joint) {
   uint32_t update_period_us = get_period();
@@ -330,32 +458,22 @@ uint8_t do_steps(const uint8_t joint) {
   uint8_t cmd_type;
   int32_t velocity_achieved = 0;
   uint32_t updated = get_joint_config(
-      joint,
-      CORE1,
-      &enabled,
-      NULL,
-      NULL,
-      &velocity_requested,
-      &abs_pos_requested,
-      &abs_pos_achieved,
-      &max_velocity,
-      &max_accel,
-      NULL,  // &velocity_achieved
-      &cmd_type
-      );
+      joint, CORE1, &enabled, NULL, NULL,
+      &velocity_requested, &abs_pos_requested, &abs_pos_achieved,
+      &max_velocity, &max_accel, NULL, &cmd_type);
 
-  if(update_period_us == 0) {
+  if (update_period_us == 0) {
     /* Period unknown: can't compute step timing. */
     issue_pio_step(joint, 0, 0);
     return 0;
   }
-  if(updated == 0 && joint_state[joint].last_velocity_q == 0) {
+  if (updated == 0 && joint_state[joint].last_velocity_q == 0) {
     /* No new Core0 data and already at rest: nothing to compute. */
     issue_pio_step(joint, 0, 0);
     return 0;
   }
 
-  if(joint < NUM_FEEDBACK) {
+  if (joint < NUM_FEEDBACK) {
     /* Read step_count FIFO before computing velocity correction so
      * compute_velocity_cmd sees the current-period position, not the
      * stale value written to config at the end of the previous period. */
@@ -367,80 +485,25 @@ uint8_t do_steps(const uint8_t joint) {
       cmd_type, velocity_requested, abs_pos_requested, abs_pos_achieved,
       enabled, updated, update_period_us, max_accel);
 
-  /* Use the EMA-measured inter-packet interval for step-count conversion so that
-   * crystal-frequency disagreement between host and RP is automatically tracked.
-   * VEL_HEADROOM on max_vel_q gives the correction term room to act at full speed
-   * even when update_period_us is biased slightly above SERVO_PERIOD_US by jitter. */
-  int32_t velocity_q   = (int32_t)((velocity_requested / (double)update_period_us) * 65536.0);
-  int32_t vel_ff_q     = (int32_t)((vel_ff / (double)update_period_us) * 65536.0);
-  int32_t max_vel_q    = (int32_t)((max_velocity / (double)update_period_us) * 65536.0 * VEL_HEADROOM);
-  /* Accel is steps/s²; convert to Q16.16 steps/period/period → multiply by period_s². */
-  double  period_s     = (double)update_period_us * 1e-6;
-  int32_t max_accel_q  = (int32_t)(max_accel * period_s * period_s * 65536.0);
-  int32_t clamp_accel_q = (int32_t)(max_accel_q * ACCEL_HEADROOM);
-  int32_t period_ticks = (int32_t)((int64_t)update_period_us * RP2040_CLOCK_MHZ);
+  joint_dynamics_q_t dq = dynamics_to_fixed(
+      velocity_requested, vel_ff, max_velocity, max_accel, update_period_us);
 
-  if(enabled != joint_state[joint].last_enabled) {
-    joint_state[joint].last_enabled = enabled;
-    if(enabled) {
-      printf("J%u enab\n", joint);
-      init_pio(joint);
-      // Snap to commanded velocity when stopped so we don't ramp from zero
-      // when LinuxCNC is already moving (joint enabled before motion started).
-      // When last_velocity_q is non-zero the joint is mid-deceleration (network
-      // reconnect before reaching zero); preserve it so clamp_accel limits the
-      // velocity change normally and avoids a jitter step.
-      if (joint_state[joint].last_velocity_q == 0) {
-        joint_state[joint].last_velocity_q = velocity_q;
-      }
-    } else {
-      printf("J%u disab\n", joint);
-    }
-  }
+  handle_enable_transition(joint, enabled, dq.velocity_q);
 
-  velocity_q = clamp_accel(velocity_q, joint_state[joint].last_velocity_q, clamp_accel_q);
+  int32_t velocity_q = clamp_accel(
+      dq.velocity_q, joint_state[joint].last_velocity_q, dq.clamp_accel_q);
 
-  /* Stopping-profile cap: ensure the motor can decelerate to vel_ff within the
-   * remaining distance to target.  Formula: |v| ≤ vel_ff + sqrt(2·a·|error|).
-   * When vel_ff=0 this is the classic bang-bang stopping guarantee.
-   * When vel_ff>0 (active jog or G-code move) the extra headroom prevents the
-   * cap from interfering with normal tracking.
-   * Use floating-point error (not truncated integer) so the cap stays active
-   * during the final sub-1-step approach and prevents overshoot.
-   * When the cap fires, also clear the Bresenham accumulator so that its
-   * residual fraction cannot drain into an extra overshoot step. */
-  if (cmd_type == JOINT_CMD_POSITION && max_accel_q > 0 && enabled && updated) {
-    double err_f = abs_pos_requested - (double)abs_pos_achieved;
-    if (err_f != 0.0 && (velocity_q > 0) == (err_f > 0.0)) {
-      int32_t sqrt_term = (int32_t)sqrt(
-          2.0 * (double)max_accel_q * fabs(err_f) * 65536.0);
-      if (err_f > 0.0) {
-        int32_t cap_v = vel_ff_q + sqrt_term;
-        if (velocity_q > cap_v) {
-          velocity_q = cap_v;
-          joint_state[joint].step_accumulator_q = 0;
-        }
-      } else {
-        int32_t floor_v = vel_ff_q - sqrt_term;
-        if (velocity_q < floor_v) {
-          velocity_q = floor_v;
-          joint_state[joint].step_accumulator_q = 0;
-        }
-      }
-    }
-  }
+  velocity_q = apply_stopping_cap(
+      cmd_type, enabled, updated,
+      velocity_q, dq.vel_ff_q, dq.max_accel_q,
+      abs_pos_requested, abs_pos_achieved,
+      &joint_state[joint].step_accumulator_q);
 
-  /* At-target snap: when in the dead zone with no feedforward, zero velocity
-   * and accumulator immediately.  Without this, clamp_accel leaves residual
-   * velocity after the final correction step; the Bresenham accumulator drains
-   * it into an overshoot step. */
-  if (cmd_type == JOINT_CMD_POSITION && vel_ff_q == 0 && enabled && updated) {
-    int32_t err_snap = (int32_t)(abs_pos_requested - (double)abs_pos_achieved);
-    if (err_snap == 0) {
-      velocity_q = 0;
-      joint_state[joint].step_accumulator_q = 0;
-    }
-  }
+  velocity_q = apply_at_target_snap(
+      cmd_type, enabled, updated,
+      velocity_q, dq.vel_ff_q,
+      abs_pos_requested, abs_pos_achieved,
+      &joint_state[joint].step_accumulator_q);
 
   joint_state[joint].last_velocity_q = velocity_q;
 
@@ -448,58 +511,23 @@ uint8_t do_steps(const uint8_t joint) {
     /* Fully decelerated: issue hard stop and keep pos_fb current while disabled.
      * abs_pos_achieved already reflects any in-flight steps drained above. */
     issue_pio_step(joint, 0, 0);
-    velocity_achieved = 0;  /* velocity_q == 0: joint has stopped */
+    velocity_achieved = 0;
     update_joint_config(
-        joint, CORE1,
-        NULL, NULL, NULL, NULL, NULL,
-        &abs_pos_achieved,
-        NULL, NULL,
-        &velocity_achieved,
-        NULL);
+        joint, CORE1, NULL, NULL, NULL, NULL, NULL,
+        &abs_pos_achieved, NULL, NULL, &velocity_achieved, NULL);
     joint_state[joint].last_pos_achieved = abs_pos_achieved;
     return 0;
   }
 
-  int32_t step_count_q  = abs(velocity_q);
-  /* Sub-1-step with active feedforward: drive Bresenham with vel_ff_q so that
-   * position-correction spikes do not disrupt inter-step intervals.  At ≥1
-   * step/period or with zero feedforward (stationary positioning), use velocity_q. */
-  int32_t plan_vel_q    = (step_count_q > 0 && step_count_q < 65536 && abs(vel_ff_q) > 0)
-                          ? vel_ff_q : velocity_q;
-  int32_t step_len_ceil = calculate_step_len(step_count_q, period_ticks, max_vel_q);
-  int32_t n_steps       = plan_steps(plan_vel_q, joint, period_ticks, step_len_ceil);
-  /* Derive step_len for the exact n_steps this period (floor or ceil of v),
-   * so the PIO pulse rate matches the intended physical step count. */
-  int32_t step_len_ticks = calculate_step_len(n_steps * 65536, period_ticks, max_vel_q);
-
-  uint32_t direction = (velocity_q > 0);
-
-  if(joint >= NUM_FEEDBACK) {
-    abs_pos_achieved += (direction ? 1 : -1) * n_steps;
-  }
-
-  issue_pio_step(joint, step_len_ticks, direction);
-
   /* Report Q16.16 internal velocity so the driver can detect velocity_q==0
    * exactly.  Integer step-delta aliased to 0 at low speed (<1 step/period),
    * causing premature network-recovery detection on the driver side. */
-  velocity_achieved = velocity_q;
+  velocity_achieved = commit_steps(joint, &dq, velocity_q, &abs_pos_achieved);
 
   update_joint_config(
-      joint,
-      CORE1,
-      NULL,
-      NULL,
-      NULL,
-      NULL,
-      NULL,
-      &abs_pos_achieved,
-      NULL,
-      NULL,
-      &velocity_achieved,
-      NULL);
-
-  joint_state[joint].last_pos_achieved  = abs_pos_achieved;
+      joint, CORE1, NULL, NULL, NULL, NULL, NULL,
+      &abs_pos_achieved, NULL, NULL, &velocity_achieved, NULL);
+  joint_state[joint].last_pos_achieved = abs_pos_achieved;
 
   return enabled ? updated : 0;
 }
