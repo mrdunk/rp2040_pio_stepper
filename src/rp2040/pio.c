@@ -423,26 +423,37 @@ static int32_t apply_at_target_snap(
 /* Compute step count, pulse timing, direction; write to PIO and update
  * abs_pos_achieved for open-loop joints (no feedback counter).
  * Sub-1-step with active feedforward: drive Bresenham with vel_ff_q so that
- * position-correction spikes do not disrupt inter-step intervals.  At ≥1
- * step/period or with zero feedforward (stationary positioning), use velocity_q.
- * Returns velocity_q for use as velocity_achieved in the config reply. */
+ * position-correction spikes do not disrupt inter-step intervals.  The boundary
+ * step_count_q==65536 (exactly 1.0 step/period) is included because a correction
+ * spike can land exactly there and escape the old < guard.  At >1 step/period or
+ * with zero feedforward (stationary positioning), use velocity_q.
+ * Returns vel_ff_q as velocity_achieved so vel-fb tracks the commanded trajectory
+ * velocity in both modes; correction steps still fire through velocity_q. */
 static int32_t commit_steps(
     uint8_t joint, const joint_dynamics_q_t *dq,
     int32_t velocity_q, int32_t *abs_pos_achieved)
 {
     int32_t step_count_q   = abs(velocity_q);
-    int32_t plan_vel_q     = (step_count_q > 0 && step_count_q < 65536 && abs(dq->vel_ff_q) > 0)
-                             ? dq->vel_ff_q : velocity_q;
+    /* Include step_count_q==65536 in feedforward path: a correction spike can
+     * land velocity_q at exactly -65536, which the old < guard excluded. */
+    int      in_ff_path    = step_count_q > 0 && step_count_q <= 65536 && abs(dq->vel_ff_q) > 0;
+    int32_t  plan_vel_q    = in_ff_path ? dq->vel_ff_q : velocity_q;
     int32_t step_len_ceil  = calculate_step_len(step_count_q, dq->period_ticks, dq->max_vel_q);
     int32_t n_steps        = plan_steps(plan_vel_q, joint, dq->period_ticks, step_len_ceil);
     /* Derive step_len for the exact n_steps this period (floor or ceil of v),
      * so the PIO pulse rate matches the intended physical step count. */
     int32_t step_len_ticks = calculate_step_len(n_steps * 65536, dq->period_ticks, dq->max_vel_q);
-    uint32_t direction     = (velocity_q > 0);
+    /* Direction must follow plan_vel_q, not velocity_q.  In the feedforward path
+     * plan_vel_q = vel_ff_q stays positive while a correction spike can flip
+     * velocity_q negative — using velocity_q would reverse the motor. */
+    uint32_t direction     = (plan_vel_q > 0);
     if (joint >= NUM_FEEDBACK)
         *abs_pos_achieved += (direction ? 1 : -1) * n_steps;
     issue_pio_step(joint, step_len_ticks, direction);
-    return velocity_q;
+    /* Always report vel_ff_q as velocity_achieved so vel-fb matches LinuxCNC's
+     * commanded trajectory velocity.  Correction steps still fire through
+     * velocity_q → plan_steps; only reporting is changed here. */
+    return dq->vel_ff_q;
 }
 
 /* Generate step counts and send to PIOs. */
