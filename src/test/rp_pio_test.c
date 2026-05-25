@@ -1494,6 +1494,41 @@ static void test_do_steps_posmode_correction_at_stop_does_not_spike_vel_achieved
     assert_int_equal(config.joint[0].velocity_achieved, 0);
 }
 
+/* Position mode: large overshoot produces step_count_q > 65536 backward — motor
+ * must not reverse.
+ *
+ * vel_ff=300 steps/s, pos_ach=5, pos_req=0.5: error=-4.5, correction=-2250 steps/s,
+ * velocity=-1950 steps/s → velocity_q ≈ -127795 (|velocity_q| >> 65536).
+ * Old code: in_ff_path=0 (step_count_q>65536), plan_vel_q=velocity_q<0 → backward.
+ * New code: sign-flip branch of in_ff_path catches this → plan_vel_q=vel_ff_q → forward. */
+static void test_do_steps_posmode_large_overshoot_does_not_reverse(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = 300.0;
+    config.joint[0].abs_pos_requested  = 0.5;
+    config.joint[0].max_velocity       = 32000.0;
+    config.joint[0].max_accel          = 0.0;  /* no cap so correction stays large */
+    mock_tx_fifo_empty                 = 1;
+
+    int forward_steps = 0, reverse_steps = 0;
+    for (int p = 0; p < 20; p++) {
+        mock_rx_values[0]  = 5;   /* pos_ach=5; error=-4.5 → velocity_q ≈ -127795 */
+        mock_rx_fifo_level = 1;
+        mock_rx_index      = 0;
+        config.joint[0].updated_from_c0 = 1;
+        last_pio_put_value = 0;
+        do_steps(0);
+        if (last_pio_put_value != 0) {
+            if (last_pio_put_value & 1) forward_steps++;
+            else                        reverse_steps++;
+        }
+        assert_true(config.joint[0].velocity_achieved >= 0);
+    }
+    assert_int_equal(reverse_steps, 0);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -1571,6 +1606,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_posmode_velocity_achieved_zero_reverse,             test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_overshoot_does_not_reverse,                test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_correction_at_stop_does_not_spike_vel_achieved, test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_large_overshoot_does_not_reverse,         test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
