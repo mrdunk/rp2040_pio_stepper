@@ -435,13 +435,17 @@ static int32_t commit_steps(
 {
     int32_t step_count_q   = abs(velocity_q);
     /* Feedforward path: use vel_ff_q for Bresenham scheduling when either:
-     * (a) step_count_q is sub-1-step (correction keeps velocity near vel_ff_q), or
-     * (b) correction has flipped velocity_q to the opposite sign as vel_ff_q — a
+     * (a) vel_ff_q is sub-1-step — correction must never add extra steps, even a
+     *     same-direction correction of >1 step would double-step and create a long
+     *     gap before the next step, ruining even spacing at slow speed, or
+     * (b) step_count_q is sub-1-step (correction is small; vel_ff_q already governs), or
+     * (c) correction has flipped velocity_q to the opposite sign as vel_ff_q — a
      *     large overshoot correction that would otherwise reverse the motor.
-     * In both cases plan_vel_q=vel_ff_q steps at the commanded ff rate in the
+     * In all cases plan_vel_q=vel_ff_q steps at the commanded ff rate in the
      * commanded ff direction; the correction resolves over subsequent periods. */
     int      in_ff_path    = abs(dq->vel_ff_q) > 0 && step_count_q > 0 &&
-                             (step_count_q <= 65536 ||
+                             (abs(dq->vel_ff_q) <= 65536 ||
+                              step_count_q <= 65536 ||
                               (dq->vel_ff_q > 0 ? velocity_q < 0 : velocity_q > 0));
     int32_t  plan_vel_q    = in_ff_path ? dq->vel_ff_q : velocity_q;
     int32_t step_len_ceil  = calculate_step_len(step_count_q, dq->period_ticks, dq->max_vel_q);

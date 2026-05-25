@@ -1529,6 +1529,52 @@ static void test_do_steps_posmode_large_overshoot_does_not_reverse(void **state)
     assert_int_equal(reverse_steps, 0);
 }
 
+/* Position mode at sub-1-step speed: same-direction correction must not cause
+ * double-stepping.
+ *
+ * vel_ff=100 steps/s → vel_ff_q=6553 (0.1 steps/period).  After 10 priming
+ * periods the accumulator is at 65530 (one add away from firing).  On period 11,
+ * pos_ach=0 while pos_req=2.0 → error=2 steps → correction=1000 steps/s →
+ * velocity_q=(1100/1000)*65536=72090 (>65536).
+ *
+ * Without the vel_ff_q≤65536 guard: step_count_q=72090 exits in_ff_path (same
+ * direction, large), plan_steps adds 72090 to accum (65530+72090=137620 → 2 steps).
+ * With the fix: abs(vel_ff_q)=6553≤65536 → in_ff_path=1, plan_vel_q=vel_ff_q=6553,
+ * accum=65530+6553=72083 → exactly 1 step. */
+static void test_do_steps_posmode_sub1step_correction_does_not_double_step(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = 100.0;  /* vel_ff_q=6553, 0.1 steps/period */
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].max_velocity       = 32000.0;
+    config.joint[0].max_accel          = 0.0;    /* no accel cap — worst case */
+    mock_tx_fifo_empty                 = 1;
+
+    /* Prime accumulator: 10 periods with error=0 → accum=10*6553=65530, no step yet */
+    for (int p = 0; p < 10; p++) {
+        mock_rx_values[0]  = 0;
+        mock_rx_fifo_level = 1;
+        mock_rx_index      = 0;
+        config.joint[0].updated_from_c0 = 1;
+        do_steps(0);
+    }
+
+    /* Period 11: error=2 → correction=1000 steps/s → velocity_q=72090 > 65536.
+     * Old code fires 2 steps; new code must fire exactly 1. */
+    config.joint[0].abs_pos_requested = 2.0;
+    mock_rx_values[0]  = 0;
+    mock_rx_fifo_level = 1;
+    mock_rx_index      = 0;
+    config.joint[0].updated_from_c0 = 1;
+    last_pio_put_value = 0;
+    do_steps(0);
+
+    int steps_this_period = (last_pio_put_value != 0) ? 1 : 0;
+    assert_int_equal(steps_this_period, 1);  /* exactly 1 step, not 2 */
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -1607,6 +1653,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_posmode_overshoot_does_not_reverse,                test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_correction_at_stop_does_not_spike_vel_achieved, test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_large_overshoot_does_not_reverse,         test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_sub1step_correction_does_not_double_step, test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
