@@ -448,7 +448,12 @@ static int32_t commit_steps(
                               step_count_q <= 65536 ||
                               (dq->vel_ff_q > 0 ? velocity_q < 0 : velocity_q > 0));
     int32_t  plan_vel_q    = in_ff_path ? dq->vel_ff_q : velocity_q;
-    int32_t step_len_ceil  = calculate_step_len(step_count_q, dq->period_ticks, dq->max_vel_q);
+    /* step_len_ceil must be sized for plan_vel_q, not step_count_q.  When
+     * in_ff_path is active, step_count_q (the clamped/corrected velocity) can be
+     * much smaller than vel_ff_q (e.g. during accel ramp-up).  Sizing step_len
+     * from step_count_q would give max_steps=1, causing the Bresenham accumulator
+     * to build a huge backlog that later drains in bursts. */
+    int32_t step_len_ceil  = calculate_step_len(abs(plan_vel_q), dq->period_ticks, dq->max_vel_q);
     int32_t n_steps        = plan_steps(plan_vel_q, joint, dq->period_ticks, step_len_ceil);
     /* Derive step_len for the exact n_steps this period (floor or ceil of v),
      * so the PIO pulse rate matches the intended physical step count. */

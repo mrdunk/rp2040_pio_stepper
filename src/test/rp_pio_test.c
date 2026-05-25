@@ -1575,6 +1575,48 @@ static void test_do_steps_posmode_sub1step_correction_does_not_double_step(void 
     assert_int_equal(steps_this_period, 1);  /* exactly 1 step, not 2 */
 }
 
+/* Multi-step velocity with accel ramp: step count must match vel_ff_q rate from
+ * period 0, not build a backlog.
+ *
+ * 1280 steps/mm × 4mm/s = 5120 steps/s = 5.12 steps/period.  clamp_accel limits
+ * velocity_q during ramp-up (period 0: vq≈14417, << vel_ff_q=335544).  The old
+ * code computed step_len_ceil from step_count_q=14417 → step_len=66450 → max_steps=1.
+ * With plan_vel_q=vel_ff_q=335544 added to accumulator each period, 4+ steps of
+ * backlog built up in 4 periods, draining as a burst later.
+ *
+ * Fix: step_len_ceil computed from abs(plan_vel_q)=335544 → step_len≈11033 →
+ * max_steps=6.  Period 0 fires 5 steps; accumulator stays near zero. */
+static void test_do_steps_multistep_accel_ramp_no_backlog(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = 5120.0;  /* 5.12 steps/period */
+    config.joint[0].abs_pos_requested  = 5120.0 * 20;  /* far target, no stopping cap */
+    config.joint[0].max_velocity       = 5120.0 * 1.01;
+    config.joint[0].max_accel          = 200000.0;  /* gives clamp_accel_q≈14417 */
+    mock_tx_fifo_empty                 = 1;
+
+    /* Period 0: velocity_q is clamped to clamp_accel_q << vel_ff_q.
+     * Must fire ~5 steps (plan_vel_q=vel_ff_q), not 1 (max_steps sized for vq). */
+    mock_rx_values[0]  = 0;
+    mock_rx_fifo_level = 1;
+    mock_rx_index      = 0;
+    config.joint[0].updated_from_c0 = 1;
+    last_pio_put_value = 0;
+    do_steps(0);
+
+    /* Decode n_steps from PIO word: upper bits = step_len_ticks, lower bit = dir */
+    if (last_pio_put_value != 0) {
+        /* step_len_ticks encodes how many steps fit: a short step_len means
+         * multiple steps.  We just check at least 3 steps fired (not 1). */
+        int32_t step_len = (int32_t)(last_pio_put_value >> 1);
+        /* For 5 steps/period: step_len ≈ 11033.  For 1 step: step_len ≈ 66450. */
+        assert_true(step_len < 30000);  /* step_len small → multiple steps scheduled */
+    }
+    assert_int_not_equal(last_pio_put_value, 0);  /* at least something fired */
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -1654,6 +1696,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_posmode_correction_at_stop_does_not_spike_vel_achieved, test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_large_overshoot_does_not_reverse,         test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_sub1step_correction_does_not_double_step, test_setup),
+        cmocka_unit_test_setup(test_do_steps_multistep_accel_ramp_no_backlog,                 test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
