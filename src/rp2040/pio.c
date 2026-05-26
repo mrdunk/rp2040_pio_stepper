@@ -451,12 +451,17 @@ static int32_t commit_steps(
      * (b) step_count_q is sub-1-step (correction is small; vel_ff_q already governs), or
      * (c) correction has flipped velocity_q to the opposite sign as vel_ff_q — a
      *     large overshoot correction that would otherwise reverse the motor.
+     *     Limit (c) to vel_ff_q within 2 steps/period: at higher speeds a sign-flipped
+     *     correction should apply normally, or it compounds the overshoot instead of
+     *     resolving it (observed as follow errors on coarse-scale joints, e.g. Z at
+     *     SCALE=500 where 1 step/period = 2 mm/s).
      * In all cases plan_vel_q=vel_ff_q steps at the commanded ff rate in the
      * commanded ff direction; the correction resolves over subsequent periods. */
     int      in_ff_path    = abs(dq->vel_ff_q) > 0 && step_count_q > 0 &&
                              (abs(dq->vel_ff_q) <= 65536 ||
                               step_count_q <= 65536 ||
-                              (dq->vel_ff_q > 0 ? velocity_q < 0 : velocity_q > 0));
+                              (abs(dq->vel_ff_q) <= 2*65536 &&
+                               (dq->vel_ff_q > 0 ? velocity_q < 0 : velocity_q > 0)));
     int32_t  plan_vel_q    = in_ff_path ? dq->vel_ff_q : velocity_q;
     /* step_len_ceil must be sized for plan_vel_q, not step_count_q.  When
      * in_ff_path is active, step_count_q (the clamped/corrected velocity) can be
