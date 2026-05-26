@@ -1677,6 +1677,55 @@ static void test_do_steps_sub1step_double_buffer_stop_word(void **state) {
     assert_int_equal(last_pio_step_value & 1, 1);      /* direction = forward */
 }
 
+/* do_steps: two-step correction at sub-1-step ff speed also gets a stop word.
+ *
+ * A same-direction correction at sub-1-step ff can push velocity_q above the
+ * 1-step threshold so Bresenham fires n_steps==2.  The PIO finishes both steps
+ * at period/2 and idles in the second half; without a stop word it re-fires
+ * from the stale x register just as for n_steps==1.
+ *
+ * At vel_ff=500 steps/s (0.5 steps/period) with a 100-step lag, correction
+ * raises velocity_q to 1.5 steps/period (98304).  After one prime period
+ * (accum=32768), period 2 adds 98304 → accum=131072 → n_steps=2.
+ * step_len = period/4 - overhead = 33241.  Must produce exactly 2 FIFO
+ * writes: the step word (33241) and the trailing stop word. */
+static void test_do_steps_sub1step_two_step_correction_stop_word(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = 500.0;  /* 0.5 steps/period */
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 0.0;
+    mock_tx_fifo_empty                 = 1;
+
+    /* Period 1: prime accumulator to 32768 (no step, no correction). */
+    mock_rx_values[0]  = 0;
+    mock_rx_fifo_level = 1;
+    mock_rx_index      = 0;
+    pio_put_call_count = 0;
+    do_steps(0);
+    assert_int_equal(pio_put_call_count, 1);  /* only stop word (n_steps=0) */
+
+    /* Period 2: 100-step lag → correction 1000 steps/s → velocity_q=98304
+     * (1.5 steps/period).  Bresenham: 32768+98304=131072 → n_steps=2.
+     * step_len for 2 steps/period: 133000/4 - 9 = 33241. */
+    config.joint[0].abs_pos_requested  = 100.0;
+    mock_rx_values[0]  = 0;
+    mock_rx_fifo_level = 1;
+    mock_rx_index      = 0;
+    pio_put_call_count = 0;
+    last_pio_step_value = 0;
+    config.joint[0].updated_from_c0 = 1;
+    do_steps(0);
+    assert_int_equal(pio_put_call_count, 2);           /* step word + stop word */
+    assert_int_equal(last_pio_put_value >> 1, 0);      /* last write is stop word */
+    assert_int_equal(last_pio_step_value >> 1, 33241); /* step_len for 2 steps/period */
+    assert_int_equal(last_pio_step_value & 1, 1);      /* direction = forward */
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -1758,6 +1807,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_posmode_sub1step_correction_fires_at_sub1step_ff, test_setup),
         cmocka_unit_test_setup(test_do_steps_multistep_accel_ramp_no_backlog,                 test_setup),
         cmocka_unit_test_setup(test_do_steps_sub1step_double_buffer_stop_word,               test_setup),
+        cmocka_unit_test_setup(test_do_steps_sub1step_two_step_correction_stop_word,        test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

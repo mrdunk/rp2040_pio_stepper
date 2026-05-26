@@ -260,10 +260,14 @@ int32_t plan_steps(int32_t velocity_q, uint8_t joint,
  * When step_len_ticks > 0 the passed direction is cached; when 0 the cached
  * direction is reused so the DIR pin does not toggle unnecessarily.
  *
- * When n_steps == 1 a stop word (step_len=0) is queued immediately after the
- * step word.  Without it the PIO step cycle (2*step_len+11 clocks) completes
- * ~7 cycles before the next servo period and re-uses the stale x value,
- * firing a spurious second step before do_steps can write the stop command. */
+ * For n_steps == 1 or 2 a stop word (step_len=0) is queued immediately after
+ * the step word.  Without it the PIO finishes its step(s) before the next
+ * servo period and re-uses the stale x register, firing a spurious extra step.
+ * At n_steps == 1 the step fills almost the full period (~7 clocks early).
+ * At n_steps == 2 the steps fill half the period; the PIO idles in the second
+ * half and would re-fire without the stop word.
+ * At n_steps >= 3 the PIO fills enough of the period that Core1 writes the
+ * next command before a spurious re-fire can occur; no stop word needed. */
 static void issue_pio_step(uint32_t joint, int32_t step_len_ticks, uint32_t direction,
                            int32_t n_steps) {
     if (!pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
@@ -274,7 +278,7 @@ static void issue_pio_step(uint32_t joint, int32_t step_len_ticks, uint32_t dire
     }
     pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen,
                ((uint32_t)step_len_ticks << 1) | joint_state[joint].last_direction);
-    if (n_steps == 1) {
+    if (n_steps == 1 || n_steps == 2) {
         pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen,
                    joint_state[joint].last_direction);
     }
@@ -454,8 +458,9 @@ static int32_t commit_steps(
      *     compounds position error instead).  Note: a large same-direction correction
      *     at sub-1-step ff speeds is intentionally allowed through (step_count_q >
      *     65536, no sign flip → in_ff_path=false) so position lag can be corrected
-     *     even when vel_ff_q < 1 step/period; plan_vel_q is then capped to 1 step/period
-     *     below to prevent consecutive steps while still draining the error.
+     *     even when vel_ff_q < 1 step/period; issue_pio_step sends a stop word after
+     *     any non-zero step command so the PIO does not spuriously re-fire after the
+     *     correction steps complete mid-period.
      * In all cases plan_vel_q=vel_ff_q steps at the commanded ff rate in the
      * commanded ff direction; the correction resolves over subsequent periods. */
     int      in_ff_path    = abs(dq->vel_ff_q) > 0 && step_count_q > 0 &&
@@ -463,15 +468,6 @@ static int32_t commit_steps(
                               (abs(dq->vel_ff_q) <= 2*65536 &&
                                (dq->vel_ff_q > 0 ? velocity_q < 0 : velocity_q > 0)));
     int32_t  plan_vel_q    = in_ff_path ? dq->vel_ff_q : velocity_q;
-    /* When ff is sub-1-step, cap plan_vel_q to 1 step/period.  A same-direction
-     * correction can otherwise push plan_vel_q above the 1-step threshold and cause
-     * two steps in one servo period (consecutive steps at slow speed).  Capping to
-     * 1 step/period lets the correction drain over subsequent periods while avoiding
-     * the burst.  Sign-flipped corrections are already routed via ff path above
-     * (plan_vel_q = vel_ff_q < 65536), so the cap only activates for large
-     * same-direction corrections at sub-1-step ff speeds. */
-    if (abs(dq->vel_ff_q) > 0 && abs(dq->vel_ff_q) < 65536 && abs(plan_vel_q) > 65536)
-        plan_vel_q = plan_vel_q > 0 ? 65536 : -65536;
     /* step_len_ceil must be sized for plan_vel_q, not step_count_q.  When
      * in_ff_path is active, step_count_q (the clamped/corrected velocity) can be
      * much smaller than vel_ff_q (e.g. during accel ramp-up).  Sizing step_len
