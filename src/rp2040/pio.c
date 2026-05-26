@@ -258,8 +258,14 @@ int32_t plan_steps(int32_t velocity_q, uint8_t joint,
 /* Write a packed step command to the joint's step_gen TX FIFO if it is empty.
  * Encoding: lower bit = direction, upper bits = half-period in ticks.
  * When step_len_ticks > 0 the passed direction is cached; when 0 the cached
- * direction is reused so the DIR pin does not toggle unnecessarily. */
-static void issue_pio_step(uint32_t joint, int32_t step_len_ticks, uint32_t direction) {
+ * direction is reused so the DIR pin does not toggle unnecessarily.
+ *
+ * When n_steps == 1 a stop word (step_len=0) is queued immediately after the
+ * step word.  Without it the PIO step cycle (2*step_len+11 clocks) completes
+ * ~7 cycles before the next servo period and re-uses the stale x value,
+ * firing a spurious second step before do_steps can write the stop command. */
+static void issue_pio_step(uint32_t joint, int32_t step_len_ticks, uint32_t direction,
+                           int32_t n_steps) {
     if (!pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
         return;
     }
@@ -268,6 +274,10 @@ static void issue_pio_step(uint32_t joint, int32_t step_len_ticks, uint32_t dire
     }
     pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen,
                ((uint32_t)step_len_ticks << 1) | joint_state[joint].last_direction);
+    if (n_steps == 1) {
+        pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen,
+                   joint_state[joint].last_direction);
+    }
 }
 
 /* Compute the commanded velocity (steps/s) for this period.
@@ -464,7 +474,7 @@ static int32_t commit_steps(
     uint32_t direction     = (plan_vel_q > 0);
     if (joint >= NUM_FEEDBACK)
         *abs_pos_achieved += (direction ? 1 : -1) * n_steps;
-    issue_pio_step(joint, step_len_ticks, direction);
+    issue_pio_step(joint, step_len_ticks, direction, n_steps);
     /* Always report vel_ff_q as velocity_achieved so vel-fb matches LinuxCNC's
      * commanded trajectory velocity.  Correction steps still fire through
      * velocity_q → plan_steps; only reporting is changed here. */
@@ -490,12 +500,12 @@ uint8_t do_steps(const uint8_t joint) {
 
   if (update_period_us == 0) {
     /* Period unknown: can't compute step timing. */
-    issue_pio_step(joint, 0, 0);
+    issue_pio_step(joint, 0, 0, 0);
     return 0;
   }
   if (updated == 0 && joint_state[joint].last_velocity_q == 0) {
     /* No new Core0 data and already at rest: nothing to compute. */
-    issue_pio_step(joint, 0, 0);
+    issue_pio_step(joint, 0, 0, 0);
     return 0;
   }
 
@@ -536,7 +546,7 @@ uint8_t do_steps(const uint8_t joint) {
   if (!enabled && velocity_q == 0) {
     /* Fully decelerated: issue hard stop and keep pos_fb current while disabled.
      * abs_pos_achieved already reflects any in-flight steps drained above. */
-    issue_pio_step(joint, 0, 0);
+    issue_pio_step(joint, 0, 0, 0);
     velocity_achieved = 0;
     update_joint_config(
         joint, CORE1, NULL, NULL, NULL, NULL, NULL,

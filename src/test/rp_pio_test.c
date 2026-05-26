@@ -16,6 +16,7 @@ static size_t   mock_rx_fifo_level  = 0;
 static int32_t  mock_rx_values[8]   = {0};
 static size_t   mock_rx_index       = 0;
 static uint32_t last_pio_put_value  = 0;
+static uint32_t last_pio_step_value = 0;  /* last put with step_len > 0 */
 static int      pio_put_call_count  = 0;
 static int      mock_tx_fifo_empty  = 0;
 
@@ -36,6 +37,9 @@ void __wrap_pio_sm_put(size_t pio, size_t sm, size_t data) {
     (void)pio; (void)sm;
     last_pio_put_value = (uint32_t)data;
     pio_put_call_count++;
+    if ((uint32_t)data >> 1 != 0) {
+        last_pio_step_value = (uint32_t)data;
+    }
 }
 
 int __wrap_pio_sm_is_tx_fifo_empty(size_t pio, size_t sm) {
@@ -56,9 +60,10 @@ static int test_setup(void **state) {
     }
     mock_rx_fifo_level = 0;
     mock_rx_index      = 0;
-    last_pio_put_value = 0;
-    pio_put_call_count  = 0;   /* reset call counter */
-    mock_tx_fifo_empty = 0;
+    last_pio_put_value  = 0;
+    last_pio_step_value = 0;
+    pio_put_call_count  = 0;
+    mock_tx_fifo_empty  = 0;
     memset(mock_rx_values, 0, sizeof(mock_rx_values));
     return 0;
 }
@@ -983,9 +988,10 @@ static int32_t run_velocity_periods(double vel_steps_per_s, int n) {
         mock_rx_fifo_level = 1;
         mock_rx_index      = 0;
         config.joint[0].updated_from_c0 = 1;
-        last_pio_put_value = 0;
+        last_pio_put_value  = 0;
+        last_pio_step_value = 0;
         do_steps(0);
-        sim_pos       += pio_word_steps(last_pio_put_value);
+        sim_pos       += pio_word_steps(last_pio_step_value);
         pos_requested += vel_steps_per_s * 1e-3;  /* advance 1ms per period */
     }
     return sim_pos;
@@ -1070,9 +1076,10 @@ static void test_do_steps_velmode_lag_corrected_over_time(void **state) {
         mock_rx_fifo_level = 1;
         mock_rx_index      = 0;
         config.joint[0].updated_from_c0 = 1;
-        last_pio_put_value = 0;
+        last_pio_put_value  = 0;
+        last_pio_step_value = 0;
         do_steps(0);
-        sim_pos       += pio_word_steps(last_pio_put_value);
+        sim_pos       += pio_word_steps(last_pio_step_value);
         pos_requested += 10.0;  /* LinuxCNC advances pos by 10 steps/period */
     }
     assert_true(sim_pos > 1000);
@@ -1101,9 +1108,10 @@ static void test_do_steps_noninteger_velocity_no_drift(void **state) {
         mock_rx_fifo_level = 1;
         mock_rx_index      = 0;
         config.joint[0].updated_from_c0 = 1;
-        last_pio_put_value = 0;
+        last_pio_put_value  = 0;
+        last_pio_step_value = 0;
         do_steps(0);
-        sim_pos       += pio_word_steps(last_pio_put_value);
+        sim_pos       += pio_word_steps(last_pio_step_value);
         pos_requested += vel * 1e-3;
     }
     assert_true(sim_pos >= 2559);
@@ -1377,9 +1385,10 @@ static void test_do_steps_posmode_uniform_spacing_at_low_speed(void **state) {
         mock_rx_fifo_level = 1;
         mock_rx_index      = 0;
         config.joint[0].updated_from_c0 = 1;
-        last_pio_put_value = 0;
+        last_pio_put_value  = 0;
+        last_pio_step_value = 0;
         do_steps(0);
-        int32_t fired = pio_word_steps(last_pio_put_value);
+        int32_t fired = pio_word_steps(last_pio_step_value);
         if (fired > 0) {
             step_at[n++] = p;
             sim_pos += fired;
@@ -1617,6 +1626,53 @@ static void test_do_steps_multistep_accel_ramp_no_backlog(void **state) {
     assert_int_not_equal(last_pio_put_value, 0);  /* at least something fired */
 }
 
+/* do_steps: single-step PIO double-buffer prevents spurious second step.
+ *
+ * At sub-1-step velocities (n_steps=1 per Bresenham decision), the PIO step
+ * cycle (2*step_len+11 ≈ 132993 clocks) completes ~7 clocks before the next
+ * servo period.  Without the stop word, x still holds step_len and the PIO
+ * fires a second unwanted step.  Fix: issue_pio_step writes a stop word
+ * immediately after the step word when n_steps==1, pre-loading the FIFO so
+ * the PIO pulls x=0 before do_steps can write the next step.
+ *
+ * At 500 steps/s (0.5 steps/period, 1ms period) Bresenham fires on alternate
+ * periods.  The period that fires (n_steps=1) must produce exactly 2 FIFO
+ * writes: the step word and the trailing stop word. */
+static void test_do_steps_sub1step_double_buffer_stop_word(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = 500.0;  /* 0.5 steps/period at 1ms */
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 0.0;
+    mock_tx_fifo_empty                 = 1;
+
+    /* Period 1: accumulator = 32768; n_steps=0; only stop word written. */
+    mock_rx_values[0]  = 0;
+    mock_rx_fifo_level = 1;
+    mock_rx_index      = 0;
+    pio_put_call_count = 0;
+    do_steps(0);
+    assert_int_equal(pio_put_call_count, 1);  /* only stop word */
+    assert_int_equal(last_pio_put_value >> 1, 0);  /* step_len == 0 */
+
+    /* Period 2: accumulator = 65536; n_steps=1; step word + stop word. */
+    mock_rx_values[0]  = 0;
+    mock_rx_fifo_level = 1;
+    mock_rx_index      = 0;
+    pio_put_call_count = 0;
+    last_pio_step_value = 0;
+    config.joint[0].updated_from_c0 = 1;
+    do_steps(0);
+    assert_int_equal(pio_put_call_count, 2);  /* step word + stop word */
+    assert_int_equal(last_pio_put_value >> 1, 0);      /* last write is stop word */
+    assert_int_equal(last_pio_step_value >> 1, 66491); /* step word has correct step_len */
+    assert_int_equal(last_pio_step_value & 1, 1);      /* direction = forward */
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -1697,6 +1753,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_posmode_large_overshoot_does_not_reverse,         test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_sub1step_correction_does_not_double_step, test_setup),
         cmocka_unit_test_setup(test_do_steps_multistep_accel_ramp_no_backlog,                 test_setup),
+        cmocka_unit_test_setup(test_do_steps_sub1step_double_buffer_stop_word,               test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
