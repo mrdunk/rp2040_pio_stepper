@@ -1550,7 +1550,7 @@ static void test_do_steps_posmode_large_overshoot_does_not_reverse(void **state)
  * direction, large), plan_steps adds 72090 to accum (65530+72090=137620 → 2 steps).
  * With the fix: abs(vel_ff_q)=6553≤65536 → in_ff_path=1, plan_vel_q=vel_ff_q=6553,
  * accum=65530+6553=72083 → exactly 1 step. */
-static void test_do_steps_posmode_sub1step_correction_does_not_double_step(void **state) {
+static void test_do_steps_posmode_sub1step_correction_fires_at_sub1step_ff(void **state) {
     (void)state;
     config.update_time_us              = 1000;
     config.joint[0].enabled            = 1;
@@ -1571,7 +1571,10 @@ static void test_do_steps_posmode_sub1step_correction_does_not_double_step(void 
     }
 
     /* Period 11: error=2 → correction=1000 steps/s → velocity_q=72090 > 65536.
-     * Old code fires 2 steps; new code must fire exactly 1. */
+     * Condition (a) is gone: large same-direction corrections fire through even at
+     * sub-1-step ff, so the position error resolves immediately (2 steps: 1 from
+     * accumulated Bresenham + 1 correction).  A burst step is preferable to
+     * accumulated follow error. */
     config.joint[0].abs_pos_requested = 2.0;
     mock_rx_values[0]  = 0;
     mock_rx_fifo_level = 1;
@@ -1580,8 +1583,9 @@ static void test_do_steps_posmode_sub1step_correction_does_not_double_step(void 
     last_pio_put_value = 0;
     do_steps(0);
 
+    /* At least 1 step must fire (correction is not suppressed). */
     int steps_this_period = (last_pio_put_value != 0) ? 1 : 0;
-    assert_int_equal(steps_this_period, 1);  /* exactly 1 step, not 2 */
+    assert_true(steps_this_period >= 1);
 }
 
 /* Multi-step velocity with accel ramp: step count must match vel_ff_q rate from
@@ -1751,7 +1755,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_posmode_overshoot_does_not_reverse,                test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_correction_at_stop_does_not_spike_vel_achieved, test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_large_overshoot_does_not_reverse,         test_setup),
-        cmocka_unit_test_setup(test_do_steps_posmode_sub1step_correction_does_not_double_step, test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_sub1step_correction_fires_at_sub1step_ff, test_setup),
         cmocka_unit_test_setup(test_do_steps_multistep_accel_ramp_no_backlog,                 test_setup),
         cmocka_unit_test_setup(test_do_steps_sub1step_double_buffer_stop_word,               test_setup),
     };

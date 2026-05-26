@@ -445,21 +445,21 @@ static int32_t commit_steps(
 {
     int32_t step_count_q   = abs(velocity_q);
     /* Feedforward path: use vel_ff_q for Bresenham scheduling when either:
-     * (a) vel_ff_q is sub-1-step — correction must never add extra steps, even a
-     *     same-direction correction of >1 step would double-step and create a long
-     *     gap before the next step, ruining even spacing at slow speed, or
-     * (b) step_count_q is sub-1-step (correction is small; vel_ff_q already governs), or
-     * (c) correction has flipped velocity_q to the opposite sign as vel_ff_q — a
-     *     large overshoot correction that would otherwise reverse the motor.
-     *     Limit (c) to vel_ff_q within 2 steps/period: at higher speeds a sign-flipped
-     *     correction should apply normally, or it compounds the overshoot instead of
-     *     resolving it (observed as follow errors on coarse-scale joints, e.g. Z at
-     *     SCALE=500 where 1 step/period = 2 mm/s).
+     * (a) step_count_q is sub-1-step — correction is small; vel_ff_q already governs
+     *     the pacing so the Bresenham accumulator stays in sync, or
+     * (b) correction has flipped velocity_q to the opposite sign as vel_ff_q AND
+     *     vel_ff_q is within 2 steps/period — prevents visible direction inversions
+     *     near the 1-step boundary.  Not applied at higher ff speeds: a sign-flipped
+     *     correction there should apply so it resolves the overshoot (suppressing it
+     *     compounds position error instead).  Note: a large same-direction correction
+     *     at sub-1-step ff speeds is intentionally allowed through (step_count_q >
+     *     65536, no sign flip → in_ff_path=false) so position lag can be corrected
+     *     even when vel_ff_q < 1 step/period; the resulting burst step is preferable
+     *     to accumulated follow error.
      * In all cases plan_vel_q=vel_ff_q steps at the commanded ff rate in the
      * commanded ff direction; the correction resolves over subsequent periods. */
     int      in_ff_path    = abs(dq->vel_ff_q) > 0 && step_count_q > 0 &&
-                             (abs(dq->vel_ff_q) <= 65536 ||
-                              step_count_q <= 65536 ||
+                             (step_count_q <= 65536 ||
                               (abs(dq->vel_ff_q) <= 2*65536 &&
                                (dq->vel_ff_q > 0 ? velocity_q < 0 : velocity_q > 0)));
     int32_t  plan_vel_q    = in_ff_path ? dq->vel_ff_q : velocity_q;
