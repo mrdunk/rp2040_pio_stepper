@@ -1720,7 +1720,7 @@ static void test_do_steps_sub1step_two_step_correction_stop_word(void **state) {
     last_pio_step_value = 0;
     config.joint[0].updated_from_c0 = 1;
     do_steps(0);
-    assert_int_equal(pio_put_call_count, 2);           /* step word + stop word */
+    assert_int_equal(pio_put_call_count, 3);           /* step word + step word + stop word */
     assert_int_equal(last_pio_put_value >> 1, 0);      /* last write is stop word */
     assert_int_equal(last_pio_step_value >> 1, 33241); /* step_len for 2 steps/period */
     assert_int_equal(last_pio_step_value & 1, 1);      /* direction = forward */

@@ -260,12 +260,13 @@ int32_t plan_steps(int32_t velocity_q, uint8_t joint,
  * When step_len_ticks > 0 the passed direction is cached; when 0 the cached
  * direction is reused so the DIR pin does not toggle unnecessarily.
  *
- * For n_steps == 1 or 2 a stop word (step_len=0) is queued immediately after
- * the step word.  Without it the PIO finishes its step(s) before the next
- * servo period and re-uses the stale x register, firing a spurious extra step.
- * At n_steps == 1 the step fills almost the full period (~7 clocks early).
- * At n_steps == 2 the steps fill half the period; the PIO idles in the second
- * half and would re-fire without the stop word.
+ * For n_steps == 1 or 2 a stop word (step_len=0) is queued after the step
+ * word(s).  Without it the PIO finishes its step(s) before the next servo
+ * period and re-uses the stale x register, firing a spurious extra step.
+ * At n_steps == 1: [step_word, stop_word] — 1 step, then idle.
+ * At n_steps == 2: [step_word, step_word, stop_word] — 2 explicit steps, then
+ *   idle.  A single step_word + stop_word would only fire 1 step because the
+ *   stop_word pre-empts the stale-OSR auto-repeat that would have fired step 2.
  * At n_steps >= 3 the PIO fills enough of the period that Core1 writes the
  * next command before a spurious re-fire can occur; no stop word needed. */
 static void issue_pio_step(uint32_t joint, int32_t step_len_ticks, uint32_t direction,
@@ -276,11 +277,14 @@ static void issue_pio_step(uint32_t joint, int32_t step_len_ticks, uint32_t dire
     if (step_len_ticks > 0) {
         joint_state[joint].last_direction = direction;
     }
-    pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen,
-               ((uint32_t)step_len_ticks << 1) | joint_state[joint].last_direction);
+    uint32_t step_word = ((uint32_t)step_len_ticks << 1) | joint_state[joint].last_direction;
+    uint32_t stop_word = joint_state[joint].last_direction;
+    pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, step_word);
+    if (n_steps == 2) {
+        pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, step_word);
+    }
     if (n_steps == 1 || n_steps == 2) {
-        pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen,
-                   joint_state[joint].last_direction);
+        pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, stop_word);
     }
 }
 
