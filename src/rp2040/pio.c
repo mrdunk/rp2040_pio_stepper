@@ -454,8 +454,8 @@ static int32_t commit_steps(
      *     compounds position error instead).  Note: a large same-direction correction
      *     at sub-1-step ff speeds is intentionally allowed through (step_count_q >
      *     65536, no sign flip → in_ff_path=false) so position lag can be corrected
-     *     even when vel_ff_q < 1 step/period; the resulting burst step is preferable
-     *     to accumulated follow error.
+     *     even when vel_ff_q < 1 step/period; plan_vel_q is then capped to 1 step/period
+     *     below to prevent consecutive steps while still draining the error.
      * In all cases plan_vel_q=vel_ff_q steps at the commanded ff rate in the
      * commanded ff direction; the correction resolves over subsequent periods. */
     int      in_ff_path    = abs(dq->vel_ff_q) > 0 && step_count_q > 0 &&
@@ -463,6 +463,15 @@ static int32_t commit_steps(
                               (abs(dq->vel_ff_q) <= 2*65536 &&
                                (dq->vel_ff_q > 0 ? velocity_q < 0 : velocity_q > 0)));
     int32_t  plan_vel_q    = in_ff_path ? dq->vel_ff_q : velocity_q;
+    /* When ff is sub-1-step, cap plan_vel_q to 1 step/period.  A same-direction
+     * correction can otherwise push plan_vel_q above the 1-step threshold and cause
+     * two steps in one servo period (consecutive steps at slow speed).  Capping to
+     * 1 step/period lets the correction drain over subsequent periods while avoiding
+     * the burst.  Sign-flipped corrections are already routed via ff path above
+     * (plan_vel_q = vel_ff_q < 65536), so the cap only activates for large
+     * same-direction corrections at sub-1-step ff speeds. */
+    if (abs(dq->vel_ff_q) > 0 && abs(dq->vel_ff_q) < 65536 && abs(plan_vel_q) > 65536)
+        plan_vel_q = plan_vel_q > 0 ? 65536 : -65536;
     /* step_len_ceil must be sized for plan_vel_q, not step_count_q.  When
      * in_ff_path is active, step_count_q (the clamped/corrected velocity) can be
      * much smaller than vel_ff_q (e.g. during accel ramp-up).  Sizing step_len
