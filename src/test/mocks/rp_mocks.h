@@ -20,10 +20,16 @@ enum  gpio_function {
 };
 
 
+typedef enum {
+  GPIO_OVERRIDE_NORMAL = 0,
+  GPIO_OVERRIDE_INVERT = 2,
+} gpio_override_t;
+
 void gpio_init (uint8_t gpio);
 void gpio_set_dir (uint8_t gpio, uint8_t out);
 void gpio_pull_up (uint8_t gpio);
 void gpio_set_function (size_t gpio, enum gpio_function fn);
+void gpio_set_outover (uint32_t gpio, gpio_override_t value);
 
 void tight_loop_contents();
 

@@ -232,7 +232,9 @@ size_t serialize_joint_config(
     uint8_t gpio_dir,
     float max_velocity,
     float max_accel,
-    uint8_t cmd_type
+    uint8_t cmd_type,
+    uint8_t invert_step,
+    uint8_t invert_dir
 ) {
   union MessageAny message;
   message.joint_config.type = MSG_SET_JOINT_CONFIG;
@@ -243,6 +245,8 @@ size_t serialize_joint_config(
   message.joint_config.max_velocity = max_velocity;
   message.joint_config.max_accel = max_accel;
   message.joint_config.cmd_type = cmd_type;
+  message.joint_config.invert_step = invert_step;
+  message.joint_config.invert_dir = invert_dir;
 
   return pack_nw_buff(buffer, &message, sizeof(struct Message_joint_config));
 }
@@ -482,6 +486,8 @@ bool unpack_joint_config(
   printf("      max_velocity: %f\n", reply->max_velocity);
   printf("      max_accel:    %f\n", reply->max_accel);
   printf("      cmd_type:     %u\n", reply->cmd_type);
+  printf("      invert_step:  %u\n", reply->invert_step);
+  printf("      invert_dir:   %u\n", reply->invert_dir);
 
   last_joint_config[joint].enable = reply->enable;
   last_joint_config[joint].gpio_step = reply->gpio_step;
@@ -489,6 +495,8 @@ bool unpack_joint_config(
   last_joint_config[joint].max_velocity = reply->max_velocity;
   last_joint_config[joint].max_accel = reply->max_accel;
   last_joint_config[joint].cmd_type = reply->cmd_type;
+  last_joint_config[joint].invert_step = reply->invert_step;
+  last_joint_config[joint].invert_dir = reply->invert_dir;
 
   (*received_count)++;
   return true;

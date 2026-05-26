@@ -21,7 +21,7 @@ relevant to the current task.
 Be direct but constructive, offering solutions alongside criticism.
 Be concise. Shorter is better.
 Always ask before performing git commit. Never open PR to main.
-Save state whenever you have something useful to remember.
+If you discover something incorrect in your memory files, correct it.
 
 ## Project overview
 
