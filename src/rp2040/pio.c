@@ -272,7 +272,7 @@ int32_t plan_steps(int32_t velocity_q, uint8_t joint,
  *   n_steps == 1: [step_word, stop_word]
  *
  * Used only by the sub-1-step Bresenham path (commit_steps below).
- * The ≥1-step/period continuous path uses issue_pio_step_continuous() instead. */
+ * The ≥1-step/period continuous path uses issue_pio_steps() instead. */
 static void issue_pio_step(uint32_t joint, int32_t step_len_ticks, uint32_t direction,
                            int32_t n_steps) {
     if (!pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
@@ -292,7 +292,7 @@ static void issue_pio_step(uint32_t joint, int32_t step_len_ticks, uint32_t dire
 /* Write a single step word to the joint's step_gen TX FIFO for continuous mode.
  * No stop word is appended: the PIO auto-repeats via stale-x across period
  * boundaries, producing a uniform step rate at the commanded velocity. */
-static void issue_pio_step_continuous(uint32_t joint, int32_t step_len_ticks,
+static void issue_pio_steps(uint32_t joint, int32_t step_len_ticks,
                                       uint32_t direction) {
     if (!pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
         return;
@@ -499,7 +499,7 @@ static int32_t commit_steps(
         int32_t step_len = (int32_t)((int64_t)dq->period_ticks * 32768 / abs(plan_vel_q))
                            - STEP_PIO_LEN_OVERHEAD;
         if (step_len < 0) step_len = 0;
-        issue_pio_step_continuous(joint, step_len, direction);
+        issue_pio_steps(joint, step_len, direction);
         if (joint >= NUM_FEEDBACK && joint < MAX_JOINT) {
             /* Open-loop: uncapped Bresenham tracks fractional step accumulation.
              * Mathematically equivalent to period_ticks / step_period per period.
