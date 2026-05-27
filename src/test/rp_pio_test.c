@@ -47,6 +47,9 @@ int __wrap_pio_sm_is_tx_fifo_empty(size_t pio, size_t sm) {
     return mock_tx_fifo_empty;
 }
 
+/* Fractional accumulator for pio_word_steps() — declared here so test_setup can reset it. */
+static double pio_step_frac;
+
 /* ── Setup / Teardown ── */
 static int test_setup(void **state) {
     (void)state;
@@ -64,6 +67,7 @@ static int test_setup(void **state) {
     last_pio_step_value = 0;
     pio_put_call_count  = 0;
     mock_tx_fifo_empty  = 0;
+    pio_step_frac       = 0.0;
     memset(mock_rx_values, 0, sizeof(mock_rx_values));
     return 0;
 }
@@ -375,12 +379,17 @@ static void test_do_steps_network_loss_decelerates(void **state) {
  * new commanded velocity, bypassing clamp_accel.  If the motor was still decelerating,
  * this caused a velocity jump (jitter).
  *
- * Scenario: max_accel=2 steps/period², velocity=10 steps/period.
- *   Tick 1: enable snap → last_velocity_q=10.
- *   Tick 2-4: decel (enabled=0, updated=0) → 8 → 6 → 4 steps/period.
+ * Scenario: max_accel=2e6 steps/s² (clamp_accel_q = 2*65536*1.1 = 144179 ≈ 2.2 steps/period),
+ * velocity=10 steps/period.
+ *   Tick 1: enable snap → last_velocity_q=655360 (10 steps/period).
+ *   Ticks 2-4: decel (enabled=0, updated=0):
+ *     Tick 2: 655360-144179=511181 (7.8 steps/period).
+ *     Tick 3: 511181-144179=367002 (5.6 steps/period).
+ *     Tick 4: 367002-144179=222823 (3.4 steps/period).
  *   Tick 5: re-enable (enabled=1, updated=1) at velocity=10.
- *     WRONG (old): snap last_velocity_q=10 → clamp_accel(10,10,2)=10 → jump from 4 to 10.
- *     CORRECT: no snap (last_velocity_q=4 != 0) → clamp_accel(10,4,2)=6 → accel-limited. */
+ *     WRONG (old): snap → clamp_accel(10,10,2.2)=10 → jump from 3.4 to 10.
+ *     CORRECT: no snap → clamp_accel(10,3.4,2.2)=5.6 → accel-limited to 367002.
+ *     Continuous mode: step_len = 133000*32768/367002 - 9 = 11874 - 9 = 11865. */
 static void test_do_steps_reconnect_mid_decel_no_jitter(void **state) {
     (void)state;
     config.update_time_us              = 1000;
@@ -410,9 +419,9 @@ static void test_do_steps_reconnect_mid_decel_no_jitter(void **state) {
     mock_tx_fifo_empty               = 1;
     do_steps(0);
 
-    /* Acceleration limit must be honoured: velocity steps from 4 to at most 4+2=6,
-     * not a snap to 10.  step_len for 6 steps/period = 133000/(2*6)-9 = 11074. */
-    assert_int_equal(last_pio_put_value >> 1, 11074);
+    /* Acceleration limit must be honoured: velocity ≤ 3.4+2.2=5.6 steps/period,
+     * not a snap to 10.  Continuous mode step_len for 367002: 11865. */
+    assert_int_equal(last_pio_put_value >> 1, 11865);
 }
 
 /* do_steps: fresh enable (last_velocity_q==0) snaps to commanded velocity.
@@ -502,8 +511,8 @@ static void test_do_steps_accel_clamped(void **state) {
     do_steps(0);
     uint32_t first_word = last_pio_put_value;
 
-    /* Second call: jump velocity to 10000 steps/s; clamp limits increase to 5.0,
-     * so velocity reaches 10.0 steps/period -> step_len=(133000/(10*2))-9=6641 */
+    /* Second call: jump velocity to 10000 steps/s; clamp limits increase to 5.0*1.1=5.5,
+     * so velocity reaches 10.5 steps/period → continuous mode step_len=133000*32768/688128-9=6324 */
     mock_tx_fifo_empty = 1;
     last_pio_put_value = 0;
     config.joint[0].updated_from_c0    = 1;
@@ -514,7 +523,7 @@ static void test_do_steps_accel_clamped(void **state) {
 
     assert_int_equal(first_word >> 1, 13291);
     assert_int_equal(first_word & 0x1, 1);
-    assert_int_equal(second_word >> 1, 6641);
+    assert_int_equal(second_word >> 1, 6324);
     assert_int_equal(second_word & 0x1, 1);
 }
 
@@ -746,7 +755,8 @@ static void test_do_steps_underrun_while_enabled_decelerates(void **state) {
 
 /* do_steps: position mode, active vel_ff, small tracking error.
  * vel_ff=10000 steps/s (10 steps/period), error=1 step, max_accel=5e6 steps/s².
- * velocity = vel_ff + Kp·error = 10000+500 = 10500 steps/s → 10 steps → step_len=6641. */
+ * velocity = vel_ff + Kp·error = 10000+500 = 10500 steps/s = 10.5 steps/period.
+ * Continuous mode: step_len = 133000*32768/688128 - 9 = 6333-9 = 6324. */
 static void test_do_steps_posmode_ff_active_tracks_at_full_speed(void **state) {
     (void)state;
     config.update_time_us              = 1000;
@@ -763,11 +773,12 @@ static void test_do_steps_posmode_ff_active_tracks_at_full_speed(void **state) {
 
     do_steps(0);
 
-    assert_int_equal(last_pio_put_value >> 1, 6641);
+    assert_int_equal(last_pio_put_value >> 1, 6324);
 }
 
 /* Position mode, large negative vel_ff: mirror of large-positive.
- * vel_ff=-10000, error=-1 → velocity=-10500 steps/s → 10 steps → step_len=6641. */
+ * vel_ff=-10000, error=-1 → velocity=-10500 steps/s = 10.5 steps/period.
+ * Continuous mode: step_len = 6324. */
 static void test_do_steps_posmode_ff_large_negative_tracks_at_full_speed(void **state) {
     (void)state;
     config.update_time_us              = 1000;
@@ -784,11 +795,12 @@ static void test_do_steps_posmode_ff_large_negative_tracks_at_full_speed(void **
 
     do_steps(0);
 
-    assert_int_equal(last_pio_put_value >> 1, 6641);
+    assert_int_equal(last_pio_put_value >> 1, 6324);
 }
 
 /* Position mode, small positive vel_ff.
- * vel_ff=4000, error=1 → velocity=4500 steps/s → 4 steps → step_len=16616. */
+ * vel_ff=4000, error=1 → velocity=4500 steps/s = 4.5 steps/period.
+ * Continuous mode: step_len = 133000*32768/294912 - 9 = 14777-9 = 14768. */
 static void test_do_steps_posmode_ff_small_positive_tracks_normally(void **state) {
     (void)state;
     config.update_time_us              = 1000;
@@ -805,10 +817,10 @@ static void test_do_steps_posmode_ff_small_positive_tracks_normally(void **state
 
     do_steps(0);
 
-    assert_int_equal(last_pio_put_value >> 1, 16616);
+    assert_int_equal(last_pio_put_value >> 1, 14768);
 }
 
-/* Position mode, small negative vel_ff: mirror of small-positive. */
+/* Position mode, small negative vel_ff: mirror of small-positive (step_len=14768). */
 static void test_do_steps_posmode_ff_small_negative_tracks_normally(void **state) {
     (void)state;
     config.update_time_us              = 1000;
@@ -825,16 +837,18 @@ static void test_do_steps_posmode_ff_small_negative_tracks_normally(void **state
 
     do_steps(0);
 
-    assert_int_equal(last_pio_put_value >> 1, 16616);
+    assert_int_equal(last_pio_put_value >> 1, 14768);
 }
 
 /* Position mode, vel_ff=0, residual error: stopping-profile cap limits velocity.
  *
  * Period 1: enable snap at 10 steps/period → last_velocity_q=655360.
  * Period 2: vel_ff=0, 1-step error → Kp correction=500 steps/s → target=32768.
- *   clamp_accel: 655360-327680=327680 (5 steps/period).
+ *   clamp_accel: 655360-360448=294912 (4.5 steps/period).
  *   cap: vel_ff_q=0, sqrt_term=sqrt(2·327680·1·65536)≈207243 (3.16 steps/period).
- *   327680>207243 → capped → n_steps=3 → step_len=22157. */
+ *   294912>207243 → capped → velocity_q=207243 → continuous mode.
+ *   step_len = 133000*32768/207243 - 9 = 21029-9 = 21020.
+ * Continuous mode: one step_word written (no stop word). */
 static void test_do_steps_posmode_ff_zero_clamp_accel_positive(void **state) {
     (void)state;
     config.update_time_us              = 1000;
@@ -853,10 +867,12 @@ static void test_do_steps_posmode_ff_zero_clamp_accel_positive(void **state) {
     config.joint[0].velocity_requested = 0.0;
     config.joint[0].abs_pos_requested  = 1.0;
     config.joint[0].updated_from_c0    = 1;
-    last_pio_put_value = 0;
+    last_pio_put_value  = 0;
+    last_pio_step_value = 0;
     do_steps(0);
 
-    assert_int_equal(last_pio_put_value >> 1, 22157);
+    assert_int_equal(last_pio_put_value >> 1, 21020);  /* step_len, continuous mode */
+    assert_int_equal(last_pio_step_value >> 1, 21020); /* same word, no stop word */
 }
 
 /* Position mode, vel_ff=0, negative approach: mirror of positive. */
@@ -878,10 +894,12 @@ static void test_do_steps_posmode_ff_zero_clamp_accel_negative(void **state) {
     config.joint[0].velocity_requested = 0.0;
     config.joint[0].abs_pos_requested  = -1.0;
     config.joint[0].updated_from_c0    = 1;
-    last_pio_put_value = 0;
+    last_pio_put_value  = 0;
+    last_pio_step_value = 0;
     do_steps(0);
 
-    assert_int_equal(last_pio_put_value >> 1, 22157);
+    assert_int_equal(last_pio_put_value >> 1, 21020);  /* step_len, continuous mode */
+    assert_int_equal(last_pio_step_value >> 1, 21020); /* same word, no stop word */
 }
 
 /* Integration test: position-mode stationary hold at fractional step position.
@@ -935,35 +953,37 @@ static void test_do_steps_position_mode_no_jitter_at_rest(void **state) {
  * Physical model: when do_steps writes a non-zero word to the PIO FIFO, the
  * step_gen programme loops at rate step_period = 2*(step_len+9) ticks.  In one
  * servo period (133000 ticks @ 1ms/133MHz) it generates
- *   max_steps = 133000 / step_period
- * physical steps.  pio_word_steps() converts a FIFO word to that signed count.
+ *   steps = 133000.0 / step_period
+ * physical steps.  pio_word_steps() converts a FIFO word to that signed count,
+ * using a fractional accumulator (pio_step_frac) to track sub-integer residuals
+ * across calls so the long-run total is exact.
  *
  * Accuracy analysis:
  *
- *   v < 1 step/period:
- *     calculate_step_len caps step_len at max_len=66491 → step_period=133000 →
- *     max_steps=1.  Bresenham schedules 0 or 1 step each period; long-run
- *     average equals v exactly.  Position is EXACT.
+ *   v < 1 step/period (sub-1-step Bresenham path):
+ *     step_len capped at max_len=66491 → step_period=133000 → exact steps=1.0.
+ *     Bresenham schedules 0 or 1 step each period; long-run average equals v
+ *     exactly.  Position is EXACT.
  *
- *   v = integer steps/period:
- *     step_len sized so max_steps = v exactly; Bresenham desired = v always.
+ *   v >= 1 step/period (continuous mode):
+ *     step_len = period_ticks * 32768 / velocity_q - overhead.
+ *     exact steps per period = 133000.0 / (2*(step_len+9)) ≈ v.
+ *     Fractional accumulator ensures long-run total matches v*n_periods exactly.
  *     Position is EXACT.
- *
- *   v = non-integer, v > 1 step/period:
- *     calculate_step_len sizes step_len for ceil(v) → max_steps = ceil(v).
- *     Bresenham alternates floor(v) and ceil(v) steps per period; long-run
- *     average equals v exactly.  Position is EXACT.
  */
 
 /* Convert one PIO FIFO word to the physical step count it causes.
  * Returns negative for direction=0 (reverse).
  * Idle/stop words have step_len==0 (upper bits zero) regardless of the
- * direction bit (which now preserves the last cached direction). */
+ * direction bit (which preserves the last cached direction). */
 static int32_t pio_word_steps(uint32_t word) {
-    int32_t step_len  = (int32_t)(word >> 1);
+    int32_t step_len = (int32_t)(word >> 1);
     if (step_len == 0) return 0;
-    int32_t max_steps = 133000 / (2 * (step_len + 9));
-    return (word & 1) ? max_steps : -max_steps;
+    double exact = 133000.0 / (2.0 * ((double)step_len + 9.0));
+    pio_step_frac += exact;
+    int32_t whole = (int32_t)pio_step_frac;
+    pio_step_frac -= (double)whole;
+    return (word & 1) ? whole : -whole;
 }
 
 /* Run n servo periods in JOINT_CMD_VELOCITY mode; return accumulated position.
@@ -1026,17 +1046,17 @@ static void test_do_steps_velmode_int_10(void **state) {
     assert_int_equal(run_velocity_periods(10000.0, 100), 1000);
 }
 
-/* 1.5 steps/period (1500 steps/s): non-integer above 1, now exact.
- * v_ceil=2, step_len=33241, max_steps=2.
- * Bresenham alternates 1,2 → 150 steps in 100 periods. */
+/* 1.5 steps/period (1500 steps/s): non-integer above 1, exact.
+ * Continuous mode: step_len=133000*32768/98304-9=44325, step_period=88668.
+ * Exact steps/period=1.50033; fractional accumulator alternates 1,2 → 150 steps. */
 static void test_do_steps_velmode_frac_1_5(void **state) {
     (void)state;
     assert_int_equal(run_velocity_periods(1500.0, 100), 150);
 }
 
-/* 10.5 steps/period (10500 steps/s): non-integer above 10, now exact.
- * v_ceil=11, step_len=6036, max_steps=11.
- * Bresenham alternates 10,11 → 1050 steps in 100 periods. */
+/* 10.5 steps/period (10500 steps/s): non-integer above 10, exact.
+ * Continuous mode: step_len=133000*32768/688128-9=6324, step_period=12666.
+ * Exact steps/period=10.5034; fractional accumulator → 1050 steps in 100 periods. */
 static void test_do_steps_velmode_frac_10_5(void **state) {
     (void)state;
     assert_int_equal(run_velocity_periods(10500.0, 100), 1050);
@@ -1677,18 +1697,13 @@ static void test_do_steps_sub1step_double_buffer_stop_word(void **state) {
     assert_int_equal(last_pio_step_value & 1, 1);      /* direction = forward */
 }
 
-/* do_steps: two-step correction at sub-1-step ff speed also gets a stop word.
+/* do_steps: large position correction at sub-1-step ff speed uses continuous mode.
  *
- * A same-direction correction at sub-1-step ff can push velocity_q above the
- * 1-step threshold so Bresenham fires n_steps==2.  The PIO finishes both steps
- * at period/2 and idles in the second half; without a stop word it re-fires
- * from the stale x register just as for n_steps==1.
- *
- * At vel_ff=500 steps/s (0.5 steps/period) with a 100-step lag, correction
- * raises velocity_q to 1.5 steps/period (98304).  After one prime period
- * (accum=32768), period 2 adds 98304 → accum=131072 → n_steps=2.
- * step_len = period/4 - overhead = 33241.  Must produce exactly 2 FIFO
- * writes: the step word (33241) and the trailing stop word. */
+ * When vel_ff=500 steps/s (0.5 steps/period, sub-1-step) and a 100-step lag
+ * adds a correction of 1000 steps/s, velocity_q = 1.5 steps/period (98304) ≥ 65536.
+ * The threshold selects continuous mode (not Bresenham + stop_word).
+ * Continuous mode: one step_word with step_len=133000*32768/98304-9=44324, no stop word.
+ * The PIO fires evenly at 1.5 steps/period across period boundaries. */
 static void test_do_steps_sub1step_two_step_correction_stop_word(void **state) {
     (void)state;
     config.update_time_us              = 1000;
@@ -1710,8 +1725,8 @@ static void test_do_steps_sub1step_two_step_correction_stop_word(void **state) {
     assert_int_equal(pio_put_call_count, 1);  /* only stop word (n_steps=0) */
 
     /* Period 2: 100-step lag → correction 1000 steps/s → velocity_q=98304
-     * (1.5 steps/period).  Bresenham: 32768+98304=131072 → n_steps=2.
-     * step_len for 2 steps/period: 133000/4 - 9 = 33241. */
+     * (1.5 steps/period ≥ 65536) → continuous mode.
+     * step_len = 133000*32768/98304 - 9 = 44333-9 = 44324. One FIFO write. */
     config.joint[0].abs_pos_requested  = 100.0;
     mock_rx_values[0]  = 0;
     mock_rx_fifo_level = 1;
@@ -1720,9 +1735,9 @@ static void test_do_steps_sub1step_two_step_correction_stop_word(void **state) {
     last_pio_step_value = 0;
     config.joint[0].updated_from_c0 = 1;
     do_steps(0);
-    assert_int_equal(pio_put_call_count, 3);           /* step word + step word + stop word */
-    assert_int_equal(last_pio_put_value >> 1, 0);      /* last write is stop word */
-    assert_int_equal(last_pio_step_value >> 1, 33241); /* step_len for 2 steps/period */
+    assert_int_equal(pio_put_call_count, 1);            /* one step_word, no stop word */
+    assert_int_equal(last_pio_put_value >> 1, 44324);  /* step_len for continuous 1.5 steps/period */
+    assert_int_equal(last_pio_step_value >> 1, 44324); /* same word */
     assert_int_equal(last_pio_step_value & 1, 1);      /* direction = forward */
 }
 

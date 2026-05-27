@@ -260,15 +260,19 @@ int32_t plan_steps(int32_t velocity_q, uint8_t joint,
  * When step_len_ticks > 0 the passed direction is cached; when 0 the cached
  * direction is reused so the DIR pin does not toggle unnecessarily.
  *
- * For n_steps == 1 or 2 a stop word (step_len=0) is queued after the step
- * word(s).  Without it the PIO finishes its step(s) before the next servo
- * period and re-uses the stale x register, firing a spurious extra step.
- * At n_steps == 1: [step_word, stop_word] — 1 step, then idle.
- * At n_steps == 2: [step_word, step_word, stop_word] — 2 explicit steps, then
- *   idle.  A single step_word + stop_word would only fire 1 step because the
- *   stop_word pre-empts the stale-OSR auto-repeat that would have fired step 2.
- * At n_steps >= 3 the PIO fills enough of the period that Core1 writes the
- * next command before a spurious re-fire can occur; no stop word needed. */
+ * The PIO auto-repeats using stale x when the TX FIFO is empty (the `nop [3]`
+ * path falls through to `data_acquired:`).  After firing its intended steps the
+ * PIO idles until Core1 writes the next period's command, but if steps finish
+ * before that write the stale x fires a spurious extra step.
+ *
+ * The sub-1-step Bresenham path produces n_steps of 0 or 1 only (max_steps==1
+ * when abs(velocity_q) < 65536).  For n_steps==1 a stop word follows the step
+ * word so the PIO does not spuriously re-fire via stale-x mid-period:
+ *   n_steps == 0: [stop_word]          — idle, step_len=0
+ *   n_steps == 1: [step_word, stop_word]
+ *
+ * Used only by the sub-1-step Bresenham path (commit_steps below).
+ * The ≥1-step/period continuous path uses issue_pio_step_continuous() instead. */
 static void issue_pio_step(uint32_t joint, int32_t step_len_ticks, uint32_t direction,
                            int32_t n_steps) {
     if (!pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
@@ -280,12 +284,24 @@ static void issue_pio_step(uint32_t joint, int32_t step_len_ticks, uint32_t dire
     uint32_t step_word = ((uint32_t)step_len_ticks << 1) | joint_state[joint].last_direction;
     uint32_t stop_word = joint_state[joint].last_direction;
     pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, step_word);
-    if (n_steps == 2) {
-        pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, step_word);
-    }
-    if (n_steps == 1 || n_steps == 2) {
+    if (n_steps >= 1) {
         pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, stop_word);
     }
+}
+
+/* Write a single step word to the joint's step_gen TX FIFO for continuous mode.
+ * No stop word is appended: the PIO auto-repeats via stale-x across period
+ * boundaries, producing a uniform step rate at the commanded velocity. */
+static void issue_pio_step_continuous(uint32_t joint, int32_t step_len_ticks,
+                                      uint32_t direction) {
+    if (!pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen)) {
+        return;
+    }
+    if (step_len_ticks > 0) {
+        joint_state[joint].last_direction = direction;
+    }
+    uint32_t step_word = ((uint32_t)step_len_ticks << 1) | joint_state[joint].last_direction;
+    pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, step_word);
 }
 
 /* Compute the commanded velocity (steps/s) for this period.
@@ -438,60 +454,76 @@ static int32_t apply_at_target_snap(
     return velocity_q;
 }
 
-/* Compute step count, pulse timing, direction; write to PIO and update
- * abs_pos_achieved for open-loop joints (no feedback counter).
- * Sub-1-step with active feedforward: drive Bresenham with vel_ff_q so that
- * position-correction spikes do not disrupt inter-step intervals.  The boundary
- * step_count_q==65536 (exactly 1.0 step/period) is included because a correction
- * spike can land exactly there and escape the old < guard.  At >1 step/period or
- * with zero feedforward (stationary positioning), use velocity_q.
- * Returns vel_ff_q as velocity_achieved so vel-fb tracks the commanded trajectory
- * velocity in both modes; correction steps still fire through velocity_q. */
+/* Translate velocity_q → PIO step command and update abs_pos_achieved for
+ * open-loop joints (no feedback counter).
+ *
+ * Two modes, selected by abs(plan_vel_q):
+ *
+ * Sub-1-step (<65536, i.e. <1 step/period): Bresenham accumulator schedules 0
+ * or 1 step per period.  A stop word follows each non-zero command so the PIO
+ * does not spuriously re-fire after the step completes mid-period.  Feedforward
+ * path (in_ff_path) drives Bresenham with vel_ff_q so position-correction
+ * spikes do not disrupt inter-step timing.
+ *
+ * Continuous (>=65536, i.e. >=1 step/period): step_len is derived directly from
+ * velocity so steps are evenly spaced in time.  One step_word is written per
+ * period; no stop word — the PIO fires continuously via stale-x across period
+ * boundaries.  Feedback joints get position from the step_count PIO (already
+ * read by drain_rx_fifo before this call).  Open-loop joints track position via
+ * uncapped Bresenham (step_accumulator_q) so the long-run average is exact.
+ *
+ * Returns vel_ff_q as velocity_achieved so vel-fb tracks the commanded
+ * trajectory velocity in both modes. */
 static int32_t commit_steps(
     uint8_t joint, const joint_dynamics_q_t *dq,
     int32_t velocity_q, int32_t *abs_pos_achieved)
 {
-    int32_t step_count_q   = abs(velocity_q);
-    /* Feedforward path: use vel_ff_q for Bresenham scheduling when either:
-     * (a) step_count_q is sub-1-step — correction is small; vel_ff_q already governs
-     *     the pacing so the Bresenham accumulator stays in sync, or
-     * (b) correction has flipped velocity_q to the opposite sign as vel_ff_q AND
-     *     vel_ff_q is within 2 steps/period — prevents visible direction inversions
-     *     near the 1-step boundary.  Not applied at higher ff speeds: a sign-flipped
-     *     correction there should apply so it resolves the overshoot (suppressing it
-     *     compounds position error instead).  Note: a large same-direction correction
-     *     at sub-1-step ff speeds is intentionally allowed through (step_count_q >
-     *     65536, no sign flip → in_ff_path=false) so position lag can be corrected
-     *     even when vel_ff_q < 1 step/period; issue_pio_step sends a stop word after
-     *     any non-zero step command so the PIO does not spuriously re-fire after the
-     *     correction steps complete mid-period.
-     * In all cases plan_vel_q=vel_ff_q steps at the commanded ff rate in the
-     * commanded ff direction; the correction resolves over subsequent periods. */
-    int      in_ff_path    = abs(dq->vel_ff_q) > 0 && step_count_q > 0 &&
-                             (step_count_q <= 65536 ||
-                              (abs(dq->vel_ff_q) <= 2*65536 &&
-                               (dq->vel_ff_q > 0 ? velocity_q < 0 : velocity_q > 0)));
-    int32_t  plan_vel_q    = in_ff_path ? dq->vel_ff_q : velocity_q;
-    /* step_len_ceil must be sized for plan_vel_q, not step_count_q.  When
-     * in_ff_path is active, step_count_q (the clamped/corrected velocity) can be
-     * much smaller than vel_ff_q (e.g. during accel ramp-up).  Sizing step_len
-     * from step_count_q would give max_steps=1, causing the Bresenham accumulator
-     * to build a huge backlog that later drains in bursts. */
-    int32_t step_len_ceil  = calculate_step_len(abs(plan_vel_q), dq->period_ticks, dq->max_vel_q);
-    int32_t n_steps        = plan_steps(plan_vel_q, joint, dq->period_ticks, step_len_ceil);
-    /* Derive step_len for the exact n_steps this period (floor or ceil of v),
-     * so the PIO pulse rate matches the intended physical step count. */
-    int32_t step_len_ticks = calculate_step_len(n_steps * 65536, dq->period_ticks, dq->max_vel_q);
-    /* Direction must follow plan_vel_q, not velocity_q.  In the feedforward path
-     * plan_vel_q = vel_ff_q stays positive while a correction spike can flip
-     * velocity_q negative — using velocity_q would reverse the motor. */
-    uint32_t direction     = (plan_vel_q > 0);
-    if (joint >= NUM_FEEDBACK)
-        *abs_pos_achieved += (direction ? 1 : -1) * n_steps;
-    issue_pio_step(joint, step_len_ticks, direction, n_steps);
-    /* Always report vel_ff_q as velocity_achieved so vel-fb matches LinuxCNC's
-     * commanded trajectory velocity.  Correction steps still fire through
-     * velocity_q → plan_steps; only reporting is changed here. */
+    int32_t step_count_q = abs(velocity_q);
+    /* Feedforward path: use vel_ff_q for sub-1-step scheduling when:
+     * (a) step_count_q is sub-1-step — vel_ff_q governs pacing, or
+     * (b) correction has sign-flipped velocity_q near the 2-step/period boundary.
+     * At >=1 step/period without a sign flip, plan_vel_q = velocity_q directly. */
+    int in_ff_path = abs(dq->vel_ff_q) > 0 && step_count_q > 0 &&
+                     (step_count_q <= 65536 ||
+                      (abs(dq->vel_ff_q) <= 2*65536 &&
+                       (dq->vel_ff_q > 0 ? velocity_q < 0 : velocity_q > 0)));
+    int32_t plan_vel_q = in_ff_path ? dq->vel_ff_q : velocity_q;
+    uint32_t direction = (plan_vel_q > 0);
+
+    if (abs(plan_vel_q) >= 65536) {
+        /* Continuous mode: >=1 step/period.
+         * step_period = period_ticks * 65536 / abs(plan_vel_q)
+         * step_len    = step_period/2 - overhead
+         *             = period_ticks * 32768 / abs(plan_vel_q) - overhead
+         * int64 prevents overflow: 133000 * 32768 > INT32_MAX. */
+        int32_t step_len = (int32_t)((int64_t)dq->period_ticks * 32768 / abs(plan_vel_q))
+                           - STEP_PIO_LEN_OVERHEAD;
+        if (step_len < 0) step_len = 0;
+        issue_pio_step_continuous(joint, step_len, direction);
+        if (joint >= NUM_FEEDBACK && joint < MAX_JOINT) {
+            /* Open-loop: uncapped Bresenham tracks fractional step accumulation.
+             * Mathematically equivalent to period_ticks / step_period per period.
+             * joint < MAX_JOINT guard: compiler needs an explicit upper bound to
+             * prove joint_state[joint] is in-bounds (do_steps guarantees it). */
+            joint_state[joint].step_accumulator_q += abs(plan_vel_q);
+            int32_t n_steps_f = joint_state[joint].step_accumulator_q >> 16;
+            joint_state[joint].step_accumulator_q -= n_steps_f << 16;
+            *abs_pos_achieved += (direction ? 1 : -1) * n_steps_f;
+        }
+    } else {
+        /* Sub-1-step mode: Bresenham + stop word.
+         * step_len_ceil sized for plan_vel_q (not step_count_q) so the
+         * accumulator doesn't build a backlog during acceleration ramp-up. */
+        int32_t step_len_ceil = calculate_step_len(abs(plan_vel_q), dq->period_ticks,
+                                                   dq->max_vel_q);
+        int32_t n_steps = plan_steps(plan_vel_q, joint, dq->period_ticks, step_len_ceil);
+        int32_t step_len_ticks = calculate_step_len(n_steps * 65536, dq->period_ticks,
+                                                    dq->max_vel_q);
+        if (joint >= NUM_FEEDBACK)
+            *abs_pos_achieved += (direction ? 1 : -1) * n_steps;
+        issue_pio_step(joint, step_len_ticks, direction, n_steps);
+    }
+
     return dq->vel_ff_q;
 }
 
