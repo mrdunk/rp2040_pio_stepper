@@ -17,6 +17,8 @@ typedef struct {
   hal_s32_t  joint_gpio_step[MAX_JOINT];
   hal_s32_t  joint_gpio_dir[MAX_JOINT];
   hal_u32_t  joint_cmd_type[MAX_JOINT];
+  hal_bit_t  joint_invert_step[MAX_JOINT];
+  hal_bit_t  joint_invert_dir[MAX_JOINT];
   hal_float_t* joint_vel_limit[MAX_JOINT];
   hal_float_t* joint_accel_limit[MAX_JOINT];
   hal_float_t* joint_scale[MAX_JOINT];

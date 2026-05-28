@@ -89,6 +89,10 @@ static bool configure_joint(
         last_joint_config[joint].max_accel != max_accel_ticks
         ||
         last_joint_config[joint].cmd_type != data->joint_cmd_type[joint]
+        ||
+        last_joint_config[joint].invert_step != data->joint_invert_step[joint]
+        ||
+        last_joint_config[joint].invert_dir != data->joint_invert_dir[joint]
       ) {
       pack_success = pack_success && serialize_joint_config(
           tx_buffer,
@@ -98,7 +102,9 @@ static bool configure_joint(
           data->joint_gpio_dir[joint],
           max_velocity_ticks,
           max_accel_ticks,
-          data->joint_cmd_type[joint]
+          data->joint_cmd_type[joint],
+          data->joint_invert_step[joint],
+          data->joint_invert_dir[joint]
           );
     }
     return pack_success;

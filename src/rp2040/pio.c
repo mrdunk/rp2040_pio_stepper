@@ -69,6 +69,8 @@ void init_pio(const uint32_t joint)
 
   int8_t io_pos_step;
   int8_t io_pos_dir;
+  uint8_t invert_step;
+  uint8_t invert_dir;
   get_joint_config(
       joint,
       CORE1,
@@ -81,7 +83,9 @@ void init_pio(const uint32_t joint)
       NULL,
       NULL,
       NULL,
-      NULL
+      NULL,
+      &invert_step,
+      &invert_dir
       );
 
   if(io_pos_step < 0 || io_pos_step >= 32) {
@@ -95,7 +99,8 @@ void init_pio(const uint32_t joint)
   // TODO: Warn about duplicate pin assignments.
 
 #ifdef VERBOSE_CONFIG_LOG
-  printf("\tio-step: %i\tio-dir: %i\n", io_pos_step, io_pos_dir);
+  printf("\tio-step: %i\tio-dir: %i\tinv-step: %u\tinv-dir: %u\n",
+         io_pos_step, io_pos_dir, invert_step, invert_dir);
 #endif
   gpio_init(io_pos_step);
   gpio_init(io_pos_dir);
@@ -103,6 +108,8 @@ void init_pio(const uint32_t joint)
   gpio_set_dir(io_pos_dir, GPIO_OUT);
   gpio_put(io_pos_step, 0);
   gpio_put(io_pos_dir, 0);
+  gpio_set_outover(io_pos_step, invert_step ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+  gpio_set_outover(io_pos_dir,  invert_dir  ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
 
   if(programs_loaded == 0)
   {
@@ -542,7 +549,7 @@ uint8_t do_steps(const uint8_t joint) {
   uint32_t updated = get_joint_config(
       joint, CORE1, &enabled, NULL, NULL,
       &velocity_requested, &abs_pos_requested, &abs_pos_achieved,
-      &max_velocity, &max_accel, NULL, &cmd_type);
+      &max_velocity, &max_accel, NULL, &cmd_type, NULL, NULL);
 
   if (update_period_us == 0) {
     /* Period unknown: can't compute step timing. */
@@ -596,7 +603,7 @@ uint8_t do_steps(const uint8_t joint) {
     velocity_achieved = 0;
     update_joint_config(
         joint, CORE1, NULL, NULL, NULL, NULL, NULL,
-        &abs_pos_achieved, NULL, NULL, &velocity_achieved, NULL);
+        &abs_pos_achieved, NULL, NULL, &velocity_achieved, NULL, NULL, NULL);
     joint_state[joint].last_pos_achieved = abs_pos_achieved;
     return 0;
   }
@@ -608,7 +615,7 @@ uint8_t do_steps(const uint8_t joint) {
 
   update_joint_config(
       joint, CORE1, NULL, NULL, NULL, NULL, NULL,
-      &abs_pos_achieved, NULL, NULL, &velocity_achieved, NULL);
+      &abs_pos_achieved, NULL, NULL, &velocity_achieved, NULL, NULL, NULL);
   joint_state[joint].last_pos_achieved = abs_pos_achieved;
 
   return enabled ? updated : 0;

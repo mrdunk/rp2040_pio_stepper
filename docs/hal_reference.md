@@ -62,6 +62,8 @@ Hardware wiring — set once at config time.
 | `cmd-type` | u32 | Step command mode: `0` = position, `1` = velocity (default) |
 | `gpio-dir` | s32 | RP2040 GPIO pin number for the direction signal |
 | `gpio-step` | s32 | RP2040 GPIO pin number for the step signal |
+| `invert-dir` | bit | Invert DIR GPIO output polarity (default: false) |
+| `invert-step` | bit | Invert STEP GPIO output polarity (default: false) |
 
 **`cmd-type` modes:**
 
