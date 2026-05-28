@@ -266,6 +266,57 @@ static void test_recovery_requires_all_joints_stopped_multi_joint(void **state) 
     assert_true(*data.machine_on);
 }
 
+static void test_pin_conflict_no_conflict(void **state) {
+    (void)state;
+    skeleton_t data = make_data();
+    data.joint_gpio_step[0] = 2;
+    data.joint_gpio_dir[0]  = 3;
+    data.joint_gpio_step[1] = 4;
+    data.joint_gpio_dir[1]  = 5;
+    assert_int_equal(warn_pin_conflicts_driver(&data, 2), 0);
+}
+
+static void test_pin_conflict_joint_vs_joint(void **state) {
+    (void)state;
+    skeleton_t data = make_data();
+    data.joint_gpio_step[0] = 2;
+    data.joint_gpio_step[1] = 2;  /* same pin */
+    assert_int_equal(warn_pin_conflicts_driver(&data, 2), 1);
+}
+
+static void test_pin_conflict_joint_vs_gpio(void **state) {
+    (void)state;
+    skeleton_t data = make_data();
+    data.joint_gpio_step[0] = 6;
+    data.gpio_type[0]  = GPIO_TYPE_NATIVE_OUT;
+    data.gpio_index[0] = 6;  /* same pin */
+    assert_int_equal(warn_pin_conflicts_driver(&data, 1), 1);
+}
+
+static void test_pin_conflict_gpio_vs_gpio(void **state) {
+    (void)state;
+    skeleton_t data = make_data();
+    data.gpio_type[0]  = GPIO_TYPE_NATIVE_OUT;
+    data.gpio_index[0] = 7;
+    data.gpio_type[1]  = GPIO_TYPE_NATIVE_IN;
+    data.gpio_index[1] = 7;  /* same pin */
+    assert_int_equal(warn_pin_conflicts_driver(&data, 0), 1);
+}
+
+static void test_pin_conflict_joint_vs_modbus(void **state) {
+    (void)state;
+    skeleton_t data = make_data();
+    data.joint_gpio_step[0] = MODBUS_TX_PIN;
+    assert_int_equal(warn_pin_conflicts_driver(&data, 1), 1);
+}
+
+static void test_pin_conflict_joint_vs_i2c(void **state) {
+    (void)state;
+    skeleton_t data = make_data();
+    data.joint_gpio_step[0] = I2C_SDA_PIN;
+    assert_int_equal(warn_pin_conflicts_driver(&data, 1), 1);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_cable_unplug_sets_eth_down),
@@ -274,6 +325,12 @@ int main(void) {
         cmocka_unit_test(test_recovery_waits_for_all_stopped),
         cmocka_unit_test(test_recovery_requires_all_joints_stopped_multi_joint),
         cmocka_unit_test(test_force_disable_while_eth_down),
+        cmocka_unit_test(test_pin_conflict_no_conflict),
+        cmocka_unit_test(test_pin_conflict_joint_vs_joint),
+        cmocka_unit_test(test_pin_conflict_joint_vs_gpio),
+        cmocka_unit_test(test_pin_conflict_gpio_vs_gpio),
+        cmocka_unit_test(test_pin_conflict_joint_vs_modbus),
+        cmocka_unit_test(test_pin_conflict_joint_vs_i2c),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
