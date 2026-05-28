@@ -331,6 +331,42 @@ static void test_pin_conflict_joint_vs_led(void **state) {
     assert_int_equal(warn_pin_conflicts_driver(&data, 1), 1);
 }
 
+static void test_pin_conflict_joint_vs_smps(void **state) {
+    (void)state;
+    skeleton_t data = make_data();
+    data.joint_gpio_step[0] = SMPS_PS_PIN;
+    assert_int_equal(warn_pin_conflicts_driver(&data, 1), 1);
+}
+
+static void test_pin_conflict_joint_vs_vbus(void **state) {
+    (void)state;
+    skeleton_t data = make_data();
+    data.joint_gpio_step[0] = VBUS_SENSE_PIN;
+    assert_int_equal(warn_pin_conflicts_driver(&data, 1), 1);
+}
+
+static void test_pin_conflict_joint_vs_vsys_adc(void **state) {
+    (void)state;
+    skeleton_t data = make_data();
+    data.joint_gpio_step[0] = VSYS_ADC_PIN;
+    assert_int_equal(warn_pin_conflicts_driver(&data, 1), 1);
+}
+
+static void test_pin_conflict_joint_invalid_pin(void **state) {
+    (void)state;
+    skeleton_t data = make_data();
+    data.joint_gpio_step[0] = 30; /* GP30 does not exist on RP2040 */
+    assert_int_equal(warn_pin_conflicts_driver(&data, 1), 1);
+}
+
+static void test_pin_conflict_gpio_invalid_pin(void **state) {
+    (void)state;
+    skeleton_t data = make_data();
+    data.gpio_type[0]  = GPIO_TYPE_NATIVE_OUT;
+    data.gpio_index[0] = 30; /* GP30 does not exist on RP2040 */
+    assert_int_equal(warn_pin_conflicts_driver(&data, 0), 1);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_cable_unplug_sets_eth_down),
@@ -347,6 +383,11 @@ int main(void) {
         cmocka_unit_test(test_pin_conflict_joint_vs_i2c),
         cmocka_unit_test(test_pin_conflict_joint_vs_spi),
         cmocka_unit_test(test_pin_conflict_joint_vs_led),
+        cmocka_unit_test(test_pin_conflict_joint_vs_smps),
+        cmocka_unit_test(test_pin_conflict_joint_vs_vbus),
+        cmocka_unit_test(test_pin_conflict_joint_vs_vsys_adc),
+        cmocka_unit_test(test_pin_conflict_joint_invalid_pin),
+        cmocka_unit_test(test_pin_conflict_gpio_invalid_pin),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

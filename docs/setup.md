@@ -208,10 +208,16 @@ for the full board reference.
 | GP20 | W5500 SPI | Reset | Yes |
 | GP21 | W5500 SPI | Interrupt | Yes |
 | GP22 | I2C (MCP23017) | Reset | Yes |
-| GP24 | USB | VBUS sense (hardware input, not firmware-controlled) | No |
+| GP23 | SMPS (RT6150) | Power-save control (not on headers) | Yes |
+| GP24 | USB | VBUS sense (not on headers) | Yes |
 | GP25 | On-board LED | Firmware heartbeat | Yes |
 | GP26 | I2C (MCP23017) | SDA | Yes |
 | GP27 | I2C (MCP23017) | SCL | Yes |
+| GP29 | VSYS ADC | VSYS/3 voltage divider (not on headers) | Yes |
+| GP30+ | — | Do not exist on RP2040 | Yes (error) |
+
+> **GP23**: controls the onboard SMPS power-save mode. Assigning it as a GPIO output
+> would silently change power supply behaviour, so it is treated as reserved.
 
 ### Native GPIO (RP2040 GP pins)
 

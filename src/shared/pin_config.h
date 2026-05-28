@@ -22,6 +22,12 @@
 #define SPI_INT_PIN     21
 
 /* Other board-reserved pins (W5500-EVB-Pico).
- * GP24 is a hardware VBUS-sense input (not firmware-controlled; no conflict to detect).
- * GP25 is driven by the firmware heartbeat LED. */
-#define ONBOARD_LED_PIN 25
+ * None of GP23-GP25 or GP29 are brought out to headers.
+ * GP23: SMPS power-save control (PS pin of onboard RT6150 regulator).
+ * GP24: hardware VBUS-sense input (USB power present indicator).
+ * GP25: driven by the firmware heartbeat LED.
+ * GP29: VSYS/3 ADC input (onboard voltage divider). */
+#define SMPS_PS_PIN      23
+#define VBUS_SENSE_PIN   24
+#define ONBOARD_LED_PIN  25
+#define VSYS_ADC_PIN     29
