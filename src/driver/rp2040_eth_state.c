@@ -20,7 +20,7 @@
 #include <stdint.h>
 
 #include "../rp2040/modbus.h"    /* MODBUS_TYPE_NOT_SET */
-#include "../shared/pin_config.h" /* MODBUS_TX_PIN, MODBUS_RX_PIN, MODBUS_DIR_PIN */
+#include "../shared/pin_config.h" /* MODBUS_*_PIN, I2C_*_PIN, SPI_*_PIN */
 
 #define MAX_SKIPPED_PACKETS 10
 
@@ -199,7 +199,7 @@ static size_t count_confirmed_configs(skeleton_t *data, int num_joints) {
 }
 
 static uint8_t warn_pin_conflicts_driver(skeleton_t *data, int num_joints) {
-  char labels[MAX_JOINT * 2 + MAX_GPIO + 3 + 3][16];
+  char labels[MAX_JOINT * 2 + MAX_GPIO + 3 + 3 + 6 + 1][16];
   const char *owner[32] = {0};
   uint8_t n = 0;
   uint8_t conflicts = 0;
@@ -242,11 +242,17 @@ static uint8_t warn_pin_conflicts_driver(skeleton_t *data, int num_joints) {
     n++;
   }
 
-  const int fixed_pins[6]      = { MODBUS_TX_PIN, MODBUS_RX_PIN, MODBUS_DIR_PIN,
-                                    I2C_SDA_PIN, I2C_SCL_PIN, I2C_RESET_PIN };
-  const char *fixed_labels[6]  = { "modbus-tx", "modbus-rx", "modbus-dir",
-                                    "i2c-sda", "i2c-scl", "i2c-reset" };
-  for (int m = 0; m < 6; m++) {
+  const int fixed_pins[13]     = { MODBUS_TX_PIN, MODBUS_RX_PIN, MODBUS_DIR_PIN,
+                                    I2C_SDA_PIN, I2C_SCL_PIN, I2C_RESET_PIN,
+                                    SPI_MISO_PIN, SPI_CS_PIN, SPI_SCK_PIN,
+                                    SPI_MOSI_PIN, SPI_RST_PIN, SPI_INT_PIN,
+                                    ONBOARD_LED_PIN };
+  const char *fixed_labels[13] = { "modbus-tx", "modbus-rx", "modbus-dir",
+                                    "i2c-sda", "i2c-scl", "i2c-reset",
+                                    "spi-miso", "spi-cs", "spi-sck",
+                                    "spi-mosi", "spi-rst", "spi-int",
+                                    "onboard-led" };
+  for (int m = 0; m < 13; m++) {
     int pin = fixed_pins[m];
     if (pin < 0 || pin >= 32) continue;
     snprintf(labels[n], sizeof(labels[0]), "%s", fixed_labels[m]);

@@ -317,6 +317,20 @@ static void test_pin_conflict_joint_vs_i2c(void **state) {
     assert_int_equal(warn_pin_conflicts_driver(&data, 1), 1);
 }
 
+static void test_pin_conflict_joint_vs_spi(void **state) {
+    (void)state;
+    skeleton_t data = make_data();
+    data.joint_gpio_step[0] = SPI_SCK_PIN;
+    assert_int_equal(warn_pin_conflicts_driver(&data, 1), 1);
+}
+
+static void test_pin_conflict_joint_vs_led(void **state) {
+    (void)state;
+    skeleton_t data = make_data();
+    data.joint_gpio_step[0] = ONBOARD_LED_PIN;
+    assert_int_equal(warn_pin_conflicts_driver(&data, 1), 1);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_cable_unplug_sets_eth_down),
@@ -331,6 +345,8 @@ int main(void) {
         cmocka_unit_test(test_pin_conflict_gpio_vs_gpio),
         cmocka_unit_test(test_pin_conflict_joint_vs_modbus),
         cmocka_unit_test(test_pin_conflict_joint_vs_i2c),
+        cmocka_unit_test(test_pin_conflict_joint_vs_spi),
+        cmocka_unit_test(test_pin_conflict_joint_vs_led),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
