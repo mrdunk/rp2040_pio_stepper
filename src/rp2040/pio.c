@@ -92,8 +92,6 @@ void init_pio(const uint32_t joint)
     printf("WARN: Joint %u dir io pin is out of range: %i\n", joint, io_pos_dir);
     return;
   }
-  // TODO: Warn about duplicate pin assignments.
-
 #ifdef VERBOSE_CONFIG_LOG
   printf("\tio-step: %i\tio-dir: %i\n", io_pos_step, io_pos_dir);
 #endif
