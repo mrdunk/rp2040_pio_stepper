@@ -5,9 +5,7 @@
 
 #define MODBUS_UART uart1
 #define MODBUS_UART_IRQ UART1_IRQ
-#define MODBUS_TX_PIN 8
-#define MODBUS_RX_PIN 9
-#define MODBUS_DIR_PIN 10
+#include "../shared/pin_config.h"
 
 // #define modbus_printf printf
 #define modbus_printf(...)
