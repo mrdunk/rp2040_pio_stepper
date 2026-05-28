@@ -24,6 +24,7 @@
  * from pico_stepper.pio); subtracted when converting step period to PIO len. */
 #define STEP_PIO_LEN_OVERHEAD  9
 #define RP2040_CLOCK_MHZ       133
+#define Q16_ONE                65536  /* 1.0 in Q16.16 fixed-point */
 
 /* Remaining SMs after step_gen, capped at MAX_JOINT (can't count more joints
  * than we move). For MAX_JOINT=4: 4 feedback SMs (current behaviour).
@@ -159,8 +160,10 @@ void init_pio(const uint32_t joint)
   joint_state[joint].init_done = true;
 }
 
-/* Drain PIO1's RX FIFO and return the last feedback position received.
- * Returns current_pos unchanged if the FIFO is empty. */
+/* Read the latest feedback position from PIO1's RX FIFO.
+ * Snapshots the FIFO level, then drains exactly that many entries, keeping
+ * only the last.  Intermediate values are discarded — only the current
+ * position matters.  Returns current_pos unchanged if the FIFO is empty. */
 int32_t drain_rx_fifo(uint32_t sm, int32_t current_pos) {
     uint8_t fifo_len = pio_sm_get_rx_fifo_level(pio1, sm);
     while (fifo_len > 0) {
@@ -340,7 +343,8 @@ double compute_velocity_cmd(
      * Pure velocity mode has no feedback — any systematic step-rate undershoot
      * (e.g. from update_period_us bias or dropped periods) accumulates without
      * bound.  Kp = 0.01× of position-mode gain limits steady-state lag to
-     * ~50× the per-period undershoot without fighting the trajectory planner. */
+     * ~100× the per-period undershoot (E = U/Kp_vel = U/0.01 vs U/0.5 for
+     * position mode) without fighting the trajectory planner. */
     double error_steps = abs_pos_requested - (double)abs_pos_achieved;
     if (error_steps >= 1.0 || error_steps <= -1.0) {
       velocity_requested += error_steps * (1.0e6 / (double)update_period_us) * 0.01;
@@ -422,7 +426,8 @@ static int32_t apply_stopping_cap(
     double err_f = abs_pos_requested - (double)abs_pos_achieved;
     if (err_f == 0.0 || (velocity_q > 0) != (err_f > 0.0))
         return velocity_q;
-    int32_t sqrt_term = (int32_t)sqrt(2.0 * (double)max_accel_q * fabs(err_f) * 65536.0);
+    double sqrt_d = sqrt(2.0 * (double)max_accel_q * fabs(err_f) * (double)Q16_ONE);
+    int32_t sqrt_term = (sqrt_d > (double)INT32_MAX) ? INT32_MAX : (int32_t)sqrt_d;
     if (err_f > 0.0) {
         int32_t cap_v = vel_ff_q + sqrt_term;
         if (velocity_q > cap_v) { velocity_q = cap_v; *step_accumulator_q = 0; }
@@ -445,7 +450,7 @@ static int32_t apply_at_target_snap(
 {
     if (!(cmd_type == JOINT_CMD_POSITION && vel_ff_q == 0 && enabled && updated))
         return velocity_q;
-    if ((int32_t)(abs_pos_requested - (double)abs_pos_achieved) == 0) {
+    if (fabs(abs_pos_requested - (double)abs_pos_achieved) < 0.5) {
         velocity_q = 0;
         *step_accumulator_q = 0;
     }
@@ -471,7 +476,8 @@ static int32_t apply_at_target_snap(
  * uncapped Bresenham (step_accumulator_q) so the long-run average is exact.
  *
  * Returns vel_ff_q as velocity_achieved so vel-fb tracks the commanded
- * trajectory velocity in both modes. */
+ * trajectory velocity in both modes.  When vel_ff_q == 0 (pure position mode,
+ * no jog), velocity_achieved is zero even if a correction step fires. */
 static int32_t commit_steps(
     uint8_t joint, const joint_dynamics_q_t *dq,
     int32_t velocity_q, int32_t *abs_pos_achieved)
@@ -479,16 +485,17 @@ static int32_t commit_steps(
     int32_t step_count_q = abs(velocity_q);
     /* Feedforward path: use vel_ff_q for sub-1-step scheduling when:
      * (a) step_count_q is sub-1-step — vel_ff_q governs pacing, or
-     * (b) correction has sign-flipped velocity_q near the 2-step/period boundary.
+     * (b) correction has sign-flipped velocity_q (near the 2-step boundary or
+     *     a large correction spike has reversed sign at higher velocities).
      * At >=1 step/period without a sign flip, plan_vel_q = velocity_q directly. */
     int in_ff_path = abs(dq->vel_ff_q) > 0 && step_count_q > 0 &&
-                     (step_count_q <= 65536 ||
-                      (abs(dq->vel_ff_q) <= 2*65536 &&
+                     (step_count_q <= Q16_ONE ||
+                      (abs(dq->vel_ff_q) <= 2*Q16_ONE &&
                        (dq->vel_ff_q > 0 ? velocity_q < 0 : velocity_q > 0)));
     int32_t plan_vel_q = in_ff_path ? dq->vel_ff_q : velocity_q;
     uint32_t direction = (plan_vel_q > 0);
 
-    if (abs(plan_vel_q) >= 65536) {
+    if (abs(plan_vel_q) >= Q16_ONE) {
         /* Continuous mode: >=1 step/period.
          * step_period = period_ticks * 65536 / abs(plan_vel_q)
          * step_len    = step_period/2 - overhead
@@ -515,7 +522,7 @@ static int32_t commit_steps(
         int32_t step_len_ceil = calculate_step_len(abs(plan_vel_q), dq->period_ticks,
                                                    dq->max_vel_q);
         int32_t n_steps = plan_steps(plan_vel_q, joint, dq->period_ticks, step_len_ceil);
-        int32_t step_len_ticks = calculate_step_len(n_steps * 65536, dq->period_ticks,
+        int32_t step_len_ticks = calculate_step_len(n_steps * Q16_ONE, dq->period_ticks,
                                                     dq->max_vel_q);
         if (joint >= NUM_FEEDBACK)
             *abs_pos_achieved += (direction ? 1 : -1) * n_steps;
@@ -548,7 +555,10 @@ uint8_t do_steps(const uint8_t joint) {
     return 0;
   }
   if (updated == 0 && joint_state[joint].last_velocity_q == 0) {
-    /* No new Core0 data and already at rest: nothing to compute. */
+    /* No new Core0 data and already at rest: nothing to compute.
+     * last_velocity_q == 0 implies the joint was stationary last period, so
+     * the step_count PIO produced no output and its FIFO is empty — safe to
+     * skip drain_rx_fifo. */
     issue_pio_step(joint, 0, 0, 0);
     return 0;
   }
