@@ -133,6 +133,7 @@ void init_config()
     config.joint[joint].io_pos_dir  = -1;
     config.joint[joint].max_accel   = 0.0;
   }
+
 }
 
 /* Update the period of the main timing loop.

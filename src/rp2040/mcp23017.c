@@ -1,6 +1,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include "i2c.h"
+#include "../shared/pin_config.h"
 
 #ifdef BUILD_TESTS
 #include "../test/mocks/rp_mocks.h"
@@ -44,9 +45,6 @@ void mcp23017_init(struct i2c_engine_state *state, i2c_inst_t *i2c, int sda_pin,
 }
 #endif
 
-#define I2C_RESET_PIN 22
-#define I2C_SDA_PIN 26
-#define I2C_SCL_PIN 27
 
 void i2c_gpio_init(struct i2c_gpio_state *gpio) {
   for (int i = 0; i < MAX_I2C_MCP; ++i) {
