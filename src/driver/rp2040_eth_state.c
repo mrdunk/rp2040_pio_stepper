@@ -20,7 +20,7 @@
 #include <stdint.h>
 
 #include "../rp2040/modbus.h"    /* MODBUS_TYPE_NOT_SET */
-#include "../shared/pin_config.h" /* MODBUS_TX_PIN, MODBUS_RX_PIN, MODBUS_DIR_PIN */
+#include "../shared/pin_config.h" /* MODBUS_*_PIN, I2C_*_PIN, SPI_*_PIN */
 
 #define MAX_SKIPPED_PACKETS 10
 
@@ -205,7 +205,7 @@ static size_t count_confirmed_configs(skeleton_t *data, int num_joints) {
 }
 
 static uint8_t warn_pin_conflicts_driver(skeleton_t *data, int num_joints) {
-  char labels[MAX_JOINT * 2 + MAX_GPIO + 3 + 3][16];
+  char labels[MAX_JOINT * 2 + MAX_GPIO + 3 + 3 + 6 + 1 + 2 + 1][16];
   const char *owner[32] = {0};
   uint8_t n = 0;
   uint8_t conflicts = 0;
@@ -214,7 +214,16 @@ static uint8_t warn_pin_conflicts_driver(skeleton_t *data, int num_joints) {
     int32_t pins[2]     = { data->joint_gpio_step[j], data->joint_gpio_dir[j] };
     const char *role[2] = { "step", "dir" };
     for (int p = 0; p < 2; p++) {
-      if (pins[p] < 0 || pins[p] >= 32) continue;
+      if (pins[p] < 0 || pins[p] >= 30) {
+        if (pins[p] >= 30) {
+          printf("WARN: Config assigns invalid GP%d to joint%d-%s (RP2040 has GP0-GP29)\n",
+                 (int)pins[p], j, role[p]);
+          rtapi_print_msg(RTAPI_MSG_ERR, "Config assigns invalid GP%d to joint%d-%s (RP2040 has GP0-GP29)\n",
+                 (int)pins[p], j, role[p]);
+          conflicts++;
+        }
+        continue;
+      }
       snprintf(labels[n], sizeof(labels[0]), "joint%d-%s", j, role[p]);
       if (owner[pins[p]]) {
         printf("WARN: Config assigns IO pin more than once: GP%d conflict: %s and %s\n",
@@ -234,7 +243,12 @@ static uint8_t warn_pin_conflicts_driver(skeleton_t *data, int num_joints) {
     if (t != GPIO_TYPE_NATIVE_OUT && t != GPIO_TYPE_NATIVE_IN &&
         t != GPIO_TYPE_NATIVE_OUT_DEBUG && t != GPIO_TYPE_NATIVE_IN_DEBUG) continue;
     uint32_t pin = data->gpio_index[g];
-    if (pin >= 32) continue;
+    if (pin >= 30) {
+      printf("WARN: Config assigns invalid GP%u to gpio%d (RP2040 has GP0-GP29)\n", pin, g);
+      rtapi_print_msg(RTAPI_MSG_ERR, "Config assigns invalid GP%u to gpio%d (RP2040 has GP0-GP29)\n", pin, g);
+      conflicts++;
+      continue;
+    }
     snprintf(labels[n], sizeof(labels[0]), "gpio%d", g);
     if (owner[pin]) {
       printf("WARN: Config assigns IO pin more than once: GP%u conflict: %s and %s\n",
@@ -248,13 +262,21 @@ static uint8_t warn_pin_conflicts_driver(skeleton_t *data, int num_joints) {
     n++;
   }
 
-  const int fixed_pins[6]      = { MODBUS_TX_PIN, MODBUS_RX_PIN, MODBUS_DIR_PIN,
-                                    I2C_SDA_PIN, I2C_SCL_PIN, I2C_RESET_PIN };
-  const char *fixed_labels[6]  = { "modbus-tx", "modbus-rx", "modbus-dir",
-                                    "i2c-sda", "i2c-scl", "i2c-reset" };
-  for (int m = 0; m < 6; m++) {
+  const int fixed_pins[16]     = { MODBUS_TX_PIN, MODBUS_RX_PIN, MODBUS_DIR_PIN,
+                                    I2C_SDA_PIN, I2C_SCL_PIN, I2C_RESET_PIN,
+                                    SPI_MISO_PIN, SPI_CS_PIN, SPI_SCK_PIN,
+                                    SPI_MOSI_PIN, SPI_RST_PIN, SPI_INT_PIN,
+                                    SMPS_PS_PIN, ONBOARD_LED_PIN,
+                                    VBUS_SENSE_PIN, VSYS_ADC_PIN };
+  const char *fixed_labels[16] = { "modbus-tx", "modbus-rx", "modbus-dir",
+                                    "i2c-sda", "i2c-scl", "i2c-reset",
+                                    "spi-miso", "spi-cs", "spi-sck",
+                                    "spi-mosi", "spi-rst", "spi-int",
+                                    "smps-ps", "onboard-led",
+                                    "vbus-sense", "vsys-adc" };
+  for (int m = 0; m < 16; m++) {
     int pin = fixed_pins[m];
-    if (pin < 0 || pin >= 32) continue;
+    if (pin < 0 || pin >= 30) continue;
     snprintf(labels[n], sizeof(labels[0]), "%s", fixed_labels[m]);
     if (owner[pin]) {
       printf("WARN: Config assigns IO pin more than once: GP%d conflict: %s and %s\n",

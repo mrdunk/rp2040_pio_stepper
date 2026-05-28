@@ -187,6 +187,38 @@ GPIO channels are numbered sequentially (`gpio.00`, `gpio.01`, …) regardless
 of whether they are native RP2040 pins or I2C expander pins. Each channel is
 configured by setting HAL params before the driver starts.
 
+### Reserved GPIO pins
+
+The following RP2040 GPIO pins are used by on-board peripherals and must not
+be assigned to joints or GPIO channels. The driver will print a warning if a
+conflict is detected at startup.
+
+See the [W5500-EVB-Pico pinout](https://docs.wiznet.io/Product/Chip/Ethernet/W5500/w5500-evb-pico)
+for the full board reference.
+
+| Pin  | Peripheral | Purpose | Conflict detected |
+|------|------------|---------|-------------------|
+| GP8  | Modbus RS-485 | TX | Yes |
+| GP9  | Modbus RS-485 | RX | Yes |
+| GP10 | Modbus RS-485 | Direction | Yes |
+| GP16 | W5500 SPI | MISO | Yes |
+| GP17 | W5500 SPI | Chip select | Yes |
+| GP18 | W5500 SPI | SCK | Yes |
+| GP19 | W5500 SPI | MOSI | Yes |
+| GP20 | W5500 SPI | Reset | Yes |
+| GP21 | W5500 SPI | Interrupt | Yes |
+| GP22 | I2C (MCP23017) | Reset | Yes |
+| GP23 | SMPS (RT6150) | Power-save control (not on headers) | Yes |
+| GP24 | USB | VBUS sense (not on headers) | Yes |
+| GP25 | On-board LED | Firmware heartbeat | Yes |
+| GP26 | I2C (MCP23017) | SDA | Yes |
+| GP27 | I2C (MCP23017) | SCL | Yes |
+| GP29 | VSYS ADC | VSYS/3 voltage divider (not on headers) | Yes |
+| GP30+ | — | Do not exist on RP2040 | Yes (error) |
+
+> **GP23**: controls the onboard SMPS power-save mode. Assigning it as a GPIO output
+> would silently change power supply behaviour, so it is treated as reserved.
+
 ### Native GPIO (RP2040 GP pins)
 
 Native pins are fast (updated every servo cycle) and directly driven by the
