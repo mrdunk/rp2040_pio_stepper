@@ -443,8 +443,14 @@ static int32_t commit_steps(
     uint32_t step_word = ((uint32_t)step_len << 1) | joint_state[joint].last_direction;
     pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, step_word);
     if (sub1step && n_steps >= 1) {
-        /* Halt PIO after the step so stale-x auto-repeat doesn't fire a spurious extra step. */
-        issue_stop_word(joint);
+        /* Push stop word directly — do NOT use issue_stop_word() here.
+         * issue_stop_word() guards on FIFO-empty, which fails immediately after
+         * pushing step_word (FIFO has 1 entry).  On hardware the PIO is mid-step
+         * and cannot drain the FIFO in the ~15 CPU cycles between push and check,
+         * so the stop word would never be sent near 1 step/period, allowing the
+         * PIO to stale-x repeat at 2× the commanded rate. */
+        pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen,
+                   joint_state[joint].last_direction);
     }
 
     return dq->vel_ff_q;

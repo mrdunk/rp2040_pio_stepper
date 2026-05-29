@@ -19,6 +19,9 @@ static uint32_t last_pio_put_value  = 0;
 static uint32_t last_pio_step_value = 0;  /* last put with step_len > 0 */
 static int      pio_put_call_count  = 0;
 static int      mock_tx_fifo_empty  = 0;
+/* When >= 0: return mock_tx_fifo_empty for this many calls, then return 0 (non-empty).
+ * When -1 (default): always return mock_tx_fifo_empty. */
+static int      mock_tx_fifo_empty_calls_remaining = -1;
 
 size_t __wrap_pio_sm_get_rx_fifo_level(size_t pio, size_t sm) {
     (void)pio; (void)sm;
@@ -44,6 +47,10 @@ void __wrap_pio_sm_put(size_t pio, size_t sm, size_t data) {
 
 int __wrap_pio_sm_is_tx_fifo_empty(size_t pio, size_t sm) {
     (void)pio; (void)sm;
+    if (mock_tx_fifo_empty_calls_remaining == 0)
+        return 0;  /* exhausted — simulate non-empty FIFO */
+    if (mock_tx_fifo_empty_calls_remaining > 0)
+        mock_tx_fifo_empty_calls_remaining--;
     return mock_tx_fifo_empty;
 }
 
@@ -67,6 +74,7 @@ static int test_setup(void **state) {
     last_pio_step_value = 0;
     pio_put_call_count  = 0;
     mock_tx_fifo_empty  = 0;
+    mock_tx_fifo_empty_calls_remaining = -1;
     pio_step_frac       = 0.0;
     memset(mock_rx_values, 0, sizeof(mock_rx_values));
     return 0;
@@ -1743,6 +1751,47 @@ static void test_do_steps_sub1step_step_len_fits_half_period(void **state) {
     assert_int_equal(last_pio_step_value >> 1, 133000 / 4 - 9);  /* 33241 */
 }
 
+/* Sub-1-step stop word is pushed even when the PIO has not yet drained step_word.
+ *
+ * Hardware race: issue_stop_word() checks pio_sm_is_tx_fifo_empty() immediately
+ * after step_word is pushed.  At ~1 step/period the PIO is mid-step and cannot
+ * drain the FIFO in the ~15 CPU cycles between the two calls, so the stop word
+ * is silently skipped and the PIO stale-x repeats at 2 steps/ms.
+ *
+ * Fix: push stop word unconditionally in commit_steps (do not use issue_stop_word).
+ *
+ * This test simulates the hardware condition by exhausting mock_tx_fifo_empty
+ * after the guard check so the stop-word call sees a non-empty FIFO.  With the
+ * old issue_stop_word() path that would produce only 1 FIFO write (step_word);
+ * the fix produces 2 (step_word + stop_word). */
+static void test_do_steps_sub1step_stop_word_pushed_despite_active_pio(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].max_velocity       = 32000.0;
+    config.joint[0].max_accel          = 0.0;
+    mock_rx_fifo_level                 = 0;
+    mock_tx_fifo_empty                 = 1;
+    config.joint[0].velocity_requested = 500.0;  /* 0.5 steps/period */
+
+    /* Period 1: acc=32768, n_steps=0 — one FIFO-empty check (guard). */
+    config.joint[0].updated_from_c0 = 1;
+    pio_put_call_count = 0;
+    do_steps(0);
+
+    /* Period 2: acc=65536, n_steps=1.  Allow exactly 1 call to return 1 (empty)
+     * so the guard passes and step_word is pushed; subsequent call returns 0
+     * (non-empty), simulating the PIO still holding step_word mid-step.
+     * The stop word must be pushed regardless. */
+    mock_tx_fifo_empty_calls_remaining = 1;
+    config.joint[0].updated_from_c0 = 1;
+    pio_put_call_count = 0;
+    do_steps(0);
+    assert_int_equal(pio_put_call_count, 2);  /* step_word + stop_word */
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -1818,6 +1867,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_sub1step_two_step_correction_stop_word,        test_setup),
         cmocka_unit_test_setup(test_do_steps_accumulator_resets_on_direction_change,       test_setup),
         cmocka_unit_test_setup(test_do_steps_sub1step_step_len_fits_half_period,           test_setup),
+        cmocka_unit_test_setup(test_do_steps_sub1step_stop_word_pushed_despite_active_pio, test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
