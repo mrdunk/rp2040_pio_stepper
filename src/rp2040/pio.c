@@ -432,10 +432,10 @@ static int32_t commit_steps(
     if (step_len > 0) joint_state[joint].last_direction = direction;
     uint32_t step_word = ((uint32_t)step_len << 1) | joint_state[joint].last_direction;
     pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, step_word);
-    if (sub1step && n_steps >= 1) {
+    //if (sub1step && n_steps >= 1) {
         /* Halt PIO after the step so stale-x auto-repeat doesn't fire a spurious extra step. */
-        issue_stop_word(joint);
-    }
+    //    issue_stop_word(joint);
+    //}
 
     return dq->vel_ff_q;
 }
