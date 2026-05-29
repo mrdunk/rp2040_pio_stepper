@@ -53,6 +53,7 @@ typedef struct {
     int32_t  last_velocity_q;
     int32_t  step_accumulator_q;
     uint32_t last_direction;
+    uint32_t last_commanded_direction;
 } JointPioState;
 
 static JointPioState joint_state[MAX_JOINT];
@@ -377,28 +378,29 @@ static int32_t commit_steps(
     int32_t velocity_q, int32_t *abs_pos_achieved)
 {
     int32_t step_count_q = abs(velocity_q);
-    /* Feedforward path: use vel_ff_q for sub-1-step scheduling when:
-     * (a) step_count_q is sub-1-step — vel_ff_q governs pacing, or
-     * (b) correction has sign-flipped velocity_q (near the 2-step boundary or
-     *     a large correction spike has reversed sign at higher velocities).
-     * At >=1 step/period without a sign flip, plan_vel_q = velocity_q directly. */
     int has_ff       = abs(dq->vel_ff_q) > 0 && step_count_q > 0; /* feedforward is active and there's motion */
-    int vel_sub1step = step_count_q <= Q16_ONE;                   /* commanded velocity is below 1 step/period */
+    int vel_sub1step = step_count_q <= Q16_ONE;                    /* commanded velocity is below 1 step/period */
     int sign_flipped = (dq->vel_ff_q > 0) ? (velocity_q < 0) : (velocity_q > 0); /* correction has reversed the direction of velocity_q */
     int corr_spike   = abs(dq->vel_ff_q) <= 2*Q16_ONE && sign_flipped; /* sign flip near the 2-step boundary */
     int in_ff_path   = has_ff && (vel_sub1step || corr_spike);
     int32_t plan_vel_q = in_ff_path ? dq->vel_ff_q : velocity_q;
-
-    //uint32_t direction = (plan_vel_q > 0);
-    uint32_t direction = (velocity_q > 0);
+    uint32_t direction = (plan_vel_q > 0);
 
     /* Bresenham accumulator — identical for both modes.
      * Continuous (>=1 step/period): n_steps is the full integer count.
      * Sub-1-step (<1 step/period): plan_vel_q < Q16_ONE so the accumulator
-     * never reaches 2×Q16_ONE between drains; n_steps is naturally 0 or 1. */
-    joint_state[joint].step_accumulator_q += abs(plan_vel_q);
-    int32_t n_steps = joint_state[joint].step_accumulator_q >> 16;
-    joint_state[joint].step_accumulator_q -= n_steps << 16;
+     * never reaches 2×Q16_ONE between drains; n_steps is naturally 0 or 1.
+     * Reset on direction reversal so the prior direction's fractional accumulation
+     * does not cause an early first step after the reversal.  Skipped when
+     * plan_vel_q==0 so a brief stop preserves the fraction for same-direction resume. */
+    if (plan_vel_q != 0) {
+        if (direction != joint_state[joint].last_commanded_direction)
+            joint_state[joint].step_accumulator_q = 0;
+        joint_state[joint].last_commanded_direction = direction;
+    }
+    joint_state[joint].step_accumulator_q += (uint32_t)abs(plan_vel_q);
+    int32_t n_steps = (int32_t)(joint_state[joint].step_accumulator_q >> 16);
+    joint_state[joint].step_accumulator_q -= (uint32_t)(n_steps << 16);
 
     if (joint >= NUM_FEEDBACK)
         *abs_pos_achieved += (direction ? 1 : -1) * n_steps;
@@ -432,10 +434,10 @@ static int32_t commit_steps(
     if (step_len > 0) joint_state[joint].last_direction = direction;
     uint32_t step_word = ((uint32_t)step_len << 1) | joint_state[joint].last_direction;
     pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, step_word);
-    //if (sub1step && n_steps >= 1) {
+    if (sub1step && n_steps >= 1) {
         /* Halt PIO after the step so stale-x auto-repeat doesn't fire a spurious extra step. */
-    //    issue_stop_word(joint);
-    //}
+        issue_stop_word(joint);
+    }
 
     return dq->vel_ff_q;
 }

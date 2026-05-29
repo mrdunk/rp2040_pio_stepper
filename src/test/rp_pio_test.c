@@ -1625,6 +1625,78 @@ static void test_do_steps_sub1step_two_step_correction_stop_word(void **state) {
     assert_int_equal(last_pio_step_value & 1, 1);      /* direction = forward */
 }
 
+/* Sub-1-step accumulator resets on direction reversal.
+ *
+ * At 0.5 steps/period (32768 Q16.16), Bresenham fires every other period.
+ * After 3 forward periods the accumulator holds 32768 (no step in period 3).
+ * On reversal, the correct behaviour is to discard that 32768 so the first
+ * reverse period fires no step (0+32768 < Q16_ONE).  Without the reset, the
+ * carry-over 32768+32768=65536 would fire a step one period too early. */
+static void test_do_steps_accumulator_resets_on_direction_change(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].max_velocity       = 32000.0;
+    config.joint[0].max_accel          = 0.0;
+    mock_tx_fifo_empty                 = 1;
+    mock_rx_fifo_level                 = 0;  /* no pos error, no correction */
+
+    /* — Forward: 500 steps/s = 0.5 steps/period — */
+    config.joint[0].velocity_requested = 500.0;
+
+    /* Period 1: acc = 32768 < Q16_ONE, no step. */
+    config.joint[0].updated_from_c0 = 1;
+    last_pio_step_value = 0;
+    do_steps(0);
+    assert_int_equal(last_pio_step_value >> 1, 0);
+
+    /* Period 2: acc = 65536 → step fires forward, acc drains to 0. */
+    config.joint[0].updated_from_c0 = 1;
+    last_pio_step_value = 0;
+    do_steps(0);
+    assert_true(last_pio_step_value >> 1 > 0);
+    assert_int_equal(last_pio_step_value & 1, 1);  /* forward */
+
+    /* Period 3: acc = 32768, no step — accumulator holds 32768 at reversal. */
+    config.joint[0].updated_from_c0 = 1;
+    last_pio_step_value = 0;
+    do_steps(0);
+    assert_int_equal(last_pio_step_value >> 1, 0);
+
+    /* — Reverse: -500 steps/s = 0.5 steps/period backward — */
+    config.joint[0].velocity_requested = -500.0;
+
+    /* Reverse period 1: accumulator must reset to 0 on direction change.
+     * acc = 0+32768 = 32768 < Q16_ONE → no step.
+     * Without the reset: 32768+32768=65536 → step fires one period early. */
+    config.joint[0].updated_from_c0 = 1;
+    last_pio_step_value = 0;
+    do_steps(0);
+    assert_int_equal(last_pio_step_value >> 1, 0);  /* proves accumulator reset */
+
+    /* Reverse period 2: acc = 65536 → step fires backward. */
+    config.joint[0].updated_from_c0 = 1;
+    last_pio_step_value = 0;
+    do_steps(0);
+    assert_true(last_pio_step_value >> 1 > 0);
+    assert_int_equal(last_pio_step_value & 1, 0);  /* backward */
+
+    /* Reverse period 3: acc = 32768, no step. */
+    config.joint[0].updated_from_c0 = 1;
+    last_pio_step_value = 0;
+    do_steps(0);
+    assert_int_equal(last_pio_step_value >> 1, 0);
+
+    /* Reverse period 4: acc = 65536 → step fires backward. */
+    config.joint[0].updated_from_c0 = 1;
+    last_pio_step_value = 0;
+    do_steps(0);
+    assert_true(last_pio_step_value >> 1 > 0);
+    assert_int_equal(last_pio_step_value & 1, 0);  /* backward */
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -1698,6 +1770,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_multistep_accel_ramp_no_backlog,                 test_setup),
         cmocka_unit_test_setup(test_do_steps_sub1step_double_buffer_stop_word,               test_setup),
         cmocka_unit_test_setup(test_do_steps_sub1step_two_step_correction_stop_word,        test_setup),
+        cmocka_unit_test_setup(test_do_steps_accumulator_resets_on_direction_change,       test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
