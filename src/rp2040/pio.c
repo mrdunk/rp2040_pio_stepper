@@ -382,10 +382,11 @@ static int32_t commit_steps(
      * (b) correction has sign-flipped velocity_q (near the 2-step boundary or
      *     a large correction spike has reversed sign at higher velocities).
      * At >=1 step/period without a sign flip, plan_vel_q = velocity_q directly. */
-    int in_ff_path = abs(dq->vel_ff_q) > 0 && step_count_q > 0 &&
-                     (step_count_q <= Q16_ONE ||
-                      (abs(dq->vel_ff_q) <= 2*Q16_ONE &&
-                       (dq->vel_ff_q > 0 ? velocity_q < 0 : velocity_q > 0)));
+    int has_ff       = abs(dq->vel_ff_q) > 0 && step_count_q > 0; /* feedforward is active and there's motion */
+    int vel_sub1step = step_count_q <= Q16_ONE;                   /* commanded velocity is below 1 step/period */
+    int sign_flipped = (dq->vel_ff_q > 0) ? (velocity_q < 0) : (velocity_q > 0); /* correction has reversed the direction of velocity_q */
+    int corr_spike   = abs(dq->vel_ff_q) <= 2*Q16_ONE && sign_flipped; /* sign flip near the 2-step boundary */
+    int in_ff_path   = has_ff && (vel_sub1step || corr_spike);
     int32_t plan_vel_q = in_ff_path ? dq->vel_ff_q : velocity_q;
     uint32_t direction = (plan_vel_q > 0);
 
