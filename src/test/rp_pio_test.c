@@ -100,70 +100,6 @@ static void test_drain_rx_fifo_keeps_last(void **state) {
     assert_int_equal(result, 30);
 }
 
-/* calculate_step_len: normal step count -> positive result */
-static void test_calculate_step_len_normal(void **state) {
-    (void)state;
-    /* step_count=2.0 -> Q16.16=131072, period=133000, max_vel=50.0 -> Q16.16=3276800
-     * 133000*65536=8716288000; 8716288000/(131072*2)=8716288000/262144=33250 exactly
-     * 33250-9=33241 */
-    int32_t result = calculate_step_len(131072, 133000, 3276800);
-    assert_int_equal(result, 33241);
-}
-
-/* calculate_step_len: step_count exceeds max_velocity -> clamped to min */
-static void test_calculate_step_len_clamped(void **state) {
-    (void)state;
-    /* step_count=200.0, max_vel=50.0, both in Q16.16 */
-    int32_t result = calculate_step_len(13107200, 133000, 3276800);
-    /* len=323, min=1321, result=1321 */
-    assert_int_equal(result, 1321);
-}
-
-/* calculate_step_len: step_count_q=0 -> 0 (division-by-zero guard) */
-static void test_calculate_step_len_below_threshold(void **state) {
-    (void)state;
-    assert_int_equal(calculate_step_len(0, 133000, 3276800), 0);
-}
-
-/* calculate_step_len: slow velocity -> capped at max_len (fits in one period) */
-static void test_calculate_step_len_too_slow_skip(void **state) {
-    (void)state;
-    /* 0.05 steps/period (sq=3276): raw len >> period_ticks, capped to max_len=66491 */
-    assert_int_equal(calculate_step_len(3276, 133000, 3276800), 66491);
-    /* 0.1 steps/period (sq=6553): same cap */
-    assert_int_equal(calculate_step_len(6553, 133000, 3276800), 66491);
-    /* sq=1 (extreme): int64 intermediate would overflow int32, capped to max_len */
-    assert_int_equal(calculate_step_len(1, 133000, 3276800), 66491);
-}
-
-/* calculate_step_len: non-integer velocity (25.6 steps/period) must not clamp below v_ceil
- * SCALE=1024, vel=25mm/s, 1ms period @ 133MHz → v_ceil=26; min_len must not prevent 26 steps */
-static void test_calculate_step_len_allows_bresenham_ceiling(void **state) {
-    (void)state;
-    int32_t period_ticks = 133000;
-    int32_t velocity_q   = (int32_t)(25.6 * 65536.0);          /* 1677721 */
-    int32_t max_vel_q    = (int32_t)(25.6 * 1.01 * 65536.0);   /* 1694498 */
-
-    int32_t step_len    = calculate_step_len(velocity_q, period_ticks, max_vel_q);
-    int32_t step_period = 2 * (step_len + 9); /* 9 = STEP_PIO_LEN_OVERHEAD */
-    int32_t max_steps   = period_ticks / step_period;
-    assert_true(max_steps >= 26);
-}
-
-/* When correction pushes v_ceil above v_ceil_max, the clamped step_len must still
- * allow v_ceil_max steps per period (not v_ceil_max-1). */
-static void test_calculate_step_len_clamped_allows_v_ceil_max_steps(void **state) {
-    (void)state;
-    int32_t period_ticks = 133000;
-    /* position correction pushes velocity to 27 steps/period; max is 25.6 × 1.01 */
-    int32_t velocity_q = (int32_t)(27.0 * 65536.0);           /* 1769472; v_ceil=27 */
-    int32_t max_vel_q  = (int32_t)(25.6 * 1.01 * 65536.0);   /* 1694498; v_ceil_max=26 */
-
-    int32_t step_len  = calculate_step_len(velocity_q, period_ticks, max_vel_q);
-    int32_t max_steps = period_ticks / (2 * (step_len + 9)); /* 9 = STEP_PIO_LEN_OVERHEAD */
-    /* clamp fires (v_ceil=27 > v_ceil_max=26) but must still allow v_ceil_max=26 steps */
-    assert_true(max_steps >= 26);
-}
 
 /* clamp_accel: velocity unchanged -> returns same velocity */
 static void test_clamp_accel_no_change(void **state) {
@@ -200,55 +136,6 @@ static void test_clamp_accel_zero_max(void **state) {
     assert_int_equal(result, 6553600);  /* max_accel=0 -> no limit */
 }
 
-/* plan_steps: fractional accumulation -> step fires on 4th call */
-static void test_plan_steps_fractional_accumulation(void **state) {
-    (void)state;
-    /* velocity_q = (int32_t)(0.3 * 65536) = 19660 (C truncates toward zero)
-     * acc: 19660, 39320, 58980, 78640 -> steps: 0,0,0,1 */
-    int32_t vq = (int32_t)(0.3 * 65536);
-    assert_int_equal(plan_steps(vq, 0, 133000, 1), 0);
-    assert_int_equal(plan_steps(vq, 0, 133000, 1), 0);
-    assert_int_equal(plan_steps(vq, 0, 133000, 1), 0);
-    assert_int_equal(plan_steps(vq, 0, 133000, 1), 1);
-}
-
-/* plan_steps: correct total over 10 periods for fractional velocity */
-static void test_plan_steps_total_over_ten_periods(void **state) {
-    (void)state;
-    /* Use 2.75 (= 180224 in Q16.16, exactly representable); 10 periods -> 27 steps */
-    int32_t total = 0;
-    for (int i = 0; i < 10; i++) {
-        total += plan_steps(180224, 0, 133000, 1);
-    }
-    assert_int_equal(total, 27);
-}
-
-/* plan_steps: excess steps returned to accumulator when max_steps limits output */
-static void test_plan_steps_excess_returned_to_accumulator(void **state) {
-    (void)state;
-    /* velocity_q=196608 (3.0), step_period=50000, max_steps=133000/50000=2
-     * desired=3, capped to 2, excess=1 returned; next call vel=0, acc=1.0 -> 1 step */
-    assert_int_equal(plan_steps(196608, 0, 133000, 24991), 2);
-    assert_int_equal(plan_steps(0,      0, 133000, 24991), 1);
-}
-
-/* plan_steps: zero velocity -> no steps, accumulator stays 0 */
-static void test_plan_steps_zero_velocity(void **state) {
-    (void)state;
-    assert_int_equal(plan_steps(0, 0, 133000, 13291), 0);
-    assert_int_equal(plan_steps(0, 0, 133000, 13291), 0);
-}
-
-/* plan_steps: step_len=0 (skip signal) -> max_steps=0, accumulator preserved */
-static void test_plan_steps_skip_preserves_accumulator(void **state) {
-    (void)state;
-    /* velocity_q=65536 (1.0 step/period). Two calls with step_len=0 skip both
-     * steps but accumulator grows to 2.0. Third call with normal step_len
-     * issues 2 steps immediately from the banked accumulator. */
-    assert_int_equal(plan_steps(65536, 0, 133000, 0), 0);
-    assert_int_equal(plan_steps(65536, 0, 133000, 0), 0);
-    assert_int_equal(plan_steps(0,     0, 133000, 13291), 2);
-}
 
 /* do_steps: update_period == 0, enabled joint -> returns 0 without dividing */
 static void test_do_steps_zero_period(void **state) {
@@ -913,9 +800,6 @@ static void test_do_steps_posmode_ff_zero_clamp_accel_negative(void **state) {
  *   Kp correction = (100.5-100) * (1e6/1000) * 0.5 = 250 steps/s = 0.25 steps/period
  *   velocity_q = (250/1000) * 65536 = 16384
  *   step_len   = (133000*65536/32768) - 9 = 265991 ticks  (spans ~2 servo periods)
- *
- * dunk_stepgen_refactor_involved: 265991 >= period_ticks → calculate_step_len returns 0
- *   → plan_steps: max_steps=0 → no step fires → stable hold.
  *
  * dunk_fix_cmd_pos: 265991 > max_len → capped to 66491 → plan_steps fires 1 step every
  *   4 periods → visible back-and-forth jitter on hardware when machine is stationary.
@@ -1746,22 +1630,13 @@ int main(void) {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
         cmocka_unit_test_setup(test_drain_rx_fifo_single_entry,          test_setup),
         cmocka_unit_test_setup(test_drain_rx_fifo_keeps_last,            test_setup),
-        cmocka_unit_test_setup(test_calculate_step_len_normal,          test_setup),
-        cmocka_unit_test_setup(test_calculate_step_len_clamped,         test_setup),
-        cmocka_unit_test_setup(test_calculate_step_len_below_threshold, test_setup),
-        cmocka_unit_test_setup(test_calculate_step_len_too_slow_skip,              test_setup),
-        cmocka_unit_test_setup(test_calculate_step_len_allows_bresenham_ceiling, test_setup),
-        cmocka_unit_test_setup(test_calculate_step_len_clamped_allows_v_ceil_max_steps, test_setup),
+
         cmocka_unit_test_setup(test_clamp_accel_no_change,                       test_setup),
         cmocka_unit_test_setup(test_clamp_accel_under_limit,            test_setup),
         cmocka_unit_test_setup(test_clamp_accel_over_limit_positive,    test_setup),
         cmocka_unit_test_setup(test_clamp_accel_over_limit_negative,    test_setup),
         cmocka_unit_test_setup(test_clamp_accel_zero_max,               test_setup),
-        cmocka_unit_test_setup(test_plan_steps_fractional_accumulation,        test_setup),
-        cmocka_unit_test_setup(test_plan_steps_total_over_ten_periods,         test_setup),
-        cmocka_unit_test_setup(test_plan_steps_excess_returned_to_accumulator, test_setup),
-        cmocka_unit_test_setup(test_plan_steps_zero_velocity,                  test_setup),
-        cmocka_unit_test_setup(test_plan_steps_skip_preserves_accumulator,     test_setup),
+
         cmocka_unit_test_setup(test_compute_velocity_cmd_velmode_passthrough,        test_setup),
         cmocka_unit_test_setup(test_compute_velocity_cmd_velmode_lag_correction,    test_setup),
         cmocka_unit_test_setup(test_compute_velocity_cmd_velmode_lead_correction,   test_setup),
