@@ -845,7 +845,9 @@ static void test_do_steps_position_mode_no_jitter_at_rest(void **state) {
  * Accuracy analysis:
  *
  *   v < 1 step/period (sub-1-step Bresenham path):
- *     step_len capped at max_len=66491 → step_period=133000 → exact steps=1.0.
+ *     Produces 2 FIFO writes when a step fires: step word then stop word.
+ *     The stop word halts the PIO after exactly 1 physical step regardless of
+ *     step_len.  Detected by pio_put_call_count==2; counted as exactly 1 step.
  *     Bresenham schedules 0 or 1 step each period; long-run average equals v
  *     exactly.  Position is EXACT.
  *
@@ -894,8 +896,14 @@ static int32_t run_velocity_periods(double vel_steps_per_s, int n) {
         config.joint[0].updated_from_c0 = 1;
         last_pio_put_value  = 0;
         last_pio_step_value = 0;
+        pio_put_call_count  = 0;
         do_steps(0);
-        sim_pos       += pio_word_steps(last_pio_step_value);
+        /* Sub-1-step: 2 writes (step word + stop word) → exactly 1 physical step.
+         * Continuous: 1 write → PIO repeats at step_len rate for the full period. */
+        if (pio_put_call_count == 2 && last_pio_step_value != 0)
+            sim_pos += (last_pio_step_value & 1) ? 1 : -1;
+        else
+            sim_pos += pio_word_steps(last_pio_step_value);
         pos_requested += vel_steps_per_s * 1e-3;  /* advance 1ms per period */
     }
     return sim_pos;
@@ -917,7 +925,7 @@ static void test_do_steps_velmode_0_25(void **state) {
 }
 
 /* 1.0 steps/period (1000 steps/s): integer boundary, exact.
- * step_len=66491 (=max_len), max_steps=1, desired=1 every period → 100 steps. */
+ * Continuous mode (abs(plan_vel_q)==Q16_ONE): step_len=66491, 1 step/period → 100 steps. */
 static void test_do_steps_velmode_int_1(void **state) {
     (void)state;
     assert_int_equal(run_velocity_periods(1000.0, 100), 100);
@@ -1537,11 +1545,11 @@ static void test_do_steps_multistep_accel_ramp_no_backlog(void **state) {
 /* do_steps: single-step PIO double-buffer prevents spurious second step.
  *
  * At sub-1-step velocities (n_steps=1 per Bresenham decision), the PIO step
- * cycle (2*step_len+11 ≈ 132993 clocks) completes ~7 clocks before the next
- * servo period.  Without the stop word, x still holds step_len and the PIO
- * fires a second unwanted step.  Fix: issue_pio_step writes a stop word
- * immediately after the step word when n_steps==1, pre-loading the FIFO so
- * the PIO pulls x=0 before do_steps can write the next step.
+ * cycle takes 2*step_len+11 PIO clocks.  step_len = period_ticks/4 − overhead,
+ * so the step occupies ~half the servo period, leaving the trailing stop word
+ * time to clear before the next timer fires (see pio.c step_len sizing comment).
+ * Without the stop word, x still holds step_len and the PIO fires a second
+ * unwanted step.
  *
  * At 500 steps/s (0.5 steps/period, 1ms period) Bresenham fires on alternate
  * periods.  The period that fires (n_steps=1) must produce exactly 2 FIFO
@@ -1577,7 +1585,7 @@ static void test_do_steps_sub1step_double_buffer_stop_word(void **state) {
     do_steps(0);
     assert_int_equal(pio_put_call_count, 2);  /* step word + stop word */
     assert_int_equal(last_pio_put_value >> 1, 0);      /* last write is stop word */
-    assert_int_equal(last_pio_step_value >> 1, 66491); /* step word has correct step_len */
+    assert_int_equal(last_pio_step_value >> 1, 33241); /* step word has correct step_len: period_ticks/4 - overhead */
     assert_int_equal(last_pio_step_value & 1, 1);      /* direction = forward */
 }
 
@@ -1697,6 +1705,44 @@ static void test_do_steps_accumulator_resets_on_direction_change(void **state) {
     assert_int_equal(last_pio_step_value & 1, 0);  /* backward */
 }
 
+/* Sub-1-step step_len must fit within half the servo period to prevent a FIFO race.
+ *
+ * With step_len = period_ticks/2 the PIO step takes 2*step_len+11 ≈ period_ticks
+ * cycles.  The trailing stop word is still being consumed by the PIO when the next
+ * timer fires, so the !fifo_empty guard in commit_steps spuriously blocks the next
+ * step push — consecutive steps near 1 step/period are randomly dropped.
+ *
+ * Fix: step_len = period_ticks/4.  Step takes ≈ period_ticks/2 PIO cycles, leaving
+ * the rest of the period for the stop word to clear before the next timer fires.
+ * At 900 steps/s (0.9 steps/period at 1ms), Bresenham fires a step on period 2
+ * (acc=117964).  step_len must be 133000/4−9 = 33241, not the old 66491. */
+static void test_do_steps_sub1step_step_len_fits_half_period(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].max_velocity       = 32000.0;
+    config.joint[0].max_accel          = 0.0;
+    mock_tx_fifo_empty                 = 1;
+    mock_rx_fifo_level                 = 0;
+    config.joint[0].velocity_requested = 900.0;  /* 0.9 steps/period at 1ms */
+
+    /* Period 1: acc=58982 < 65536, no step. */
+    config.joint[0].updated_from_c0 = 1;
+    last_pio_step_value = 0;
+    do_steps(0);
+    assert_int_equal(last_pio_step_value >> 1, 0);
+
+    /* Period 2: acc=117964 → step fires.  Verify step_len = period_ticks/4 - overhead.
+     * Before the fix step_len was 66491 (= period_ticks/2 − 9), causing the race. */
+    config.joint[0].updated_from_c0 = 1;
+    last_pio_step_value = 0;
+    do_steps(0);
+    assert_true(last_pio_step_value >> 1 > 0);
+    assert_int_equal(last_pio_step_value >> 1, 133000 / 4 - 9);  /* 33241 */
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -1771,6 +1817,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_sub1step_double_buffer_stop_word,               test_setup),
         cmocka_unit_test_setup(test_do_steps_sub1step_two_step_correction_stop_word,        test_setup),
         cmocka_unit_test_setup(test_do_steps_accumulator_resets_on_direction_change,       test_setup),
+        cmocka_unit_test_setup(test_do_steps_sub1step_step_len_fits_half_period,           test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

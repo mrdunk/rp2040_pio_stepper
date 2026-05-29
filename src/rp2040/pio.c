@@ -428,12 +428,14 @@ static int32_t commit_steps(
         if (step_len < 0) step_len = 0;
         sub1step = 0;
     } else {
-        /* Sub-1-step: step fills one full period when it fires
-         * (step_len = period_ticks/2 - STEP_PIO_LEN_OVERHEAD).
-         * step_len=0 when n_steps=0 — the resulting step_word equals a stop word,
-         * so the PIO idles without a spurious re-fire.
-         * When n_steps=1 a separate stop word follows to halt the PIO after the step. */
-        step_len = n_steps > 0 ? dq->period_ticks / 2 - STEP_PIO_LEN_OVERHEAD : 0;
+        /* Sub-1-step: step occupies ~half the period (period_ticks/4 for step_len,
+         * giving 2*(period_ticks/4)+11 ≈ period_ticks/2 PIO cycles total).
+         * Using period_ticks/2 here would make the step consume nearly the entire
+         * period; the trailing stop word would still be in the FIFO when the next
+         * timer fires, causing the !fifo_empty guard to spuriously drop the next step.
+         * Halving step_len leaves ~half the period for the stop word to clear.
+         * step_len=0 when n_steps=0 — the resulting step_word equals a stop word. */
+        step_len = n_steps > 0 ? dq->period_ticks / 4 - STEP_PIO_LEN_OVERHEAD : 0;
         sub1step = 1;
     }
 
