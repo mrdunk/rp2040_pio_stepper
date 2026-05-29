@@ -388,7 +388,9 @@ static int32_t commit_steps(
     int corr_spike   = abs(dq->vel_ff_q) <= 2*Q16_ONE && sign_flipped; /* sign flip near the 2-step boundary */
     int in_ff_path   = has_ff && (vel_sub1step || corr_spike);
     int32_t plan_vel_q = in_ff_path ? dq->vel_ff_q : velocity_q;
-    uint32_t direction = (plan_vel_q > 0);
+
+    //uint32_t direction = (plan_vel_q > 0);
+    uint32_t direction = (velocity_q > 0);
 
     /* Bresenham accumulator — identical for both modes.
      * Continuous (>=1 step/period): n_steps is the full integer count.
