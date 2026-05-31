@@ -40,12 +40,6 @@ if(BUILD_RP)
     set_property(CACHE RP_CHIP PROPERTY STRINGS RP2040 RP2350)
 
     # Derive PICO_BOARD from RP_CHIP + ETH_CHIP unless the caller supplies it.
-    # Board .h files for each combination must exist in the pico-sdk boards directory:
-    #   wiznet_w5100s_evb_pico   — pico-sdk v1.5.1+
-    #   wiznet_w5500_evb_pico    — pico-sdk v2.x+  (issue #34)
-    #   wiznet_w5500_evb_pico2   — pico-sdk v2.x+  (issue #34)
-    #   wiznet_w6100_evb_pico2   — pico-sdk v2.x+  (issue #43)
-    #   wiznet_w6300_evb_pico2   — pico-sdk v2.x+  (issue #36)
     if(NOT DEFINED PICO_BOARD)
         string(TOLOWER "${ETH_CHIP}" _eth_lower)
         if(RP_CHIP STREQUAL "RP2350")
@@ -55,6 +49,10 @@ if(BUILD_RP)
         endif()
         message(STATUS "PICO_BOARD = ${PICO_BOARD} (derived from RP_CHIP=${RP_CHIP}, ETH_CHIP=${ETH_CHIP})")
     endif()
+
+    # Project-local board headers (W5500, W6100, W6300 variants not yet in upstream pico-sdk).
+    # Searched after the SDK's own boards directory, so SDK-provided headers take precedence.
+    list(APPEND PICO_BOARD_HEADER_DIRS ${CMAKE_SOURCE_DIR}/boards)
 
     include(rp2040_hat_c-patch.cmake)
     include(pico_sdk_import.cmake)
