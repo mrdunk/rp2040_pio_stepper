@@ -25,9 +25,9 @@ Save state whenever you have something useful to remember.
 
 ## Project overview
 
-RP2040-based stepper motor controller for LinuxCNC. Core0 handles UDP networking
-(W5500 Ethernet) and clock synchronisation; Core1 runs the stepper PIO loop.
-The driver side runs on the LinuxCNC PC (`src/driver/`).
+RP2040/RP2350-based stepper motor controller for LinuxCNC. Core0 handles UDP networking
+(WIZnet Ethernet — W5500, W5100S, W6100, or W6300) and clock synchronisation; Core1
+runs the stepper PIO loop. The driver side runs on the LinuxCNC PC (`src/driver/`).
 
 ## Code comments
 
@@ -56,8 +56,8 @@ Key cmake options:
 
 | Variable | Default | Values | Notes |
 |----------|---------|--------|-------|
-| `ETH_CHIP` | `W5500` | `W5500`, `W5100S`, `W6100`, `W6300` | W6100/W6300 need ioLibrary update (issues #35/#36) |
-| `RP_CHIP` | `RP2040` | `RP2040`, `RP2350` | RP2350 support via pico-sdk v2.2.0 (issue #34) |
+| `ETH_CHIP` | `W5500` | `W5500`, `W5100S`, `W6100`, `W6300` | W6100/W6300 need hardware validation (issues #35/#36) |
+| `RP_CHIP` | `RP2040` | `RP2040`, `RP2350` | RP2350 builds clean; needs hardware validation (issue #34) |
 | `PICO_BOARD` | derived | e.g. `wiznet_w5500_evb_pico` | Auto-derived from RP_CHIP+ETH_CHIP; override if needed |
 | `MAX_JOINT` | `8` | `1`–`8` | Number of stepper axes |
 
