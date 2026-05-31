@@ -20,8 +20,12 @@ relevant to the current task.
 
 Be direct but constructive, offering solutions alongside criticism.
 Be concise. Shorter is better.
-Always ask before performing git commit. Never open PR to main.
 Save state whenever you have something useful to remember.
+
+**NEVER run `git commit` without explicit user instruction to do so.**
+Stage changes and report what is staged, then wait for the user to say "commit".
+This applies even when a commit seems like the obvious next step.
+Never open PR to main.
 
 ## Project overview
 

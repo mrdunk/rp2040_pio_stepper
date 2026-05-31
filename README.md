@@ -6,7 +6,7 @@ Most hobby CNC projects use GRBL — simple, cheap, but limited: no real-time fe
 
 rp2040_pio_stepper sits between these worlds: low-cost, open hardware with a real-time Ethernet link to LinuxCNC, accurate step generation via the RP2040's PIO state machines, and a HAL driver that integrates cleanly with LinuxCNC's existing toolchain. No parallel port required.
 
-A verified starting point is the [W5500-EVB-Pico](https://docs.wiznet.io/Product/Chip/Ethernet/W5500/w5500-evb-pico) — a dev board combining the RP2040 with a W5500 Ethernet chip. Up to 8-axis operation has been tested and confirmed.
+A verified starting point is the [W5500-EVB-Pico](https://docs.wiznet.io/Product/Chip/Ethernet/W5500/w5500-evb-pico) — a dev board combining the RP2040 with a W5500 Ethernet chip. Up to 8-axis operation has been tested and confirmed. Other supported boards include the W5100S-EVB-Pico, W5500-EVB-Pico2 (RP2350), and W6100-EVB-Pico2.
 
 See [Setup](docs/setup.md) to build the firmware, install the driver, and configure LinuxCNC. Working HAL and INI configs for 3, 4, 6, and 8-axis machines are in `config/`.
 
@@ -22,7 +22,7 @@ See [Setup](docs/setup.md) to build the firmware, install the driver, and config
 | GPIO channels | 32 by default (compile-time limit; see [Advanced GPIO](docs/setup.md#advanced-increasing-gpio-and-i2c-expander-counts)) |
 | MCP23017 expanders supported | 4 by default, up to 8 (compile-time limit; see above) |
 | Spindle controllers | 1 RS-485 VFD (Huanyang, Fuling, Weiken); multiple planned |
-| Network | UDP/Ethernet, W5500 or W5100S |
+| Network | UDP/Ethernet, W5500, W5100S, W6100, or W6300 |
 | Host connection | Direct point-to-point to LinuxCNC NIC (no switch needed) |
 
 # Docs

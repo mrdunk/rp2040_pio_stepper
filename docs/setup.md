@@ -26,15 +26,22 @@ connect a UART serial console for debug output from the firmware (see [Advanced:
 
 ## Build the Firmware
 
-Two cache variables control the build:
+Three cache variables control the build:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `WIZNET_CHIP` | `W5500` | Ethernet chip — `W5500` or `W5100S` |
+| `ETH_CHIP` | `W5500` | Ethernet chip — `W5500`, `W5100S`, `W6100`, or `W6300` |
+| `RP_CHIP` | `RP2040` | MCU variant — `RP2040` or `RP2350` |
 | `MAX_JOINT` | `8` | Number of stepper joints (1–8) |
 
+`ETH_CHIP` and `RP_CHIP` together determine the target board. For example,
+`-DETH_CHIP=W5500 -DRP_CHIP=RP2040` targets the W5500-EVB-Pico;
+`-DETH_CHIP=W5500 -DRP_CHIP=RP2350` targets the W5500-EVB-Pico2.
+The correct `PICO_BOARD` is derived automatically — override with
+`-DPICO_BOARD=<name>` only if you need a non-standard board name.
+
 ```bash
-cmake -B build_rp -S . -DBUILD_RP=ON -DWIZNET_CHIP=W5500 -DMAX_JOINT=6
+cmake -B build_rp -S . -DBUILD_RP=ON -DETH_CHIP=W5500 -DRP_CHIP=RP2040 -DMAX_JOINT=6
 make -C build_rp stepper_control
 ```
 
