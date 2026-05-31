@@ -48,9 +48,22 @@ ctest --test-dir build_tests --output-on-failure
 ### Firmware build (requires arm-none-eabi-gcc + pico-sdk)
 
 ```bash
-cmake -B build -S . -DBUILD_RP=ON
+cmake -B build -S . -DBUILD_RP=ON [-DETH_CHIP=W5500] [-DRP_CHIP=RP2040]
 make -C build stepper_control
 ```
+
+Key cmake options:
+
+| Variable | Default | Values | Notes |
+|----------|---------|--------|-------|
+| `ETH_CHIP` | `W5500` | `W5500`, `W5100S`, `W6100`, `W6300` | W6100/W6300 need ioLibrary update (issues #35/#36) |
+| `RP_CHIP` | `RP2040` | `RP2040`, `RP2350` | RP2350 needs pico-sdk v2.x (issue #34) |
+| `PICO_BOARD` | derived | e.g. `wiznet_w5500_evb_pico` | Auto-derived from RP_CHIP+ETH_CHIP; override if needed |
+| `MAX_JOINT` | `8` | `1`–`8` | Number of stepper axes |
+
+`PICO_BOARD` is derived as `wiznet_<eth_chip_lower>_evb_pico[2]`. The current pico-sdk
+submodule (v1.5.1) only defines `wiznet_w5100s_evb_pico`; all other board definitions
+require a pico-sdk submodule update.
 
 Without `-DBUILD_RP=ON`, CMake configures successfully but produces an empty Makefile with no firmware targets — no error, no warning.
 
