@@ -21,14 +21,18 @@ elseif(ETH_CHIP STREQUAL "W5500")
     target_link_libraries(ETHERNET_FILES PUBLIC W5500_FILES)
 
 elseif(ETH_CHIP STREQUAL "W6100")
-    # W6100 driver is not yet wired up. Update ioLibrary_Driver submodule (issue #35)
-    # and add W6100 source paths here once available.
-    message(FATAL_ERROR "ETH_CHIP=W6100: ioLibrary_Driver W6100 support not yet integrated (issue #35)")
+    target_include_directories(ETHERNET_FILES INTERFACE
+            ${WIZNET_DIR}/Ethernet
+            ${WIZNET_DIR}/Ethernet/W6100
+            )
+    target_link_libraries(ETHERNET_FILES PUBLIC W6100_FILES)
 
 elseif(ETH_CHIP STREQUAL "W6300")
-    # W6300 driver is not yet wired up. Update ioLibrary_Driver submodule (issue #36)
-    # and add W6300 source paths here once available.
-    message(FATAL_ERROR "ETH_CHIP=W6300: ioLibrary_Driver W6300 support not yet integrated (issue #36)")
+    target_include_directories(ETHERNET_FILES INTERFACE
+            ${WIZNET_DIR}/Ethernet
+            ${WIZNET_DIR}/Ethernet/W6300
+            )
+    target_link_libraries(ETHERNET_FILES PUBLIC W6300_FILES)
 endif()
 
 if(ETH_CHIP STREQUAL "W5100S")
@@ -52,6 +56,28 @@ elseif(ETH_CHIP STREQUAL "W5500")
             ${WIZNET_DIR}/Ethernet/W5500
             )
     target_link_libraries(W5500_FILES PRIVATE ETHERNET_FILES)
+
+elseif(ETH_CHIP STREQUAL "W6100")
+    add_library(W6100_FILES STATIC)
+    target_sources(W6100_FILES PUBLIC
+            ${WIZNET_DIR}/Ethernet/W6100/w6100.c
+            )
+    target_include_directories(W6100_FILES INTERFACE
+            ${WIZNET_DIR}/Ethernet
+            ${WIZNET_DIR}/Ethernet/W6100
+            )
+    target_link_libraries(W6100_FILES PRIVATE ETHERNET_FILES)
+
+elseif(ETH_CHIP STREQUAL "W6300")
+    add_library(W6300_FILES STATIC)
+    target_sources(W6300_FILES PUBLIC
+            ${WIZNET_DIR}/Ethernet/W6300/w6300.c
+            )
+    target_include_directories(W6300_FILES INTERFACE
+            ${WIZNET_DIR}/Ethernet
+            ${WIZNET_DIR}/Ethernet/W6300
+            )
+    target_link_libraries(W6300_FILES PRIVATE ETHERNET_FILES)
 endif()
 
 # Loopback
