@@ -66,7 +66,7 @@ bool i2c_engine_run(struct i2c_engine_state *state) {
       state->timeout_check = init_single_timeout_until(&state->timeout_state, make_timeout_time_us(state->timeout_us));
       return true;
     }
-    else if (state->timeout_check(&state->timeout_state)) {
+    else if (state->timeout_check(&state->timeout_state, false)) {
       state->phase = I2CES_FAIL;
       state->abort_reason = 0; // timeout
       return true;
@@ -86,7 +86,7 @@ bool i2c_engine_run(struct i2c_engine_state *state) {
       state->timeout_check = init_single_timeout_until(&state->timeout_state, make_timeout_time_us(500));
       return true;
     }
-    else if (state->timeout_check(&state->timeout_state)) {
+    else if (state->timeout_check(&state->timeout_state, false)) {
       state->phase = I2CES_FAIL;
       state->abort_reason = 0; // timeout
       return true;
@@ -103,7 +103,7 @@ bool i2c_engine_run(struct i2c_engine_state *state) {
       state->phase = I2CES_READ_BYTE2;
       return true;
     }
-    else if (state->timeout_check(&state->timeout_state)) {
+    else if (state->timeout_check(&state->timeout_state, false)) {
       state->phase = I2CES_FAIL;
       state->abort_reason = 0; // timeout
       return true;
@@ -126,7 +126,7 @@ bool i2c_engine_run(struct i2c_engine_state *state) {
       state->timeout_check = init_single_timeout_until(&state->timeout_state, make_timeout_time_us(state->timeout_us));
       return true;
     }
-    else if (state->timeout_check(&state->timeout_state)) {
+    else if (state->timeout_check(&state->timeout_state, false)) {
       state->phase = I2CES_FAIL;
       state->abort_reason = 0; // timeout
       return true;
@@ -145,7 +145,7 @@ bool i2c_engine_run(struct i2c_engine_state *state) {
       state->timeout_check = init_single_timeout_until(&state->timeout_state, make_timeout_time_us(500));
       return true;
     }
-    else if (state->timeout_check(&state->timeout_state)) {
+    else if (state->timeout_check(&state->timeout_state, false)) {
       state->phase = I2CES_FAIL;
       state->abort_reason = 0; // timeout
       return true;
@@ -162,7 +162,7 @@ bool i2c_engine_run(struct i2c_engine_state *state) {
     state->i2c->hw->enable = 1; // clear abort
     state->i2c->hw->clr_intr;
     state->i2c->hw->tx_abrt_source;
-    if (state->timeout_check(&state->timeout_state)) {
+    if (state->timeout_check(&state->timeout_state, false)) {
       gpio_put(state->reset_pin, 1);
       state->timeout_check = init_single_timeout_until(&state->timeout_state, make_timeout_time_us(20000));
       state->phase = I2CES_FAIL_WAIT2;
@@ -172,14 +172,14 @@ bool i2c_engine_run(struct i2c_engine_state *state) {
   case I2CES_FAIL_WAIT2:
     state->i2c->hw->clr_intr;
     state->i2c->hw->tx_abrt_source;
-    if (state->timeout_check(&state->timeout_state)) {
+    if (state->timeout_check(&state->timeout_state, false)) {
       state->phase = I2CES_FAIL_RECOVER;
     }
     return false;
   case I2CES_FAIL_RECOVER:
     return false;
   case I2CES_WAIT:
-    if (state->timeout_check(&state->timeout_state)) {
+    if (state->timeout_check(&state->timeout_state, false)) {
       state->phase = I2CES_IDLE;
     }
     return false;
