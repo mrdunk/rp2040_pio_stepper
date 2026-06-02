@@ -46,6 +46,11 @@ double compute_velocity_cmd(
 /* Generate step counts and send to PIOs. */
 uint8_t do_steps(const uint8_t joint);
 
+/* Set the HIGH-phase loop iteration count for a joint's step pulse.
+ * count is clamped to 6 bits (0–63); default is STEP_PIO_HIGH_COUNT_DEFAULT.
+ * Takes effect on the next FIFO word (next servo period). */
+void pio_set_step_high_count(uint32_t joint, uint32_t count);
+
 int32_t clamp_accel(int32_t velocity_q, int32_t last_velocity_q, int32_t max_accel_q);
 
 #ifdef BUILD_TESTS

@@ -5,9 +5,11 @@ size_t pio0;
 size_t pio1;
 
 void step_gen_program(size_t);
+void step_gen2_program(size_t);
 void step_count_program(size_t);
 
 void step_gen_program_init(size_t, size_t, size_t, size_t, size_t);
+void step_gen2_program_init(size_t, size_t, size_t, size_t, size_t);
 void step_count_program_init(size_t, size_t, size_t, size_t, size_t);
 size_t pio_add_program(size_t, const void*);
 int pio_claim_unused_sm(size_t, int);

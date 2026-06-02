@@ -91,6 +91,93 @@ static inline void step_gen_program_init(
 
 
 
+; step_gen2: fixed HIGH pulse width (~2.53µs), variable LOW periods either side.
+;
+; Solves the stepper driver compatibility issue in step_gen where the HIGH pulse
+; width equals the LOW width (50:50 duty cycle), causing it to fall below driver
+; minimum pulse specs at high step rates and to be excessively long at low rates.
+;
+; Same FIFO protocol as step_gen: one 32-bit word per update.
+;   bit 0      = direction (0=reverse, 1=forward)
+;   bits 24:1  = step_low_half: each LOW phase duration in PIO clock cycles
+;   bits 30:25 = high_count: HIGH phase loop count (21 cycles/iteration)
+;   zero word  = stop (PIO idles until new data)
+;
+; Step waveform: LOW(step_low_half) → HIGH(1 + (high_count+1)×21 cycles) → LOW(step_low_half)
+; step_period = 2*step_low_half + 348  where 348 = 1 + (high_count+1)×21 + 11, high_count=15
+;
+; HIGH phase: mov y,isr side 1  +  (high_count+1) × (nop[19] + jmp y--) = 1 + (high_count+1)×21 cycles
+; (loop runs high_count+1 times: y counts down from high_count to 0, fall-through at y=0 still executes)
+; Default high_count=15 → 1 + 16×21 = 337 cycles ≈ 2.53µs (matches previous hardcoded value)
+
+.program step_gen2
+.side_set 1 opt
+
+  set x, 0
+
+.wrap_target
+check:
+    mov y, STATUS   side 0    ; STEP=LOW; determine if new data has arrived
+    jmp !y, new_data
+    nop [3]                   ; Balance new_data path: both paths = 6 cycles to data_acquired
+
+data_acquired:
+    jmp !x, check             ; x=0 = stop; tight poll loop (same behaviour as step_gen)
+
+    mov y, x                  ; LOW phase 1 (variable)
+low1:
+    jmp y-- low1
+
+    ; HIGH pulse duration is controlled by high_count (bits 30:25 of the FIFO word).
+    ; Each loop iteration = nop[19] + jmp y-- = 21 cycles. Default high_count=15 → 337 cycles ≈ 2.53µs.
+    ; Valid range: high_count 4–63 → 0.8µs–10.1µs @ 133MHz PIO clock (high_count=0 wraps Y to 0xFFFFFFFF).
+    mov y, isr      side 1    ; STEP=HIGH; load HIGH-phase counter from ISR
+high_loop:
+    nop [19]                  ; 20 cycles per iteration (+ 1 for jmp = 21 total)
+    jmp y-- high_loop         ; repeats high_count+1 times; total = (high_count+1)×21 cycles
+
+    mov y, x        side 0    ; STEP=LOW; LOW phase 2 (variable)
+low2:
+    jmp y-- low2
+.wrap
+
+new_data:
+    pull
+    out pins, 1               ; Direction pin
+    out x, 24                 ; step_low_half into X (24 bits; persists until next FIFO read)
+    out y, 6                  ; high_count (bits 30:25) into Y
+    mov isr, y                ; persist high_count in ISR for HIGH phase
+    jmp data_acquired
+
+
+
+% c-sdk {
+
+static inline void step_gen2_program_init(
+    PIO pio, uint sm, uint offset, uint pin_step, uint pin_direction
+) {
+  pio_sm_config config = step_gen2_program_get_default_config(offset);
+
+  sm_config_set_clkdiv(&config, 1.0);
+
+  pio_gpio_init(pio, pin_step);
+  pio_sm_set_consecutive_pindirs(pio, sm, pin_step, 1, true);
+  sm_config_set_sideset_pins(&config, pin_step);
+
+  pio_gpio_init(pio, pin_direction);
+  pio_sm_set_consecutive_pindirs(pio, sm, pin_direction, 1, true);
+  sm_config_set_out_pins(&config, pin_direction, 1);
+
+  sm_config_set_out_shift(&config, true, false, 32);
+  sm_config_set_mov_status(&config, STATUS_TX_LESSTHAN, 1);
+
+  pio_sm_init(pio, sm, offset, &config);
+}
+
+%}
+
+
+
 ; This program monitors step and direction IO pins and tracks stepper motor position.
 ; Note it reads pin values directly. The RP2040 allows pins configured as outputs
 ; to be read as inputs, yielding the value they were set to. There is a ~2 instruction

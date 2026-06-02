@@ -1,7 +1,8 @@
 #include <stddef.h>
 
 void step_gen_program(size_t pio) {}
-void step_count_program(size_t pio ) {}
+void step_gen2_program(size_t pio) {}
+void step_count_program(size_t pio) {}
 
 
 void step_count_program_init(
@@ -9,6 +10,10 @@ void step_count_program_init(
 ) {}
 
 void step_gen_program_init(
+    size_t pio, size_t sm, size_t offset, size_t pin_step, size_t pin_direction
+) {}
+
+void step_gen2_program_init(
     size_t pio, size_t sm, size_t offset, size_t pin_step, size_t pin_direction
 ) {}
 

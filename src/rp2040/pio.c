@@ -20,9 +20,15 @@
 #include "pio.h"
 #include "config.h"
 
-/* PIO instruction cycles consumed by the state machine loop itself (derived
- * from pico_stepper.pio); subtracted when converting step period to PIO len. */
-#define STEP_PIO_LEN_OVERHEAD  9
+/* Half of the total fixed overhead per step cycle in step_gen2 (pico_stepper.pio):
+ *   HIGH phase:        337 cycles  (mov y,isr + (high_count+1)×(nop[19]+jmp y--), default high_count=15 → 16×21+1)
+ *   non-loop overhead:  11 cycles  (FIFO check + stop guard + LOW setup × 2 + loop ends × 2)
+ *   total overhead:    348 cycles  = 2 × 174
+ * Subtracted from desired_half_period to get step_low_half:
+ *   step_low_half = period_ticks * 32768 / abs(plan_vel_q) - STEP_PIO_LEN_OVERHEAD
+ *   step_period   = 2*(step_low_half + STEP_PIO_LEN_OVERHEAD) */
+#define STEP_PIO_LEN_OVERHEAD        174
+#define STEP_PIO_HIGH_COUNT_DEFAULT   15   /* 1 + 16×21 cycles = 337 cycles ≈ 2.53µs */
 #define RP2040_CLOCK_MHZ       133
 #define Q16_ONE                65536  /* 1.0 in Q16.16 fixed-point */
 
@@ -54,6 +60,7 @@ typedef struct {
     int32_t  step_accumulator_q;
     uint32_t last_direction;
     uint32_t last_commanded_direction;
+    uint32_t high_count;    /* HIGH-phase loop iterations; default STEP_PIO_HIGH_COUNT_DEFAULT */
 } JointPioState;
 
 static JointPioState joint_state[MAX_JOINT];
@@ -106,10 +113,10 @@ void init_pio(const uint32_t joint)
 
   if(programs_loaded == 0)
   {
-    offset_pio0 = pio_add_program(pio0, &step_gen_program);
+    offset_pio0 = pio_add_program(pio0, &step_gen2_program);
 
 #if MAX_JOINT > 4
-    offset_pio1_gen = pio_add_program(pio1, &step_gen_program);
+    offset_pio1_gen = pio_add_program(pio1, &step_gen2_program);
 #endif
 #if NUM_FEEDBACK > 0
     offset_pio1_count = pio_add_program(pio1, &step_count_program);
@@ -133,8 +140,8 @@ void init_pio(const uint32_t joint)
 
   /* Initialise the step_gen state machine for this joint. */
   pio_sm_set_enabled(JOINT_PIO(joint), joint_state[joint].sm_gen, false);
-  step_gen_program_init(JOINT_PIO(joint), joint_state[joint].sm_gen,
-                        JOINT_GEN_OFFSET(joint), io_pos_step, io_pos_dir);
+  step_gen2_program_init(JOINT_PIO(joint), joint_state[joint].sm_gen,
+                         JOINT_GEN_OFFSET(joint), io_pos_step, io_pos_dir);
   pio_sm_set_enabled(JOINT_PIO(joint), joint_state[joint].sm_gen, true);
 
   if(joint_state[joint].sm_gen != joint % 4) {
@@ -158,6 +165,7 @@ void init_pio(const uint32_t joint)
     }
   }
 
+  joint_state[joint].high_count = STEP_PIO_HIGH_COUNT_DEFAULT;
   joint_state[joint].init_done = true;
 }
 
@@ -414,33 +422,37 @@ static int32_t commit_steps(
     if (!pio_sm_is_tx_fifo_empty(JOINT_PIO(joint), joint_state[joint].sm_gen))
         return dq->vel_ff_q;
 
-    /* Encoding: lower bit = direction, upper bits = step half-period in ticks.
-     * step_len=0 encodes a stop word (PIO idles); direction bit is preserved so
-     * the DIR pin does not toggle on idle writes. */
-    int32_t step_len;
+    /* Encoding: lower bit = direction, upper bits = step_low_half in ticks.
+     * step_low_half=0 encodes a stop word (PIO idles); direction bit is preserved
+     * so the DIR pin does not toggle on idle writes.
+     * step_period = 2*(step_low_half + STEP_PIO_LEN_OVERHEAD) */
+    int32_t step_low_half;
     int sub1step;
     if (abs(plan_vel_q) >= Q16_ONE) {
-        /* Continuous: step_len sized for plan_vel_q; PIO auto-repeats via
+        /* Continuous: step_low_half sized for plan_vel_q; PIO auto-repeats via
          * stale-x across period boundaries — no stop word needed.
          * int64 prevents overflow: 133000 * 32768 > INT32_MAX. */
-        step_len = (int32_t)((int64_t)dq->period_ticks * 32768 / abs(plan_vel_q))
-                   - STEP_PIO_LEN_OVERHEAD;
-        if (step_len < 0) step_len = 0;
+        step_low_half = (int32_t)((int64_t)dq->period_ticks * 32768 / abs(plan_vel_q))
+                        - STEP_PIO_LEN_OVERHEAD;
+        if (step_low_half < 0) step_low_half = 0;
         sub1step = 0;
     } else {
-        /* Sub-1-step: step occupies ~half the period (period_ticks/4 for step_len,
-         * giving 2*(period_ticks/4)+11 ≈ period_ticks/2 PIO cycles total).
+        /* Sub-1-step: step occupies exactly period_ticks/2 PIO cycles total
+         * (2*(period_ticks/4 - 174) + 348 = period_ticks/2).
          * Using period_ticks/2 here would make the step consume nearly the entire
          * period; the trailing stop word would still be in the FIFO when the next
          * timer fires, causing the !fifo_empty guard to spuriously drop the next step.
-         * Halving step_len leaves ~half the period for the stop word to clear.
-         * step_len=0 when n_steps=0 — the resulting step_word equals a stop word. */
-        step_len = n_steps > 0 ? dq->period_ticks / 4 - STEP_PIO_LEN_OVERHEAD : 0;
+         * Halving step_low_half leaves ~half the period for the stop word to clear.
+         * step_low_half=0 when n_steps=0 — the resulting step_word equals a stop word. */
+        step_low_half = n_steps > 0 ? dq->period_ticks / 4 - STEP_PIO_LEN_OVERHEAD : 0;
         sub1step = 1;
     }
 
-    if (step_len > 0) joint_state[joint].last_direction = direction;
-    uint32_t step_word = ((uint32_t)step_len << 1) | joint_state[joint].last_direction;
+    if (step_low_half > 0) joint_state[joint].last_direction = direction;
+    uint32_t high_count = joint_state[joint].high_count & 0x3F;
+    uint32_t step_word  = (high_count << 25)
+                        | (((uint32_t)step_low_half & 0xFFFFFF) << 1)
+                        | joint_state[joint].last_direction;
     pio_sm_put(JOINT_PIO(joint), joint_state[joint].sm_gen, step_word);
     if (sub1step && n_steps >= 1) {
         /* Push stop word directly — do NOT use issue_stop_word() here.
@@ -519,6 +531,12 @@ uint8_t do_steps(const uint8_t joint) {
       abs_pos_requested, abs_pos_achieved,
       &joint_state[joint].step_accumulator_q);
 
+  /* Clamp to max_velocity. Position-mode Kp corrections can exceed max_velocity
+   * when max_accel=0 (no stopping cap) and error is large. Without this clamp,
+   * high velocity_q produces step_low_half < 0 which is truncated to a stop word. */
+  if (velocity_q >  dq.max_vel_q) velocity_q =  dq.max_vel_q;
+  if (velocity_q < -dq.max_vel_q) velocity_q = -dq.max_vel_q;
+
   joint_state[joint].last_velocity_q = velocity_q;
 
   if (!enabled && velocity_q == 0) {
@@ -544,6 +562,11 @@ uint8_t do_steps(const uint8_t joint) {
   joint_state[joint].last_pos_achieved = abs_pos_achieved;
 
   return enabled ? updated : 0;
+}
+
+void pio_set_step_high_count(uint32_t joint, uint32_t count) {
+    if (joint >= MAX_JOINT) return;
+    joint_state[joint].high_count = count & 0x3F;
 }
 
 #ifdef BUILD_TESTS

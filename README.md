@@ -15,8 +15,9 @@ See [Setup](docs/setup.md) to build the firmware, install the driver, and config
 | Property | Value |
 |----------|-------|
 | Joints (stepper axes) | Up to 8 |
-| Step rate — theoretical max | 6.65 MHz per joint (PIO ceiling at 133 MHz clock) |
-| Step rate — practical max | ~500 kHz per joint (limited by stepper driver minimum pulse width, typically 1–2 µs) |
+| Step rate — theoretical max | ~380 kHz per joint (STEP HIGH pulse is a fixed 2.53 µs; minimum step period is 2.63 µs) |
+| Step rate — practical max | ~131 kHz per joint (both HIGH and LOW meet TB6600/DM860 2.5 µs minimums) |
+| STEP pulse width | Fixed 2.53 µs at all step rates (independent of velocity) |
 | Step command modes | Position or velocity, configurable per joint |
 | Position feedback | Step counter via second PIO state machine |
 | GPIO channels | 32 by default (compile-time limit; see [Advanced GPIO](docs/setup.md#advanced-increasing-gpio-and-i2c-expander-counts)) |
