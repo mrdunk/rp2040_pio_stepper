@@ -20,15 +20,17 @@
 #include "pio.h"
 #include "config.h"
 
-/* Half of the total fixed overhead per step cycle in step_gen2 (pico_stepper.pio):
- *   HIGH phase:        337 cycles  (mov y,isr + (high_count+1)×(nop[19]+jmp y--), default high_count=15 → 16×21+1)
- *   non-loop overhead:  11 cycles  (FIFO check + stop guard + LOW setup × 2 + loop ends × 2)
- *   total overhead:    348 cycles  = 2 × 174
- * Subtracted from desired_half_period to get step_low_half:
+/* Fixed overhead per step cycle in step_gen2 (pico_stepper.pio):
+ *   HIGH phase:     1 + (high_count+1)×21 cycles  (mov y,isr + (high_count+1)×(nop[19]+jmp y--))
+ *   non-loop:      12 cycles  (FIFO-check path 6 + stop-guard 1 + LOW-setup×2 + LOW-end×2 + HIGH-setup 1)
+ *   total:         12 + (high_count+1)×21  — must be even (requires odd high_count; see static assert)
+ * STEP_PIO_LEN_OVERHEAD = total/2, subtracted from desired_half_period to get step_low_half:
  *   step_low_half = period_ticks * 32768 / abs(plan_vel_q) - STEP_PIO_LEN_OVERHEAD
  *   step_period   = 2*(step_low_half + STEP_PIO_LEN_OVERHEAD) */
-#define STEP_PIO_LEN_OVERHEAD        174
-#define STEP_PIO_HIGH_COUNT_DEFAULT   15   /* 1 + 16×21 cycles = 337 cycles ≈ 2.53µs */
+#define STEP_PIO_HIGH_COUNT_DEFAULT   15   /* 1 + 16×21 = 337 cycles ≈ 2.53µs */
+#define STEP_PIO_LEN_OVERHEAD         ((12 + (STEP_PIO_HIGH_COUNT_DEFAULT + 1) * 21) / 2)
+_Static_assert(((12 + (STEP_PIO_HIGH_COUNT_DEFAULT + 1) * 21) % 2) == 0,
+               "STEP_PIO_HIGH_COUNT_DEFAULT must be odd for exact overhead calculation");
 #define RP2040_CLOCK_MHZ       133
 #define Q16_ONE                65536  /* 1.0 in Q16.16 fixed-point */
 
