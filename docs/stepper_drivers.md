@@ -9,11 +9,13 @@ parameters that matter for driver compatibility and how to configure them.
 ## Timing parameters
 
 ```
-  DIR  ──────────────────────────────────────────────────
-  STEP ─────╮          ╭────────╮          ╭────────╮
-            │          │        │          │        │
-            ╰──────────╯        ╰──────────╯        ╰──
-            ← low1 →   ← HIGH → ← low2 →  ← low1 → ...
+  DIR  ───────────────────────────╮
+                                  ╰─────────────────────────
+
+  STEP      ╭────────╮                        ╭────────╮
+            │        │                        │        │
+  ──────────╯        ╰────────────────────────╯        ╰─────
+  ← low1  →←  HIGH  →←   low2  →←   low1  →←  HIGH  →
 ```
 
 | Parameter | Description |
