@@ -24,6 +24,7 @@ hal_float_t joint_vel_fb[4];
 hal_s32_t joint_pos_error_fb[4];
 hal_bit_t joint_enable_fb[4];
 hal_float_t joint_vel_calculated[4];
+hal_bit_t joint_dir_setup_violation[4];
 hal_u32_t core1_period;
 hal_u32_t core1_tick;
 hal_u32_t core1_work_us;
@@ -49,8 +50,9 @@ void setup_data(skeleton_t* data) {
     data->joint_scale[joint] = &(joint_scale[joint]);
     data->joint_vel_fb[joint] = &(joint_vel_fb[joint]);
     data->joint_pos_error_fb[joint] = &(joint_pos_error_fb[joint]);
-    data->joint_enable_fb[joint]      = &(joint_enable_fb[joint]);
-    data->joint_vel_calculated[joint] = &(joint_vel_calculated[joint]);
+    data->joint_enable_fb[joint]           = &(joint_enable_fb[joint]);
+    data->joint_vel_calculated[joint]      = &(joint_vel_calculated[joint]);
+    data->joint_dir_setup_violation[joint] = &(joint_dir_setup_violation[joint]);
   }
   data->update_overrun  = &update_overrun;
   data->update_underrun = &update_underrun;
@@ -207,11 +209,13 @@ static void test_joint_metrics(void **state) {
 
     skeleton_t data = {0};
     setup_data(&data);
-   
+
+    /* bits 0 and 1 set: joints 0 and 1 violated DIR setup time */
     struct Reply_joint_metrics message = {
-        .type = REPLY_JOINT_METRICS,
-        .overrun_occurred  = 1,
-        .underrun_occurred = 1,
+        .type                = REPLY_JOINT_METRICS,
+        .overrun_occurred    = 1,
+        .underrun_occurred   = 1,
+        .dir_setup_violations = 0x03,
     };
 
     memcpy(buffer.payload, &message, sizeof(message));
@@ -227,6 +231,11 @@ static void test_joint_metrics(void **state) {
             NULL,
             NULL
             );
+
+    assert_int_equal(*data.joint_dir_setup_violation[0], 1);
+    assert_int_equal(*data.joint_dir_setup_violation[1], 1);
+    assert_int_equal(*data.joint_dir_setup_violation[2], 0);
+    assert_int_equal(*data.joint_dir_setup_violation[3], 0);
 }
 
 /* EMA pins reflect combined overrun/underrun across all joints. */

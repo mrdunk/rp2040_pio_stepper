@@ -539,6 +539,14 @@ bool unpack_joint_metrics(
   *data->core1_work_us   = reply->core1_work_us;
   *data->core0_work_us   = reply->core0_work_us;
 
+  uint8_t violations = reply->dir_setup_violations;
+  for (size_t j = 0; j < MAX_JOINT; j++)
+      *data->joint_dir_setup_violation[j] = (violations >> j) & 1;
+  if (violations)
+      rtapi_print_msg(RTAPI_MSG_ERR,
+          "rp2040_eth: DIR setup time violation on joint(s) 0x%02x — reduce MAX_VELOCITY\n",
+          violations);
+
   (*received_count)++;
   return true;
 }

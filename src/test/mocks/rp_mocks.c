@@ -87,3 +87,7 @@ bool cancel_alarm(alarm_id_t alarm_id) {
     return true;
 }
 
+__attribute__((weak)) uint8_t pio_get_and_clear_dir_setup_violations(void) {
+    return 0;
+}
+

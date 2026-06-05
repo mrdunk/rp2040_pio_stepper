@@ -17,6 +17,7 @@
 #include "messages.h"
 #include "buffer.h"
 #include "gpio.h"
+#include "pio.h"
 
 // Mutexes for locking the main config which is shared between cores.
 mutex_t mtx_top;
@@ -548,10 +549,11 @@ bool serialise_joint_metrics(struct NWBuffer* tx_buf) {
     any_overrun  |= get_and_reset_overrun_count(joint);
     any_underrun |= get_and_reset_underrun_count(joint);
   }
-  reply.overrun_occurred  = any_overrun  ? 1 : 0;
-  reply.underrun_occurred = any_underrun ? 1 : 0;
-  reply.core1_work_us     = core1_work_us;
-  reply.core0_work_us     = core0_work_us;
+  reply.overrun_occurred      = any_overrun  ? 1 : 0;
+  reply.underrun_occurred     = any_underrun ? 1 : 0;
+  reply.dir_setup_violations  = pio_get_and_clear_dir_setup_violations();
+  reply.core1_work_us         = core1_work_us;
+  reply.core0_work_us         = core0_work_us;
 
   uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
 

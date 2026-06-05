@@ -21,6 +21,12 @@
  * correction steps when vel-cmd is at its limit. */
 #define VEL_HEADROOM 1.01
 
+/* Minimum DIR-stable time before the STEP rising edge.  When a direction change
+ * occurs and low1 (= step_low_half) is shorter than this, a bit is set in the
+ * value returned by pio_get_and_clear_dir_setup_violations(). */
+#define DIR_SETUP_MIN_US     5     /* µs */
+#define DIR_SETUP_MIN_CYCLES 665   /* DIR_SETUP_MIN_US × 133 MHz */
+
 /* Initialize PIO state machines for a joint.
  * Always sets up a step_gen SM on the appropriate PIO block.
  * Also sets up a step_count SM on PIO1 for joints 0..NUM_FEEDBACK-1.
@@ -50,6 +56,12 @@ uint8_t do_steps(const uint8_t joint);
  * count is clamped to 6 bits (0–63); default is STEP_PIO_HIGH_COUNT_DEFAULT.
  * Takes effect on the next FIFO word (next servo period). */
 void pio_set_step_high_count(uint32_t joint, uint32_t count);
+
+/* Return and clear the per-joint DIR setup violation bitmask.
+ * Bit N is set when joint N had a direction change with step_low_half <
+ * DIR_SETUP_MIN_CYCLES in the most recent servo period(s).
+ * Clears on read (momentary semantics). */
+uint8_t pio_get_and_clear_dir_setup_violations(void);
 
 int32_t clamp_accel(int32_t velocity_q, int32_t last_velocity_q, int32_t max_accel_q);
 

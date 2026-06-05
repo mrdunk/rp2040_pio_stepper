@@ -23,6 +23,7 @@ hal_float_t joint_vel_fb[4];
 hal_s32_t joint_pos_error_fb[4];
 hal_bit_t joint_enable_fb[4];
 hal_float_t joint_vel_calculated[4];
+hal_bit_t joint_dir_setup_violation[4];
 hal_u32_t core1_period;
 hal_u32_t core1_tick;
 hal_u32_t core1_work_us;
@@ -47,8 +48,9 @@ void setup_data(skeleton_t* data) {
         data->joint_scale[joint] =           &joint_scale[joint];
         data->joint_vel_fb[joint] =          &joint_vel_fb[joint];
         data->joint_pos_error_fb[joint] =    &joint_pos_error_fb[joint];
-        data->joint_enable_fb[joint] =       &joint_enable_fb[joint];
-        data->joint_vel_calculated[joint] =  &joint_vel_calculated[joint];
+        data->joint_enable_fb[joint] =            &joint_enable_fb[joint];
+        data->joint_vel_calculated[joint] =       &joint_vel_calculated[joint];
+        data->joint_dir_setup_violation[joint] =  &joint_dir_setup_violation[joint];
     }
 
     data->core1_period  = &core1_period;

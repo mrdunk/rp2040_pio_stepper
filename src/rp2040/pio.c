@@ -70,6 +70,7 @@ static uint32_t offset_pio0       = 0;  /* step_gen on PIO0 */
 static uint32_t offset_pio1_gen   = 0;  /* step_gen on PIO1 (MAX_JOINT > 4 only) */
 static uint32_t offset_pio1_count = 0;  /* step_count on PIO1 (NUM_FEEDBACK > 0 only) */
 static uint8_t  programs_loaded   = 0;
+static uint8_t  dir_setup_violation_bits = 0;  /* bit N set when joint N violated DIR setup time */
 
 void init_pio(const uint32_t joint)
 {
@@ -401,6 +402,8 @@ static int32_t commit_steps(
     int32_t plan_vel_q = in_ff_path ? dq->vel_ff_q : velocity_q;
 
     uint32_t direction = (plan_vel_q > 0);
+    int direction_changed = (plan_vel_q != 0) &&
+                            (direction != joint_state[joint].last_commanded_direction);
 
     /* Bresenham accumulator — identical for both modes.
      * Continuous (>=1 step/period): n_steps is the full integer count.
@@ -449,6 +452,9 @@ static int32_t commit_steps(
         step_low_half = n_steps > 0 ? dq->period_ticks / 4 - STEP_PIO_LEN_OVERHEAD : 0;
         sub1step = 1;
     }
+
+    if (direction_changed && step_low_half > 0 && step_low_half < DIR_SETUP_MIN_CYCLES)
+        dir_setup_violation_bits |= (1u << joint);
 
     if (step_low_half > 0) joint_state[joint].last_direction = direction;
     uint32_t high_count = joint_state[joint].high_count & 0x3F;
@@ -571,12 +577,19 @@ void pio_set_step_high_count(uint32_t joint, uint32_t count) {
     joint_state[joint].high_count = count & 0x3F;
 }
 
+uint8_t pio_get_and_clear_dir_setup_violations(void) {
+    uint8_t v = dir_setup_violation_bits;
+    dir_setup_violation_bits = 0;
+    return v;
+}
+
 #ifdef BUILD_TESTS
 void pio_reset_for_test(void) {
     memset(joint_state, 0, sizeof(joint_state));
-    offset_pio0       = 0;
-    offset_pio1_gen   = 0;
-    offset_pio1_count = 0;
-    programs_loaded   = 0;
+    offset_pio0              = 0;
+    offset_pio1_gen          = 0;
+    offset_pio1_count        = 0;
+    programs_loaded          = 0;
+    dir_setup_violation_bits = 0;
 }
 #endif  // BUILD_TESTS

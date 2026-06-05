@@ -218,9 +218,10 @@ static const PinDef joint_pins[] = {
     { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_pos_fb),         sizeof(hal_float_t*), "joint", 0, 1, "pos-fb"           }, // Position feedback (cumulative step count ÷ scale)
     { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_vel_fb),         sizeof(hal_float_t*), "joint", 0, 1, "vel-fb"           }, // Velocity feedback (steps/period; Q16.16 from firmware, exact zero when stopped)
     { S32,   HAL_OUT, offsetof(skeleton_t, joint_pos_error_fb),   sizeof(hal_s32_t*),   "joint", 0, 1, "pos-error-fb"     }, // Difference between commanded and actual step count (raw steps, unscaled)
-    { PIN,   HAL_OUT, offsetof(skeleton_t, joint_enable_fb),      sizeof(hal_bit_t*),   "joint", 0, 1, "enable-fb"        }, // RP2040's actual enabled state; may remain false after network recovery until protocol re-enables
-    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_vel_calculated), sizeof(hal_float_t*), "joint", 0, 1, "vel-calculated"   }, // Velocity the RP2040 computed after applying vel-limit and accel-limit
-    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_ferror_suggest), sizeof(hal_float_t*), "joint", 0, 1, "ferror-suggest"   }, // Expected following error at vel-limit given current round-trip latency (units); use as FERROR lower bound
+    { PIN,   HAL_OUT, offsetof(skeleton_t, joint_enable_fb),           sizeof(hal_bit_t*),   "joint", 0, 1, "enable-fb"           }, // RP2040's actual enabled state; may remain false after network recovery until protocol re-enables
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_vel_calculated),      sizeof(hal_float_t*), "joint", 0, 1, "vel-calculated"       }, // Velocity the RP2040 computed after applying vel-limit and accel-limit
+    { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_ferror_suggest),      sizeof(hal_float_t*), "joint", 0, 1, "ferror-suggest"       }, // Expected following error at vel-limit given current round-trip latency (units); use as FERROR lower bound
+    { PIN,   HAL_OUT, offsetof(skeleton_t, joint_dir_setup_violation), sizeof(hal_bit_t*),   "joint", 0, 1, "dir-setup-violation"  }, // 1 for the servo period after a direction change with insufficient DIR setup time
 };
 
 static const PinDef spindle_pins[] = {

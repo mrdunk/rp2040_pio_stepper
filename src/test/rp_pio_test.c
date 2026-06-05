@@ -1719,6 +1719,109 @@ static void test_do_steps_accumulator_resets_on_direction_change(void **state) {
     assert_int_equal(last_pio_step_value & 1, 0);  /* backward */
 }
 
+/* DIR setup violation fires when step_low_half < DIR_SETUP_MIN_CYCLES on direction change.
+ *
+ * At 100,000 steps/s (100 steps/period @ 1ms), step_low_half ≈ 491 PIO cycles, which is
+ * below DIR_SETUP_MIN_CYCLES (665).  Reversing direction at this speed must set bit 0
+ * in the violation bitmask. */
+static void test_dir_setup_violation_fires_on_fast_reversal(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].max_velocity       = 200000.0;
+    config.joint[0].max_accel          = 0.0;
+    mock_tx_fifo_empty                 = 1;
+    mock_rx_fifo_level                 = 0;
+
+    /* Forward at low speed — establishes direction; discard any initial-state change. */
+    config.joint[0].velocity_requested = 1000.0;
+    config.joint[0].updated_from_c0   = 1;
+    do_steps(0);
+    pio_get_and_clear_dir_setup_violations();
+
+    /* Reverse at high speed: step_low_half ≈ 491 < DIR_SETUP_MIN_CYCLES (665). */
+    config.joint[0].velocity_requested = -100000.0;
+    config.joint[0].updated_from_c0   = 1;
+    do_steps(0);
+    assert_int_equal(pio_get_and_clear_dir_setup_violations(), 1 << 0);
+}
+
+/* No violation when step_low_half >= DIR_SETUP_MIN_CYCLES on direction change.
+ *
+ * At 1,000 steps/s (1 step/period @ 1ms), step_low_half ≈ 1490 PIO cycles >> 665.
+ * Reversing at this speed must not set any violation bit. */
+static void test_dir_setup_no_violation_at_low_speed(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].max_velocity       = 200000.0;
+    config.joint[0].max_accel          = 0.0;
+    mock_tx_fifo_empty                 = 1;
+    mock_rx_fifo_level                 = 0;
+
+    config.joint[0].velocity_requested = 1000.0;
+    config.joint[0].updated_from_c0   = 1;
+    do_steps(0);
+    pio_get_and_clear_dir_setup_violations();
+
+    config.joint[0].velocity_requested = -1000.0;
+    config.joint[0].updated_from_c0   = 1;
+    do_steps(0);
+    assert_int_equal(pio_get_and_clear_dir_setup_violations(), 0);
+}
+
+/* No violation when direction does not change, even at high speed. */
+static void test_dir_setup_no_violation_without_direction_change(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].max_velocity       = 200000.0;
+    config.joint[0].max_accel          = 0.0;
+    mock_tx_fifo_empty                 = 1;
+    mock_rx_fifo_level                 = 0;
+
+    /* First forward call may see initial-state direction "change"; discard. */
+    config.joint[0].velocity_requested = 100000.0;
+    config.joint[0].updated_from_c0   = 1;
+    do_steps(0);
+    pio_get_and_clear_dir_setup_violations();
+
+    /* Second forward call at same high speed: no direction change → no violation. */
+    config.joint[0].updated_from_c0   = 1;
+    do_steps(0);
+    assert_int_equal(pio_get_and_clear_dir_setup_violations(), 0);
+}
+
+/* Violation bit clears after the first read (momentary semantics). */
+static void test_dir_setup_violation_is_momentary(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].max_velocity       = 200000.0;
+    config.joint[0].max_accel          = 0.0;
+    mock_tx_fifo_empty                 = 1;
+    mock_rx_fifo_level                 = 0;
+
+    config.joint[0].velocity_requested = 1000.0;
+    config.joint[0].updated_from_c0   = 1;
+    do_steps(0);
+    pio_get_and_clear_dir_setup_violations();
+
+    config.joint[0].velocity_requested = -100000.0;
+    config.joint[0].updated_from_c0   = 1;
+    do_steps(0);
+    assert_int_equal(pio_get_and_clear_dir_setup_violations(), 1 << 0);  /* violation present */
+    assert_int_equal(pio_get_and_clear_dir_setup_violations(), 0);        /* cleared on first read */
+}
+
 /* Sub-1-step step_low_half must fit within half the servo period to prevent a FIFO race.
  *
  * With step_low_half = period_ticks/2 the PIO step takes 2*step_low_half+348 ≈ period_ticks
@@ -1872,6 +1975,10 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_sub1step_double_buffer_stop_word,               test_setup),
         cmocka_unit_test_setup(test_do_steps_sub1step_two_step_correction_stop_word,        test_setup),
         cmocka_unit_test_setup(test_do_steps_accumulator_resets_on_direction_change,       test_setup),
+        cmocka_unit_test_setup(test_dir_setup_violation_fires_on_fast_reversal,            test_setup),
+        cmocka_unit_test_setup(test_dir_setup_no_violation_at_low_speed,                   test_setup),
+        cmocka_unit_test_setup(test_dir_setup_no_violation_without_direction_change,       test_setup),
+        cmocka_unit_test_setup(test_dir_setup_violation_is_momentary,                      test_setup),
         cmocka_unit_test_setup(test_do_steps_sub1step_step_len_fits_half_period,           test_setup),
         cmocka_unit_test_setup(test_do_steps_sub1step_stop_word_pushed_despite_active_pio, test_setup),
     };
