@@ -100,15 +100,15 @@ static inline void step_gen_program_init(
 ; Same FIFO protocol as step_gen: one 32-bit word per update.
 ;   bit 0      = direction (0=reverse, 1=forward)
 ;   bits 24:1  = step_low_half: each LOW phase duration in PIO clock cycles
-;   bits 30:25 = high_count: HIGH phase loop count (21 cycles/iteration)
+;   bits 30:25 = high_count: HIGH phase loop count (16 cycles/iteration)
 ;   zero word  = stop (PIO idles until new data)
 ;
-; Step waveform: LOW(step_low_half) → HIGH(1 + (high_count+1)×21 cycles) → LOW(step_low_half)
-; step_period = 2*step_low_half + 348  where 348 = 1 + (high_count+1)×21 + 11, high_count=15
+; Step waveform: LOW(step_low_half) → HIGH(1 + (high_count+1)×16 cycles) → LOW(step_low_half)
+; step_period = 2*step_low_half + 350  where 350 = 14 + (high_count+1)×16, high_count=20
 ;
-; HIGH phase: mov y,isr side 1  +  (high_count+1) × (nop[19] + jmp y--) = 1 + (high_count+1)×21 cycles
+; HIGH phase: mov y,isr side 1  +  (high_count+1) × (nop[7] + jmp[7] y--) = 1 + (high_count+1)×16 cycles
 ; (loop runs high_count+1 times: y counts down from high_count to 0, fall-through at y=0 still executes)
-; Default high_count=15 → 1 + 16×21 = 337 cycles ≈ 2.53µs (matches previous hardcoded value)
+; Default high_count=20 → 1 + 21×16 = 337 cycles ≈ 2.53µs
 
 .program step_gen2
 .side_set 1 opt
@@ -119,7 +119,7 @@ static inline void step_gen_program_init(
 check:
     mov y, STATUS   side 0    ; STEP=LOW; determine if new data has arrived
     jmp !y, new_data
-    nop [3]                   ; Balance new_data path: both paths = 6 cycles to data_acquired
+    nop [5]                   ; Balance new_data path: non-new-data path = 8 cycles to data_acquired
 
 data_acquired:
     jmp !x, check             ; x=0 = stop; tight poll loop (same behaviour as step_gen)
@@ -129,12 +129,12 @@ low1:
     jmp y-- low1
 
     ; HIGH pulse duration is controlled by high_count (bits 30:25 of the FIFO word).
-    ; Each loop iteration = nop[19] + jmp y-- = 21 cycles. Default high_count=15 → 337 cycles ≈ 2.53µs.
-    ; Valid range: high_count 4–63 → 0.8µs–10.1µs @ 133MHz PIO clock (high_count=0 wraps Y to 0xFFFFFFFF).
+    ; Each loop iteration = nop[7] + jmp[7] y-- = 16 cycles. Default high_count=20 → 337 cycles ≈ 2.53µs.
+    ; Valid range: high_count 0–63 → 16–1024 cycles (0.12µs–7.7µs) @ 133MHz PIO clock.
     mov y, isr      side 1    ; STEP=HIGH; load HIGH-phase counter from ISR
 high_loop:
-    nop [19]                  ; 20 cycles per iteration (+ 1 for jmp = 21 total)
-    jmp y-- high_loop         ; repeats high_count+1 times; total = (high_count+1)×21 cycles
+    nop [7]                   ; 8 cycles per iteration (+ 8 for jmp = 16 total)
+    jmp [7] y-- high_loop     ; repeats high_count+1 times; total = (high_count+1)×16 cycles
 
     mov y, x        side 0    ; STEP=LOW; LOW phase 2 (variable)
 low2:

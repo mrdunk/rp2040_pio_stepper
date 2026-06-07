@@ -21,16 +21,14 @@
 #include "config.h"
 
 /* Fixed overhead per step cycle in step_gen2 (pico_stepper.pio):
- *   HIGH phase:     1 + (high_count+1)×21 cycles  (mov y,isr + (high_count+1)×(nop[19]+jmp y--))
- *   non-loop:      12 cycles  (FIFO-check path 6 + stop-guard 1 + LOW-setup×2 + LOW-end×2 + HIGH-setup 1)
- *   total:         12 + (high_count+1)×21  — must be even (requires odd high_count; see static assert)
+ *   HIGH phase:     1 + (high_count+1)×16 cycles  (mov y,isr + (high_count+1)×(nop[7]+jmp[7] y--))
+ *   non-loop:      14 cycles  (FIFO-check path 8 + stop-guard 1 + LOW-setup×2 + LOW-end×2 + HIGH-setup 1)
+ *   total:         14 + (high_count+1)×16  — always even (both terms even)
  * STEP_PIO_LEN_OVERHEAD = total/2, subtracted from desired_half_period to get step_low_half:
  *   step_low_half = period_ticks * 32768 / abs(plan_vel_q) - STEP_PIO_LEN_OVERHEAD
  *   step_period   = 2*(step_low_half + STEP_PIO_LEN_OVERHEAD) */
-#define STEP_PIO_HIGH_COUNT_DEFAULT   15   /* 1 + 16×21 = 337 cycles ≈ 2.53µs */
-#define STEP_PIO_LEN_OVERHEAD         ((12 + (STEP_PIO_HIGH_COUNT_DEFAULT + 1) * 21) / 2)
-_Static_assert(((12 + (STEP_PIO_HIGH_COUNT_DEFAULT + 1) * 21) % 2) == 0,
-               "STEP_PIO_HIGH_COUNT_DEFAULT must be odd for exact overhead calculation");
+#define STEP_PIO_HIGH_COUNT_DEFAULT   20   /* 1 + 21×16 = 337 cycles ≈ 2.53µs */
+#define STEP_PIO_LEN_OVERHEAD         ((14 + (STEP_PIO_HIGH_COUNT_DEFAULT + 1) * 16) / 2)
 #define RP2040_CLOCK_MHZ       133
 #define Q16_ONE                65536  /* 1.0 in Q16.16 fixed-point */
 
@@ -443,7 +441,7 @@ static int32_t commit_steps(
         sub1step = 0;
     } else {
         /* Sub-1-step: step occupies exactly period_ticks/2 PIO cycles total
-         * (2*(period_ticks/4 - 174) + 348 = period_ticks/2).
+         * (2*(period_ticks/4 - 175) + 350 = period_ticks/2).
          * Using period_ticks/2 here would make the step consume nearly the entire
          * period; the trailing stop word would still be in the FIFO when the next
          * timer fires, causing the !fifo_empty guard to spuriously drop the next step.

@@ -87,21 +87,21 @@ step rates well below these PIO maxima.
 `high_count` sets the step pulse HIGH width:
 
 ```
-HIGH duration = 1 + (high_count + 1) × 21  PIO cycles
-              = (1 + (high_count + 1) × 21) / 133  µs
+HIGH duration = 1 + (high_count + 1) × 16  PIO cycles
+              = (1 + (high_count + 1) × 16) / 133  µs
 ```
 
 | high_count | HIGH width | Suitable for |
 |-----------|-----------|--------------|
-| 0 | 165 ns | TMC only (careful — no margin) |
-| 4 | 2.21 µs | TMC, A4988, DRV8825, TB6600 |
-| 6 | 2.35 µs | TMC, A4988, DRV8825, TB6600 |
-| 11 | 1.92 µs | TMC, A4988, DRV8825 |
-| **15** | **2.53 µs** | **All drivers above (default)** |
-| 20 | 3.33 µs | DM542-class with extra margin |
-| 30 | 4.94 µs | Very conservative / long-cable setups |
+| 0 | 128 ns | TMC only (barely above 100 ns spec) |
+| 4 | 609 ns | TMC, A4988, DRV8825 |
+| 6 | 849 ns | TMC, A4988, DRV8825, TB6600 |
+| 11 | 1.45 µs | TMC, A4988, DRV8825, TB6600, DM542 |
+| 15 | 1.93 µs | All drivers above |
+| **20** | **2.53 µs** | **All drivers above (default)** |
+| 30 | 3.74 µs | Very conservative / long-cable setups |
 
-The default `high_count = 15` (≈ 2.53 µs) covers every driver in the table above
+The default `high_count = 20` (≈ 2.53 µs) covers every driver in the table above
 with margin. Only reduce it if minimising step overhead matters (e.g. TMC at very
 high step rates using LinuxCNC-side interpolation).
 
@@ -111,9 +111,8 @@ high step rates using LinuxCNC-side interpolation).
 pio_set_step_high_count(joint, high_count);
 ```
 
-Valid range is 0–63. Values `high_count = 0` map Y to 0 before the loop,
-resulting in a single iteration (≈ 165 ns) — safe for TMC but below spec for all
-other drivers.
+Valid range is 0–63. Values `high_count = 0` result in a single iteration
+(≈ 128 ns) — safe for TMC but below spec for all other drivers.
 
 ---
 
@@ -141,9 +140,9 @@ with a DM542 and SCALE = 400 steps/mm, set `MAX_VELOCITY ≤ 199000 / 400 = 497 
   HIGH so the duty cycle is lower) or reducing `MAX_VELOCITY`.
 
 - **TMC drivers in UART/SPI mode**: the step/dir interface is still active alongside
-  the serial interface. Pulse specs above apply. Use the default `high_count = 15`
+  the serial interface. Pulse specs above apply. Use the default `high_count = 20`
   unless step rate needs to exceed ~200 kHz, in which case reducing to `high_count = 4`
-  (≈ 2.21 µs) frees overhead without violating the 100 ns spec.
+  (≈ 609 ns) frees overhead without violating the 100 ns spec.
 
 - **Long cables or differential drivers**: signal rise time degrades with cable
   length. If in doubt, increase `high_count` to give the driver more time to register
