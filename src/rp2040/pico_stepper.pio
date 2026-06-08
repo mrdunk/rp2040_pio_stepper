@@ -134,7 +134,7 @@ low1:
     mov y, isr      side 1    ; STEP=HIGH; load HIGH-phase counter from ISR
 high_loop:
     nop [7]                   ; 8 cycles per iteration (+ 8 for jmp = 16 total)
-    jmp [7] y-- high_loop     ; repeats high_count+1 times; total = (high_count+1)×16 cycles
+    jmp y-- high_loop [7]     ; repeats high_count+1 times; total = (high_count+1)×16 cycles
 
     mov y, x        side 0    ; STEP=LOW; LOW phase 2 (variable)
 low2:
