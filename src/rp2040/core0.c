@@ -97,7 +97,7 @@ bool unpack_joint_enable(
 #endif
   update_joint_config(
       joint, CORE0,
-      &enabled, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+      &enabled, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
   (*received_count)++;
   return true;
@@ -129,7 +129,7 @@ bool unpack_joint_abs_pos(
   for(size_t joint = 0; joint < n; joint++) {
     update_joint_config(
         joint, CORE0,
-        NULL, NULL, NULL, &vel[joint], &pos[joint], NULL, NULL, NULL, NULL, NULL);
+        NULL, NULL, NULL, &vel[joint], &pos[joint], NULL, NULL, NULL, NULL, NULL, NULL, NULL);
   }
 
   (*received_count)++;
@@ -222,11 +222,14 @@ bool unpack_joint_config(
   double max_velocity = message->max_velocity;
   double max_accel = message->max_accel;
   uint8_t cmd_type = message->cmd_type;
+  uint8_t invert_step = message->invert_step;
+  uint8_t invert_dir = message->invert_dir;
 
 
 #ifdef VERBOSE_CONFIG_LOG
-  printf("%u Cfg joint %u: en=%u step=%i dir=%i vel=%f acc=%f cmd=%u\n",
-      *received_count, joint, enabled, io_step, io_dir, max_velocity, max_accel, cmd_type);
+  printf("%u Cfg joint %u: en=%u step=%i dir=%i vel=%f acc=%f cmd=%u inv_step=%u inv_dir=%u\n",
+      *received_count, joint, enabled, io_step, io_dir, max_velocity, max_accel, cmd_type,
+      invert_step, invert_dir);
 #endif
   update_joint_config(
       joint,
@@ -240,7 +243,9 @@ bool unpack_joint_config(
       &max_velocity,
       &max_accel,
       NULL,
-      &cmd_type);
+      &cmd_type,
+      &invert_step,
+      &invert_dir);
 
   if(!serialise_joint_config(joint, tx_buf)) {
     printf("WARN: TX buf full, drop joint config rep\n");

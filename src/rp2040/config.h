@@ -47,6 +47,8 @@ struct ConfigAxis {
   int8_t enabled;
   int8_t io_pos_step;             // Physical step IO pin.
   int8_t io_pos_dir;              // Physical direction IO pin.
+  uint8_t invert_step;            // 1 = invert STEP GPIO output via hardware override.
+  uint8_t invert_dir;             // 1 = invert DIR GPIO output via hardware override.
   uint8_t cmd_type;               // JOINT_CMD_POSITION or JOINT_CMD_VELOCITY
   double velocity_requested;      // In steps. Default value is UINT_MAX / 2.
   double abs_pos_requested;       // In steps. Default value is UINT_MAX / 2.
@@ -122,7 +124,9 @@ void update_joint_config(
     const double* max_velocity,
     const double* max_accel,
     const int32_t* velocity_achieved,
-    const uint8_t* cmd_type
+    const uint8_t* cmd_type,
+    const uint8_t* invert_step,
+    const uint8_t* invert_dir
 );
 
 uint32_t get_joint_config(
@@ -137,7 +141,9 @@ uint32_t get_joint_config(
     double* max_velocity,
     double* max_accel,
     int32_t* velocity_achieved,
-    uint8_t* cmd_type
+    uint8_t* cmd_type,
+    uint8_t* invert_step,
+    uint8_t* invert_dir
     );
 
 void disable_joint(const uint8_t joint, const uint8_t core);
