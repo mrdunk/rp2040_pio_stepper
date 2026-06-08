@@ -6,7 +6,7 @@
 
 typedef struct {} i2c_inst_t;
 typedef struct {} timeout_state_t;
-typedef bool (*check_timeout_fn)(timeout_state_t*);
+typedef bool (*check_timeout_fn)(timeout_state_t*, bool);
 
 #else
 
