@@ -48,6 +48,7 @@ static void write_port(void *arg, long period);
 
 enum t_types {
   PIN = 0,
+  BIT = 1,  // bit-type HAL param (direct value, not pointer)
   U32 = 2,
   S32 = 3,
   FLOAT = 4
@@ -135,6 +136,10 @@ static bool init_hal_param(
       return false;
     }
     switch(types) {
+      case BIT:
+        retval = hal_param_bit_newf(HAL_RW, data_p, component_id, format,
+                                    device_num, io_type, chan_num, specific_name);
+        break;
       case U32:
         retval = hal_param_u32_newf(HAL_RW, data_p, component_id, format,
                                     device_num, io_type, chan_num, specific_name);
@@ -148,7 +153,7 @@ static bool init_hal_param(
                                       device_num, io_type, chan_num, specific_name);
         break;
       case PIN:
-        rtapi_print_msg(RTAPI_MSG_ERR, "RP2040: ERROR: bit-type HAL params not supported\n");
+        rtapi_print_msg(RTAPI_MSG_ERR, "RP2040: ERROR: PIN type cannot be used as HAL param\n");
         return false;
     }
     if (retval < 0) {
@@ -203,9 +208,11 @@ static const ParamDef gpio_params[] = {
 };
 
 static const ParamDef joint_params[] = {
-    { S32, offsetof(skeleton_t, joint_gpio_step), sizeof(hal_s32_t), "joint", 1, "gpio-step" }, // RP2040 GPIO pin number for the step signal
-    { S32, offsetof(skeleton_t, joint_gpio_dir),  sizeof(hal_s32_t), "joint", 1, "gpio-dir"  }, // RP2040 GPIO pin number for the direction signal
-    { U32, offsetof(skeleton_t, joint_cmd_type),  sizeof(hal_u32_t), "joint", 1, "cmd-type"  }, // Step command mode: 0=position, 1=velocity (default)
+    { S32, offsetof(skeleton_t, joint_gpio_step),    sizeof(hal_s32_t), "joint", 1, "gpio-step"    }, // RP2040 GPIO pin number for the step signal
+    { S32, offsetof(skeleton_t, joint_gpio_dir),     sizeof(hal_s32_t), "joint", 1, "gpio-dir"     }, // RP2040 GPIO pin number for the direction signal
+    { U32, offsetof(skeleton_t, joint_cmd_type),     sizeof(hal_u32_t), "joint", 1, "cmd-type"     }, // Step command mode: 0=position, 1=velocity (default)
+    { BIT, offsetof(skeleton_t, joint_invert_step),  sizeof(hal_bit_t), "joint", 1, "invert-step"  }, // Invert STEP GPIO output polarity
+    { BIT, offsetof(skeleton_t, joint_invert_dir),   sizeof(hal_bit_t), "joint", 1, "invert-dir"   }, // Invert DIR GPIO output polarity
 };
 
 static const PinDef joint_pins[] = {
