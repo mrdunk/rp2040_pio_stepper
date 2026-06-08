@@ -5,9 +5,9 @@ device index of 0, the full prefix is `rp2040_eth.0`.
 
 Name format:
 - Scalar: `rp2040_eth.0.<name>`
-- Per-joint: `rp2040_eth.0.joint.<N>.<name>` (N = 0–3)
+- Per-joint: `rp2040_eth.0.joint.<N>.<name>` (N = 0–7, up to MAX_JOINT)
 - Per-GPIO: `rp2040_eth.0.gpio.<NN>.<name>` (NN = 00–63, zero-padded)
-- Per-spindle: `rp2040_eth.0.spindle.<N>.<name>` (N = 0–3)
+- Per-spindle: `rp2040_eth.0.spindle.<N>.<name>` (N = 0–3, up to MAX_SPINDLE)
 
 **HAL pins** can be connected to signals with `net`. **HAL parameters** are set once at
 config time with `setp` and cannot be connected to signals.
@@ -36,7 +36,7 @@ config time with `setp` and cannot be connected to signals.
 
 ## Joint Pins
 
-Per-joint pins are indexed 0–3. Replace `<N>` with the joint number.
+Per-joint pins are indexed 0–7 (up to MAX_JOINT − 1). Replace `<N>` with the joint number.
 
 | Pin | Type | Dir | Use | Description |
 |-----|------|-----|-----|-------------|
@@ -51,6 +51,7 @@ Per-joint pins are indexed 0–3. Replace `<N>` with the joint number.
 | `vel-calculated` | float | OUT | debug | Velocity the RP2040 computed after applying `vel-limit` and `accel-limit` |
 | `vel-cmd` | float | IN | user | Velocity command from LinuxCNC |
 | `vel-fb` | float | OUT | debug | Velocity feedback (raw steps per servo period, unscaled) |
+| `dir-setup-violation` | bit | OUT | debug | Pulses high for one servo period when a STEP pulse was issued within the DIR setup time window after a direction change |
 | `vel-limit` | float | IN | user | Maximum velocity (units/sec) |
 
 ### Joint Parameters
@@ -62,6 +63,8 @@ Hardware wiring — set once at config time.
 | `cmd-type` | u32 | Step command mode: `0` = position, `1` = velocity (default) |
 | `gpio-dir` | s32 | RP2040 GPIO pin number for the direction signal |
 | `gpio-step` | s32 | RP2040 GPIO pin number for the step signal |
+| `invert-dir` | bit | Invert DIR GPIO output polarity (for active-low DIR inputs) |
+| `invert-step` | bit | Invert STEP GPIO output polarity (for active-low STEP inputs) |
 
 **`cmd-type` modes:**
 
@@ -169,7 +172,7 @@ net pump-out  rp2040_eth.0.gpio.09.out
 
 ## Spindle Pins
 
-Per-spindle pins are indexed 0–3. Replace `<N>` with the spindle number.
+Per-spindle pins are indexed 0–3 (up to MAX_SPINDLE − 1). Replace `<N>` with the spindle number.
 
 | Pin | Type | Dir | Description |
 |-----|------|-----|-------------|
