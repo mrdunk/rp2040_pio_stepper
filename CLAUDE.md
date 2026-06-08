@@ -20,14 +20,18 @@ relevant to the current task.
 
 Be direct but constructive, offering solutions alongside criticism.
 Be concise. Shorter is better.
-Always ask before performing git commit. Never open PR to main.
 Save state whenever you have something useful to remember.
+
+**NEVER run `git commit` without explicit user instruction to do so.**
+Stage changes and report what is staged, then wait for the user to say "commit".
+This applies even when a commit seems like the obvious next step.
+Never open PR to main.
 
 ## Project overview
 
-RP2040-based stepper motor controller for LinuxCNC. Core0 handles UDP networking
-(W5500 Ethernet) and clock synchronisation; Core1 runs the stepper PIO loop.
-The driver side runs on the LinuxCNC PC (`src/driver/`).
+RP2040/RP2350-based stepper motor controller for LinuxCNC. Core0 handles UDP networking
+(WIZnet Ethernet — W5500, W5100S, W6100, or W6300) and clock synchronisation; Core1
+runs the stepper PIO loop. The driver side runs on the LinuxCNC PC (`src/driver/`).
 
 ## Code comments
 
@@ -48,9 +52,22 @@ ctest --test-dir build_tests --output-on-failure
 ### Firmware build (requires arm-none-eabi-gcc + pico-sdk)
 
 ```bash
-cmake -B build -S . -DBUILD_RP=ON
+cmake -B build -S . -DBUILD_RP=ON [-DETH_CHIP=W5500] [-DRP_CHIP=RP2040]
 make -C build stepper_control
 ```
+
+Key cmake options:
+
+| Variable | Default | Values | Notes |
+|----------|---------|--------|-------|
+| `ETH_CHIP` | `W5500` | `W5500`, `W5100S`, `W6100`, `W6300` | W6100/W6300 need hardware validation (issues #35/#36) |
+| `RP_CHIP` | `RP2040` | `RP2040`, `RP2350` | RP2350 builds clean; needs hardware validation (issue #34) |
+| `PICO_BOARD` | derived | e.g. `wiznet_w5500_evb_pico` | Auto-derived from RP_CHIP+ETH_CHIP; override if needed |
+| `MAX_JOINT` | `8` | `1`–`8` | Number of stepper axes |
+
+`PICO_BOARD` is derived as `wiznet_<eth_chip_lower>_evb_pico[2]`. Board headers for
+W5500/W6100/W6300 variants live in `boards/` (project-local; not in upstream pico-sdk).
+`wiznet_w5100s_evb_pico[2]` are provided by the pico-sdk submodule itself.
 
 Without `-DBUILD_RP=ON`, CMake configures successfully but produces an empty Makefile with no firmware targets — no error, no warning.
 

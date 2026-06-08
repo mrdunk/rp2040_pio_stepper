@@ -123,6 +123,18 @@ static void wizchip_write_burst(uint8_t *pBuf, uint16_t len)
 }
 #endif
 
+#if (_WIZCHIP_ == W6100)
+static void wizchip_read_buf(uint8_t *buf, datasize_t len)
+{
+    spi_read_blocking(SPI_PORT, 0xFF, buf, (size_t)len);
+}
+
+static void wizchip_write_buf(uint8_t *buf, datasize_t len)
+{
+    spi_write_blocking(SPI_PORT, buf, (size_t)len);
+}
+#endif
+
 static void wizchip_critical_section_lock(void)
 {
     critical_section_enter_blocking(&g_wizchip_cri_sec);
@@ -187,7 +199,11 @@ void wizchip_initialize(void)
     reg_wizchip_cs_cbfunc(wizchip_select, wizchip_deselect);
 
     /* SPI function register */
+#if (_WIZCHIP_ == W6100)
+    reg_wizchip_spi_cbfunc(wizchip_read, wizchip_write, wizchip_read_buf, wizchip_write_buf);
+#else
     reg_wizchip_spi_cbfunc(wizchip_read, wizchip_write);
+#endif
 #ifdef USE_SPI_DMA
     reg_wizchip_spiburst_cbfunc(wizchip_read_burst, wizchip_write_burst);
 #endif
@@ -196,7 +212,7 @@ void wizchip_initialize(void)
     uint8_t temp;
 #if (_WIZCHIP_ == W5100S)
     uint8_t memsize[2][4] = {{2, 2, 2, 2}, {2, 2, 2, 2}};
-#elif (_WIZCHIP_ == W5500)
+#elif (_WIZCHIP_ == W5500) || (_WIZCHIP_ == W6100) || (_WIZCHIP_ == W6300)
     uint8_t memsize[2][8] = {{2, 2, 2, 2, 2, 2, 2, 2}, {2, 2, 2, 2, 2, 2, 2, 2}};
 #endif
 

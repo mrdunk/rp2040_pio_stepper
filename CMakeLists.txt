@@ -13,7 +13,6 @@ include_directories (./src/shared/)
 
 OPTION(BUILD_RP "Build all examples" OFF)
 if(BUILD_RP)
-    # Pull in SDK (must be before project)
     if(NOT DEFINED PICO_SDK_PATH)
         set(PICO_SDK_PATH ${CMAKE_SOURCE_DIR}/libraries/pico-sdk)
         message(STATUS "PICO_SDK_PATH = ${PICO_SDK_PATH}")
@@ -29,22 +28,41 @@ if(BUILD_RP)
         message(STATUS "PORT_DIR = ${PORT_DIR}")
     endif()
 
+    # ETH_CHIP: Ethernet controller.
+    # W5500/W5100S: supported via libraries/ioLibrary_Driver.
+    # W6100/W6300: require ioLibrary_Driver submodule update — see issues #35/#36.
+    set(ETH_CHIP "W5500" CACHE STRING "Ethernet chip (W5500, W5100S, W6100, W6300)")
+    set_property(CACHE ETH_CHIP PROPERTY STRINGS W5500 W5100S W6100 W6300)
+
+    # RP_CHIP: MCU silicon variant.
+    # RP2350 requires pico-sdk v2.x — update the libraries/pico-sdk submodule first.
+    set(RP_CHIP "RP2040" CACHE STRING "RP MCU variant (RP2040, RP2350)")
+    set_property(CACHE RP_CHIP PROPERTY STRINGS RP2040 RP2350)
+
+    # Derive PICO_BOARD from RP_CHIP + ETH_CHIP unless the caller supplies it.
+    if(NOT DEFINED PICO_BOARD)
+        string(TOLOWER "${ETH_CHIP}" _eth_lower)
+        if(RP_CHIP STREQUAL "RP2350")
+            set(PICO_BOARD "wiznet_${_eth_lower}_evb_pico2")
+        else()
+            set(PICO_BOARD "wiznet_${_eth_lower}_evb_pico")
+        endif()
+        message(STATUS "PICO_BOARD = ${PICO_BOARD} (derived from RP_CHIP=${RP_CHIP}, ETH_CHIP=${ETH_CHIP})")
+    endif()
+
+    # Project-local board headers (W5500, W6100, W6300 variants not yet in upstream pico-sdk).
+    # Searched after the SDK's own boards directory, so SDK-provided headers take precedence.
+    list(APPEND PICO_BOARD_HEADER_DIRS ${CMAKE_SOURCE_DIR}/boards)
+
     include(rp2040_hat_c-patch.cmake)
     include(pico_sdk_import.cmake)
     include(rp2040_hat_c_sdk_version.cmake)
 
-    # Set project name
     set(PROJECT_NAME RP2040-STEPPER-C)
-
-    # Set project informations
     project(test_project C CXX ASM)
 
     # Initialize the SDK
     pico_sdk_init()
-
-    # Set ethernet chip
-    set(WIZNET_CHIP "W5500" CACHE STRING "Ethernet chip (W5500, W5100S)")
-    set_property(CACHE WIZNET_CHIP PROPERTY STRINGS W5500 W5100S)
 
     # Number of stepper joints (1-8); determines PIO layout and feedback allocation
     set(MAX_JOINT 8 CACHE STRING "Number of stepper joints (1-8)")
@@ -53,21 +71,22 @@ if(BUILD_RP)
     # Disable for production builds; UART blocking during startup causes missed UDP replies.
     option(VERBOSE_CONFIG_LOG "Log config message details to UART" OFF)
 
-    if(${WIZNET_CHIP} STREQUAL W5100S)
+    if(ETH_CHIP STREQUAL "W5100S")
         add_definitions(-D_WIZCHIP_=W5100S)
-    elseif(${WIZNET_CHIP} STREQUAL W5500)
+    elseif(ETH_CHIP STREQUAL "W5500")
         add_definitions(-D_WIZCHIP_=W5500)
+    elseif(ETH_CHIP STREQUAL "W6100")
+        add_definitions(-D_WIZCHIP_=W6100)
+    elseif(ETH_CHIP STREQUAL "W6300")
+        add_definitions(-D_WIZCHIP_=W6300)
     else()
-        message(FATAL_ERROR "WIZNET_CHIP is wrong = ${WIZNET_CHIP}")
+        message(FATAL_ERROR "ETH_CHIP is invalid: ${ETH_CHIP}. Must be one of: W5500, W5100S, W6100, W6300")
     endif()
 
-    message(STATUS "WIZNET_CHIP = ${WIZNET_CHIP}")
+    message(STATUS "ETH_CHIP = ${ETH_CHIP}")
+    message(STATUS "RP_CHIP  = ${RP_CHIP}")
 
-
-    # Code to include:
     add_subdirectory(src/rp2040)
-
-    # Add libraries in subdirectories
     add_subdirectory(${CMAKE_SOURCE_DIR}/libraries)
     add_subdirectory(${PORT_DIR})
 endif()
