@@ -116,6 +116,8 @@ void init_pio(const uint32_t joint)
   gpio_set_dir(io_pos_dir, GPIO_OUT);
   gpio_put(io_pos_step, 0);
   gpio_put(io_pos_dir, 0);
+  gpio_set_outover(io_pos_step, invert_step ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+  gpio_set_outover(io_pos_dir,  invert_dir  ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
 
   if(programs_loaded == 0)
   {
@@ -170,12 +172,6 @@ void init_pio(const uint32_t joint)
           joint, joint_state[joint].sm_count, expected_sm_count);
     }
   }
-
-  /* Apply output polarity inversion after all pio_gpio_init() calls — those
-   * zero the GPIO CTRL register (via gpio_set_function), wiping any earlier
-   * outover setting. */
-  gpio_set_outover(io_pos_step, invert_step ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
-  gpio_set_outover(io_pos_dir,  invert_dir  ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
 
   joint_state[joint].high_count = STEP_PIO_HIGH_COUNT_DEFAULT;
   joint_state[joint].init_done = true;
