@@ -21,7 +21,6 @@ relevant to the current task.
 Be direct but constructive, offering solutions alongside criticism.
 Be concise. Shorter is better.
 Save state whenever you have something useful to remember.
-If you discover something incorrect in your memory files, correct it.
 
 **NEVER run `git commit` without explicit user instruction to do so.**
 Stage changes and report what is staged, then wait for the user to say "commit".

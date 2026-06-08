@@ -88,8 +88,7 @@ struct __attribute__((packed)) Message_joint_config {
   int8_t gpio_step;               // Negative if disabled.
   int8_t gpio_dir;                // Negative if disabled.
   uint8_t cmd_type;               // JOINT_CMD_POSITION or JOINT_CMD_VELOCITY
-  uint8_t invert_step;            // 1 = invert STEP GPIO output
-  uint8_t invert_dir;             // 1 = invert DIR GPIO output
+  uint8_t _pad[2];                // align floats to 4-byte boundary
   float max_velocity;
   float max_accel;
 };
@@ -177,8 +176,7 @@ struct __attribute__((packed)) Reply_joint_config {
   int8_t gpio_step;
   int8_t gpio_dir;
   uint8_t cmd_type;               // JOINT_CMD_POSITION or JOINT_CMD_VELOCITY
-  uint8_t invert_step;            // 1 = STEP GPIO output is inverted
-  uint8_t invert_dir;             // 1 = DIR GPIO output is inverted
+  uint8_t _pad[2];                // align floats to 4-byte boundary
   float max_velocity;
   float max_accel;
 };

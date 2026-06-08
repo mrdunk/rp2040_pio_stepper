@@ -18,10 +18,6 @@ int gpio_get(uint32_t gpio) {
 void gpio_set_function (size_t gpio, enum gpio_function fn) {
 }
 
-void gpio_set_outover (uint32_t gpio, gpio_override_t value) {
-    (void)gpio; (void)value;
-}
-
 void mutex_enter_blocking(mutex_t *mtx) {
 }
 
