@@ -45,32 +45,49 @@ and why a guard exists. CLAUDE.md is for things with no natural home in the code
 ### Test build (host, no hardware needed)
 
 ```bash
-cmake -B build_tests -S . -DBUILD_TESTS=ON
-make -C build_tests
-ctest --test-dir build_tests --output-on-failure
+cmake --preset tests && cmake --build --preset tests
+ctest --preset tests
 ```
 
 ### Firmware build (requires arm-none-eabi-gcc + pico-sdk)
 
+Each variant has its own named preset and build directory under `build/`; no need to
+delete the build directory when switching configs.
+
 ```bash
-cmake -B build -S . -DBUILD_RP=ON [-DETH_CHIP=W5500] [-DRP_CHIP=RP2040]
-make -C build stepper_control
+cmake --preset rp2040-w5500 && cmake --build --preset rp2040-w5500
+cmake --preset rp2350-w5500 && cmake --build --preset rp2350-w5500
+```
+
+Available presets: `rp2040-w5500`, `rp2040-w5100s`, `rp2040-w6100`, `rp2040-w6300`,
+`rp2350-w5500`, `rp2350-w5100s`, `rp2350-w6100`, `rp2350-w6300`.
+
+Override `MAX_JOINT` on the command line (preset default is 4):
+
+```bash
+cmake --preset rp2040-w5500 -DMAX_JOINT=8 && cmake --build --preset rp2040-w5500
 ```
 
 Key cmake options:
 
-| Variable | Default | Values | Notes |
-|----------|---------|--------|-------|
-| `ETH_CHIP` | `W5500` | `W5500`, `W5100S`, `W6100`, `W6300` | W6100/W6300 need hardware validation (issues #35/#36) |
-| `RP_CHIP` | `RP2040` | `RP2040`, `RP2350` | RP2350 builds clean; needs hardware validation (issue #34) |
+| Variable | Preset default | Values | Notes |
+|----------|---------------|--------|-------|
+| `ETH_CHIP` | per preset | `W5500`, `W5100S`, `W6100`, `W6300` | W6100/W6300 need hardware validation (issues #35/#36) |
+| `RP_CHIP` | per preset | `RP2040`, `RP2350` | RP2350 builds clean; needs hardware validation (issue #34) |
 | `PICO_BOARD` | derived | e.g. `wiznet_w5500_evb_pico` | Auto-derived from RP_CHIP+ETH_CHIP; override if needed |
-| `MAX_JOINT` | `8` | `1`–`8` | Number of stepper axes |
+| `MAX_JOINT` | `4` | `1`–`8` | Number of stepper axes |
 
 `PICO_BOARD` is derived as `wiznet_<eth_chip_lower>_evb_pico[2]`. Board headers for
 W5500/W6100/W6300 variants live in `boards/` (project-local; not in upstream pico-sdk).
 `wiznet_w5100s_evb_pico[2]` are provided by the pico-sdk submodule itself.
 
-Without `-DBUILD_RP=ON`, CMake configures successfully but produces an empty Makefile with no firmware targets — no error, no warning.
+Without `-DBUILD_RP=ON` (or a firmware preset), CMake configures successfully but
+produces an empty Makefile with no firmware targets — no error, no warning.
+
+If `ccache` is installed it is used automatically for firmware builds; run `ccache -s`
+to verify hit rate when switching between presets.
+
+Personal preset overrides go in `CMakeUserPresets.json` (gitignored).
 
 ### Pre-commit hook
 

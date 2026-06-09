@@ -1,6 +1,7 @@
 build/
 build_rp/
 build_tests*/
+CMakeUserPresets.json
 .worktrees/
 
 # Ignore vim files:
