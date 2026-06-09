@@ -26,37 +26,49 @@ connect a UART serial console for debug output from the firmware (see [Advanced:
 
 ## Build the Firmware
 
-Three cache variables control the build:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ETH_CHIP` | `W5500` | Ethernet chip — `W5500`, `W5100S`, `W6100`, or `W6300` |
-| `RP_CHIP` | `RP2040` | MCU variant — `RP2040` or `RP2350` |
-| `MAX_JOINT` | `8` | Number of stepper joints (1–8) |
-
-`ETH_CHIP` and `RP_CHIP` together determine the target board. For example,
-`-DETH_CHIP=W5500 -DRP_CHIP=RP2040` targets the W5500-EVB-Pico;
-`-DETH_CHIP=W5500 -DRP_CHIP=RP2350` targets the W5500-EVB-Pico2.
-The correct `PICO_BOARD` is derived automatically — override with
-`-DPICO_BOARD=<name>` only if you need a non-standard board name.
+The repo ships with named CMake presets — one per hardware variant. Each preset
+has its own build directory so you can maintain builds for multiple configs
+side-by-side and switch between them without deleting anything.
 
 ```bash
-cmake -B build_rp -S . -DBUILD_RP=ON -DETH_CHIP=W5500 -DRP_CHIP=RP2040 -DMAX_JOINT=6
-make -C build_rp stepper_control
+cmake --preset rp2040-w5500 && cmake --build --preset rp2040-w5500
 ```
 
-Without `-DBUILD_RP=ON`, CMake configures successfully but produces an empty
-Makefile with no firmware targets — no error, no warning.
+Available presets:
+
+| Preset | Chip | Ethernet |
+|--------|------|----------|
+| `rp2040-w5500` | RP2040 | W5500 |
+| `rp2040-w5100s` | RP2040 | W5100S |
+| `rp2040-w6100` | RP2040 | W6100 |
+| `rp2040-w6300` | RP2040 | W6300 |
+| `rp2350-w5500` | RP2350 | W5500 |
+| `rp2350-w5100s` | RP2350 | W5100S |
+| `rp2350-w6100` | RP2350 | W6100 |
+| `rp2350-w6300` | RP2350 | W6300 |
+
+All presets default to `MAX_JOINT=4`. Override on the command line if needed:
+
+```bash
+cmake --preset rp2040-w5500 -DMAX_JOINT=6 && cmake --build --preset rp2040-w5500
+```
 
 `MAX_JOINT` determines the PIO layout and feedback channel allocation. It must
 match the number of joints configured in LinuxCNC. Rebuilding with a different
 value requires reflashing the firmware.
 
-The output image:
+If `ccache` is installed it is used automatically — subsequent builds after the
+first are significantly faster, especially when switching between presets that
+share most source files.
+
+The output image is at:
 
 ```
-build_rp/src/rp2040/stepper_control.uf2
+build/<preset-name>/src/rp2040/stepper_control.uf2
 ```
+
+For example, `cmake --preset rp2040-w5500` writes to
+`build/rp2040_w5500/src/rp2040/stepper_control.uf2`.
 
 See [Getting Started with Raspberry Pi Pico](https://rptl.io/pico-get-started)
 for full toolchain setup and build troubleshooting.
@@ -73,7 +85,7 @@ Hold BOOTSEL on the RP2040 while plugging USB. The device appears as a mass
 storage drive. Copy the `.uf2`:
 
 ```bash
-cp build_rp/src/rp2040/stepper_control.uf2 /media/$USER/RPI-RP2/
+cp build/rp2040_w5500/src/rp2040/stepper_control.uf2 /media/$USER/RPI-RP2/
 ```
 
 The board reboots automatically once the file is written.
@@ -502,7 +514,6 @@ the full list of joint pins and params.
 Tests run on the host — no hardware needed.
 
 ```bash
-cmake -B build_tests -S . -DBUILD_TESTS=ON
-make -C build_tests
-ctest --test-dir build_tests --output-on-failure
+cmake --preset tests && cmake --build --preset tests
+ctest --preset tests
 ```

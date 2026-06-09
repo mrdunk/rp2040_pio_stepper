@@ -11,6 +11,10 @@ execute_process(
 include_directories (./src/shared/)
 
 
+if(NOT BUILD_RP AND NOT BUILD_TESTS)
+    message(WARNING "Nothing to build. Use --preset <name>, or pass -DBUILD_RP=ON (firmware) or -DBUILD_TESTS=ON (host tests).")
+endif()
+
 OPTION(BUILD_RP "Build all examples" OFF)
 if(BUILD_RP)
     if(NOT DEFINED PICO_SDK_PATH)
