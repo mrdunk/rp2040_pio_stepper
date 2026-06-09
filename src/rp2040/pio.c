@@ -465,6 +465,9 @@ static int32_t commit_steps(
     if (direction_changed && step_low_half > 0 && step_low_half < DIR_SETUP_MIN_CYCLES)
         dir_setup_violation_bits |= (1u << joint);
 
+    config.joint[joint].step_len_us = step_low_half > 0
+        ? (uint16_t)((step_low_half + STEP_PIO_LEN_OVERHEAD) / RP2040_CLOCK_MHZ) : 0;
+
     if (step_low_half > 0) joint_state[joint].last_direction = direction;
     uint32_t high_count = joint_state[joint].high_count & 0x3F;
     uint32_t step_word  = (high_count << 25)

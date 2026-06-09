@@ -580,6 +580,8 @@ bool serialise_joint_metrics(struct NWBuffer* tx_buf) {
   reply.dir_setup_violations  = pio_get_and_clear_dir_setup_violations();
   reply.core1_work_us         = core1_work_us;
   reply.core0_work_us         = core0_work_us;
+  for (uint8_t j = 0; j < MAX_JOINT; j++)
+    reply.step_len_us[j] = config.joint[j].step_len_us;
 
   uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
 

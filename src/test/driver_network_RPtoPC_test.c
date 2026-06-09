@@ -35,6 +35,7 @@ hal_float_t update_underrun;
 hal_float_t spindle_speed_fb[MAX_SPINDLE];
 hal_float_t spindle_speed_cmd[MAX_SPINDLE];
 hal_bit_t   spindle_at_speed[MAX_SPINDLE];
+hal_u32_t   joint_step_len_us[MAX_JOINT];
 
 void setup_data(skeleton_t* data) {
   data->seq_in = &seq_in;
@@ -53,6 +54,7 @@ void setup_data(skeleton_t* data) {
     data->joint_enable_fb[joint]           = &(joint_enable_fb[joint]);
     data->joint_vel_calculated[joint]      = &(joint_vel_calculated[joint]);
     data->joint_dir_setup_violation[joint] = &(joint_dir_setup_violation[joint]);
+    data->joint_step_len_us[joint]         = &(joint_step_len_us[joint]);
   }
   data->update_overrun  = &update_overrun;
   data->update_underrun = &update_underrun;
@@ -508,6 +510,32 @@ static void test_version__already_checked__skips_second_check(void **state) {
     assert_int_equal(received_count, 2);
 }
 
+static void test_joint_metrics_step_len_us(void **state) {
+    (void)state;
+
+    struct NWBuffer buffer = {0};
+    size_t mess_received_count = 0;
+    skeleton_t data = {0};
+    setup_data(&data);
+
+    struct Reply_joint_metrics message = {
+        .type = REPLY_JOINT_METRICS,
+    };
+    message.step_len_us[0] = 500;
+    message.step_len_us[1] = 250;
+
+    memcpy(buffer.payload, &message, sizeof(message));
+    buffer.length = aligned32(sizeof(struct Reply_joint_metrics));
+    buffer.checksum = checksum(0, 0, buffer.length, buffer.payload);
+
+    process_data(&buffer, &data, &mess_received_count,
+                 buffer.length + sizeof(buffer.length) + sizeof(buffer.checksum),
+                 NULL, NULL, NULL);
+
+    assert_int_equal(*data.joint_step_len_us[0], 500);
+    assert_int_equal(*data.joint_step_len_us[1], 250);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_timing),
@@ -515,6 +543,7 @@ int main(void) {
         cmocka_unit_test(test_joint_config),
         cmocka_unit_test(test_joint_metrics),
         cmocka_unit_test(test_joint_metrics_ema_ratios),
+        cmocka_unit_test(test_joint_metrics_step_len_us),
         cmocka_unit_test(test_unpack_spindle_speed),
         cmocka_unit_test(test_unpack_spindle_not_at_speed),
         cmocka_unit_test(test_unpack_spindle_config),

@@ -29,6 +29,8 @@ hal_u32_t core1_tick;
 hal_u32_t core1_work_us;
 hal_u32_t core0_work_us;
 
+hal_u32_t joint_step_len_us[4];
+
 hal_bit_t gpio_data_out[MAX_GPIO];
 hal_bit_t gpio_data_out_invert[MAX_GPIO];
 hal_bit_t gpio_data_in[MAX_GPIO];
@@ -51,6 +53,7 @@ void setup_data(skeleton_t* data) {
         data->joint_enable_fb[joint] =            &joint_enable_fb[joint];
         data->joint_vel_calculated[joint] =       &joint_vel_calculated[joint];
         data->joint_dir_setup_violation[joint] =  &joint_dir_setup_violation[joint];
+        data->joint_step_len_us[joint]          = &joint_step_len_us[joint];
     }
 
     data->core1_period  = &core1_period;

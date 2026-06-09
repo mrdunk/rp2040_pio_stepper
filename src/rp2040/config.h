@@ -56,6 +56,7 @@ struct ConfigAxis {
   double max_velocity;
   double max_accel;               // ticks / update_time_ticks ^ 2
   int32_t velocity_achieved;      // Steps per update_time_us.
+  uint16_t step_len_us;           // PIO step half-period this window (µs); 0 = no step.
 };
 
 /* Configuration object for a single GPIO. */
@@ -88,6 +89,8 @@ struct ConfigGlobal {
   bool gpio_confirmation_pending[MAX_GPIO_BANK];
 };
 
+
+extern volatile struct ConfigGlobal config;
 
 void init_config();
 

@@ -229,6 +229,7 @@ static const PinDef joint_pins[] = {
     { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_vel_calculated),      sizeof(hal_float_t*), "joint", 0, 1, "vel-calculated"       }, // Velocity the RP2040 computed after applying vel-limit and accel-limit
     { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_ferror_suggest),      sizeof(hal_float_t*), "joint", 0, 1, "ferror-suggest"       }, // Expected following error at vel-limit given current round-trip latency (units); use as FERROR lower bound
     { PIN,   HAL_OUT, offsetof(skeleton_t, joint_dir_setup_violation), sizeof(hal_bit_t*),   "joint", 0, 1, "dir-setup-violation"  }, // 1 for the servo period after a direction change with insufficient DIR setup time
+    { U32,   HAL_OUT, offsetof(skeleton_t, joint_step_len_us),         sizeof(hal_u32_t*),   "joint", 0, 1, "step-len-us"          }, // PIO step half-period sent this servo period (µs); 0 = no step
 };
 
 static const PinDef spindle_pins[] = {

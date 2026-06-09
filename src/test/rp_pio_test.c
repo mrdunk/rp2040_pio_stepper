@@ -1901,6 +1901,32 @@ static void test_do_steps_sub1step_stop_word_pushed_despite_active_pio(void **st
     assert_int_equal(pio_put_call_count, 2);  /* step_word + stop_word */
 }
 
+/* step_len_us reflects the half-period of the most recent step sent to PIO,
+ * or 0 if no step fired this window.
+ * Continuous at 1 step/period: step_len = 133000*32768/65536 - 9 = 66491;
+ * half_period_us = (66491+9)/133 = 500. */
+static void test_step_len_us_tracked(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].max_velocity       = 32000.0;
+    config.joint[0].max_accel          = 0.0;
+    mock_tx_fifo_empty                 = 1;
+    mock_rx_fifo_level                 = 0;
+
+    config.joint[0].velocity_requested = 1000.0;  /* 1 step/period → continuous */
+    config.joint[0].updated_from_c0    = 1;
+    do_steps(0);
+    assert_int_equal(config.joint[0].step_len_us, 500);
+
+    config.joint[0].velocity_requested = 0.0;  /* no step */
+    config.joint[0].updated_from_c0    = 1;
+    do_steps(0);
+    assert_int_equal(config.joint[0].step_len_us, 0);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -1981,6 +2007,7 @@ int main(void) {
         cmocka_unit_test_setup(test_dir_setup_violation_is_momentary,                      test_setup),
         cmocka_unit_test_setup(test_do_steps_sub1step_step_len_fits_half_period,           test_setup),
         cmocka_unit_test_setup(test_do_steps_sub1step_stop_word_pushed_despite_active_pio, test_setup),
+        cmocka_unit_test_setup(test_step_len_us_tracked,                                   test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

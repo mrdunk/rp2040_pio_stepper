@@ -555,6 +555,11 @@ bool unpack_joint_metrics(
           "rp2040_eth: DIR setup time violation on joint(s) 0x%02x — reduce MAX_VELOCITY\n",
           violations);
 
+  for (uint8_t joint = 0; joint < MAX_JOINT; joint++) {
+    if (data->joint_step_len_us[joint])
+      *data->joint_step_len_us[joint] = reply->step_len_us[joint];
+  }
+
   (*received_count)++;
   return true;
 }

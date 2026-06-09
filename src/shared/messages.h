@@ -198,6 +198,7 @@ struct __attribute__((packed)) Reply_joint_metrics {
   uint8_t  dir_setup_violations;   /* bit N = joint N had DIR setup time violation this period */
   uint32_t core1_work_us;          /* µs Core1 spent working last period (excl. wait_for_packet) */
   uint32_t core0_work_us;          /* µs Core0 spent working last period (packet rx → response tx) */
+  uint16_t step_len_us[WIRE_MAX_JOINT]; /* PIO step half-period per joint this window (µs); 0 = no step */
 };
 
 struct __attribute__((packed)) Reply_gpio {
