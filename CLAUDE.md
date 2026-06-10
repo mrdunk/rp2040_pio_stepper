@@ -62,20 +62,25 @@ cmake --preset rp2350-w5500 && cmake --build --preset rp2350-w5500
 Available presets: `rp2040-w5500`, `rp2040-w5100s`, `rp2040-w6100`, `rp2040-w6300`,
 `rp2350-w5500`, `rp2350-w5100s`, `rp2350-w6100`, `rp2350-w6300`.
 
-Override `MAX_JOINT` on the command line (preset default is 4):
+Override `MAX_JOINT` at first configure; the value is cached in the build directory and
+persists across subsequent cmake runs without needing to repeat it:
 
 ```bash
 cmake --preset rp2040-w5500 -DMAX_JOINT=8 && cmake --build --preset rp2040-w5500
+# Later runs reuse the cached value — no -DMAX_JOINT needed:
+cmake --build --preset rp2040-w5500
+# To change it, pass -DMAX_JOINT again:
+cmake --preset rp2040-w5500 -DMAX_JOINT=6 && cmake --build --preset rp2040-w5500
 ```
 
 Key cmake options:
 
-| Variable | Preset default | Values | Notes |
-|----------|---------------|--------|-------|
+| Variable | Default | Values | Notes |
+|----------|---------|--------|-------|
 | `ETH_CHIP` | per preset | `W5500`, `W5100S`, `W6100`, `W6300` | W6100/W6300 need hardware validation (issues #35/#36) |
 | `RP_CHIP` | per preset | `RP2040`, `RP2350` | RP2350 builds clean; needs hardware validation (issue #34) |
 | `PICO_BOARD` | derived | e.g. `wiznet_w5500_evb_pico` | Auto-derived from RP_CHIP+ETH_CHIP; override if needed |
-| `MAX_JOINT` | `4` | `1`–`8` | Number of stepper axes |
+| `MAX_JOINT` | `4` | `1`–`8` | Number of stepper axes; cached — pass once, change by passing again |
 
 `PICO_BOARD` is derived as `wiznet_<eth_chip_lower>_evb_pico[2]`. Board headers for
 W5500/W6100/W6300 variants live in `boards/` (project-local; not in upstream pico-sdk).

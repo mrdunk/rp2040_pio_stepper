@@ -75,8 +75,10 @@ if(BUILD_RP)
     # Initialize the SDK
     pico_sdk_init()
 
-    # Number of stepper joints (1-8); determines PIO layout and feedback allocation
-    set(MAX_JOINT 8 CACHE STRING "Number of stepper joints (1-8)")
+    # Number of stepper joints (1-8); determines PIO layout and feedback allocation.
+    # Default is 4. Pass -DMAX_JOINT=N at first configure; value persists in the
+    # build directory so subsequent cmake runs do not need to repeat it.
+    set(MAX_JOINT 4 CACHE STRING "Number of stepper joints (1-8)")
 
     # Print joint/GPIO/spindle config details on UART as they are received.
     # Disable for production builds; UART blocking during startup causes missed UDP replies.

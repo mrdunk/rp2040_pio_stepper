@@ -16,8 +16,7 @@
       "cacheVariables": {
         "BUILD_RP": "ON",
         "RP_CHIP": "RP2040",
-        "ETH_CHIP": "W5500",
-        "MAX_JOINT": "4"
+        "ETH_CHIP": "W5500"
       }
     },
     {
@@ -27,8 +26,7 @@
       "cacheVariables": {
         "BUILD_RP": "ON",
         "RP_CHIP": "RP2040",
-        "ETH_CHIP": "W5100S",
-        "MAX_JOINT": "4"
+        "ETH_CHIP": "W5100S"
       }
     },
     {
@@ -38,8 +36,7 @@
       "cacheVariables": {
         "BUILD_RP": "ON",
         "RP_CHIP": "RP2040",
-        "ETH_CHIP": "W6100",
-        "MAX_JOINT": "4"
+        "ETH_CHIP": "W6100"
       }
     },
     {
@@ -49,8 +46,7 @@
       "cacheVariables": {
         "BUILD_RP": "ON",
         "RP_CHIP": "RP2040",
-        "ETH_CHIP": "W6300",
-        "MAX_JOINT": "4"
+        "ETH_CHIP": "W6300"
       }
     },
     {
@@ -60,8 +56,7 @@
       "cacheVariables": {
         "BUILD_RP": "ON",
         "RP_CHIP": "RP2350",
-        "ETH_CHIP": "W5500",
-        "MAX_JOINT": "4"
+        "ETH_CHIP": "W5500"
       }
     },
     {
@@ -71,8 +66,7 @@
       "cacheVariables": {
         "BUILD_RP": "ON",
         "RP_CHIP": "RP2350",
-        "ETH_CHIP": "W5100S",
-        "MAX_JOINT": "4"
+        "ETH_CHIP": "W5100S"
       }
     },
     {
@@ -82,8 +76,7 @@
       "cacheVariables": {
         "BUILD_RP": "ON",
         "RP_CHIP": "RP2350",
-        "ETH_CHIP": "W6100",
-        "MAX_JOINT": "4"
+        "ETH_CHIP": "W6100"
       }
     },
     {
@@ -93,8 +86,7 @@
       "cacheVariables": {
         "BUILD_RP": "ON",
         "RP_CHIP": "RP2350",
-        "ETH_CHIP": "W6300",
-        "MAX_JOINT": "4"
+        "ETH_CHIP": "W6300"
       }
     }
   ],
