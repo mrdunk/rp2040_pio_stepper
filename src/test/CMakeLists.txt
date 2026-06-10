@@ -44,11 +44,13 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/timing.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/pio.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
   ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
   ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
   #${CMAKE_CURRENT_SOURCE_DIR}/mocks/config_mocks.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/pio_mocks.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c
   )
@@ -72,11 +74,13 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/timing.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/pio.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
   ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
   ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
   #${CMAKE_CURRENT_SOURCE_DIR}/mocks/config_mocks.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/pio_mocks.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c
   )
@@ -101,10 +105,12 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/timing.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/pio.c
   ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
   ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/mcp23017.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/pio_mocks.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c
   )
@@ -257,9 +263,11 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/src/rp2040/modbus.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/core1.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/pio.c
   ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
   ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/pio_mocks.c
   )
 target_link_libraries(
   rpCore1Test
@@ -283,10 +291,12 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/src/rp2040/core0.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/timing.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/config.c
+  ${CMAKE_SOURCE_DIR}/src/rp2040/pio.c
   ${CMAKE_SOURCE_DIR}/src/rp2040/gpio.c
   ${CMAKE_SOURCE_DIR}/src/shared/buffer.c
   ${CMAKE_SOURCE_DIR}/src/shared/checksum.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/rp_mocks.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/mocks/pio_mocks.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/ringbuffer_mocks.c
   ${CMAKE_CURRENT_SOURCE_DIR}/mocks/network_mocks.c
   )

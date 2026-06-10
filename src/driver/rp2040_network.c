@@ -234,7 +234,8 @@ size_t serialize_joint_config(
     float max_accel,
     uint8_t cmd_type,
     uint8_t invert_step,
-    uint8_t invert_dir
+    uint8_t invert_dir,
+    uint8_t step_pulse_len_us
 ) {
   union MessageAny message;
   message.joint_config.type = MSG_SET_JOINT_CONFIG;
@@ -247,6 +248,7 @@ size_t serialize_joint_config(
   message.joint_config.cmd_type = cmd_type;
   message.joint_config.invert_step = invert_step;
   message.joint_config.invert_dir = invert_dir;
+  message.joint_config.step_pulse_len_us = step_pulse_len_us;
 
   return pack_nw_buff(buffer, &message, sizeof(struct Message_joint_config));
 }
@@ -488,6 +490,7 @@ bool unpack_joint_config(
   printf("      cmd_type:     %u\n", reply->cmd_type);
   printf("      invert_step:  %u\n", reply->invert_step);
   printf("      invert_dir:   %u\n", reply->invert_dir);
+  printf("      step_pulse:   %u us\n", reply->step_pulse_len_us);
 
   last_joint_config[joint].enable = reply->enable;
   last_joint_config[joint].gpio_step = reply->gpio_step;
@@ -497,6 +500,7 @@ bool unpack_joint_config(
   last_joint_config[joint].cmd_type = reply->cmd_type;
   last_joint_config[joint].invert_step = reply->invert_step;
   last_joint_config[joint].invert_dir = reply->invert_dir;
+  last_joint_config[joint].step_pulse_len_us = reply->step_pulse_len_us;
 
   (*received_count)++;
   return true;
