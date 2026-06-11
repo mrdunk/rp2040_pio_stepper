@@ -53,9 +53,13 @@ double compute_velocity_cmd(
 uint8_t do_steps(const uint8_t joint);
 
 /* Set the HIGH-phase loop iteration count for a joint's step pulse.
- * count is clamped to 6 bits (0–63); default is STEP_PIO_HIGH_COUNT_DEFAULT.
+ * count is clamped to 7 bits (0–127); default is STEP_PIO_HIGH_COUNT_DEFAULT.
  * Takes effect on the next FIFO word (next servo period). */
 void pio_set_step_high_count(uint32_t joint, uint32_t count);
+
+/* Clear init_done for all joints so init_pio() re-runs on next enable.
+ * Call after any event that may have changed GPIO pin assignments. */
+void pio_invalidate_all_joints(void);
 
 /* Return and clear the per-joint DIR setup violation bitmask.
  * Bit N is set when joint N had a direction change with step_low_half <

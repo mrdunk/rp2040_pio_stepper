@@ -100,6 +100,8 @@ HIGH duration = 1 + (high_count + 1) × 16  PIO cycles
 | 15 | 1.93 µs | All drivers above |
 | **20** | **2.53 µs** | **All drivers above (default)** |
 | 30 | 3.74 µs | Very conservative / long-cable setups |
+| 63 | 7.68 µs | Maximum pre-expansion (informational) |
+| 127 | 15.4 µs | Maximum — opto-isolated drivers / very long cables |
 
 The default `high_count = 20` (≈ 2.53 µs) covers every driver in the table above
 with margin. Only reduce it if minimising step overhead matters (e.g. TMC at very
@@ -111,7 +113,7 @@ high step rates using LinuxCNC-side interpolation).
 pio_set_step_high_count(joint, high_count);
 ```
 
-Valid range is 0–63. Values `high_count = 0` result in a single iteration
+Valid range is 0–127. Values `high_count = 0` result in a single iteration
 (≈ 128 ns) — safe for TMC but below spec for all other drivers.
 
 ---
