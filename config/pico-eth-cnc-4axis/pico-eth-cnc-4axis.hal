@@ -27,7 +27,7 @@ net user-ok                                        => logic.0.in-00
 net driver-ok                                      => logic.0.in-01
 net machine-is-on   halui.machine.is-on             => logic.0.in-02
 net config-complete rp2040_eth.0.config-complete    => logic.0.in-03
-net joints-enabled <= logic.0.out
+net joints-enabled <= logic.0.and
 
 
 # Joint 0 — X AXIS (J5: GP7=STEP, GP6=DIR via 74HCT541 buffer)
