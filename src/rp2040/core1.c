@@ -54,7 +54,6 @@ void handle_network_timeout(void) {
   for (uint8_t joint = 0; joint < MAX_JOINT; joint++) {
     disable_joint(joint, CORE1);
   }
-  pio_invalidate_all_joints();
   printf("No NW\n");
   no_network = true;
 }
@@ -79,6 +78,7 @@ static void core1_tick(void) {
   core1_loop_count++;
   if (linuxcnc_restart_detected) {
     linuxcnc_restart_detected = false;
+    pio_invalidate_all_joints();
     handle_network_timeout();
   } else if (!check_network_health()) {
     handle_network_timeout();

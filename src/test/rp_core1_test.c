@@ -168,11 +168,23 @@ static void test_core1_restart_while_network_unhealthy(void **state) {
     assert_false(linuxcnc_restart_detected);
 }
 
-/* handle_network_timeout: must call pio_invalidate_all_joints() so that
- * init_pio() re-runs on next enable after a config change (issue #44). */
+/* linuxcnc_restart_detected path: must call pio_invalidate_all_joints() so
+ * init_pio() re-runs on next enable after a GPIO config change (issue #44).
+ * Normal network timeouts must NOT invalidate PIO — that would cause a
+ * re-config loop on every brief dropout. */
 static void test_handle_network_timeout_invalidates_pio(void **state) {
     (void)state;
+    /* plain timeout: no PIO invalidation */
     handle_network_timeout();
+    assert_int_equal(0, pio_invalidate_all_joints_call_count);
+}
+
+static void test_linuxcnc_restart_invalidates_pio(void **state) {
+    (void)state;
+    linuxcnc_restart_detected = true;
+    tick             = 1;
+    last_packet_tick = 1;
+    core1_run_once_for_test();
     assert_int_equal(1, pio_invalidate_all_joints_call_count);
 }
 
@@ -191,6 +203,7 @@ int main(void) {
         cmocka_unit_test_setup(test_core1_disables_joints_on_linuxcnc_restart,       test_setup),
         cmocka_unit_test_setup(test_core1_restart_while_network_unhealthy,           test_setup),
         cmocka_unit_test_setup(test_handle_network_timeout_invalidates_pio,          test_setup),
+        cmocka_unit_test_setup(test_linuxcnc_restart_invalidates_pio,                test_setup),
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);
