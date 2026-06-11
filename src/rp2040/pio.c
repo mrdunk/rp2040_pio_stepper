@@ -469,7 +469,7 @@ static int32_t commit_steps(
         ? (uint16_t)((step_low_half + STEP_PIO_LEN_OVERHEAD) / RP2040_CLOCK_MHZ) : 0;
 
     if (step_low_half > 0) joint_state[joint].last_direction = direction;
-    uint32_t high_count = joint_state[joint].high_count & 0x3F;
+    uint32_t high_count = joint_state[joint].high_count & 0x7F;
     uint32_t step_word  = (high_count << 25)
                         | (((uint32_t)step_low_half & 0xFFFFFF) << 1)
                         | joint_state[joint].last_direction;
@@ -586,13 +586,18 @@ uint8_t do_steps(const uint8_t joint) {
 
 void pio_set_step_high_count(uint32_t joint, uint32_t count) {
     if (joint >= MAX_JOINT) return;
-    joint_state[joint].high_count = count & 0x3F;
+    joint_state[joint].high_count = count & 0x7F;
 }
 
 uint8_t pio_get_and_clear_dir_setup_violations(void) {
     uint8_t v = dir_setup_violation_bits;
     dir_setup_violation_bits = 0;
     return v;
+}
+
+void pio_invalidate_all_joints(void) {
+    for (uint8_t j = 0; j < MAX_JOINT; j++)
+        joint_state[j].init_done = false;
 }
 
 #ifdef BUILD_TESTS
