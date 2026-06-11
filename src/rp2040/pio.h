@@ -65,15 +65,15 @@ void pio_set_step_high_count(uint32_t joint, uint32_t count);
  * Call after any event that may have changed GPIO pin assignments. */
 void pio_invalidate_all_joints(void);
 
-/* Set the STEP pulse HIGH-phase duration in µs.
- * Converts µs to a high_count value (rounds up to guarantee >= requested duration).
- * us=0 resets to the firmware default (~2.5µs, STEP_PIO_HIGH_COUNT_DEFAULT).
- * Clamped to 6-bit range; takes effect on the next servo period. */
-void pio_set_step_pulse_us(uint32_t joint, uint8_t us);
+/* Set the STEP pulse HIGH-phase duration in ns.
+ * Converts ns to a high_count value (rounds up to guarantee >= requested duration).
+ * ns=0 resets to the firmware default (~2500ns, STEP_PIO_HIGH_COUNT_DEFAULT).
+ * Clamped to 7-bit range; takes effect on the next servo period. */
+void pio_set_step_pulse_ns(uint32_t joint, uint16_t ns);
 
-/* Return the commanded STEP pulse HIGH-phase duration in µs for a joint.
+/* Return the commanded STEP pulse HIGH-phase duration in ns for a joint.
  * Returns 0 if using the firmware default (no explicit command received). */
-uint8_t pio_get_step_pulse_us(uint32_t joint);
+uint16_t pio_get_step_pulse_ns(uint32_t joint);
 
 /* Return and clear the per-joint DIR setup violation bitmask.
  * Bit N is set when joint N had a direction change with step_low_half <

@@ -36,7 +36,7 @@ hal_float_t spindle_speed_fb[MAX_SPINDLE];
 hal_float_t spindle_speed_cmd[MAX_SPINDLE];
 hal_bit_t   spindle_at_speed[MAX_SPINDLE];
 hal_u32_t   joint_step_len_us[MAX_JOINT];
-hal_u32_t   joint_step_pulse_len_cmd[MAX_JOINT];
+hal_float_t joint_step_pulse_len_cmd[MAX_JOINT];
 
 void setup_data(skeleton_t* data) {
   data->seq_in = &seq_in;
@@ -177,7 +177,7 @@ static void test_joint_config(void **state) {
         .gpio_step = 2,
         .gpio_dir = 3,
         .cmd_type = JOINT_CMD_VELOCITY,
-        .step_pulse_len_us = 5,
+        .step_pulse_len_ns = 5000,
         .max_velocity = 56.78,
         .max_accel = 90.12,
     };
@@ -202,7 +202,7 @@ static void test_joint_config(void **state) {
     assert_int_equal(last_joint_config.gpio_step, message.gpio_step);
     assert_int_equal(last_joint_config.gpio_dir, message.gpio_dir);
     assert_int_equal(last_joint_config.cmd_type, message.cmd_type);
-    assert_int_equal(last_joint_config.step_pulse_len_us, message.step_pulse_len_us);
+    assert_int_equal(last_joint_config.step_pulse_len_ns, message.step_pulse_len_ns);
     assert_double_equal(last_joint_config.max_velocity, message.max_velocity, 0.0001);
     assert_double_equal(last_joint_config.max_accel, message.max_accel, 0.0001);
 }

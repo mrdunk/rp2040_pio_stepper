@@ -116,7 +116,7 @@ static void test_serialize_joint_config(void **state) {
     message.cmd_type = JOINT_CMD_VELOCITY;
     message.invert_step = 1;
     message.invert_dir = 0;
-    message.step_pulse_len_us = 3;
+    message.step_pulse_len_ns = 3000;
 
     size_t data_size = serialize_joint_config(
             &buffer,
@@ -129,7 +129,7 @@ static void test_serialize_joint_config(void **state) {
             message.cmd_type,
             message.invert_step,
             message.invert_dir,
-            message.step_pulse_len_us
+            message.step_pulse_len_ns
             );
 
     assert_int_equal(data_size, aligned32(sizeof(struct Message_joint_config)));
@@ -147,7 +147,7 @@ static void test_serialize_joint_config(void **state) {
     assert_int_equal(message.cmd_type, message_p->cmd_type);
     assert_int_equal(message.invert_step, message_p->invert_step);
     assert_int_equal(message.invert_dir, message_p->invert_dir);
-    assert_int_equal(message.step_pulse_len_us, message_p->step_pulse_len_us);
+    assert_int_equal(message.step_pulse_len_ns, message_p->step_pulse_len_ns);
 }
 
 int main(void) {

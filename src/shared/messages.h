@@ -90,7 +90,7 @@ struct __attribute__((packed)) Message_joint_config {
   uint8_t cmd_type;               // JOINT_CMD_POSITION or JOINT_CMD_VELOCITY
   uint8_t invert_step;            // 1 = invert STEP GPIO output
   uint8_t invert_dir;             // 1 = invert DIR GPIO output
-  uint8_t step_pulse_len_us;      // STEP HIGH phase duration in µs; 0 = firmware default (~2.5µs)
+  uint16_t step_pulse_len_ns;     // STEP HIGH phase duration in ns; 0 = firmware default (~2500ns)
   float max_velocity;
   float max_accel;
 };
@@ -180,7 +180,7 @@ struct __attribute__((packed)) Reply_joint_config {
   uint8_t cmd_type;               // JOINT_CMD_POSITION or JOINT_CMD_VELOCITY
   uint8_t invert_step;            // 1 = STEP GPIO output is inverted
   uint8_t invert_dir;             // 1 = DIR GPIO output is inverted
-  uint8_t step_pulse_len_us;      // STEP HIGH phase duration in µs; 0 = using firmware default
+  uint16_t step_pulse_len_ns;     // STEP HIGH phase duration in ns; 0 = using firmware default
   float max_velocity;
   float max_accel;
 };

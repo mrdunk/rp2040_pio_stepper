@@ -61,7 +61,7 @@ typedef struct {
     uint32_t last_direction;
     uint32_t last_commanded_direction;
     uint32_t high_count;         /* HIGH-phase loop iterations; default STEP_PIO_HIGH_COUNT_DEFAULT */
-    uint8_t  step_pulse_cmd_us;  /* commanded HIGH-phase µs; 0 = using firmware default */
+    uint16_t step_pulse_cmd_ns;  /* commanded HIGH-phase ns; 0 = using firmware default */
 } JointPioState;
 
 static JointPioState joint_state[MAX_JOINT];
@@ -592,27 +592,27 @@ void pio_set_step_high_count(uint32_t joint, uint32_t count) {
     joint_state[joint].high_count = count & 0x7F;
 }
 
-void pio_set_step_pulse_us(uint32_t joint, uint8_t us) {
+void pio_set_step_pulse_ns(uint32_t joint, uint16_t ns) {
     if (joint >= MAX_JOINT) return;
     uint32_t count;
-    if (us == 0) {
+    if (ns == 0) {
         count = STEP_PIO_HIGH_COUNT_DEFAULT;
     } else {
         /* Round up: guarantee HIGH phase >= requested duration.
-         * HIGH cycles = 1 + (count+1)*16; we need that >= us*RP2040_CLOCK_MHZ.
-         * count = ceil((us*RP2040_CLOCK_MHZ - 1) / 16) - 1
-         *       = (us*RP2040_CLOCK_MHZ + 14) / 16 - 1  (integer, rounds up). */
-        uint32_t cycles = (uint32_t)us * RP2040_CLOCK_MHZ;
-        count = (cycles + 14) / 16 - 1;
-        if (count > 63) count = 63;
+         * HIGH cycles = 1 + (count+1)*16; PIO clock = RP2040_CLOCK_MHZ MHz.
+         * count = ceil((ns*RP2040_CLOCK_MHZ/1000 - 1) / 16) - 1
+         *       = (ns*RP2040_CLOCK_MHZ + 14999) / 16000 - 1  (integer, rounds up). */
+        uint32_t count_x1000 = (uint32_t)ns * RP2040_CLOCK_MHZ;
+        count = (count_x1000 + 14999) / 16000 - 1;
+        if (count > 127) count = 127;
     }
     joint_state[joint].high_count = count;
-    joint_state[joint].step_pulse_cmd_us = us;
+    joint_state[joint].step_pulse_cmd_ns = ns;
 }
 
-uint8_t pio_get_step_pulse_us(uint32_t joint) {
+uint16_t pio_get_step_pulse_ns(uint32_t joint) {
     if (joint >= MAX_JOINT) return 0;
-    return joint_state[joint].step_pulse_cmd_us;
+    return joint_state[joint].step_pulse_cmd_ns;
 }
 
 uint8_t pio_get_and_clear_dir_setup_violations(void) {

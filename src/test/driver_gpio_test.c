@@ -30,7 +30,7 @@ hal_u32_t core1_work_us;
 hal_u32_t core0_work_us;
 
 hal_u32_t joint_step_len_us[4];
-hal_u32_t joint_step_pulse_len_cmd[4];
+hal_float_t joint_step_pulse_len_cmd[4];
 
 hal_bit_t gpio_data_out[MAX_GPIO];
 hal_bit_t gpio_data_out_invert[MAX_GPIO];

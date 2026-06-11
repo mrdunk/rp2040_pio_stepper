@@ -225,14 +225,14 @@ bool unpack_joint_config(
   uint8_t cmd_type = message->cmd_type;
   uint8_t invert_step = message->invert_step;
   uint8_t invert_dir = message->invert_dir;
-  uint8_t step_pulse_len_us = message->step_pulse_len_us;
+  uint16_t step_pulse_len_ns = message->step_pulse_len_ns;
 
-  pio_set_step_pulse_us(joint, step_pulse_len_us);
+  pio_set_step_pulse_ns(joint, step_pulse_len_ns);
 
 #ifdef VERBOSE_CONFIG_LOG
-  printf("%u Cfg joint %u: en=%u step=%i dir=%i vel=%f acc=%f cmd=%u inv_step=%u inv_dir=%u pulse_us=%u\n",
+  printf("%u Cfg joint %u: en=%u step=%i dir=%i vel=%f acc=%f cmd=%u inv_step=%u inv_dir=%u pulse_ns=%u\n",
       *received_count, joint, enabled, io_step, io_dir, max_velocity, max_accel, cmd_type,
-      invert_step, invert_dir, step_pulse_len_us);
+      invert_step, invert_dir, step_pulse_len_ns);
 #endif
   update_joint_config(
       joint,
