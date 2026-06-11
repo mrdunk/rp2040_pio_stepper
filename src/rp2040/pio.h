@@ -61,10 +61,6 @@ uint8_t do_steps(const uint8_t joint);
  * Takes effect on the next FIFO word (next servo period). */
 void pio_set_step_high_count(uint32_t joint, uint32_t count);
 
-/* Clear init_done for all joints so init_pio() re-runs on next enable.
- * Call after any event that may have changed GPIO pin assignments. */
-void pio_invalidate_all_joints(void);
-
 /* Set the STEP pulse HIGH-phase duration in ns.
  * Converts ns to a high_count value (rounds up to guarantee >= requested duration).
  * ns=0 resets to the firmware default (~2500ns, STEP_PIO_HIGH_COUNT_DEFAULT).
