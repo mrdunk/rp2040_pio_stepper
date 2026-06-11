@@ -12,6 +12,7 @@
 extern volatile struct ConfigGlobal config;
 
 /* ── PIO mock state ── */
+extern int step_gen2_program_init_call_count;
 static size_t   mock_rx_fifo_level  = 0;
 static int32_t  mock_rx_values[8]   = {0};
 static size_t   mock_rx_index       = 0;
@@ -77,6 +78,7 @@ static int test_setup(void **state) {
     mock_tx_fifo_empty_calls_remaining = -1;
     pio_step_frac       = 0.0;
     memset(mock_rx_values, 0, sizeof(mock_rx_values));
+    step_gen2_program_init_call_count = 0;
     return 0;
 }
 
@@ -1927,6 +1929,41 @@ static void test_step_len_us_tracked(void **state) {
     assert_int_equal(config.joint[0].step_len_us, 0);
 }
 
+/* After a LinuxCNC restart (pio_invalidate_all_joints()), init_pio() must run
+ * again on the next enable so new GPIO pin assignments take effect (issue #44). */
+static void test_pio_reinit_after_invalidate(void **state) {
+    (void)state;
+    config.update_time_us           = 1000;
+    config.joint[0].io_pos_step     = 1;
+    config.joint[0].io_pos_dir      = 2;
+    config.joint[0].enabled         = 1;
+    config.joint[0].cmd_type        = JOINT_CMD_VELOCITY;
+    config.joint[0].velocity_requested = 0.0;
+    config.joint[0].updated_from_c0 = 1;
+    mock_tx_fifo_empty               = 1;
+
+    do_steps(0);  /* first enable: triggers init_pio */
+    assert_int_equal(step_gen2_program_init_call_count, 1);
+
+    /* Simulate LinuxCNC restart clearing init_done for all joints. */
+    pio_invalidate_all_joints();
+
+    /* New GPIO config arrives with different pins. */
+    config.joint[0].io_pos_step = 5;
+    config.joint[0].io_pos_dir  = 6;
+
+    /* Disable then re-enable to trigger handle_enable_transition. */
+    config.joint[0].enabled          = 0;
+    config.joint[0].updated_from_c0  = 1;
+    do_steps(0);
+    config.joint[0].enabled          = 1;
+    config.joint[0].updated_from_c0  = 1;
+    do_steps(0);
+
+    /* init_pio must have run a second time to apply the new pins. */
+    assert_int_equal(step_gen2_program_init_call_count, 2);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -2008,6 +2045,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_sub1step_step_len_fits_half_period,           test_setup),
         cmocka_unit_test_setup(test_do_steps_sub1step_stop_word_pushed_despite_active_pio, test_setup),
         cmocka_unit_test_setup(test_step_len_us_tracked,                                   test_setup),
+        cmocka_unit_test_setup(test_pio_reinit_after_invalidate,                           test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

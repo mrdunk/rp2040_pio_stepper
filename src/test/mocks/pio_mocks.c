@@ -13,9 +13,14 @@ void step_gen_program_init(
     size_t pio, size_t sm, size_t offset, size_t pin_step, size_t pin_direction
 ) {}
 
+int step_gen2_program_init_call_count = 0;
+
 void step_gen2_program_init(
     size_t pio, size_t sm, size_t offset, size_t pin_step, size_t pin_direction
-) {}
+) {
+    (void)pio; (void)sm; (void)offset; (void)pin_step; (void)pin_direction;
+    step_gen2_program_init_call_count++;
+}
 
 void pio_sm_set_enabled (size_t pio, size_t sm, int enabled) {}
 

@@ -177,7 +177,8 @@ void init_pio(const uint32_t joint)
   gpio_set_outover(io_pos_step, invert_step ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
   gpio_set_outover(io_pos_dir,  invert_dir  ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
 
-  joint_state[joint].high_count = STEP_PIO_HIGH_COUNT_DEFAULT;
+  if (joint_state[joint].high_count == 0)
+    joint_state[joint].high_count = STEP_PIO_HIGH_COUNT_DEFAULT;
   joint_state[joint].init_done = true;
 }
 
@@ -593,6 +594,11 @@ uint8_t pio_get_and_clear_dir_setup_violations(void) {
     uint8_t v = dir_setup_violation_bits;
     dir_setup_violation_bits = 0;
     return v;
+}
+
+void pio_invalidate_all_joints(void) {
+    for (uint8_t j = 0; j < MAX_JOINT; j++)
+        joint_state[j].init_done = false;
 }
 
 #ifdef BUILD_TESTS
