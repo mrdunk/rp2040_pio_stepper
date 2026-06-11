@@ -228,8 +228,9 @@ static const PinDef joint_pins[] = {
     { PIN,   HAL_OUT, offsetof(skeleton_t, joint_enable_fb),           sizeof(hal_bit_t*),   "joint", 0, 1, "enable-fb"           }, // RP2040's actual enabled state; may remain false after network recovery until protocol re-enables
     { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_vel_calculated),      sizeof(hal_float_t*), "joint", 0, 1, "vel-calculated"       }, // Velocity the RP2040 computed after applying vel-limit and accel-limit
     { FLOAT, HAL_OUT, offsetof(skeleton_t, joint_ferror_suggest),      sizeof(hal_float_t*), "joint", 0, 1, "ferror-suggest"       }, // Expected following error at vel-limit given current round-trip latency (units); use as FERROR lower bound
-    { PIN,   HAL_OUT, offsetof(skeleton_t, joint_dir_setup_violation), sizeof(hal_bit_t*),   "joint", 0, 1, "dir-setup-violation"  }, // 1 for the servo period after a direction change with insufficient DIR setup time
-    { U32,   HAL_OUT, offsetof(skeleton_t, joint_step_len_us),         sizeof(hal_u32_t*),   "joint", 0, 1, "step-len-us"          }, // PIO step half-period sent this servo period (µs); 0 = no step
+    { PIN,   HAL_OUT, offsetof(skeleton_t, joint_dir_setup_violation),  sizeof(hal_bit_t*),   "joint", 0, 1, "dir-setup-violation"   }, // 1 for the servo period after a direction change with insufficient DIR setup time
+    { U32,   HAL_OUT, offsetof(skeleton_t, joint_step_len_us),          sizeof(hal_u32_t*),   "joint", 0, 1, "step-len-us"           }, // PIO step half-period sent this servo period (µs); 0 = no step
+    { U32,   HAL_IN,  offsetof(skeleton_t, joint_step_pulse_len_cmd),   sizeof(hal_u32_t*),   "joint", 0, 1, "step-pulse-len-cmd"    }, // Commanded STEP pulse HIGH duration (µs); 0 = firmware default (~2.5µs)
 };
 
 static const PinDef spindle_pins[] = {

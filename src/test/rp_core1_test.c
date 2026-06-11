@@ -11,10 +11,9 @@
  * config.h provides the extern declarations — no re-definition needed here.
  * Tests can write to them directly to control Core1 behaviour. */
 
-/* Stub for pio_invalidate_all_joints() — pio.c is not linked in this test target. */
 static int pio_invalidate_all_joints_call_count = 0;
 
-void pio_invalidate_all_joints(void) {
+void __wrap_pio_invalidate_all_joints(void) {
     pio_invalidate_all_joints_call_count++;
 }
 

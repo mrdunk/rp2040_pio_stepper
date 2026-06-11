@@ -552,6 +552,7 @@ bool serialise_joint_config(const uint32_t joint, struct NWBuffer* tx_buf) {
   reply.cmd_type = cmd_type;
   reply.invert_step = invert_step;
   reply.invert_dir = invert_dir;
+  reply.step_pulse_len_us = pio_get_step_pulse_us(joint);
   reply.max_velocity = max_velocity;
   reply.max_accel = max_accel;
 

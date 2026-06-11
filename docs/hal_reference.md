@@ -52,6 +52,7 @@ Per-joint pins are indexed 0–7 (up to MAX_JOINT − 1). Replace `<N>` with the
 | `vel-cmd` | float | IN | user | Velocity command from LinuxCNC |
 | `vel-fb` | float | OUT | debug | Velocity feedback (raw steps per servo period, unscaled) |
 | `dir-setup-violation` | bit | OUT | debug | Pulses high for one servo period when a STEP pulse was issued within the DIR setup time window after a direction change |
+| `step-pulse-len-cmd` | u32 | IN | user | STEP pulse HIGH duration in µs; 0 = firmware default (~2.5µs); takes effect on next joint config message |
 | `vel-limit` | float | IN | user | Maximum velocity (units/sec) |
 
 ### Joint Parameters

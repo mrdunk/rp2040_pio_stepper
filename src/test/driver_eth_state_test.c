@@ -34,9 +34,9 @@ uint16_t serialize_gpio(struct NWBuffer *b, skeleton_t *d) { (void)b; (void)d; r
 uint8_t get_detected_joint_count(void) { return 0; }
 size_t serialize_joint_config(struct NWBuffer *b, uint8_t j, uint8_t e,
                                uint8_t s, uint8_t dr, float v, float a, uint8_t c,
-                               uint8_t is, uint8_t id) {
+                               uint8_t is, uint8_t id, uint8_t spl) {
     (void)b; (void)j; (void)e; (void)s; (void)dr; (void)v; (void)a; (void)c;
-    (void)is; (void)id; return 1;
+    (void)is; (void)id; (void)spl; return 1;
 }
 size_t serialize_gpio_config(struct NWBuffer *b, uint8_t g, uint8_t t,
                               uint8_t i, uint8_t addr) {

@@ -509,6 +509,20 @@ Start with conservative values and increase while monitoring `ferror-suggest`
 and following error in halscope. See [hal_reference.md](hal_reference.md) for
 the full list of joint pins and params.
 
+### Step pulse width
+
+`rp2040_eth.0.joint.N.step-pulse-len-cmd` sets the STEP signal HIGH duration in
+µs. The firmware default (~2.5µs) works with most stepper drivers; increase it
+if your driver requires a longer minimum pulse:
+
+```hal
+setp rp2040_eth.0.joint.0.step-pulse-len-cmd  5   # 5µs STEP pulse
+```
+
+Set `0` (or leave unset) to use the firmware default. The value is sent as part
+of the joint configuration handshake and echoed back by the firmware; the driver
+retransmits until acknowledged.
+
 ## Development
 
 Tests run on the host — no hardware needed.
