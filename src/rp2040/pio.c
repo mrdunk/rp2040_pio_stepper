@@ -177,7 +177,8 @@ void init_pio(const uint32_t joint)
   gpio_set_outover(io_pos_step, invert_step ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
   gpio_set_outover(io_pos_dir,  invert_dir  ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
 
-  joint_state[joint].high_count = STEP_PIO_HIGH_COUNT_DEFAULT;
+  if (joint_state[joint].high_count == 0)
+    joint_state[joint].high_count = STEP_PIO_HIGH_COUNT_DEFAULT;
   joint_state[joint].init_done = true;
 }
 

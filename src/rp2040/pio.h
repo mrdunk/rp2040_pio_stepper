@@ -33,6 +33,10 @@
  */
 void init_pio(const uint32_t joint);
 
+/* Clear init_done for all joints so init_pio() re-runs on next enable.
+ * Call after any event that may have changed GPIO pin assignments. */
+void pio_invalidate_all_joints(void);
+
 /* Compute the commanded velocity (steps/s) for this period.
  * Applies the position controller (position mode) and collapses to 0 when
  * disabled or when no new Core0 data is available (underrun / network loss).

@@ -1945,11 +1945,14 @@ static void test_pio_reinit_after_invalidate(void **state) {
     do_steps(0);  /* first enable: triggers init_pio */
     assert_int_equal(step_gen2_program_init_call_count, 1);
 
+    /* Simulate LinuxCNC restart clearing init_done for all joints. */
     pio_invalidate_all_joints();
 
+    /* New GPIO config arrives with different pins. */
     config.joint[0].io_pos_step = 5;
     config.joint[0].io_pos_dir  = 6;
 
+    /* Disable then re-enable to trigger handle_enable_transition. */
     config.joint[0].enabled          = 0;
     config.joint[0].updated_from_c0  = 1;
     do_steps(0);
@@ -1957,6 +1960,7 @@ static void test_pio_reinit_after_invalidate(void **state) {
     config.joint[0].updated_from_c0  = 1;
     do_steps(0);
 
+    /* init_pio must have run a second time to apply the new pins. */
     assert_int_equal(step_gen2_program_init_call_count, 2);
 }
 
@@ -1983,6 +1987,7 @@ static void test_step_high_count_7bit_accepted(void **state) {
     /* high_count=64 << 25 = 0x80000000 → bit 31 must be set */
     assert_true(last_pio_put_value & (1u << 31));
 }
+
 
 int main(void) {
     const struct CMUnitTest tests[] = {
