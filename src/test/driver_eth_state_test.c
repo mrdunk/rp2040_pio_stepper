@@ -22,6 +22,10 @@ static int    g_send_call_count = 0;
 static size_t g_reply_length    = 0;
 static int    g_reply_call_count= 0;
 
+/* Capture last max_velocity / max_accel sent via serialize_joint_config. */
+static float g_last_config_vel = -1.0f;
+static float g_last_config_acc = -1.0f;
+
 /* ---- stub implementations of rp2040_network.c symbols ---- */
 /* reset_nw_buf is provided by buffer.c (included above). */
 
@@ -35,8 +39,11 @@ uint8_t get_detected_joint_count(void) { return 0; }
 size_t serialize_joint_config(struct NWBuffer *b, uint8_t j, uint8_t e,
                                uint8_t s, uint8_t dr, float v, float a, uint8_t c,
                                uint8_t is, uint8_t id, uint8_t spl) {
-    (void)b; (void)j; (void)e; (void)s; (void)dr; (void)v; (void)a; (void)c;
-    (void)is; (void)id; (void)spl; return 1;
+    (void)b; (void)j; (void)e; (void)s; (void)dr; (void)c;
+    (void)is; (void)id; (void)spl;
+    g_last_config_vel = v;
+    g_last_config_acc = a;
+    return 1;
 }
 size_t serialize_gpio_config(struct NWBuffer *b, uint8_t g, uint8_t t,
                               uint8_t i, uint8_t addr) {
@@ -268,6 +275,31 @@ static void test_recovery_requires_all_joints_stopped_multi_joint(void **state) 
     assert_true(*data.machine_on);
 }
 
+/* Negative scale must not invert vel/accel limits sent to firmware.
+ * A negative max_velocity in the firmware's clamp causes runaway motion. */
+static void test_negative_scale_sends_positive_limits(void **state) {
+    (void)state;
+    reset_mocks();
+    skeleton_t data = make_data();
+    *data.eth_up   = true;
+    *data.machine_on = true;
+    g_reply_length = 1;
+
+    v_joint_scale[0]       = -200.0;
+    v_joint_vel_limit[0]   = 100.0;
+    v_joint_accel_limit[0] = 1000.0;
+    data.joint_gpio_step[0] = 10;
+    data.joint_gpio_dir[0]  = 11;
+
+    g_last_config_vel = -1.0f;
+    g_last_config_acc = -1.0f;
+
+    eth_state_update(&data, 0, 0, 0, 1);
+
+    assert_true(g_last_config_vel > 0.0f);
+    assert_true(g_last_config_acc > 0.0f);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_cable_unplug_sets_eth_down),
@@ -276,6 +308,7 @@ int main(void) {
         cmocka_unit_test(test_recovery_waits_for_all_stopped),
         cmocka_unit_test(test_recovery_requires_all_joints_stopped_multi_joint),
         cmocka_unit_test(test_force_disable_while_eth_down),
+        cmocka_unit_test(test_negative_scale_sends_positive_limits),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
