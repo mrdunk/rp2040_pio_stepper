@@ -12,6 +12,7 @@
  */
 
 #include <errno.h>
+#include <math.h>
 #include <stdio.h>
 #include <netdb.h>
 #include <arpa/inet.h>
@@ -71,9 +72,9 @@ static bool configure_joint(
 ) {
     bool pack_success = true;
     float max_velocity_ticks =
-      (float)((*data->joint_vel_limit[joint]) * (*data->joint_scale[joint]));
+      (float)((*data->joint_vel_limit[joint]) * fabs(*data->joint_scale[joint]));
     float max_accel_ticks =
-      (float)((*data->joint_accel_limit[joint]) * (*data->joint_scale[joint]));
+      (float)((*data->joint_accel_limit[joint]) * fabs(*data->joint_scale[joint]));
     /* Send if anything changed, or if no reply has arrived yet (last_joint_config
      * only updates in unpack_joint_config on receipt of REPLY_JOINT_CONFIG, so a
      * lost packet leaves the diff intact and causes an automatic retry). */
@@ -175,8 +176,8 @@ static bool configure_spindle(
 static size_t count_confirmed_configs(skeleton_t *data, int num_joints) {
   size_t confirmed = 0;
   for(int j = 0; j < num_joints; j++) {
-    float vel = (float)((*data->joint_vel_limit[j]) * (*data->joint_scale[j]));
-    float acc = (float)((*data->joint_accel_limit[j]) * (*data->joint_scale[j]));
+    float vel = (float)((*data->joint_vel_limit[j]) * fabs(*data->joint_scale[j]));
+    float acc = (float)((*data->joint_accel_limit[j]) * fabs(*data->joint_scale[j]));
     if(last_joint_config[j].gpio_step == data->joint_gpio_step[j]
     && last_joint_config[j].gpio_dir  == data->joint_gpio_dir[j]
     && last_joint_config[j].max_velocity == vel
