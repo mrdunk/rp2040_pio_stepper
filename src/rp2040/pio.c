@@ -24,11 +24,11 @@
  *   HIGH phase:     1 + (high_count+1)×16 cycles  (mov y,isr + (high_count+1)×(nop[7]+jmp[7] y--))
  *   non-loop:      14 cycles  (FIFO-check path 8 + stop-guard 1 + LOW-setup×2 + LOW-end×2 + HIGH-setup 1)
  *   total:         14 + (high_count+1)×16  — always even (both terms even)
- * STEP_PIO_LEN_OVERHEAD = total/2, subtracted from desired_half_period to get step_low_half:
- *   step_low_half = period_ticks * 32768 / abs(plan_vel_q) - STEP_PIO_LEN_OVERHEAD
- *   step_period   = 2*(step_low_half + STEP_PIO_LEN_OVERHEAD) */
+ * pio_overhead = total/2, subtracted from desired_half_period to get step_low_half:
+ *   step_low_half = period_ticks * 32768 / abs(plan_vel_q) - pio_overhead
+ *   step_period   = 2*(step_low_half + pio_overhead)
+ * pio_overhead is per-joint, computed from joint_state[joint].high_count in plan_steps(). */
 #define STEP_PIO_HIGH_COUNT_DEFAULT   20   /* 1 + 21×16 = 337 cycles ≈ 2.53µs */
-#define STEP_PIO_LEN_OVERHEAD         ((14 + (STEP_PIO_HIGH_COUNT_DEFAULT + 1) * 16) / 2)
 #define RP2040_CLOCK_MHZ       133
 #define Q16_ONE                65536  /* 1.0 in Q16.16 fixed-point */
 
@@ -60,7 +60,8 @@ typedef struct {
     int32_t  step_accumulator_q;
     uint32_t last_direction;
     uint32_t last_commanded_direction;
-    uint32_t high_count;    /* HIGH-phase loop iterations; default STEP_PIO_HIGH_COUNT_DEFAULT */
+    uint32_t high_count;         /* HIGH-phase loop iterations; default STEP_PIO_HIGH_COUNT_DEFAULT */
+    uint16_t step_pulse_cmd_ns;  /* commanded HIGH-phase ns; 0 = using firmware default */
 } JointPioState;
 
 static JointPioState joint_state[MAX_JOINT];
@@ -177,7 +178,8 @@ void init_pio(const uint32_t joint)
   gpio_set_outover(io_pos_step, invert_step ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
   gpio_set_outover(io_pos_dir,  invert_dir  ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
 
-  joint_state[joint].high_count = STEP_PIO_HIGH_COUNT_DEFAULT;
+  if (joint_state[joint].high_count == 0)
+    joint_state[joint].high_count = STEP_PIO_HIGH_COUNT_DEFAULT;
   joint_state[joint].init_done = true;
 }
 
@@ -439,7 +441,8 @@ static int32_t commit_steps(
     /* Encoding: lower bit = direction, upper bits = step_low_half in ticks.
      * step_low_half=0 encodes a stop word (PIO idles); direction bit is preserved
      * so the DIR pin does not toggle on idle writes.
-     * step_period = 2*(step_low_half + STEP_PIO_LEN_OVERHEAD) */
+     * step_period = 2*(step_low_half + pio_overhead) */
+    const int32_t pio_overhead = (14 + ((int32_t)joint_state[joint].high_count + 1) * 16) / 2;
     int32_t step_low_half;
     int sub1step;
     if (abs(plan_vel_q) >= Q16_ONE) {
@@ -447,18 +450,18 @@ static int32_t commit_steps(
          * stale-x across period boundaries — no stop word needed.
          * int64 prevents overflow: 133000 * 32768 > INT32_MAX. */
         step_low_half = (int32_t)((int64_t)dq->period_ticks * 32768 / abs(plan_vel_q))
-                        - STEP_PIO_LEN_OVERHEAD;
+                        - pio_overhead;
         if (step_low_half < 0) step_low_half = 0;
         sub1step = 0;
     } else {
         /* Sub-1-step: step occupies exactly period_ticks/2 PIO cycles total
-         * (2*(period_ticks/4 - 175) + 350 = period_ticks/2).
+         * (2*(period_ticks/4 - pio_overhead) + 2*pio_overhead = period_ticks/2).
          * Using period_ticks/2 here would make the step consume nearly the entire
          * period; the trailing stop word would still be in the FIFO when the next
          * timer fires, causing the !fifo_empty guard to spuriously drop the next step.
          * Halving step_low_half leaves ~half the period for the stop word to clear.
          * step_low_half=0 when n_steps=0 — the resulting step_word equals a stop word. */
-        step_low_half = n_steps > 0 ? dq->period_ticks / 4 - STEP_PIO_LEN_OVERHEAD : 0;
+        step_low_half = n_steps > 0 ? dq->period_ticks / 4 - pio_overhead : 0;
         sub1step = 1;
     }
 
@@ -466,10 +469,10 @@ static int32_t commit_steps(
         dir_setup_violation_bits |= (1u << joint);
 
     config.joint[joint].step_len_us = step_low_half > 0
-        ? (uint16_t)((step_low_half + STEP_PIO_LEN_OVERHEAD) / RP2040_CLOCK_MHZ) : 0;
+        ? (uint16_t)((step_low_half + pio_overhead) / RP2040_CLOCK_MHZ) : 0;
 
     if (step_low_half > 0) joint_state[joint].last_direction = direction;
-    uint32_t high_count = joint_state[joint].high_count & 0x3F;
+    uint32_t high_count = joint_state[joint].high_count & 0x7F;
     uint32_t step_word  = (high_count << 25)
                         | (((uint32_t)step_low_half & 0xFFFFFF) << 1)
                         | joint_state[joint].last_direction;
@@ -586,13 +589,41 @@ uint8_t do_steps(const uint8_t joint) {
 
 void pio_set_step_high_count(uint32_t joint, uint32_t count) {
     if (joint >= MAX_JOINT) return;
-    joint_state[joint].high_count = count & 0x3F;
+    joint_state[joint].high_count = count & 0x7F;
+}
+
+void pio_set_step_pulse_ns(uint32_t joint, uint16_t ns) {
+    if (joint >= MAX_JOINT) return;
+    uint32_t count;
+    if (ns == 0) {
+        count = STEP_PIO_HIGH_COUNT_DEFAULT;
+    } else {
+        /* Round up: guarantee HIGH phase >= requested duration.
+         * HIGH cycles = 1 + (count+1)*16; PIO clock = RP2040_CLOCK_MHZ MHz.
+         * count = ceil((ns*RP2040_CLOCK_MHZ/1000 - 1) / 16) - 1
+         *       = (ns*RP2040_CLOCK_MHZ + 14999) / 16000 - 1  (integer, rounds up). */
+        uint32_t count_x1000 = (uint32_t)ns * RP2040_CLOCK_MHZ;
+        count = (count_x1000 + 14999) / 16000 - 1;
+        if (count > 127) count = 127;
+    }
+    joint_state[joint].high_count = count;
+    joint_state[joint].step_pulse_cmd_ns = ns;
+}
+
+uint16_t pio_get_step_pulse_ns(uint32_t joint) {
+    if (joint >= MAX_JOINT) return 0;
+    return joint_state[joint].step_pulse_cmd_ns;
 }
 
 uint8_t pio_get_and_clear_dir_setup_violations(void) {
     uint8_t v = dir_setup_violation_bits;
     dir_setup_violation_bits = 0;
     return v;
+}
+
+void pio_invalidate_all_joints(void) {
+    for (uint8_t j = 0; j < MAX_JOINT; j++)
+        joint_state[j].init_done = false;
 }
 
 #ifdef BUILD_TESTS

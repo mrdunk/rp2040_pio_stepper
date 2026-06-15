@@ -11,6 +11,12 @@
  * config.h provides the extern declarations — no re-definition needed here.
  * Tests can write to them directly to control Core1 behaviour. */
 
+static int pio_invalidate_all_joints_call_count = 0;
+
+void __wrap_pio_invalidate_all_joints(void) {
+    pio_invalidate_all_joints_call_count++;
+}
+
 /* Intercept disable_joint() to count calls. */
 static int disable_joint_call_count = 0;
 
@@ -37,8 +43,9 @@ static int test_setup(void **state) {
     last_packet_tick            = 0;
     packet_generation           = 1;  /* ahead of last_packet_generation (0) */
     linuxcnc_restart_detected   = false;
-    disable_joint_call_count    = 0;
-    do_steps_call_count         = 0;
+    disable_joint_call_count              = 0;
+    do_steps_call_count                   = 0;
+    pio_invalidate_all_joints_call_count  = 0;
     core1_reset_for_test();
     return 0;
 }
@@ -161,6 +168,26 @@ static void test_core1_restart_while_network_unhealthy(void **state) {
     assert_false(linuxcnc_restart_detected);
 }
 
+/* linuxcnc_restart_detected path: must call pio_invalidate_all_joints() so
+ * init_pio() re-runs on next enable after a GPIO config change (issue #44).
+ * Normal network timeouts must NOT invalidate PIO — that would cause a
+ * re-config loop on every brief dropout. */
+static void test_handle_network_timeout_invalidates_pio(void **state) {
+    (void)state;
+    /* plain timeout: no PIO invalidation */
+    handle_network_timeout();
+    assert_int_equal(0, pio_invalidate_all_joints_call_count);
+}
+
+static void test_linuxcnc_restart_invalidates_pio(void **state) {
+    (void)state;
+    linuxcnc_restart_detected = true;
+    tick             = 1;
+    last_packet_tick = 1;
+    core1_run_once_for_test();
+    assert_int_equal(1, pio_invalidate_all_joints_call_count);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_wait_for_packet_returns_when_generation_advances, test_setup),
@@ -175,6 +202,8 @@ int main(void) {
         cmocka_unit_test_setup(test_step_all_joints_calls_do_steps_for_each_joint,   test_setup),
         cmocka_unit_test_setup(test_core1_disables_joints_on_linuxcnc_restart,       test_setup),
         cmocka_unit_test_setup(test_core1_restart_while_network_unhealthy,           test_setup),
+        cmocka_unit_test_setup(test_handle_network_timeout_invalidates_pio,          test_setup),
+        cmocka_unit_test_setup(test_linuxcnc_restart_invalidates_pio,                test_setup),
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);

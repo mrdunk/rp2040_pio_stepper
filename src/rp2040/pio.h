@@ -33,6 +33,10 @@
  */
 void init_pio(const uint32_t joint);
 
+/* Clear init_done for all joints so init_pio() re-runs on next enable.
+ * Call after any event that may have changed GPIO pin assignments. */
+void pio_invalidate_all_joints(void);
+
 /* Compute the commanded velocity (steps/s) for this period.
  * Applies the position controller (position mode) and collapses to 0 when
  * disabled or when no new Core0 data is available (underrun / network loss).
@@ -53,9 +57,19 @@ double compute_velocity_cmd(
 uint8_t do_steps(const uint8_t joint);
 
 /* Set the HIGH-phase loop iteration count for a joint's step pulse.
- * count is clamped to 6 bits (0–63); default is STEP_PIO_HIGH_COUNT_DEFAULT.
+ * count is clamped to 7 bits (0–127); default is STEP_PIO_HIGH_COUNT_DEFAULT.
  * Takes effect on the next FIFO word (next servo period). */
 void pio_set_step_high_count(uint32_t joint, uint32_t count);
+
+/* Set the STEP pulse HIGH-phase duration in ns.
+ * Converts ns to a high_count value (rounds up to guarantee >= requested duration).
+ * ns=0 resets to the firmware default (~2500ns, STEP_PIO_HIGH_COUNT_DEFAULT).
+ * Clamped to 7-bit range; takes effect on the next servo period. */
+void pio_set_step_pulse_ns(uint32_t joint, uint16_t ns);
+
+/* Return the commanded STEP pulse HIGH-phase duration in ns for a joint.
+ * Returns 0 if using the firmware default (no explicit command received). */
+uint16_t pio_get_step_pulse_ns(uint32_t joint);
 
 /* Return and clear the per-joint DIR setup violation bitmask.
  * Bit N is set when joint N had a direction change with step_low_half <

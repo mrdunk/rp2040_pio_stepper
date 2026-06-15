@@ -94,6 +94,8 @@ static bool configure_joint(
         last_joint_config[joint].invert_step != data->joint_invert_step[joint]
         ||
         last_joint_config[joint].invert_dir != data->joint_invert_dir[joint]
+        ||
+        last_joint_config[joint].step_pulse_len_ns != (uint16_t)(*data->joint_step_pulse_len_cmd[joint] * 1000.0 + 0.5)
       ) {
       pack_success = pack_success && serialize_joint_config(
           tx_buffer,
@@ -105,7 +107,8 @@ static bool configure_joint(
           max_accel_ticks,
           data->joint_cmd_type[joint],
           data->joint_invert_step[joint],
-          data->joint_invert_dir[joint]
+          data->joint_invert_dir[joint],
+          (uint16_t)(*data->joint_step_pulse_len_cmd[joint] * 1000.0 + 0.5)
           );
     }
     return pack_success;

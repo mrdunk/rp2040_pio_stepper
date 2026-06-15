@@ -100,7 +100,7 @@ static inline void step_gen_program_init(
 ; Same FIFO protocol as step_gen: one 32-bit word per update.
 ;   bit 0      = direction (0=reverse, 1=forward)
 ;   bits 24:1  = step_low_half: each LOW phase duration in PIO clock cycles
-;   bits 30:25 = high_count: HIGH phase loop count (16 cycles/iteration)
+;   bits 31:25 = high_count: HIGH phase loop count (16 cycles/iteration)
 ;   zero word  = stop (PIO idles until new data)
 ;
 ; Step waveform: LOW(step_low_half) → HIGH(1 + (high_count+1)×16 cycles) → LOW(step_low_half)
@@ -128,9 +128,9 @@ data_acquired:
 low1:
     jmp y-- low1
 
-    ; HIGH pulse duration is controlled by high_count (bits 30:25 of the FIFO word).
+    ; HIGH pulse duration is controlled by high_count (bits 31:25 of the FIFO word).
     ; Each loop iteration = nop[7] + jmp[7] y-- = 16 cycles. Default high_count=20 → 337 cycles ≈ 2.53µs.
-    ; Valid range: high_count 0–63 → 16–1024 cycles (0.12µs–7.7µs) @ 133MHz PIO clock.
+    ; Valid range: high_count 0–127 → 16–2048 cycles (0.12µs–15.4µs) @ 133MHz PIO clock.
     mov y, isr      side 1    ; STEP=HIGH; load HIGH-phase counter from ISR
 high_loop:
     nop [7]                   ; 8 cycles per iteration (+ 8 for jmp = 16 total)
@@ -145,7 +145,7 @@ new_data:
     pull
     out pins, 1               ; Direction pin
     out x, 24                 ; step_low_half into X (24 bits; persists until next FIFO read)
-    out y, 6                  ; high_count (bits 30:25) into Y
+    out y, 7                  ; high_count (bits 31:25) into Y
     mov isr, y                ; persist high_count in ISR for HIGH phase
     jmp data_acquired
 
