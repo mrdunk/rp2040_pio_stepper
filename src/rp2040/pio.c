@@ -71,6 +71,13 @@ static uint32_t offset_pio1_count = 0;  /* step_count on PIO1 (NUM_FEEDBACK > 0 
 static uint8_t  programs_loaded   = 0;
 static uint8_t  dir_setup_violation_bits = 0;  /* bit N set when joint N violated DIR setup time */
 
+/* Position continuity across step_count SM reinit (e.g. LinuxCNC restart).
+ * When init_pio() restarts the SM, the hardware counter resets to zero.
+ * joint_offset[j] is set to last_pos[j] (the last reported position) so
+ * drain_rx_fifo() can add the offset and return a continuous position. */
+static int32_t last_pos[MAX_JOINT];
+static int32_t joint_offset[MAX_JOINT];
+
 void init_pio(const uint32_t joint)
 {
 
@@ -186,11 +193,14 @@ void init_pio(const uint32_t joint)
 /* Read the latest feedback position from PIO1's RX FIFO.
  * Snapshots the FIFO level, then drains exactly that many entries, keeping
  * only the last.  Intermediate values are discarded — only the current
- * position matters.  Returns current_pos unchanged if the FIFO is empty. */
+ * position matters.  Returns current_pos unchanged if the FIFO is empty.
+ * joint_offset[sm] is added to the raw counter value to make the returned
+ * position continuous across step_count SM reinit (see init_pio). */
 int32_t drain_rx_fifo(uint32_t sm, int32_t current_pos) {
     uint8_t fifo_len = pio_sm_get_rx_fifo_level(pio1, sm);
     while (fifo_len > 0) {
-        current_pos = pio_sm_get_blocking(pio1, sm);
+        current_pos = (int32_t)pio_sm_get_blocking(pio1, sm) + joint_offset[sm];
+        last_pos[sm] = current_pos;
         fifo_len--;
     }
     return current_pos;
@@ -622,13 +632,17 @@ uint8_t pio_get_and_clear_dir_setup_violations(void) {
 }
 
 void pio_invalidate_all_joints(void) {
-    for (uint8_t j = 0; j < MAX_JOINT; j++)
+    for (uint8_t j = 0; j < MAX_JOINT; j++) {
         joint_state[j].init_done = false;
+        joint_offset[j] = last_pos[j];  /* preserve position across SM counter reset */
+    }
 }
 
 #ifdef BUILD_TESTS
 void pio_reset_for_test(void) {
-    memset(joint_state, 0, sizeof(joint_state));
+    memset(joint_state,  0, sizeof(joint_state));
+    memset(last_pos,     0, sizeof(last_pos));
+    memset(joint_offset, 0, sizeof(joint_offset));
     offset_pio0              = 0;
     offset_pio1_gen          = 0;
     offset_pio1_count        = 0;

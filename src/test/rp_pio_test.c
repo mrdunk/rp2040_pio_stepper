@@ -1968,6 +1968,40 @@ static void test_pio_reinit_after_invalidate(void **state) {
  * With the old 0x3F mask, high_count=64 → 0 (silent failure, step_word bit 31 clear).
  * With the new 0x7F mask, high_count=64 → 64 → bit 31 of step_word set.
  * Set high_count AFTER the first enable so init_pio's default assignment runs first. */
+/* drain_rx_fifo: position is continuous across step_count SM reinit.
+ *
+ * When LinuxCNC restarts, pio_invalidate_all_joints() clears init_done and the
+ * step_count SM counter resets to 0. Without the joint_offset fix, drain_rx_fifo
+ * returns 0 on the next period, causing a position jump and follow error (issue #51).
+ * With the fix, abs_pos_achieved is preserved across the reinit. */
+static void test_drain_rx_fifo_position_continuous_across_reinit(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = 0.0;
+    config.joint[0].abs_pos_requested  = 100.0;
+    config.joint[0].max_velocity       = 50.0;
+    config.joint[0].max_accel          = 0.0;
+    mock_rx_values[0]                  = 100;
+    mock_rx_fifo_level                 = 1;
+    mock_tx_fifo_empty                 = 1;
+    config.joint[0].updated_from_c0    = 1;
+    do_steps(0);
+    assert_int_equal(config.joint[0].abs_pos_achieved, 100);
+
+    /* Simulate LinuxCNC restart: invalidate PIO and reset SM counter to 0. */
+    pio_invalidate_all_joints();
+    mock_rx_index      = 0;
+    mock_rx_values[0]  = 0;  /* hardware counter reset to 0 after SM restart */
+    mock_rx_fifo_level = 1;
+    config.joint[0].updated_from_c0 = 1;
+    do_steps(0);
+
+    /* Position must remain at 100 — no jump to 0. */
+    assert_int_equal(config.joint[0].abs_pos_achieved, 100);
+}
+
 static void test_step_high_count_7bit_accepted(void **state) {
     (void)state;
     config.update_time_us              = 1000;
@@ -2071,6 +2105,7 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_sub1step_stop_word_pushed_despite_active_pio, test_setup),
         cmocka_unit_test_setup(test_step_len_us_tracked,                                   test_setup),
         cmocka_unit_test_setup(test_pio_reinit_after_invalidate,                           test_setup),
+        cmocka_unit_test_setup(test_drain_rx_fifo_position_continuous_across_reinit,       test_setup),
         cmocka_unit_test_setup(test_step_high_count_7bit_accepted,                         test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
