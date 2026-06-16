@@ -195,7 +195,7 @@ void init_pio(const uint32_t joint)
  * only the last.  Intermediate values are discarded — only the current
  * position matters.  Returns current_pos unchanged if the FIFO is empty.
  * joint_offset[sm] is added to the raw counter value to make the returned
- * position continuous across step_count SM reinit (see init_pio). */
+ * position continuous across step_count SM reinit (set by pio_invalidate_all_joints). */
 int32_t drain_rx_fifo(uint32_t sm, int32_t current_pos) {
     uint8_t fifo_len = pio_sm_get_rx_fifo_level(pio1, sm);
     while (fifo_len > 0) {
@@ -632,10 +632,9 @@ uint8_t pio_get_and_clear_dir_setup_violations(void) {
 }
 
 void pio_invalidate_all_joints(void) {
-    for (uint8_t j = 0; j < MAX_JOINT; j++) {
+    for (uint8_t j = 0; j < MAX_JOINT; j++)
         joint_state[j].init_done = false;
-        joint_offset[j] = last_pos[j];  /* preserve position across SM counter reset */
-    }
+    memcpy(joint_offset, last_pos, sizeof(joint_offset));  /* preserve position across SM counter reset */
 }
 
 #ifdef BUILD_TESTS
