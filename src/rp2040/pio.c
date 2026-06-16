@@ -73,7 +73,9 @@ static uint8_t  dir_setup_violation_bits = 0;  /* bit N set when joint N violate
 
 /* Position continuity across step_count SM reinit (e.g. LinuxCNC restart).
  * When init_pio() restarts the SM, the hardware counter resets to zero.
- * joint_offset[j] is set to last_pos[j] (the last reported position) so
+ * Both arrays are indexed by SM number (joint_state[joint].sm_count), not
+ * joint number. pio_invalidate_all_joints() copies last_pos[] into
+ * joint_offset[] via memcpy (preserving SM-indexed layout) so that
  * drain_rx_fifo() can add the offset and return a continuous position. */
 static int32_t last_pos[MAX_JOINT];
 static int32_t joint_offset[MAX_JOINT];
