@@ -523,6 +523,25 @@ Set `0` (or leave unset) to use the firmware default. The value is sent as part
 of the joint configuration handshake and echoed back by the firmware; the driver
 retransmits until acknowledged.
 
+### Homing and LinuxCNC restart
+
+The RP firmware preserves its step-counter position across LinuxCNC restarts. When
+LinuxCNC reinitialises the connection, the firmware captures the current position
+in an offset register before resetting the PIO state machine, so the feedback
+position remains continuous. What LinuxCNC does with that preserved position on
+restart depends on the `HOME_ABSOLUTE_ENCODER` setting in each `[JOINT_N]` block:
+
+| Value | Behaviour |
+|-------|-----------|
+| `0` | **Standard homing** (default). Firmware preserves position internally, but LinuxCNC ignores it and requires a homing event each session. Compatible with physical limit/home switches, or with a manual workflow: jog the carriage to the desired 0,0,0 then press **Home** in the UI. Position is not carried across restarts. |
+| `1` | **Absolute encoder — home with park move.** LinuxCNC accepts the RP's preserved position as the current machine position, then makes a final move to the `[JOINT_N]HOME` coordinates. Useful if you want the machine to move to a safe parking position after restart. |
+| `2` | **Absolute encoder — stay in place** (sample config default). LinuxCNC accepts the RP's preserved position and does nothing else. Machine is immediately ready at its previous position — simplest restart workflow. |
+
+Additional notes for values 1 and 2:
+- `HOME_IS_SHARED` is silently ignored.
+- Re-home requests are silently ignored once the joint is homed.
+- No home switch is searched; LinuxCNC simply accepts the current feedback value.
+
 ## Development
 
 Tests run on the host — no hardware needed.
