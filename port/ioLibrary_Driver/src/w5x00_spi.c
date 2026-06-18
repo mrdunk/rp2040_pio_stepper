@@ -234,12 +234,14 @@ void wizchip_initialize(void)
     uint8_t memsize[2][8] = {{2, 2, 2, 2, 2, 2, 2, 2}, {2, 2, 2, 2, 2, 2, 2, 2}};
 #endif
 
+    printf(" wizchip_init: CW_INIT_WIZCHIP...\n");
     if (ctlwizchip(CW_INIT_WIZCHIP, (void *)memsize) == -1)
     {
         printf(" W5x00 initialized fail\n");
 
         return;
     }
+    printf(" wizchip_init: done, waiting for PHY link\n");
 
     /* Check PHY link status */
     do
@@ -251,6 +253,7 @@ void wizchip_initialize(void)
             return;
         }
     } while (temp == PHY_LINK_OFF);
+    printf(" wizchip_init: PHY link up\n");
 }
 
 void wizchip_check(void)

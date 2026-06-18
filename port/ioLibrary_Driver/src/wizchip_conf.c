@@ -938,7 +938,9 @@ int8_t wizphy_getphylink(void) {
 
 #elif ((_WIZCHIP_ == W6100)||(_WIZCHIP_ == W6300))
 
-#if (_PHY_IO_MODE_ == _PHY_IO_MODE_PHYCR_)
+#if (_WIZCHIP_ == W6300) || (_PHY_IO_MODE_ == _PHY_IO_MODE_PHYCR_)
+    // W6300 in single-wire SPI: wiz_mdio_read() spins while(getPHYACR()) and hangs
+    // if SPI reads return non-zero garbage. Use direct PHYSR register read instead.
     return (getPHYSR() & PHYSR_LNK);
 #elif (_PHY_IO_MODE_ == _PHY_IO_MODE_MII_)
     if (wiz_mdio_read(PHYRAR_BMSR) & BMSR_LINK_STATUS) {
