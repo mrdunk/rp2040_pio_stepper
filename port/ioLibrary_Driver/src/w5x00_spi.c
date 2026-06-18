@@ -243,7 +243,13 @@ void wizchip_initialize(void)
     }
     printf(" wizchip_init: done, waiting for PHY link\n");
 
+#if (_WIZCHIP_ == W6300)
+    printf(" W6300 CIDR=0x%04X VER=0x%04X PHYSR=0x%02X SYSR=0x%02X\n",
+           getCIDR(), getVER(), getPHYSR(), getSYSR());
+#endif
+
     /* Check PHY link status */
+    uint32_t phy_count = 0;
     do
     {
         if (ctlwizchip(CW_GET_PHYLINK, (void *)&temp) == -1)
@@ -252,8 +258,18 @@ void wizchip_initialize(void)
 
             return;
         }
+        if (++phy_count >= 100)
+        {
+#if (_WIZCHIP_ == W6300)
+            printf(" wizchip_init: PHY timeout (PHYSR=0x%02X), proceeding\n", getPHYSR());
+#else
+            printf(" wizchip_init: PHY link timeout, proceeding\n");
+#endif
+            break;
+        }
+        sleep_ms(50);
     } while (temp == PHY_LINK_OFF);
-    printf(" wizchip_init: PHY link up\n");
+    printf(" wizchip_init: PHY link %s\n", temp == PHY_LINK_ON ? "up" : "not up");
 }
 
 void wizchip_check(void)
