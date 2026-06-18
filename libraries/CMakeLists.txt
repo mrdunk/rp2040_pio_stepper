@@ -7,8 +7,12 @@ target_sources(ETHERNET_FILES PUBLIC
         )
 
 # wizchip_conf.c has a signed/unsigned mismatch (datasize_t vs uint16_t) that
-# GCC 14+ treats as an error. Suppress it for this third-party target only.
-target_compile_options(ETHERNET_FILES PRIVATE -Wno-incompatible-pointer-types)
+# GCC 14+ treats as an error. Set on the source file so the flag applies
+# regardless of which target CMake compiles it under (PUBLIC propagation).
+set_source_files_properties(
+        ${WIZNET_DIR}/Ethernet/wizchip_conf.c
+        PROPERTIES COMPILE_FLAGS "-Wno-incompatible-pointer-types"
+)
 
 if(ETH_CHIP STREQUAL "W5100S")
     target_include_directories(ETHERNET_FILES INTERFACE
