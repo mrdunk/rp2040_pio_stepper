@@ -3,7 +3,7 @@ add_library(ETHERNET_FILES STATIC)
 
 target_sources(ETHERNET_FILES PRIVATE
         ${WIZNET_DIR}/Ethernet/socket.c
-        ${WIZNET_DIR}/Ethernet/wizchip_conf.c
+        ${CMAKE_SOURCE_DIR}/port/ioLibrary_Driver/src/wizchip_conf.c
         )
 
 # wizchip_conf.c has a signed/unsigned mismatch (datasize_t vs uint16_t) that
