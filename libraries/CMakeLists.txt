@@ -6,6 +6,10 @@ target_sources(ETHERNET_FILES PUBLIC
         ${WIZNET_DIR}/Ethernet/wizchip_conf.c
         )
 
+# wizchip_conf.c has a signed/unsigned mismatch (datasize_t vs uint16_t) that
+# GCC 14+ treats as an error. Suppress it for this third-party target only.
+target_compile_options(ETHERNET_FILES PRIVATE -Wno-incompatible-pointer-types)
+
 if(ETH_CHIP STREQUAL "W5100S")
     target_include_directories(ETHERNET_FILES INTERFACE
             ${WIZNET_DIR}/Ethernet
