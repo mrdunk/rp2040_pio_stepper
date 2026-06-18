@@ -135,6 +135,22 @@ static void wizchip_write_buf(uint8_t *buf, datasize_t len)
 }
 #endif
 
+#if (_WIZCHIP_ == W6300)
+static void wizchip_read_qspi(uint8_t opcode, uint16_t addr, uint8_t *pBuf, uint16_t len)
+{
+    uint8_t header[3] = {opcode, (uint8_t)(addr >> 8), (uint8_t)(addr & 0xFF)};
+    spi_write_blocking(SPI_PORT, header, 3);
+    spi_read_blocking(SPI_PORT, 0xFF, pBuf, len);
+}
+
+static void wizchip_write_qspi(uint8_t opcode, uint16_t addr, uint8_t *pBuf, uint16_t len)
+{
+    uint8_t header[3] = {opcode, (uint8_t)(addr >> 8), (uint8_t)(addr & 0xFF)};
+    spi_write_blocking(SPI_PORT, header, 3);
+    spi_write_blocking(SPI_PORT, pBuf, len);
+}
+#endif
+
 static void wizchip_critical_section_lock(void)
 {
     critical_section_enter_blocking(&g_wizchip_cri_sec);
@@ -201,6 +217,8 @@ void wizchip_initialize(void)
     /* SPI function register */
 #if (_WIZCHIP_ == W6100)
     reg_wizchip_spi_cbfunc(wizchip_read, wizchip_write, wizchip_read_buf, wizchip_write_buf);
+#elif (_WIZCHIP_ == W6300)
+    reg_wizchip_qspi_cbfunc(wizchip_read_qspi, wizchip_write_qspi);
 #else
     reg_wizchip_spi_cbfunc(wizchip_read, wizchip_write);
 #endif
