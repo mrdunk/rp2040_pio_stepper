@@ -32,7 +32,7 @@ add_custom_target(
 
 string(TOLOWER "${RP_CHIP}" _rp_lower)
 string(TOLOWER "${ETH_CHIP}" _eth_lower)
-set_target_properties(stepper_control PROPERTIES OUTPUT_NAME "firmware_${_rp_lower}_${_eth_lower}")
+set_target_properties(stepper_control PROPERTIES OUTPUT_NAME "firmware_${_rp_lower}_${_eth_lower}_${MAX_JOINT}j")
 
 target_include_directories(stepper_control PRIVATE ${CMAKE_BINARY_DIR})
 target_compile_definitions(stepper_control PRIVATE

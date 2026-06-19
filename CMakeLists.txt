@@ -100,8 +100,9 @@ if(BUILD_RP)
         message(FATAL_ERROR "ETH_CHIP is invalid: ${ETH_CHIP}. Must be one of: W5500, W5100S, W6100, W6300")
     endif()
 
-    message(STATUS "ETH_CHIP = ${ETH_CHIP}")
-    message(STATUS "RP_CHIP  = ${RP_CHIP}")
+    message(STATUS "ETH_CHIP  = ${ETH_CHIP}")
+    message(STATUS "RP_CHIP   = ${RP_CHIP}")
+    message(STATUS "MAX_JOINT = ${MAX_JOINT}")
 
     add_subdirectory(src/rp2040)
     add_subdirectory(${CMAKE_SOURCE_DIR}/libraries)
