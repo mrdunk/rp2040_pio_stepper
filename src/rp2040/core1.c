@@ -105,7 +105,7 @@ void core1_run_once_for_test(void) {
 #endif
 
 void init_core1(void) {
-  printf("core0: Initializing.\n");
+  printf("core1: Initializing.\n");
 
   if (MAX_JOINT > 8) {
     printf("ERROR: Max joint count: 8. Configured: %u\n", MAX_JOINT);
