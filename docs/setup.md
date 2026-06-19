@@ -50,7 +50,7 @@ Available presets:
 All presets default to `MAX_JOINT=4`. Override on the command line if needed:
 
 ```bash
-cmake --preset rp2040-w5500 -DMAX_JOINT=6 && cmake --build --preset rp2040-w5500
+cmake --preset rp2040-w5500 -DMAX_JOINT=4 && cmake --build --preset rp2040-w5500
 ```
 
 `MAX_JOINT` determines the PIO layout and feedback channel allocation. It must
