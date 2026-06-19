@@ -28,6 +28,16 @@ Stage changes and report what is staged, then wait for the user to say "commit".
 This applies even when a commit seems like the obvious next step.
 Never open PR to main.
 
+## Working rules
+Favour small units of work that can be verified independently. Favour agile over waterfall approach.
+If it makes sense to split a task into smaller units, rather than completing what has been asked,
+prompt the user with suggested sub-tasks.
+
+Before embarking on any research ask the user questions to resolve ambiguity.
+
+After any decision use a separate agent to verify what has been decided. Notify the user
+about any conclusions that are not backed by evidence.
+
 ## Project overview
 
 RP2040/RP2350-based stepper motor controller for LinuxCNC. Core0 handles UDP networking
