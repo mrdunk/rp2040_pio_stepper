@@ -98,6 +98,7 @@ static hal_float_t v_joint_ferror_suggest[MAX_JOINT];
 static hal_float_t v_joint_vel_calculated[MAX_JOINT];
 static hal_s32_t   v_joint_pos_error_fb[MAX_JOINT];
 static hal_bit_t   v_joint_enable_fb[MAX_JOINT];
+static hal_float_t v_spindle_speed_cmd[MAX_SPINDLE];
 
 static skeleton_t make_data(void) {
     memset(&v_eth_up, 0, sizeof(v_eth_up));
@@ -141,8 +142,10 @@ static skeleton_t make_data(void) {
     for(int g = 0; g < MAX_GPIO; g++) {
         d.gpio_type[g] = GPIO_TYPE_NOT_SET;
     }
+    memset(v_spindle_speed_cmd, 0, sizeof(v_spindle_speed_cmd));
     for(int s = 0; s < MAX_SPINDLE; s++) {
-        d.spindle_vfd_type[s] = MODBUS_TYPE_NOT_SET;
+        d.spindle_vfd_type[s]   = MODBUS_TYPE_NOT_SET;
+        d.spindle_speed_cmd[s]  = &v_spindle_speed_cmd[s];
     }
     return d;
 }
@@ -250,6 +253,20 @@ static void test_force_disable_while_eth_down(void **state) {
 }
 
 
+/* While eth_up is false, spindle_speed_cmd is overridden to 0 every period
+ * regardless of what LinuxCNC wrote to the HAL pin. */
+static void test_force_stop_spindle_while_eth_down(void **state) {
+    (void)state;
+    reset_mocks();
+    skeleton_t data = make_data();
+    *data.eth_up = false;
+    v_spindle_speed_cmd[0] = 1500.0;   /* LinuxCNC still commands spindle speed */
+
+    eth_state_update(&data, 0, 0, 0, 1);
+
+    assert_double_equal(*data.spindle_speed_cmd[0], 0.0, 0.001);
+}
+
 /* Recovery requires ALL joints stopped: one moving joint blocks machine-on.
  *
  * The existing test covers a single joint.  This test verifies that with two
@@ -308,6 +325,7 @@ int main(void) {
         cmocka_unit_test(test_recovery_waits_for_all_stopped),
         cmocka_unit_test(test_recovery_requires_all_joints_stopped_multi_joint),
         cmocka_unit_test(test_force_disable_while_eth_down),
+        cmocka_unit_test(test_force_stop_spindle_while_eth_down),
         cmocka_unit_test(test_negative_scale_sends_positive_limits),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);

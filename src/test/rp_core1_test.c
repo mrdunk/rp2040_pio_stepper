@@ -26,6 +26,13 @@ void __wrap_disable_joint(const uint8_t joint, const uint8_t core) {
     disable_joint_call_count++;
 }
 
+/* Intercept stop_all_spindles() to count calls. */
+static int stop_all_spindles_call_count = 0;
+
+void __wrap_stop_all_spindles(void) {
+    stop_all_spindles_call_count++;
+}
+
 /* Intercept do_steps() to count calls. */
 static int do_steps_call_count = 0;
 
@@ -46,6 +53,7 @@ static int test_setup(void **state) {
     disable_joint_call_count              = 0;
     do_steps_call_count                   = 0;
     pio_invalidate_all_joints_call_count  = 0;
+    stop_all_spindles_call_count          = 0;
     core1_reset_for_test();
     return 0;
 }
@@ -112,6 +120,21 @@ static void test_handle_network_timeout_disables_all_joints(void **state) {
     (void)state;
     handle_network_timeout();
     assert_int_equal(MAX_JOINT, disable_joint_call_count);
+}
+
+/* handle_network_timeout: stops all spindles on first call. */
+static void test_handle_network_timeout_stops_spindles(void **state) {
+    (void)state;
+    handle_network_timeout();
+    assert_int_equal(1, stop_all_spindles_call_count);
+}
+
+/* handle_network_timeout: does NOT stop spindles on second call (debounced). */
+static void test_handle_network_timeout_stops_spindles_once_per_outage(void **state) {
+    (void)state;
+    handle_network_timeout();
+    handle_network_timeout();
+    assert_int_equal(1, stop_all_spindles_call_count);
 }
 
 /* handle_network_timeout: does NOT disable joints on second call (no_network debounce). */
@@ -196,8 +219,10 @@ int main(void) {
         cmocka_unit_test_setup(test_check_network_health_ok,                 test_setup),
         cmocka_unit_test_setup(test_check_network_health_at_limit,           test_setup),
         cmocka_unit_test_setup(test_check_network_health_loss,               test_setup),
-        cmocka_unit_test_setup(test_handle_network_timeout_disables_all_joints,      test_setup),
-        cmocka_unit_test_setup(test_handle_network_timeout_disables_once_per_outage, test_setup),
+        cmocka_unit_test_setup(test_handle_network_timeout_disables_all_joints,        test_setup),
+        cmocka_unit_test_setup(test_handle_network_timeout_disables_once_per_outage,  test_setup),
+        cmocka_unit_test_setup(test_handle_network_timeout_stops_spindles,            test_setup),
+        cmocka_unit_test_setup(test_handle_network_timeout_stops_spindles_once_per_outage, test_setup),
         cmocka_unit_test_setup(test_handle_network_recovery_re_arms_timeout,         test_setup),
         cmocka_unit_test_setup(test_step_all_joints_calls_do_steps_for_each_joint,   test_setup),
         cmocka_unit_test_setup(test_core1_disables_joints_on_linuxcnc_restart,       test_setup),

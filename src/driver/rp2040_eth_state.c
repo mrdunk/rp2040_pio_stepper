@@ -344,12 +344,16 @@ static void reset_rp_config(skeleton_t *data) {
 void eth_state_update(skeleton_t *data, int device_num, size_t count, uint32_t now, int num_joints) {
   struct NWBuffer buffer;
 
-  /* While eth is down, hold joint_enable_cmd=false so the RP2040 keeps
-   * decelerating.  LinuxCNC may write enable=true to this HAL pin every
-   * servo period; we intercept it here before the packet is built. */
+  /* While eth is down, hold joint_enable_cmd=false and spindle_speed_cmd=0
+   * so the RP2040 keeps decelerating and the VFD stops.  LinuxCNC may write
+   * to these HAL pins every servo period; we intercept before building the
+   * packet. */
   if (!*data->eth_up) {
     for (int j = 0; j < num_joints; j++) {
       *data->joint_enable_cmd[j] = false;
+    }
+    for (int s = 0; s < MAX_SPINDLE; s++) {
+      *data->spindle_speed_cmd[s] = 0.0;
     }
   }
 

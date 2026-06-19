@@ -54,6 +54,7 @@ void handle_network_timeout(void) {
   for (uint8_t joint = 0; joint < MAX_JOINT; joint++) {
     disable_joint(joint, CORE1);
   }
+  stop_all_spindles();
   printf("No NW\n");
   no_network = true;
 }

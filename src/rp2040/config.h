@@ -151,6 +151,9 @@ uint32_t get_joint_config(
 
 void disable_joint(const uint8_t joint, const uint8_t core);
 
+/* Set all spindle speeds to zero (EPO/e-stop). */
+void stop_all_spindles(void);
+
 /* Serialise metrics stored in global config in a format for sending over UDP. */
 bool serialise_timing(struct NWBuffer* tx_buf, int32_t update_id, int32_t time_diff);
 

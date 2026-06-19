@@ -275,6 +275,7 @@ target_link_libraries(
   -Wl,--wrap,disable_joint
   -Wl,--wrap,do_steps
   -Wl,--wrap,pio_invalidate_all_joints
+  -Wl,--wrap,stop_all_spindles
   )
 add_test(
   rpCore1Test

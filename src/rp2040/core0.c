@@ -28,6 +28,11 @@
 float req_spindle_frequency = 0;
 float act_spindle_frequency = -1000000;
 
+void stop_all_spindles(void) {
+  req_spindle_frequency = 0;
+  printf("Spindles stopped\n");
+}
+
 bool unpack_timing(
     struct NWBuffer* rx_buf,
     size_t* rx_offset,
