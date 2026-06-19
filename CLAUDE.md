@@ -33,9 +33,9 @@ Favour small units of work that can be verified independently. Favour agile over
 If it makes sense to split a task into smaller units, rather than completing what has been asked,
 prompt the user with suggested sub-tasks.
 
-Before embarking on any research ask the user questions to resolve ambiguity.
+Always ask the user questions to resolve ambiguity.
 
-After any decision use a separate agent to verify what has been decided. Notify the user
+After making any decision use a separate agent to verify what has been decided. Notify the user
 about any conclusions that are not backed by evidence.
 
 ## Project overview
