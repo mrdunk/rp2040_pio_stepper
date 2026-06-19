@@ -131,6 +131,7 @@ net spindle-rev spindle.0.reverse => rp2040_eth.0.spindle.0.rev
 net spindle-speed-cmd spindle.0.speed-out => rp2040_eth.0.spindle.0.speed-cmd
 net spindle-speed-fb  spindle.0.speed-in  <= rp2040_eth.0.spindle.0.speed-fb
 net spindle-at-speed spindle.0.at-speed <= rp2040_eth.0.spindle.0.at-speed
+net motion-enabled  motion.motion-enabled  => rp2040_eth.0.motion-enabled
 
 # GPIO
 setp rp2040_eth.0.gpio.00.type      [RP2040_ETH_GPIO_TYPES]GPIO_TYPE_NATIVE_OUT_DEBUG

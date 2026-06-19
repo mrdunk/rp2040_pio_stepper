@@ -25,6 +25,7 @@ config time with `setp` and cannot be connected to signals.
 | `config-complete` | bit | OUT | user | Goes high once all joint/GPIO/spindle configs have been confirmed by the firmware; used to gate `enable-out` |
 | `eth-up` | bit | OUT | user | Ethernet link state as seen by the driver |
 | `machine-on` | bit | OUT | user | True when the RP2040 Ethernet link is established and communicating |
+| `motion-enabled` | bit | IN | user | Connect to `motion.motion-enabled`; driver zeroes all spindle speed commands while false, stopping the VFD on LinuxCNC e-stop |
 | `packet-interval` | s32 | OUT | debug | Time between consecutive packets computed from LinuxCNC timestamps (ns); nominally equals the servo period |
 | `rx-miss-count` | u32 | OUT | debug | Consecutive cycles without a response from RP2040; resets to 0 on success; triggers network-down handling at MAX_SKIPPED_PACKETS |
 | `seq-in` | u32 | OUT | debug | Sequence number echoed back by RP2040; `seq-out − seq-in` gives round-trip latency in servo cycles |

@@ -142,6 +142,7 @@ net spindle-rev       spindle.0.reverse  => rp2040_eth.0.spindle.0.rev
 net spindle-speed-cmd spindle.0.speed-out => rp2040_eth.0.spindle.0.speed-cmd
 net spindle-speed-fb  spindle.0.speed-in  <= rp2040_eth.0.spindle.0.speed-fb
 net spindle-at-speed  spindle.0.at-speed  <= rp2040_eth.0.spindle.0.at-speed
+net motion-enabled  motion.motion-enabled  => rp2040_eth.0.motion-enabled
 
 
 # GPIO — J8 I/O 1 (MCP23017 GPA5-6, address=[I2C_0]ADDRESS)

@@ -334,6 +334,9 @@ net spindle-rev       spindle.0.reverse   => rp2040_eth.0.spindle.0.rev
 net spindle-speed-cmd spindle.0.speed-out => rp2040_eth.0.spindle.0.speed-cmd
 net spindle-speed-fb  spindle.0.speed-in  <= rp2040_eth.0.spindle.0.speed-fb
 net spindle-at-speed  spindle.0.at-speed  <= rp2040_eth.0.spindle.0.at-speed
+
+# Stop spindles immediately on e-stop (motion.motion-enabled goes false):
+net motion-enabled motion.motion-enabled => rp2040_eth.0.motion-enabled
 ```
 
 See [hal_reference.md](hal_reference.md) for a full list of spindle pins and
