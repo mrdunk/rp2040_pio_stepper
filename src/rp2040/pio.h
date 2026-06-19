@@ -85,6 +85,11 @@ void pio_reset_for_test(void);
 
 /* Exposed for unit testing only. */
 int32_t drain_rx_fifo(uint32_t sm, int32_t current_pos);
+
+/* Returns the net signed step count accumulated since the last call (or reset).
+ * Positive = forward direction, negative = reverse.
+ * Used by tests to simulate step_count PIO feedback without hardware. */
+int32_t pio_get_and_clear_test_steps(void);
 #endif  // BUILD_TESTS
 
 #endif  // PIO__H

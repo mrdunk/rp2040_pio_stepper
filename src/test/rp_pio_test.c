@@ -2022,6 +2022,212 @@ static void test_step_high_count_7bit_accepted(void **state) {
     assert_true(last_pio_put_value & (1u << 31));
 }
 
+/* -----------------------------------------------------------------------
+ * Deceleration regression tests — issue #54 (joint overshoot / bounce-back)
+ *
+ * Derived from deceleration.csv (pico-eth-cnc-4axis config):
+ *   SCALE=1280 steps/mm, MAX_VELOCITY=25mm/s=32000 steps/s,
+ *   MAX_ACCELERATION=200mm/s²=256000 steps/s², SERVO_PERIOD=1ms.
+ *
+ * Covers the active decel ramp from peak (-32000 steps/s) to rest (0).
+ * LinuxCNC positions are computed by trapezoidal integration; the firmware
+ * uses rectangular (Bresenham).  The mismatch causes the firmware to
+ * accumulate extra steps beyond the LinuxCNC commanded position.
+ * The velocity-mode test passes (the 0.01× correction factor naturally
+ * cancels the integration error and is a regression guard).  The position-mode
+ * test fails (the 0.5× correction factor over-corrects, producing a direction
+ * reversal — the "bounce back" from issue #54).
+ * ----------------------------------------------------------------------- */
+#define DECEL_N 145
+
+/* Commanded positions (steps) from LinuxCNC trapezoidal integration. */
+static const double decel_pos[DECEL_N] = {
+    -436417.472000, -436449.216000, -436480.704000, -436511.936000,
+    -436542.912000, -436573.632000, -436604.096000, -436634.304000,
+    -436664.256000, -436693.952000, -436723.392000, -436752.576000,
+    -436781.504000, -436810.176000, -436838.592000, -436866.752000,
+    -436894.656000, -436922.304000, -436949.696000, -436976.832000,
+    -437003.712000, -437030.336000, -437056.704000, -437082.816000,
+    -437108.672000, -437134.272000, -437159.616000, -437184.704000,
+    -437209.536000, -437234.112000, -437258.432000, -437282.496000,
+    -437306.304000, -437329.856000, -437353.152000, -437376.192000,
+    -437398.976000, -437421.504000, -437443.776000, -437465.792000,
+    -437487.552000, -437509.056000, -437530.304000, -437551.296000,
+    -437572.032000, -437592.512000, -437612.736000, -437632.704000,
+    -437652.416000, -437671.872000, -437691.072000, -437710.016000,
+    -437728.704000, -437747.136000, -437765.312000, -437783.232000,
+    -437800.896000, -437818.304000, -437835.456000, -437852.352000,
+    -437868.992000, -437885.376000, -437901.504000, -437917.376000,
+    -437932.992000, -437948.352000, -437963.456000, -437978.304000,
+    -437992.896000, -438007.232000, -438021.312000, -438035.136000,
+    -438048.704000, -438062.016000, -438075.072000, -438087.872000,
+    -438100.416000, -438112.704000, -438124.736000, -438136.512000,
+    -438148.032000, -438159.296000, -438170.304000, -438181.056000,
+    -438191.552000, -438201.792000, -438211.776000, -438221.504000,
+    -438230.976000, -438240.192000, -438249.152000, -438257.856000,
+    -438266.304000, -438274.496000, -438282.432000, -438290.112000,
+    -438297.536000, -438304.704000, -438311.616000, -438318.272000,
+    -438324.672000, -438330.816000, -438336.704000, -438342.336000,
+    -438347.712000, -438352.832000, -438357.696000, -438362.304000,
+    -438366.656000, -438370.752000, -438374.592000, -438378.176000,
+    -438381.504000, -438384.576000, -438387.392000, -438389.952000,
+    -438392.256000, -438394.304000, -438396.096000, -438397.632000,
+    -438398.912000, -438399.936000, -438400.704000, -438401.216000,
+    -438401.472000,
+    -438401.514667, -438401.514667, -438401.514667, -438401.514667, -438401.514667,
+    -438401.514667, -438401.514667, -438401.514667, -438401.514667, -438401.514667,
+    -438401.514667, -438401.514667, -438401.514667, -438401.514667, -438401.514667,
+};
+
+/* Commanded velocities (steps/s) from LinuxCNC trajectory planner. */
+static const double decel_vel[DECEL_N] = {
+    -31872, -31616, -31360, -31104, -30848, -30592, -30336, -30080,
+    -29824, -29568, -29312, -29056, -28800, -28544, -28288, -28032,
+    -27776, -27520, -27264, -27008, -26752, -26496, -26240, -25984,
+    -25728, -25472, -25216, -24960, -24704, -24448, -24192, -23936,
+    -23680, -23424, -23168, -22912, -22656, -22400, -22144, -21888,
+    -21632, -21376, -21120, -20864, -20608, -20352, -20096, -19840,
+    -19584, -19328, -19072, -18816, -18560, -18304, -18048, -17792,
+    -17536, -17280, -17024, -16768, -16512, -16256, -16000, -15744,
+    -15488, -15232, -14976, -14720, -14464, -14208, -13952, -13696,
+    -13440, -13184, -12928, -12672, -12416, -12160, -11904, -11648,
+    -11392, -11136, -10880, -10624, -10368, -10112,  -9856,  -9600,
+     -9344,  -9088,  -8832,  -8576,  -8320,  -8064,  -7808,  -7552,
+     -7296,  -7040,  -6784,  -6528,  -6272,  -6016,  -5760,  -5504,
+     -5248,  -4992,  -4736,  -4480,  -4224,  -3968,  -3712,  -3456,
+     -3200,  -2944,  -2688,  -2432,  -2176,  -1920,  -1664,  -1408,
+     -1152,   -896,   -640,   -384,   -128,
+         0,      0,      0,      0,      0,
+         0,      0,      0,      0,      0,
+         0,      0,      0,      0,      0,
+};
+
+/* Prime joint 0 at cruising speed (-32000 steps/s) for 150 periods to settle
+ * last_velocity_q before the deceleration data begins.  Applies the 1-period
+ * command lag present on real hardware (LinuxCNC UDP → firmware takes one
+ * servo period).  Returns final sim_pos; sets last_vel and last_pos to the last
+ * command queued so the caller can initialise its lag state correctly. */
+static int32_t run_decel_prime_lagged(double *last_vel, double *last_pos) {
+    int32_t sim_pos  = (int32_t)(decel_pos[0] + 150.0 * 32.0);
+    double  pos_req  = decel_pos[0] + 150.0 * 32.0;
+    /* Seed the lag: one extra step ahead of the first commanded position. */
+    double  prev_vel = -32000.0;
+    double  prev_pos = pos_req + 32.0;
+
+    for (int i = 0; i < 150; i++) {
+        config.joint[0].velocity_requested = prev_vel;
+        config.joint[0].abs_pos_requested  = prev_pos;
+        config.joint[0].updated_from_c0    = 1;
+        mock_rx_fifo_level = 1;
+        mock_rx_index      = 0;
+        mock_rx_values[0]  = sim_pos;
+        do_steps(0);
+        sim_pos += pio_get_and_clear_test_steps();
+
+        prev_vel = -32000.0;
+        prev_pos = pos_req;
+        pos_req += -32.0;
+    }
+    *last_vel = prev_vel;
+    *last_pos = prev_pos;
+    return sim_pos;
+}
+
+/* Velocity mode: the 2-period round-trip lag (1-period command lag LinuxCNC→
+ * firmware plus 1-period feedback lag firmware→LinuxCNC via PIO step_count)
+ * causes the motor to fire an extra step at the end of the decel ramp.  The
+ * position-correction term (error × 10 steps/s) then drives the motor in the
+ * positive direction to recover the overshoot — a direction reversal.
+ * EXPECTED TO FAIL until the overshoot bug (#54) is fixed. */
+static void test_velmode_decel_no_direction_reversal(void **state) {
+    (void)state;
+    config.update_time_us        = 1000;
+    config.joint[0].enabled      = 1;
+    config.joint[0].cmd_type     = JOINT_CMD_VELOCITY;
+    config.joint[0].max_velocity = 32000.0;
+    config.joint[0].max_accel    = 256000.0;
+    mock_tx_fifo_empty           = 1;
+
+    /* 1-period command lag: firmware always processes the previous period's cmd.
+     * run_decel_prime_lagged() establishes correct steady-state error before
+     * the decel sequence and returns the last queued command as prev_vel/prev_pos. */
+    double  prev_vel, prev_pos;
+    int32_t sim_pos      = run_decel_prime_lagged(&prev_vel, &prev_pos);
+    int     past_zero    = 0;
+    int     reversal_cnt = 0;
+
+    for (int i = 0; i < DECEL_N; i++) {
+        /* past_zero tracks when the firmware has started processing vel=0,
+         * not when LinuxCNC commanded it (which is one period earlier). */
+        if (prev_vel == 0.0)
+            past_zero = 1;
+
+        config.joint[0].velocity_requested = prev_vel;
+        config.joint[0].abs_pos_requested  = prev_pos;
+        config.joint[0].updated_from_c0    = 1;
+        mock_rx_fifo_level = 1;
+        mock_rx_index      = 0;
+        mock_rx_values[0]  = sim_pos;
+        do_steps(0);
+
+        int32_t steps = pio_get_and_clear_test_steps();
+        sim_pos += steps;
+
+        /* Motor was moving negative; any positive step after vel-cmd=0 is a reversal. */
+        if (past_zero && steps > 0)
+            reversal_cnt++;
+
+        prev_vel = decel_vel[i];
+        prev_pos = decel_pos[i];
+    }
+
+    assert_int_equal(reversal_cnt, 0);
+}
+
+/* Position mode: the 2-period round-trip lag combined with the larger
+ * correction factor (error × 500 steps/s, 0.5×) causes the motor to reverse
+ * direction after the velocity command reaches zero.
+ * EXPECTED TO FAIL until the overshoot bug (#54) is fixed. */
+static void test_posmode_decel_no_direction_reversal(void **state) {
+    (void)state;
+    config.update_time_us        = 1000;
+    config.joint[0].enabled      = 1;
+    config.joint[0].cmd_type     = JOINT_CMD_POSITION;
+    config.joint[0].max_velocity = 32000.0;
+    config.joint[0].max_accel    = 256000.0;
+    mock_tx_fifo_empty           = 1;
+
+    double  prev_vel, prev_pos;
+    int32_t sim_pos      = run_decel_prime_lagged(&prev_vel, &prev_pos);
+    int     past_zero    = 0;
+    int     reversal_cnt = 0;
+
+    for (int i = 0; i < DECEL_N; i++) {
+        if (prev_vel == 0.0)
+            past_zero = 1;
+
+        /* velocity_requested serves as vel_ff in position mode. */
+        config.joint[0].velocity_requested = prev_vel;
+        config.joint[0].abs_pos_requested  = prev_pos;
+        config.joint[0].updated_from_c0    = 1;
+        mock_rx_fifo_level = 1;
+        mock_rx_index      = 0;
+        mock_rx_values[0]  = sim_pos;
+        do_steps(0);
+
+        int32_t steps = pio_get_and_clear_test_steps();
+        sim_pos += steps;
+
+        if (past_zero && steps > 0)
+            reversal_cnt++;
+
+        prev_vel = decel_vel[i];
+        prev_pos = decel_pos[i];
+    }
+
+    assert_int_equal(reversal_cnt, 0);
+}
+
 
 int main(void) {
     const struct CMUnitTest tests[] = {
@@ -2107,6 +2313,10 @@ int main(void) {
         cmocka_unit_test_setup(test_pio_reinit_after_invalidate,                           test_setup),
         cmocka_unit_test_setup(test_drain_rx_fifo_position_continuous_across_reinit,       test_setup),
         cmocka_unit_test_setup(test_step_high_count_7bit_accepted,                         test_setup),
+
+        /* issue #54 — joint overshoot / direction reversal during deceleration */
+        cmocka_unit_test_setup(test_velmode_decel_no_direction_reversal,  test_setup),
+        cmocka_unit_test_setup(test_posmode_decel_no_direction_reversal,  test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

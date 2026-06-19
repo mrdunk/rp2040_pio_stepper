@@ -57,6 +57,7 @@ typedef struct {
     int32_t  last_pos_achieved;
     uint32_t last_enabled;
     int32_t  last_velocity_q;
+    int32_t  last_ff_q;              /* last non-zero vel_ff_q; sign = last commanded direction */
     int32_t  step_accumulator_q;
     uint32_t last_direction;
     uint32_t last_commanded_direction;
@@ -70,6 +71,9 @@ static uint32_t offset_pio1_gen   = 0;  /* step_gen on PIO1 (MAX_JOINT > 4 only)
 static uint32_t offset_pio1_count = 0;  /* step_count on PIO1 (NUM_FEEDBACK > 0 only) */
 static uint8_t  programs_loaded   = 0;
 static uint8_t  dir_setup_violation_bits = 0;  /* bit N set when joint N violated DIR setup time */
+#ifdef BUILD_TESTS
+static int32_t  test_delta_steps         = 0;  /* net signed step count since last pio_get_and_clear_test_steps() */
+#endif
 
 /* Position continuity across step_count SM reinit (e.g. LinuxCNC restart).
  * When init_pio() restarts the SM, the hardware counter resets to zero.
@@ -273,10 +277,16 @@ double compute_velocity_cmd(
      * (e.g. from update_period_us bias or dropped periods) accumulates without
      * bound.  Kp = 0.01× of position-mode gain limits steady-state lag to
      * ~100× the per-period undershoot (E = U/Kp_vel = U/0.01 vs U/0.5 for
-     * position mode) without fighting the trajectory planner. */
-    double error_steps = abs_pos_requested - (double)abs_pos_achieved;
-    if (error_steps >= 1.0 || error_steps <= -1.0) {
-      velocity_requested += error_steps * (1.0e6 / (double)update_period_us) * 0.01;
+     * position mode) without fighting the trajectory planner.
+     * Suppressed at rest (velocity_requested == 0): the 2-period round-trip lag
+     * accumulates apparent position error at the decel-to-stop boundary; applying
+     * correction here would reverse the motor.  LinuxCNC tracks the residual error
+     * via feedback and corrects it in the next commanded motion. */
+    if (velocity_requested != 0.0) {
+      double error_steps = abs_pos_requested - (double)abs_pos_achieved;
+      if (error_steps >= 1.0 || error_steps <= -1.0) {
+        velocity_requested += error_steps * (1.0e6 / (double)update_period_us) * 0.01;
+      }
     }
   }
   return velocity_requested;
@@ -444,6 +454,10 @@ static int32_t commit_steps(
     int32_t n_steps = (int32_t)(joint_state[joint].step_accumulator_q >> 16);
     joint_state[joint].step_accumulator_q -= (uint32_t)(n_steps << 16);
 
+#ifdef BUILD_TESTS
+    test_delta_steps += (direction ? 1 : -1) * n_steps;
+#endif
+
     if (joint >= NUM_FEEDBACK)
         *abs_pos_achieved += (direction ? 1 : -1) * n_steps;
 
@@ -572,6 +586,27 @@ uint8_t do_steps(const uint8_t joint) {
   if (velocity_q >  dq.max_vel_q) velocity_q =  dq.max_vel_q;
   if (velocity_q < -dq.max_vel_q) velocity_q = -dq.max_vel_q;
 
+  /* Track the most recent non-zero feedforward direction so the anti-reversal
+   * guard below can compare against the commanded direction rather than the
+   * corrected motion direction (which may already have flipped sign due to a
+   * large Kp term before vel_ff reaches zero). */
+  if (dq.vel_ff_q != 0)
+      joint_state[joint].last_ff_q = dq.vel_ff_q;
+
+  /* Anti-reversal at stop (position mode only): the 2-period round-trip lag
+   * accumulates apparent position overshoot at the decel-to-stop boundary.
+   * When vel_ff transitions to 0 the Kp correction drives the motor opposite
+   * to the commanded direction — a direction reversal.  Suppress it: snap to
+   * zero and clear the accumulator.  last_ff_q is not updated while vel_ff=0
+   * so this guard persists across successive zero-vel_ff periods until
+   * LinuxCNC issues a new non-zero vel_ff. */
+  if (cmd_type == JOINT_CMD_POSITION && dq.vel_ff_q == 0 &&
+      joint_state[joint].last_ff_q != 0 && velocity_q != 0 &&
+      (velocity_q > 0) != (joint_state[joint].last_ff_q > 0)) {
+      velocity_q = 0;
+      joint_state[joint].step_accumulator_q = 0;
+  }
+
   joint_state[joint].last_velocity_q = velocity_q;
 
   if (!enabled && velocity_q == 0) {
@@ -640,6 +675,12 @@ void pio_invalidate_all_joints(void) {
 }
 
 #ifdef BUILD_TESTS
+int32_t pio_get_and_clear_test_steps(void) {
+    int32_t v = test_delta_steps;
+    test_delta_steps = 0;
+    return v;
+}
+
 void pio_reset_for_test(void) {
     memset(joint_state,  0, sizeof(joint_state));
     memset(last_pos,     0, sizeof(last_pos));
@@ -649,5 +690,6 @@ void pio_reset_for_test(void) {
     offset_pio1_count        = 0;
     programs_loaded          = 0;
     dir_setup_violation_bits = 0;
+    test_delta_steps         = 0;
 }
 #endif  // BUILD_TESTS
