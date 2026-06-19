@@ -494,6 +494,7 @@ void core0_main() {
           &data_received,
           destip_machine,
           &destport_machine);
+      core0_heartbeat++;
     }
 
     process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, data_received);
@@ -543,5 +544,4 @@ void core0_main() {
     reset_nw_buf(&tx_buf);
   }
 }
-
 

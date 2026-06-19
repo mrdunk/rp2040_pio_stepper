@@ -42,6 +42,13 @@ uint8_t __wrap_do_steps(const uint8_t joint) {
     return 1;
 }
 
+/* Intercept watchdog_update() to count calls. */
+static int watchdog_update_call_count = 0;
+
+void __wrap_watchdog_update(void) {
+    watchdog_update_call_count++;
+}
+
 /* Reset all state before each test.
  * tick and last_packet_tick are extern from config.h — write directly. */
 static int test_setup(void **state) {
@@ -50,10 +57,12 @@ static int test_setup(void **state) {
     last_packet_tick            = 0;
     packet_generation           = 1;  /* ahead of last_packet_generation (0) */
     linuxcnc_restart_detected   = false;
+    core0_heartbeat                       = 0;
     disable_joint_call_count              = 0;
     do_steps_call_count                   = 0;
     pio_invalidate_all_joints_call_count  = 0;
     stop_all_spindles_call_count          = 0;
+    watchdog_update_call_count            = 0;
     core1_reset_for_test();
     return 0;
 }
@@ -211,6 +220,37 @@ static void test_linuxcnc_restart_invalidates_pio(void **state) {
     assert_int_equal(1, pio_invalidate_all_joints_call_count);
 }
 
+/* watchdog_update: petted when Core0 heartbeat has advanced. */
+static void test_watchdog_petted_when_core0_alive(void **state) {
+    (void)state;
+    core0_heartbeat  = 1;   /* advanced relative to last_core0_heartbeat (0) */
+    tick             = 1;
+    last_packet_tick = 1;
+    core1_run_once_for_test();
+    assert_int_equal(1, watchdog_update_call_count);
+}
+
+/* watchdog_update: NOT petted when Core0 heartbeat is stale (Core0 may be stuck). */
+static void test_watchdog_not_petted_when_core0_stale(void **state) {
+    (void)state;
+    /* core0_heartbeat == last_core0_heartbeat == 0 after test_setup */
+    tick             = 1;
+    last_packet_tick = 1;
+    core1_run_once_for_test();
+    assert_int_equal(0, watchdog_update_call_count);
+}
+
+/* watchdog_update: petted during network loss if Core0 heartbeat is still advancing.
+ * Core0 continues polling even when no packets arrive, so the heartbeat advances. */
+static void test_watchdog_petted_on_network_loss(void **state) {
+    (void)state;
+    core0_heartbeat  = 1;
+    tick             = MAX_MISSED_PACKET + 2;
+    last_packet_tick = 0;
+    core1_run_once_for_test();
+    assert_int_equal(1, watchdog_update_call_count);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_wait_for_packet_returns_when_generation_advances, test_setup),
@@ -229,6 +269,9 @@ int main(void) {
         cmocka_unit_test_setup(test_core1_restart_while_network_unhealthy,           test_setup),
         cmocka_unit_test_setup(test_handle_network_timeout_invalidates_pio,          test_setup),
         cmocka_unit_test_setup(test_linuxcnc_restart_invalidates_pio,                test_setup),
+        cmocka_unit_test_setup(test_watchdog_petted_when_core0_alive,               test_setup),
+        cmocka_unit_test_setup(test_watchdog_not_petted_when_core0_stale,           test_setup),
+        cmocka_unit_test_setup(test_watchdog_petted_on_network_loss,                test_setup),
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);

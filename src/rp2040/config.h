@@ -36,6 +36,14 @@ extern volatile uint32_t core1_loop_count;
  * per variable; Core0 reads both for serialisation. Atomic on Cortex-M0+. */
 extern volatile uint32_t core1_work_us;
 extern volatile uint32_t core0_work_us;
+/* Incremented by Core0 each iteration of the UDP polling loop (runs even during
+ * network loss). Core1 reads it before petting the hardware WDT to verify Core0
+ * is alive. Single-writer (Core0), single-reader (Core1) — atomic on Cortex-M0+. */
+extern volatile uint32_t core0_heartbeat;
+/* Set to true at startup if the previous reboot was caused by the hardware WDT.
+ * Written once at startup (stepper_control.c); read by serialise_joint_metrics
+ * to inform the driver. Never cleared — the driver debounces on its side. */
+extern volatile bool watchdog_reset_occurred;
 
 /* Configuration object for an joint.
  * This is the format for the global config that is shared between cores. */

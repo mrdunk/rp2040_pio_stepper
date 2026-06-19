@@ -540,6 +540,31 @@ static void test_joint_metrics_step_len_us(void **state) {
     assert_int_equal(*data.joint_step_len_us[1], 250);
 }
 
+/* watchdog_reset=1 in a metrics packet exercises the error-log path without crashing. */
+static void test_joint_metrics_watchdog_reset(void **state) {
+    (void)state;
+
+    struct NWBuffer buffer = {0};
+    size_t mess_received_count = 0;
+    skeleton_t data = {0};
+    setup_data(&data);
+
+    struct Reply_joint_metrics message = {
+        .type           = REPLY_JOINT_METRICS,
+        .watchdog_reset = 1,
+    };
+
+    memcpy(buffer.payload, &message, sizeof(message));
+    buffer.length   = aligned32(sizeof(struct Reply_joint_metrics));
+    buffer.checksum = checksum(0, 0, buffer.length, buffer.payload);
+
+    process_data(&buffer, &data, &mess_received_count,
+                 buffer.length + sizeof(buffer.length) + sizeof(buffer.checksum),
+                 NULL, NULL, NULL);
+
+    assert_int_equal(mess_received_count, 1);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_timing),
@@ -548,6 +573,7 @@ int main(void) {
         cmocka_unit_test(test_joint_metrics),
         cmocka_unit_test(test_joint_metrics_ema_ratios),
         cmocka_unit_test(test_joint_metrics_step_len_us),
+        cmocka_unit_test(test_joint_metrics_watchdog_reset),
         cmocka_unit_test(test_unpack_spindle_speed),
         cmocka_unit_test(test_unpack_spindle_not_at_speed),
         cmocka_unit_test(test_unpack_spindle_config),

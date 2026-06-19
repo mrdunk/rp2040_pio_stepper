@@ -564,6 +564,15 @@ bool unpack_joint_metrics(
       *data->joint_step_len_us[joint] = reply->step_len_us[joint];
   }
 
+  if (reply->watchdog_reset) {
+    static bool warned = false;
+    if (!warned) {
+      rtapi_print_msg(RTAPI_MSG_ERR,
+          "rp2040_eth: controller rebooted due to watchdog timeout\n");
+      warned = true;
+    }
+  }
+
   (*received_count)++;
   return true;
 }

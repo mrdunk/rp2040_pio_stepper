@@ -6,6 +6,7 @@
 #ifndef BUILD_TESTS
 
 #include "pico/stdlib.h"
+#include "hardware/watchdog.h"
 
 // w5x00 related.
 #include "port_common.h"
@@ -65,6 +66,10 @@ int main() {
   setup_default_uart();
 
   printf("--------------------------------\n");
+  watchdog_reset_occurred = watchdog_caused_reboot();
+  if (watchdog_reset_occurred) {
+    printf("*** WATCHDOG RESET ***\n");
+  }
   printf("UART up.\n");
   printf("Branch: %s\n", BUILD_GIT_BRANCH);
   printf("Commit: %s\n", BUILD_GIT_COMMIT);

@@ -201,6 +201,8 @@ struct __attribute__((packed)) Reply_joint_metrics {
   uint32_t core1_work_us;          /* µs Core1 spent working last period (excl. wait_for_packet) */
   uint32_t core0_work_us;          /* µs Core0 spent working last period (packet rx → response tx) */
   uint16_t step_len_us[WIRE_MAX_JOINT]; /* PIO step half-period per joint this window (µs); 0 = no step */
+  uint8_t  watchdog_reset;         /* 1 if the last reboot was caused by the hardware watchdog */
+  uint8_t  _pad[3];                /* pad to 4-byte boundary (struct was 28 bytes; +1 needs +3) */
 };
 
 struct __attribute__((packed)) Reply_gpio {

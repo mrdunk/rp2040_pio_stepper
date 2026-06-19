@@ -7,6 +7,7 @@
 #else  // BUILD_TESTS
 
 #include "pico/multicore.h"
+#include "hardware/watchdog.h"
 #include "i2c.h"
 
 #endif  // BUILD_TESTS
@@ -18,6 +19,7 @@
 static uint32_t last_tick               = 0;
 static uint32_t last_packet_generation  = 0;
 static bool     no_network              = false;
+static uint32_t last_core0_heartbeat    = 0;
 
 void wait_for_packet(void) {
   while (tick == last_tick) {}
@@ -87,6 +89,10 @@ static void core1_tick(void) {
     handle_network_recovery();
   }
   step_all_joints();
+  if (core0_heartbeat != last_core0_heartbeat) {
+    last_core0_heartbeat = core0_heartbeat;
+    watchdog_update();
+  }
 #ifndef BUILD_TESTS
   i2c_gpio_poll(&i2c_gpio);
 #endif
@@ -117,6 +123,7 @@ void init_core1(void) {
 
 #ifndef BUILD_TESTS
   i2c_gpio_init(&i2c_gpio);
+  watchdog_enable(10, true);
 #endif
 
   multicore_launch_core1(&core1_main);
@@ -127,5 +134,6 @@ void core1_reset_for_test(void) {
   last_tick               = 0;
   last_packet_generation  = 0;
   no_network              = false;
+  last_core0_heartbeat    = 0;
 }
 #endif

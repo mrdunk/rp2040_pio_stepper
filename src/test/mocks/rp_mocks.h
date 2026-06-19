@@ -81,6 +81,9 @@ bool cancel_alarm(alarm_id_t alarm_id);
 
 void multicore_launch_core1(void(*entry)(void));
 
+void watchdog_enable(uint32_t delay_ms, bool pause_on_debug);
+void watchdog_update(void);
+
 #define UART1_IRQ 0
 typedef void (*irq_handler_t)(void);
 static inline void irq_set_exclusive_handler(uint32_t num, irq_handler_t handler) { (void)num; (void)handler; }

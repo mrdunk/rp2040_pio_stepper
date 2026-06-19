@@ -30,7 +30,9 @@ mutex_t mtx_joint[MAX_JOINT];
  *   id_diff < 0 (sequence wrap = LinuxCNC restarted); Core1 reads and clears it.
  * packet_generation: incremented by Core0 after all joint configs from one
  *   packet are written; Core1 waits on it to avoid reading a half-written config.
- * All four are 32-bit aligned (or bool) with a single writer and single reader —
+ * core0_heartbeat: incremented by Core0 in the UDP polling loop; Core1 checks
+ *   it before petting the hardware WDT so a crashed Core0 stops the WDT pet.
+ * All are 32-bit aligned (or bool) with a single writer and single reader —
  * atomic on Cortex-M0+, no mutex needed. */
 volatile uint32_t tick = 0;
 volatile uint32_t last_packet_tick = 0;
@@ -39,6 +41,8 @@ volatile uint32_t packet_generation  = 0;
 volatile uint32_t core1_loop_count   = 0;
 volatile uint32_t core1_work_us      = 0;
 volatile uint32_t core0_work_us      = 0;
+volatile uint32_t core0_heartbeat    = 0;
+volatile bool     watchdog_reset_occurred = false;
 
 volatile struct ConfigGlobal config = {
   .last_update_id = 0,
@@ -583,6 +587,7 @@ bool serialise_joint_metrics(struct NWBuffer* tx_buf) {
   reply.core0_work_us         = core0_work_us;
   for (uint8_t j = 0; j < MAX_JOINT; j++)
     reply.step_len_us[j] = config.joint[j].step_len_us;
+  reply.watchdog_reset = watchdog_reset_occurred ? 1 : 0;
 
   uint16_t tx_buf_len = pack_nw_buff(tx_buf, &reply, sizeof(reply));
 

@@ -80,6 +80,13 @@ void multicore_launch_core1(void(*entry)(void)) {
     (void)entry;
 }
 
+void watchdog_enable(uint32_t delay_ms, bool pause_on_debug) {
+    (void)delay_ms; (void)pause_on_debug;
+}
+
+void watchdog_update(void) {
+}
+
 alarm_id_t add_alarm_at(absolute_time_t time, alarm_callback_t callback,
                          void *user_data, bool fire_if_past) {
     (void) time; (void) callback; (void) user_data; (void) fire_if_past;

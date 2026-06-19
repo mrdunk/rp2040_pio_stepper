@@ -276,6 +276,7 @@ target_link_libraries(
   -Wl,--wrap,do_steps
   -Wl,--wrap,pio_invalidate_all_joints
   -Wl,--wrap,stop_all_spindles
+  -Wl,--wrap,watchdog_update
   )
 add_test(
   rpCore1Test
