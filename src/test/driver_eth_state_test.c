@@ -82,6 +82,7 @@ size_t get_reply_non_block(int dev, struct NWBuffer *buf) {
 
 static hal_bit_t   v_eth_up;
 static hal_bit_t   v_machine_on;
+static hal_bit_t   v_motion_enabled;
 static hal_u32_t   v_rx_miss_count;
 static hal_u32_t   v_seq_out;
 static hal_u32_t   v_seq_in;
@@ -103,6 +104,7 @@ static hal_float_t v_spindle_speed_cmd[MAX_SPINDLE];
 static skeleton_t make_data(void) {
     memset(&v_eth_up, 0, sizeof(v_eth_up));
     memset(&v_machine_on, 0, sizeof(v_machine_on));
+    memset(&v_motion_enabled, 0, sizeof(v_motion_enabled));
     memset(&v_rx_miss_count, 0, sizeof(v_rx_miss_count));
     memset(&v_seq_out, 0, sizeof(v_seq_out));
     memset(&v_seq_in, 0, sizeof(v_seq_in));
@@ -119,6 +121,7 @@ static skeleton_t make_data(void) {
     skeleton_t d = {0};
     d.eth_up          = &v_eth_up;
     d.machine_on      = &v_machine_on;
+    d.motion_enabled  = &v_motion_enabled;
     d.rx_miss_count   = &v_rx_miss_count;
     d.seq_out         = &v_seq_out;
     d.seq_in          = &v_seq_in;
@@ -267,6 +270,35 @@ static void test_force_stop_spindle_while_eth_down(void **state) {
     assert_double_equal(*data.spindle_speed_cmd[0], 0.0, 0.001);
 }
 
+/* On LinuxCNC e-stop (motion_enabled=false, eth still up), spindle_speed_cmd
+ * is zeroed so the VFD receives a stop command every servo period. */
+static void test_force_stop_spindle_on_estop(void **state) {
+    (void)state;
+    reset_mocks();
+    skeleton_t data = make_data();
+    *data.eth_up        = true;
+    *data.motion_enabled = false;
+    v_spindle_speed_cmd[0] = 1500.0;
+
+    eth_state_update(&data, 0, 0, 0, 1);
+
+    assert_double_equal(*data.spindle_speed_cmd[0], 0.0, 0.001);
+}
+
+/* When motion_enabled is true, spindle_speed_cmd passes through unchanged. */
+static void test_spindle_speed_passes_through_when_enabled(void **state) {
+    (void)state;
+    reset_mocks();
+    skeleton_t data = make_data();
+    *data.eth_up         = true;
+    *data.motion_enabled = true;
+    v_spindle_speed_cmd[0] = 1500.0;
+
+    eth_state_update(&data, 0, 0, 0, 1);
+
+    assert_double_equal(*data.spindle_speed_cmd[0], 1500.0, 0.001);
+}
+
 /* Recovery requires ALL joints stopped: one moving joint blocks machine-on.
  *
  * The existing test covers a single joint.  This test verifies that with two
@@ -326,6 +358,8 @@ int main(void) {
         cmocka_unit_test(test_recovery_requires_all_joints_stopped_multi_joint),
         cmocka_unit_test(test_force_disable_while_eth_down),
         cmocka_unit_test(test_force_stop_spindle_while_eth_down),
+        cmocka_unit_test(test_force_stop_spindle_on_estop),
+        cmocka_unit_test(test_spindle_speed_passes_through_when_enabled),
         cmocka_unit_test(test_negative_scale_sends_positive_limits),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);

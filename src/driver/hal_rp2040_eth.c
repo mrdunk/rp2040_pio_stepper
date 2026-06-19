@@ -243,6 +243,7 @@ static const PinDef spindle_pins[] = {
 
 static const PinDef scalar_pins[] = {
     { PIN,   HAL_OUT, offsetof(skeleton_t, machine_on),      0, "machine-on",      -1, 1, NULL }, // True when RP2040 Ethernet link is established and communicating
+    { PIN,   HAL_IN,  offsetof(skeleton_t, motion_enabled),  0, "motion-enabled",  -1, 1, NULL }, // Connect to motion.motion-enabled; stops spindles on e-stop
     { U32,   HAL_OUT, offsetof(skeleton_t, seq_out),         0, "seq-out",         -1, 0, NULL }, // Sequence number stamped on each packet sent to RP2040
     { U32,   HAL_OUT, offsetof(skeleton_t, core1_period),    0, "core1-period",    -1, 0, NULL }, // RP2040 core1 measured time between loop iterations (µs)
     { U32,   HAL_OUT, offsetof(skeleton_t, core1_tick),      0, "core1-tick",      -1, 0, NULL }, // RP2040 core1 loop iteration counter; frozen value indicates firmware hang

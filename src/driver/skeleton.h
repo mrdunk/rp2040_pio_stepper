@@ -12,6 +12,7 @@ typedef struct {
   hal_u32_t* rx_miss_count;
   hal_bit_t* eth_up;
   hal_bit_t* machine_on;
+  hal_bit_t* motion_enabled;
   hal_bit_t* config_complete;
   hal_bit_t* joint_enable_cmd[MAX_JOINT];
   hal_s32_t  joint_gpio_step[MAX_JOINT];

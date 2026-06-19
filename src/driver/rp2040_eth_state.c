@@ -357,6 +357,14 @@ void eth_state_update(skeleton_t *data, int device_num, size_t count, uint32_t n
     }
   }
 
+  /* On LinuxCNC e-stop (motion_enabled goes false while eth is still up),
+   * also zero spindle speed so the VFD receives a stop command every cycle. */
+  if (!*data->motion_enabled) {
+    for (int s = 0; s < MAX_SPINDLE; s++) {
+      *data->spindle_speed_cmd[s] = 0.0;
+    }
+  }
+
   /* Send — skipped during cooloff, but receive/eth-tracking always runs so
    * that rx_miss_count and eth_up reflect reality even when we cannot send
    * (e.g. interface administratively down). */
