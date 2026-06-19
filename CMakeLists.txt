@@ -84,6 +84,10 @@ if(BUILD_RP)
     # Disable for production builds; UART blocking during startup causes missed UDP replies.
     option(VERBOSE_CONFIG_LOG "Log config message details to UART" OFF)
 
+    # Hang Core0 after N seconds to test the hardware watchdog.
+    # Leave at 0 (default) for all production builds.
+    set(TEST_WDT_IN_SECONDS 0 CACHE STRING "Hang Core0 after N seconds to trigger WDT (0 = disabled, test only)")
+
     if(ETH_CHIP STREQUAL "W5100S")
         add_definitions(-D_WIZCHIP_=W5100S)
     elseif(ETH_CHIP STREQUAL "W5500")

@@ -481,10 +481,21 @@ void core0_main() {
   modbus_init();
   timing_init();
 
+#ifdef TEST_WDT_IN_SECONDS
+  uint64_t _test_wdt_start = time_us_64();
+#endif
+
   int count = 0;
   while (1) {
     data_received = 0;
     retval = 0;
+
+#ifdef TEST_WDT_IN_SECONDS
+    if (time_us_64() - _test_wdt_start >= (uint64_t)TEST_WDT_IN_SECONDS * 1000000ULL) {
+      printf("TEST_WDT: Core0 freezing — watchdog should fire in 10 ms\n");
+      while (1) {}
+    }
+#endif
 
     while(data_received == 0 || retval <= 0) {
       retval = get_UDP(

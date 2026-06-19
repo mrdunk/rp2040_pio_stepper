@@ -553,3 +553,45 @@ Tests run on the host — no hardware needed.
 cmake --preset tests && cmake --build --preset tests
 ctest --preset tests
 ```
+
+### Testing the hardware watchdog (developer only)
+
+`TEST_WDT_IN_SECONDS` is a developer-only cmake option for manually verifying that
+the hardware watchdog fires and is correctly detected on the next boot. It has no
+effect in normal use and must never be set in production firmware.
+
+When set, Core0 deliberately freezes after the specified number of seconds. Core1
+stops receiving heartbeat advances and stops petting the WDT, which fires within
+10 ms. On the following boot the firmware logs `*** WATCHDOG RESET ***` to UART and
+reports the event to LinuxCNC via the joint metrics reply.
+
+```bash
+# Build with a 5-second hang
+cmake --preset rp2040-w5500 -DTEST_WDT_IN_SECONDS=5 && cmake --build --preset rp2040-w5500
+```
+
+CMake prints a warning to make test builds conspicuous:
+
+```
+-- TEST_WDT_IN_SECONDS=5: Core0 will freeze after 5s — NOT FOR PRODUCTION
+```
+
+Flash and connect a serial terminal. After 5 seconds you should see:
+
+```
+TEST_WDT: Core0 freezing — watchdog should fire in 10 ms
+```
+
+On the next boot:
+
+```
+*** WATCHDOG RESET ***
+```
+
+LinuxCNC will also log an `rtapi_print_msg` error on the next metrics reply.
+
+To restore a normal build, set the value back to `0`:
+
+```bash
+cmake --preset rp2040-w5500 -DTEST_WDT_IN_SECONDS=0 && cmake --build --preset rp2040-w5500
+```

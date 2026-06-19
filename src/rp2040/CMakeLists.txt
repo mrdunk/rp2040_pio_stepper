@@ -43,6 +43,10 @@ target_compile_definitions(stepper_control PRIVATE
 if(VERBOSE_CONFIG_LOG)
   target_compile_definitions(stepper_control PRIVATE VERBOSE_CONFIG_LOG)
 endif()
+if(TEST_WDT_IN_SECONDS GREATER 0)
+  target_compile_definitions(stepper_control PRIVATE TEST_WDT_IN_SECONDS=${TEST_WDT_IN_SECONDS})
+  message(WARNING "TEST_WDT_IN_SECONDS=${TEST_WDT_IN_SECONDS}: Core0 will freeze after ${TEST_WDT_IN_SECONDS}s — NOT FOR PRODUCTION")
+endif()
 add_dependencies(stepper_control build_info)
 
 target_sources(
