@@ -69,6 +69,7 @@ int main() {
   printf("Branch: %s\n", BUILD_GIT_BRANCH);
   printf("Commit: %s\n", BUILD_GIT_COMMIT);
   printf("Built:  %s %s by %s\n", __DATE__, __TIME__, BUILD_USERNAME);
+  printf("Hardware: %s + %s\n", RP_CHIP_STR, ETH_CHIP_STR);
   printf("Joints: %d\n", MAX_JOINT);
   printf("Version: %d.%d.%d\n",
       PROTOCOL_VERSION_MAJOR, PROTOCOL_VERSION_MINOR, PROTOCOL_VERSION_PATCH);
