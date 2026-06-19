@@ -55,7 +55,19 @@ Each joint uses two PIO state machines:
 - **`step_count`** (PIO1) — counts rising edges on the step pin, increments or decrements
   a 32-bit counter based on the direction pin, and pushes the result to the RX FIFO.
 
-Four joints occupy four state machines on each PIO block.
+Four joints occupy all four state machines on each PIO block. The RP2040 has two PIO
+blocks, giving a current ceiling of **4 joints**. Expansion paths:
+
+| Joints | MCU | Requires |
+|--------|-----|---------|
+| 4 | RP2040 | Current implementation |
+| 6 | RP2350 | Third PIO block on RP2350 ([issue #53](https://github.com/mrdunk/rp2040_pio_stepper/issues/53)) |
+| 8 | RP2040 | State machine sharing across joints ([issue #48](https://github.com/mrdunk/rp2040_pio_stepper/issues/48)) |
+| 12 | RP2350 | Both #48 and #53 |
+
+A LinuxCNC *joint* is a single motor channel. A LinuxCNC *axis* is a coordinate (X, Y,
+Z, …); multiple joints can share one axis. A gantry machine, for example, uses two joints
+to drive a single Y axis.
 
 ---
 
