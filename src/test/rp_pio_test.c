@@ -37,12 +37,19 @@ size_t __wrap_pio_sm_get_blocking(size_t pio, size_t sm) {
     return 0;
 }
 
+/* Direction bit from every put that carried a step (step_low_half > 0).
+ * Sized for the longest multi-period tests (100 periods × ~2 puts). */
+static uint8_t  step_dir_log[256];
+static int      step_dir_log_count = 0;
+
 void __wrap_pio_sm_put(size_t pio, size_t sm, size_t data) {
     (void)pio; (void)sm;
     last_pio_put_value = (uint32_t)data;
     pio_put_call_count++;
     if (((uint32_t)data >> 1) & 0xFFFFFF) {
         last_pio_step_value = (uint32_t)data;
+        if (step_dir_log_count < (int)(sizeof step_dir_log))
+            step_dir_log[step_dir_log_count++] = (uint8_t)((uint32_t)data & 1);
     }
 }
 
@@ -79,6 +86,7 @@ static int test_setup(void **state) {
     pio_step_frac       = 0.0;
     memset(mock_rx_values, 0, sizeof(mock_rx_values));
     step_gen2_program_init_call_count = 0;
+    step_dir_log_count  = 0;
     return 0;
 }
 
@@ -2265,6 +2273,83 @@ static void test_do_steps_posmode_highspeed_sign_flip_no_forward_step(void **sta
     assert_true(config.joint[0].velocity_achieved < 0);         /* vel_achieved tracks vel_ff */
 }
 
+/* Symmetric twin of the test above: positive vel_ff with a negative-direction sign flip.
+ *
+ * With vel_ff = +32000 steps/s (vel_ff_q = +2097152), a 21000-step positive overshoot
+ * generates a -10500000 steps/s Kp correction.  After max_vel_q clamping, velocity_q =
+ * -max_vel_q (negative) — sign_flipped is true.
+ *
+ * sign_flipped guard must activate → plan_vel_q = vel_ff_q (positive) → forward step,
+ * not a backward step. */
+static void test_do_steps_posmode_highspeed_sign_flip_no_backward_step(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = +32000.0;    /* vel_ff_q = +2097152 >> 2×Q16_ONE */
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].max_velocity       = 32000.0;
+    config.joint[0].max_accel          = 256000000.0; /* large so clamp_accel does not mask sign flip */
+    mock_tx_fifo_empty                 = 1;
+
+    /* Motor at +21000 steps, commanded at 0: +21000-step positive overshoot.
+     * correction = -10500000 steps/s; stopping cap does not clamp
+     * (floor_v ≈ -212M << velocity_q = -max_vel_q ≈ -2118123). */
+    mock_rx_values[0]  = 21000;
+    mock_rx_fifo_level = 1;
+    mock_rx_index      = 0;
+    config.joint[0].updated_from_c0 = 1;
+    last_pio_put_value = 0;
+    do_steps(0);
+
+    assert_true(((last_pio_put_value >> 1) & 0xFFFFFF) != 0);  /* step was pushed */
+    assert_int_equal(last_pio_put_value & 1, 1);                /* direction = forward */
+    assert_true(config.joint[0].velocity_achieved > 0);         /* vel_achieved tracks vel_ff */
+}
+
+/* 100 consecutive periods of sustained negative jogging at -32000 steps/s.
+ *
+ * Motor tracks target with 1-step lag (realistic), so the Kp correction adds
+ * a small negative term — correction never flips direction.  Also exercises the
+ * case where the motor is 1 step ahead (overshoot): correction is positive but
+ * far smaller than |vel_ff|, so direction stays negative.
+ *
+ * Every step word pushed to the PIO must have direction bit = 0 (negative).
+ * Uses step_dir_log[] to inspect ALL FIFO writes, not just the last one. */
+static void test_do_steps_sustained_negative_no_direction_glitch(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].max_velocity       = 32000.0;
+    config.joint[0].max_accel          = 256000000.0; /* large: reach full speed on period 1 */
+    mock_tx_fifo_empty                 = 1;
+
+    int32_t target_pos = 0;
+
+    for (int period = 0; period < 100; period++) {
+        target_pos -= 32;  /* 32 steps/period = 32000 steps/s at 1ms */
+
+        /* Alternate between 1-step lag and 1-step lead (overshoot) so the
+         * Kp correction swings both ways while remaining well inside vel_ff. */
+        int32_t motor_pos = (period % 2 == 0) ? target_pos + 1 : target_pos - 1;
+
+        config.joint[0].velocity_requested = -32000.0;
+        config.joint[0].abs_pos_requested  = (double)target_pos;
+        mock_rx_values[0]  = motor_pos;
+        mock_rx_fifo_level = 1;
+        mock_rx_index      = 0;
+        config.joint[0].updated_from_c0 = 1;
+        do_steps(0);
+    }
+
+    assert_true(step_dir_log_count > 0);  /* sanity: steps must have fired */
+    for (int i = 0; i < step_dir_log_count; i++) {
+        if (step_dir_log[i] != 0)
+            fail_msg("step %d: direction=1 (forward) during sustained negative motion", i);
+    }
+}
+
 
 int main(void) {
     const struct CMUnitTest tests[] = {
@@ -2357,6 +2442,8 @@ int main(void) {
 
         /* sign_flipped guard must fire at any vel_ff speed, not just |vel_ff_q| ≤ 2×Q16_ONE */
         cmocka_unit_test_setup(test_do_steps_posmode_highspeed_sign_flip_no_forward_step, test_setup),
+        cmocka_unit_test_setup(test_do_steps_posmode_highspeed_sign_flip_no_backward_step, test_setup),
+        cmocka_unit_test_setup(test_do_steps_sustained_negative_no_direction_glitch, test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
