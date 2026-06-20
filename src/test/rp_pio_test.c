@@ -2229,6 +2229,43 @@ static void test_posmode_decel_no_direction_reversal(void **state) {
 }
 
 
+/* Position mode: sign_flipped guard must activate regardless of |vel_ff_q| magnitude.
+ *
+ * With vel_ff = -32000 steps/s (vel_ff_q = -2097152, far above the old
+ * 2×Q16_ONE = 131072 threshold), a 21000-step negative overshoot generates a
+ * +10500000 steps/s Kp correction.  After max_vel_q clamping, velocity_q =
+ * +max_vel_q (positive) — sign_flipped is true.
+ *
+ * Old code: corr_spike = |vel_ff_q| ≤ 2×Q16_ONE && sign_flipped — false at this
+ * speed, so plan_vel_q = +max_vel_q → forward step fires (wrong direction).
+ * Fix: in_ff_path catches any sign flip → plan_vel_q = vel_ff_q → backward. */
+static void test_do_steps_posmode_highspeed_sign_flip_no_forward_step(void **state) {
+    (void)state;
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_POSITION;
+    config.joint[0].velocity_requested = -32000.0;    /* vel_ff_q = -2097152 >> 2×Q16_ONE */
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].max_velocity       = 32000.0;
+    config.joint[0].max_accel          = 256000000.0; /* large so clamp_accel does not mask sign flip */
+    mock_tx_fifo_empty                 = 1;
+
+    /* Motor at -21000 steps, commanded at 0: +21000-step overshoot.
+     * correction = +10500000 steps/s; stopping cap does not clamp
+     * (cap_v ≈ +212M >> velocity_q = +max_vel_q ≈ +2118123). */
+    mock_rx_values[0]  = -21000;
+    mock_rx_fifo_level = 1;
+    mock_rx_index      = 0;
+    config.joint[0].updated_from_c0 = 1;
+    last_pio_put_value = 0;
+    do_steps(0);
+
+    assert_true(((last_pio_put_value >> 1) & 0xFFFFFF) != 0);  /* step was pushed */
+    assert_int_equal(last_pio_put_value & 1, 0);                /* direction = backward */
+    assert_true(config.joint[0].velocity_achieved < 0);         /* vel_achieved tracks vel_ff */
+}
+
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -2317,6 +2354,9 @@ int main(void) {
         /* issue #54 — joint overshoot / direction reversal during deceleration */
         cmocka_unit_test_setup(test_velmode_decel_no_direction_reversal,  test_setup),
         cmocka_unit_test_setup(test_posmode_decel_no_direction_reversal,  test_setup),
+
+        /* sign_flipped guard must fire at any vel_ff speed, not just |vel_ff_q| ≤ 2×Q16_ONE */
+        cmocka_unit_test_setup(test_do_steps_posmode_highspeed_sign_flip_no_forward_step, test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }

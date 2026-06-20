@@ -423,15 +423,10 @@ static int32_t commit_steps(
 {
     int32_t step_count_q = abs(velocity_q);
 
-    // The following section made improvements at one time or another but i have
-    // low confidence they they are all (any) still needed.
-    // TODO(dunk): Experiment with removing some/all of these.
-    // corr_spike is almost certainly redundant.
     int has_ff       = abs(dq->vel_ff_q) > 0 && step_count_q > 0; /* feedforward is active and there's motion */
     int vel_sub1step = step_count_q <= Q16_ONE;                    /* commanded velocity is below 1 step/period */
-    int sign_flipped = (dq->vel_ff_q > 0) ? (velocity_q < 0) : (velocity_q > 0); /* correction has reversed the direction of velocity_q */
-    int corr_spike   = abs(dq->vel_ff_q) <= 2*Q16_ONE && sign_flipped; /* sign flip near the 2-step boundary */
-    int in_ff_path   = has_ff && (vel_sub1step || corr_spike);
+    int sign_flipped = (dq->vel_ff_q > 0) ? (velocity_q < 0) : (velocity_q > 0); /* correction has reversed direction relative to vel_ff_q */
+    int in_ff_path   = has_ff && (vel_sub1step || sign_flipped); /* sign flip: velocity_q reversed sign vs vel_ff_q; always trust vel_ff_q direction */
     int32_t plan_vel_q = in_ff_path ? dq->vel_ff_q : velocity_q;
 
     uint32_t direction = (plan_vel_q > 0);
