@@ -424,7 +424,7 @@ static int32_t commit_steps(
     int32_t step_count_q = abs(velocity_q);
 
     int has_ff       = abs(dq->vel_ff_q) > 0 && step_count_q > 0; /* feedforward is active and there's motion */
-    int vel_sub1step = step_count_q <= Q16_ONE;                    /* commanded velocity is below 1 step/period */
+    int vel_sub1step = (step_count_q <= Q16_ONE) && (abs(dq->vel_ff_q) <= Q16_ONE); /* both planned and ff velocity are genuinely sub-1-step */
     int sign_flipped = (dq->vel_ff_q > 0) ? (velocity_q < 0) : (velocity_q > 0); /* correction has reversed direction relative to vel_ff_q */
     int in_ff_path   = has_ff && (vel_sub1step || sign_flipped); /* sign flip: velocity_q reversed sign vs vel_ff_q; always trust vel_ff_q direction */
     int32_t plan_vel_q = in_ff_path ? dq->vel_ff_q : velocity_q;

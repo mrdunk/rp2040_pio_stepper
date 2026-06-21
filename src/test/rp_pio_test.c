@@ -2351,6 +2351,54 @@ static void test_do_steps_sustained_negative_no_direction_glitch(void **state) {
 }
 
 
+/* Velocity mode: clamp_accel must not be bypassed on first backward stroke after stop.
+ *
+ * When LinuxCNC commands a full target velocity from rest in velocity mode,
+ * the clamped velocity_q starts small (clamp_accel_q << Q16_ONE).  The old
+ * code checked step_count_q (= abs(velocity_q)) for vel_sub1step; since the
+ * clamped value was sub-1-step, in_ff_path=true made plan_vel_q=vel_ff_q (full
+ * commanded speed).  The PIO immediately fired at full speed, bypassing
+ * clamp_accel — an audible velocity overshoot on the first backward stroke.
+ *
+ * Fix: vel_ff_sub1step checks abs(vel_ff_q) instead.  At high target speed
+ * vel_ff_q >> Q16_ONE → vel_ff_sub1step=false → in_ff_path=false → plan_vel_q
+ * uses the clamped velocity_q.  abs(velocity_q) < Q16_ONE → sub-1-step path →
+ * accumulator < Q16_ONE in the first period → n_steps=0 → only stop word pushed.
+ *
+ * Realistic max_accel: 200 steps/mm × 200 mm/s² = 40000 steps/s².
+ *   max_accel_q = 40000*(1e-3)²*65536 ≈ 2621, clamp_accel_q ≈ 2883 << Q16_ONE.
+ * Target: 10000 steps/s = 10 steps/period (vel_ff_q=655360 >> Q16_ONE=65536). */
+static void test_do_steps_velocity_rampup_no_fullspeed_bypass(void **state) {
+    (void)state;
+    /* Period 0: enable at rest (velocity=0). Enable snap: last_velocity_q = 0. */
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = 0.0;
+    config.joint[0].abs_pos_requested  = 0.0;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 40000.0;  /* 200 steps/mm × 200 mm/s² */
+    mock_tx_fifo_empty                 = 1;
+    mock_rx_fifo_level                 = 0;
+    do_steps(0);  /* enable snap: last_velocity_q = 0 */
+
+    /* Period 1: command full backward speed from rest. No new enable transition.
+     * velocity_q = clamp(-655360, 0, clamp_accel_q≈2883) = -2883.
+     * Bug: vel_sub1step=true (step_count_q=2883 < Q16_ONE) → plan_vel_q=vel_ff_q=-655360
+     *      → continuous path → step_low_half≈6475 → PIO fires at full backward speed.
+     * Fix: vel_ff_sub1step=false (vel_ff_q=655360 > Q16_ONE) → plan_vel_q=velocity_q=-2883
+     *      → sub-1-step path → accumulator 2883 < Q16_ONE → n_steps=0 → stop word only. */
+    config.joint[0].updated_from_c0    = 1;
+    config.joint[0].velocity_requested = -10000.0;
+    last_pio_step_value                = 0;
+    mock_rx_fifo_level                 = 0;
+    mock_rx_index                      = 0;
+    do_steps(0);
+
+    assert_int_equal(last_pio_step_value, 0);  /* no step: clamp_accel correctly limits ramp */
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -2444,6 +2492,9 @@ int main(void) {
         cmocka_unit_test_setup(test_do_steps_posmode_highspeed_sign_flip_no_forward_step, test_setup),
         cmocka_unit_test_setup(test_do_steps_posmode_highspeed_sign_flip_no_backward_step, test_setup),
         cmocka_unit_test_setup(test_do_steps_sustained_negative_no_direction_glitch, test_setup),
+
+        /* velocity-mode ramp-up must not bypass clamp_accel via in_ff_path */
+        cmocka_unit_test_setup(test_do_steps_velocity_rampup_no_fullspeed_bypass, test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
