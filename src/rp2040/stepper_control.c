@@ -66,7 +66,7 @@ int main() {
   setup_default_uart();
 
   printf("--------------------------------\n");
-  watchdog_reset_occurred = watchdog_caused_reboot();
+  watchdog_reset_occurred = watchdog_enable_caused_reboot();
   if (watchdog_reset_occurred) {
     printf("*** WATCHDOG RESET ***\n");
   }
