@@ -25,7 +25,7 @@
 
 #endif  // BUILD_TESTS
 
-float req_spindle_frequency = 0;
+volatile float req_spindle_frequency = 0;
 float act_spindle_frequency = -1000000;
 
 void stop_all_spindles(void) {
