@@ -25,7 +25,7 @@
 
 #endif  // BUILD_TESTS
 
-float req_spindle_frequency = 0;
+volatile float req_spindle_frequency = 0;
 float act_spindle_frequency = -1000000;
 
 void stop_all_spindles(void) {
@@ -486,6 +486,7 @@ void core0_main() {
 #endif
 
   int count = 0;
+  uint64_t last_modbus_us = 0;
   while (1) {
     data_received = 0;
     retval = 0;
@@ -506,6 +507,11 @@ void core0_main() {
           destip_machine,
           &destport_machine);
       core0_heartbeat++;
+      uint64_t now = time_us_64();
+      if (now - last_modbus_us >= 1000) {
+        last_modbus_us = now;
+        act_spindle_frequency = modbus_loop(req_spindle_frequency);
+      }
     }
 
     process_received_buffer(&rx_buf, &tx_buf, &received_msg_count, data_received);
@@ -549,7 +555,6 @@ void core0_main() {
           tx_buf.length + sizeof(tx_buf.length) + sizeof(tx_buf.checksum),
           destip_machine,
           &destport_machine);
-      act_spindle_frequency = modbus_loop(req_spindle_frequency);
       core0_work_us = (uint32_t)(time_us_64() - t_c0_start);
     }
     reset_nw_buf(&tx_buf);
