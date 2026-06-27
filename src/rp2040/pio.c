@@ -555,6 +555,18 @@ uint8_t do_steps(const uint8_t joint) {
       cmd_type, velocity_requested, abs_pos_requested, abs_pos_achieved,
       enabled, updated, update_period_us, max_accel);
 
+  /* Velocity mode: position correction must not push the motor faster than
+   * commanded.  Ramp-up lag is structural (expected from physics, not drift);
+   * exceeding vel_ff fights the trajectory planner.  LinuxCNC tracks the
+   * residual via abs_pos_achieved feedback — same reasoning as the stop-case
+   * suppression in compute_velocity_cmd.  The cap fires only when correction
+   * would increase speed (motor behind); deceleration overshoot correction
+   * (motor ahead, correction reduces speed) is unaffected. */
+  if (cmd_type == JOINT_CMD_VELOCITY) {
+      if (vel_ff > 0.0 && velocity_requested > vel_ff) velocity_requested = vel_ff;
+      else if (vel_ff < 0.0 && velocity_requested < vel_ff) velocity_requested = vel_ff;
+  }
+
   joint_dynamics_q_t dq = dynamics_to_fixed(
       velocity_requested, vel_ff, max_velocity, max_accel, update_period_us);
 

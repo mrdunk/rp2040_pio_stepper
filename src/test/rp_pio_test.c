@@ -1013,7 +1013,10 @@ static void test_do_steps_velmode_lag_corrected_over_time(void **state) {
         sim_pos       += pio_word_steps(last_pio_step_value);
         pos_requested += 10.0;  /* LinuxCNC advances pos by 10 steps/period */
     }
-    assert_true(sim_pos > 1000);
+    /* vel_ff cap clamps correction at vel_ff: motor fires at exactly commanded
+     * rate, sim_pos = 100 periods × 10 steps/period = 1000.  LinuxCNC closes
+     * the residual lag via abs_pos_achieved feedback. */
+    assert_int_equal(sim_pos, 1000);
 }
 
 /* Non-integer velocity must not drift: 25.6 steps/period (SCALE=1024 × 25mm/s).
@@ -1640,9 +1643,11 @@ static void test_do_steps_sub1step_two_step_correction_stop_word(void **state) {
     do_steps(0);
     assert_int_equal(pio_put_call_count, 1);  /* only stop word (n_steps=0) */
 
-    /* Period 2: 100-step lag → correction 1000 steps/s → velocity_q=98304
-     * (1.5 steps/period ≥ 65536) → continuous mode.
-     * step_low_half = 133000*32768/98304 - 175 = 44333-175 = 44158. One FIFO write. */
+    /* Period 2: 100-step lag → correction 1000 steps/s → vel_ff cap clamps
+     * velocity_requested back to vel_ff=500.  velocity_q stays at 32768
+     * (sub-1-step); accumulator primed to 32768 in period 1 fires one step.
+     * step_low_half = period_ticks/4 - pio_overhead = 33250 - 175 = 33075.
+     * Two FIFO writes: step word then stop word. */
     config.joint[0].abs_pos_requested  = 100.0;
     mock_rx_values[0]  = 0;
     mock_rx_fifo_level = 1;
@@ -1651,10 +1656,10 @@ static void test_do_steps_sub1step_two_step_correction_stop_word(void **state) {
     last_pio_step_value = 0;
     config.joint[0].updated_from_c0 = 1;
     do_steps(0);
-    assert_int_equal(pio_put_call_count, 1);            /* one step_word, no stop word */
-    assert_int_equal((last_pio_put_value >> 1) & 0xFFFFFF, 44158);  /* step_low_half for continuous 1.5 steps/period */
-    assert_int_equal((last_pio_step_value >> 1) & 0xFFFFFF, 44158); /* same word */
-    assert_int_equal(last_pio_step_value & 1, 1);      /* direction = forward */
+    assert_int_equal(pio_put_call_count, 2);            /* step word + stop word (sub-1-step) */
+    assert_int_equal((last_pio_put_value >> 1) & 0xFFFFFF, 0);       /* last write is stop word */
+    assert_int_equal((last_pio_step_value >> 1) & 0xFFFFFF, 33075);  /* step_low_half = period/4 - pio_overhead */
+    assert_int_equal(last_pio_step_value & 1, 1);       /* direction = forward */
 }
 
 /* Sub-1-step accumulator resets on direction reversal.
@@ -2399,6 +2404,62 @@ static void test_do_steps_velocity_rampup_no_fullspeed_bypass(void **state) {
     assert_int_equal(last_pio_step_value, 0);  /* no step: clamp_accel correctly limits ramp */
 }
 
+/* Helper: prime motor to vel_ff speed (max_accel=0 so it snaps instantly), then
+ * run one period with a 9-step lag and the requested max_accel.  The position
+ * correction (90 steps/s) would exceed vel_ff; the cap must clamp it back.
+ * Expected: step_low_half = 133000*32768/655360 - 175 = 6650-175 = 6475.
+ *
+ * Without cap the unclamped values would be:
+ *   max_accel=0     → velocity_q=661098 → step_low_half=6419
+ *   max_accel=20000 → velocity_q=657702 → step_low_half=6460
+ *   max_accel=40000 → velocity_q=658535 → step_low_half=6445  */
+static void run_velff_cap_test(double vel_ff, double max_accel) {
+    config.update_time_us              = 1000;
+    config.joint[0].enabled            = 1;
+    config.joint[0].cmd_type           = JOINT_CMD_VELOCITY;
+    config.joint[0].max_velocity       = 50000.0;
+    config.joint[0].max_accel          = 0.0;   /* no clamp during prime */
+    config.joint[0].velocity_requested = vel_ff;
+    config.joint[0].abs_pos_requested  = 0.0;
+    mock_tx_fifo_empty                 = 1;
+
+    /* Prime: snap to vel_ff immediately. */
+    config.joint[0].updated_from_c0    = 1;
+    mock_rx_fifo_level                 = 1;
+    mock_rx_index                      = 0;
+    mock_rx_values[0]                  = 0;
+    do_steps(0);
+
+    /* Test period: 9-step lag → correction pushes past vel_ff → cap fires. */
+    config.joint[0].max_accel          = max_accel;
+    config.joint[0].abs_pos_requested  = (vel_ff > 0.0) ? 9.0 : -9.0;
+    last_pio_step_value                = 0;
+    config.joint[0].updated_from_c0    = 1;
+    mock_rx_fifo_level                 = 1;
+    mock_rx_index                      = 0;
+    mock_rx_values[0]                  = 0;
+    do_steps(0);
+
+    assert_int_equal((last_pio_step_value >> 1) & 0xFFFFFF, 6475);
+    assert_int_equal(last_pio_step_value & 1, vel_ff > 0.0 ? 1 : 0);
+}
+
+/* velocity-mode vel_ff cap: 9-step lag at full speed must not produce a step
+ * word faster than vel_ff implies, across a range of acceleration limits and
+ * both directions. */
+static void test_velmode_velff_cap_forward_zero_accel(void **state)
+    { (void)state; run_velff_cap_test(10000.0, 0.0); }
+static void test_velmode_velff_cap_forward_half_accel(void **state)
+    { (void)state; run_velff_cap_test(10000.0, 20000.0); }
+static void test_velmode_velff_cap_forward_full_accel(void **state)
+    { (void)state; run_velff_cap_test(10000.0, 40000.0); }
+static void test_velmode_velff_cap_backward_zero_accel(void **state)
+    { (void)state; run_velff_cap_test(-10000.0, 0.0); }
+static void test_velmode_velff_cap_backward_half_accel(void **state)
+    { (void)state; run_velff_cap_test(-10000.0, 20000.0); }
+static void test_velmode_velff_cap_backward_full_accel(void **state)
+    { (void)state; run_velff_cap_test(-10000.0, 40000.0); }
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup(test_drain_rx_fifo_empty_returns_current, test_setup),
@@ -2495,6 +2556,14 @@ int main(void) {
 
         /* velocity-mode ramp-up must not bypass clamp_accel via in_ff_path */
         cmocka_unit_test_setup(test_do_steps_velocity_rampup_no_fullspeed_bypass, test_setup),
+
+        /* velocity-mode vel_ff cap: position correction must not exceed commanded speed */
+        cmocka_unit_test_setup(test_velmode_velff_cap_forward_zero_accel,  test_setup),
+        cmocka_unit_test_setup(test_velmode_velff_cap_forward_half_accel,  test_setup),
+        cmocka_unit_test_setup(test_velmode_velff_cap_forward_full_accel,  test_setup),
+        cmocka_unit_test_setup(test_velmode_velff_cap_backward_zero_accel, test_setup),
+        cmocka_unit_test_setup(test_velmode_velff_cap_backward_half_accel, test_setup),
+        cmocka_unit_test_setup(test_velmode_velff_cap_backward_full_accel, test_setup),
     };
     return cmocka_run_group_tests(tests, NULL, NULL);
 }
