@@ -64,11 +64,11 @@ share most source files.
 The output image is at:
 
 ```
-build/<preset-name>/src/rp2040/stepper_control.uf2
+build/<preset-name>/src/rp2040/firmware_<rp_chip>_<eth_chip>_<max_joint>j.uf2
 ```
 
-For example, `cmake --preset rp2040-w5500` writes to
-`build/rp2040_w5500/src/rp2040/stepper_control.uf2`.
+For example, `cmake --preset rp2040-w5500` with `MAX_JOINT=4` writes to
+`build/rp2040_w5500/src/rp2040/firmware_rp2040_w5500_4j.uf2`.
 
 See [Getting Started with Raspberry Pi Pico](https://rptl.io/pico-get-started)
 for full toolchain setup and build troubleshooting.
@@ -85,7 +85,8 @@ Hold BOOTSEL on the RP2040 while plugging USB. The device appears as a mass
 storage drive. Copy the `.uf2`:
 
 ```bash
-cp build/rp2040_w5500/src/rp2040/stepper_control.uf2 /media/$USER/RPI-RP2/
+# build/<preset-name>/src/rp2040/firmware_<rp_chip>_<eth_chip>_<max_joint>j.uf2
+cp build/rp2040_w5500/src/rp2040/firmware_rp2040_w5500_4j.uf2 /media/$USER/RPI-RP2/
 ```
 
 The board reboots automatically once the file is written.
